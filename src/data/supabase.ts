@@ -2,8 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://rsifjxeqitgiecqwvien.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJzaWZqeGVxaXRnaWVjcXd2aWVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5NDU3NjEsImV4cCI6MjA5MzUyMTc2MX0.MDZTmUKDNQgd_eNMBYcHw8wmoRTAeCgbmh6twOv4YRQ';;
-
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJzaWZqeGVxaXRnaWVjcXd2aWVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5NDU3NjEsImV4cCI6MjA5MzUyMTc2MX0.MDZTmUKDNQgd_eNMBYcHw8wmoRTAeCgbmh6twOv4YRQ';
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export async function salvarChamada(
