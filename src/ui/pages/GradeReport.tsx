@@ -1,62 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { useStore } from '../../store';
-import { buscarNotas, salvarNotas, buscarAlunos } from '../../data/supabase';
+import React, { useState } from 'react';
 import { cn } from '../AppLayout';
-import { Upload, X } from 'lucide-react';
+import { Upload, X, FileDown } from 'lucide-react';
 
 export function GradeReport() {
-  const { selectedClassId, setSelectedClassId, classRooms } = useStore();
   const [bimestre, setBimester] = useState<1 | 2 | 3 | 4>(1);
   const [alunos, setAlunos] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [showImport, setShowImport] = useState(false);
-  const [extractedData, setExtractedData] = useState<any[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-
-  useEffect(() => {
-    // Turmas already available in classRooms
-  }, [classRooms]);
-
-  useEffect(() => {
-    if (selectedClassId) {
-      loadNotas();
-    }
-  }, [selectedClassId, bimestre]);
-
-  const loadNotas = async () => {
-    setLoading(true);
-    try {
-      const data = await buscarNotas(selectedClassId, bimestre);
-      setAlunos(data);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleNotaChange = (aluno_id: string, novaNota: string) => {
-    const notaNum = novaNota === '' ? null : parseFloat(novaNota.replace(',', '.'));
-    setAlunos(prev => prev.map(n => n.id === aluno_id ? { ...n, nota: notaNum } : n));
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const notasParaSalvar = alunos
-        .filter(n => n.nota !== null)
-        .map(n => ({ aluno_id: n.id, nota: n.nota }));
-
-      await salvarNotas(selectedClassId, bimestre, notasParaSalvar);
-      alert('Notas salvas com sucesso!');
-    } catch (e) {
-      console.error(e);
-      alert('Erro ao salvar notas.');
-    } finally {
-      setSaving(false);
-    }
-  };
+  const [showImport, setShowImport] = useState(false);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -64,36 +14,43 @@ export function GradeReport() {
 
     setIsProcessing(true);
     try {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64Data = reader.result?.toString().split(',')[1];
-        if (!base64Data) return;
+      const toBase64 = (file: File): Promise<string> =>
+        new Promise((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res((r.result as string).split(",")[1]);
+          r.onerror = rej;
+          r.readAsDataURL(file);
+        });
 
-        console.log("PDF convertido, enviando para API...");
+      const base64 = await toBase64(file);
 
-        // Use Gemini to extract data
-        const { GoogleGenAI } = await import('@google/genai');
-        const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || 'MISSING_KEY' });
-        const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY || 'MISSING_KEY',
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-call": "true"
+        },
+        body: JSON.stringify({
+          model: "claude-3-5-sonnet-20241022",
+          max_tokens: 1000,
+          messages: [{
+            role: "user",
+            content: [
+              { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 }},
+              { type: "text", text: "Extraia APENAS JSON sem explicações: [{\"num\":1,\"nome\":\"NOME\",\"nota\":7.0}]" }
+            ]
+          }]
+        })
+      });
 
-        const prompt = "Extraia os dados desta tabela de notas. Retorne APENAS um JSON array de objetos no formato: [{\"num\":1,\"nome\":\"NOME\", \"nota\":7.0}]. Sem explicações.";
-
-        const result = await model.generateContent([
-          { inlineData: { data: base64Data, mimeType: "application/pdf" } },
-          prompt
-        ]);
-
-        console.log("Resposta da API:", result);
-        console.log("Content:", result.response.text());
-
-        const text = result.response.text();
-        const notasExtraidas = JSON.parse(text.replace(/```json/g, '').replace(/```/g, ''));
-        console.log("Notas extraídas:", notasExtraidas);
-
-        setExtractedData(notasExtraidas);
-        setIsProcessing(false);
-      };
-      reader.readAsDataURL(file);
+      const json = await resp.json();
+      const notas = JSON.parse(json.content[0].text);
+      
+      setAlunos(notas);
+      setIsProcessing(false);
+      setShowImport(false);
     } catch (e) {
       console.error(e);
       alert('Erro ao processar PDF.');
@@ -101,54 +58,19 @@ export function GradeReport() {
     }
   };
 
-  const applyExtractedData = () => {
-    const newNotas = alunos.map(aluno => {
-      const normalizedAlunoNome = aluno.nome.trim().toLowerCase();
-      const imported = extractedData.find((i: any) => i.nome.trim().toLowerCase() === normalizedAlunoNome);
-      return imported ? { ...aluno, nota: imported.nota } : aluno;
-    });
-
-    setAlunos(newNotas);
-    setExtractedData([]);
-    setShowImport(false);
-  }
-
-  const getStatusColor = (nota: number | null) => {
-    if (nota === null) return 'text-gray-400';
-    if (nota >= 5) return 'text-green-600';
-    if (nota >= 3) return 'text-yellow-600';
-    return 'text-red-600';
-  };
-
-  const getStatusText = (nota: number | null) => {
-    if (nota === null) return '';
-    if (nota >= 5) return 'Aprovado';
-    if (nota >= 3) return 'Recuperação';
-    return 'Reprovado';
+  const getStatus = (nota: number) => {
+    if (nota >= 5) return { text: 'Aprovado', color: 'text-green-600' };
+    if (nota >= 3) return { text: 'Recuperação', color: 'text-yellow-600' };
+    return { text: 'Reprovado', color: 'text-red-600' };
   };
 
   return (
-    <div className="flex flex-col h-full bg-background relative">
-      <div className="p-4 border-b border-gray-200 sticky top-0 bg-background/90 backdrop-blur-md z-10 shadow-sm">
+    <div className="flex flex-col h-full bg-background relative" id="report-content">
+      <div className="p-4 border-b border-gray-200 sticky top-0 bg-background/90 backdrop-blur-md z-10 shadow-sm print:hidden">
         <h2 className="text-2xl font-bold tracking-tight mb-4 text-primary-dark">Notas {bimestre}º Bimestre</h2>
-
-        {/* Turma Filter */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Turma</label>
-          <select
-            value={selectedClassId}
-            onChange={(e) => setSelectedClassId(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded-xl"
-          >
-            <option value="">Selecione uma turma</option>
-            {classRooms.map(c => (
-              <option key={c.id} value={c.name}>{c.name}</option>
-            ))}
-          </select>
-        </div>
-
+         
         <div className="flex gap-2 w-full p-1 bg-gray-200/50 rounded-xl border border-gray-200 mb-4">
-          {[1, 2, 3, 4].map(b => (
+          {[1,2,3,4].map(b => (
             <button
               key={b}
               onClick={() => setBimester(b as any)}
@@ -161,94 +83,73 @@ export function GradeReport() {
             </button>
           ))}
         </div>
-
+        
         <div className="flex gap-2">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex-1 py-3 bg-primary text-white rounded-xl font-bold shadow-md hover:bg-primary-dark transition-all disabled:opacity-50"
-          >
-            {saving ? 'Salvando...' : 'Salvar Notas'}
-          </button>
-          <button
-            onClick={() => setShowImport(true)}
-            className="py-3 px-4 bg-gray-200 text-gray-800 rounded-xl font-bold hover:bg-gray-300 transition-all"
-          >
-            <Upload className="w-5 h-5" />
-          </button>
+            <button 
+                onClick={() => setShowImport(true)}
+                className="flex-1 py-3 bg-primary text-white rounded-xl font-bold shadow-md hover:bg-primary-dark transition-all"
+            >
+                Carregar PDF do Simaed
+            </button>
+            <button 
+                onClick={() => window.print()}
+                className="py-3 px-4 bg-gray-200 text-gray-800 rounded-xl font-bold hover:bg-gray-300 transition-all"
+            >
+                <FileDown className="w-5 h-5"/>
+            </button>
         </div>
       </div>
 
       <div className="p-4 pb-20">
-        {loading ? (
-          <div className="text-center p-10">Carregando...</div>
-        ) : (
+        {alunos.length > 0 ? (
           <div className="bg-surface rounded-3xl border border-gray-200 overflow-hidden shadow-sm">
-            <div className="flex flex-col divide-y divide-gray-100">
-              {alunos.map(aluno => {
-                const nota = aluno.nota;
-                return (
-                  <div key={aluno.id} className="p-3 pl-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-gray-400 text-sm">{aluno.numero_chamada}</span>
-                      <span className="font-semibold text-textPrimary">{aluno.nome}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={cn("text-xs font-bold w-20 text-right", getStatusColor(nota))}>
-                        {getStatusText(nota)}
-                      </span>
-                      <input
-                        type="text" // Using text to allow commas
-                        value={nota !== null ? nota.toString().replace('.', ',') : ''}
-                        onChange={(e) => handleNotaChange(aluno.id, e.target.value)}
-                        className="w-16 p-2 bg-surface border border-gray-300 rounded-xl text-center font-bold outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-                      />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+             <div className="flex flex-col divide-y divide-gray-100">
+                {alunos.map(aluno => {
+                    const status = getStatus(aluno.nota);
+                    return (
+                        <div key={aluno.nome} className="p-3 pl-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
+                           <div className="flex items-center gap-2">
+                             <span className="font-mono text-gray-400 text-sm">{aluno.num}</span>
+                             <span className="font-semibold text-textPrimary">{aluno.nome}</span>
+                           </div>
+                           <div className="flex items-center gap-4">
+                             <span className="font-bold text-gray-700">{aluno.nota.toFixed(1).replace('.', ',')}</span>
+                             <span className={cn("text-xs font-bold w-20 text-right", status.color)}>
+                                {status.text}
+                             </span>
+                           </div>
+                        </div>
+                    )
+                })}
+             </div>
           </div>
+        ) : (
+            <div className="text-center p-10 text-gray-500">Nenhum dado carregado. Carregue um PDF do Simaed.</div>
         )}
       </div>
 
       {showImport && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white p-6 rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold">Importar Notas via PDF</h3>
-              <button onClick={() => setShowImport(false)}><X /></button>
-            </div>
-
-            {isProcessing ? (
-              <div className="text-center py-10">
-                <p className="text-lg font-bold">Analisando PDF...</p>
-                <p className="text-sm text-gray-500">Isso pode levar alguns segundos.</p>
-              </div>
-            ) : extractedData.length > 0 ? (
-              <div>
-                <p className="mb-4 text-sm text-gray-600">Dados extraídos. Confira e confirme:</p>
-                <div className="max-h-64 overflow-y-auto border border-gray-200 rounded-lg mb-4">
-                  {extractedData.map((d: any, i: number) => (
-                    <div key={i} className="p-2 border-b text-sm flex justify-between">
-                      <span>{d.nome}</span>
-                      <span className="font-bold">{d.nota}</span>
-                    </div>
-                  ))}
+            <div className="bg-white p-6 rounded-2xl w-full max-w-lg">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-bold">Carregar PDF do Simaed</h3>
+                    <button onClick={() => setShowImport(false)}><X/></button>
                 </div>
-                <button onClick={applyExtractedData} className="w-full py-3 bg-primary text-white rounded-xl font-bold">Confirmar e Salvar</button>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-4">
-                <input
-                  type="file"
-                  accept="application/pdf"
-                  onChange={handleFileUpload}
-                  className="w-full p-3 border border-gray-300 rounded-xl"
-                />
-              </div>
-            )}
-          </div>
+                
+                {isProcessing ? (
+                    <div className="text-center py-10">
+                        <p className="text-lg font-bold">Analisando PDF...</p>
+                        <p className="text-sm text-gray-500">Isso pode levar alguns segundos.</p>
+                    </div>
+                ) : (
+                    <input 
+                        type="file" 
+                        accept="application/pdf"
+                        onChange={handleFileUpload}
+                        className="w-full p-3 border border-gray-300 rounded-xl"
+                    />
+                )}
+            </div>
         </div>
       )}
     </div>
