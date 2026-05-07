@@ -24,13 +24,10 @@ export function GradeReport() {
 
       const base64 = await toBase64(file);
 
-      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      const resp = await fetch("/api/claude", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY || 'MISSING_KEY',
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-call": "true"
         },
         body: JSON.stringify({
           model: "claude-3-5-sonnet-20241022",
