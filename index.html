@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#1E3A8A" />
+    <title>EduSync PE</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              surface: '#f9f9ff',
+              'surface-dim': '#d8d9e5',
+              'surface-bright': '#f9f9ff',
+              'surface-container-lowest': '#ffffff',
+              'surface-container-low': '#f1f3fe',
+              'surface-container': '#ecedf9',
+              'surface-container-high': '#e6e8f3',
+              'surface-container-highest': '#e0e2ed',
+              'on-surface': '#181c23',
+              'on-surface-variant': '#414755',
+              'inverse-surface': '#2d3039',
+              'inverse-on-surface': '#eef0fc',
+              outline: '#717786',
+              'outline-variant': '#c1c6d7',
+              'surface-tint': '#005bc1',
+              primary: '#0058bc',
+              'on-primary': '#ffffff',
+              'primary-container': '#0070eb',
+              'on-primary-container': '#fefcff',
+              'inverse-primary': '#adc6ff',
+              secondary: '#006a6a',
+              'on-secondary': '#ffffff',
+              'secondary-container': '#90efef',
+              'on-secondary-container': '#006e6e',
+              tertiary: '#9e3d00',
+              'on-tertiary': '#ffffff',
+              'tertiary-container': '#c64f00',
+              'on-tertiary-container': '#fffbff',
+              error: '#ba1a1a',
+              'on-error': '#ffffff',
+              'error-container': '#ffdad6',
+              'on-error-container': '#93000a',
+              background: '#f9f9ff',
+              'on-background': '#181c23',
+              'surface-variant': '#e0e2ed',
+            },
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+            },
+            borderRadius: {
+              sm: '0.25rem',
+              DEFAULT: '0.5rem',
+              md: '0.75rem',
+              lg: '1rem',
+              xl: '1.5rem',
+              full: '9999px',
+            },
+          },
+        },
+      }
+    </script>
+    <style>
+      body {
+        background-color: #f9f9ff;
+        color: #181c23;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .logo-principal {
+        width: 160px;
+        height: auto;
+        object-fit: contain;
+        max-width: 100%;
+        transition: width 0.3s ease;
+      }
+      @media (min-width: 768px) {
+        .logo-principal {
+          width: 240px;
+        }
+      }
+    </style>
+  </head>
+  <body class="text-textPrimary bg-background min-h-screen">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
