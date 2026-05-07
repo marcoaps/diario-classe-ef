@@ -12,6 +12,7 @@ import { Attendance } from './ui/pages/Attendance';
 import { AttendanceHistory } from './ui/pages/AttendanceHistory';
 import { AttendanceReport } from './ui/pages/AttendanceReport';
 import { Evaluations } from './ui/pages/Evaluations';
+import { GradeReport } from './ui/pages/GradeReport';
 import { SystemReset } from './ui/pages/SystemReset';
 
 export default function App() {
@@ -25,6 +26,7 @@ export default function App() {
             <Route path="/history" element={<AttendanceHistory />} />
             <Route path="/report" element={<AttendanceReport />} />
             <Route path="/evaluations" element={<Evaluations />} />
+            <Route path="/grades" element={<GradeReport />} />
             <Route path="/reset" element={<SystemReset />} />
           </Route>
         </Routes>

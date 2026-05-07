@@ -14,15 +14,15 @@ export function AppLayout() {
   const { isSynced, triggerSync } = useStore();
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-background text-on-surface overflow-hidden font-sans">
-      <header className="flex-shrink-0 flex items-center justify-between px-margin-mobile h-32 bg-surface z-50 sticky top-0 shadow-sm border-b border-outline-variant pt-4">
-        <div className="flex items-center gap-3 px-4 py-3">
+    <div className="flex flex-col h-[100dvh] bg-background text-on-surface overflow-hidden font-sans" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <header className="flex-shrink-0 flex items-center justify-between px-margin-mobile h-20 bg-surface z-50 sticky top-0 shadow-sm border-b border-outline-variant pt-2">
+        <div className="flex items-center gap-2 px-2 py-1">
            <img 
              src={LOGO_URL} 
              alt="Diário de Classe EF" 
-             className="w-24 h-24 object-contain flex-shrink-0"
+             className="w-8 h-8 object-contain rounded-lg flex-shrink-0"
            />
-           <span className="font-bold text-lg">Diário de Classe EF</span>
+           <span className="font-bold text-base text-primary">Diário de Classe EF</span>
         </div>
         
         <div className="flex items-center gap-sm">
@@ -53,6 +53,7 @@ export function AppLayout() {
          <NavItem to="/attendance" icon={<CheckSquare />} label="Chamada" />
          <NavItem to="/history" icon={<CalendarSearch />} label="Histórico" />
          <NavItem to="/report" icon={<BarChart3 />} label="Relatórios" />
+         <NavItem to="/grades" icon={<GraduationCap />} label="Notas" />
       </nav>
     </div>
   );

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useStore } from '../../store';
 import { MIN_PASSING_GRADE, MAX_ABSENCES_TOTAL, ClassRoom, Student } from '../../domain/types';
-import { AlertCircle, ChevronRight, UserX, Activity, CalendarDays, Users, Flame, Download, X, CheckSquare, BarChart3, CalendarSearch, Edit, Trash2 } from 'lucide-react';
+import { AlertCircle, ChevronRight, UserX, Activity, CalendarDays, Users, Flame, Download, X, CheckSquare, BarChart3, CalendarSearch, Edit, Trash2, Star } from 'lucide-react';
 import { cn } from '../AppLayout';
 import { buscarAlunos, supabase } from '../../data/supabase';
 import { v4 as uuidv4 } from 'uuid';
@@ -273,6 +273,7 @@ export function Dashboard() {
         <MenuCard icon={<BarChart3 className="w-8 h-8"/>} title="Relatórios" onClick={() => navigate('/report')} />
         <MenuCard icon={<Users className="w-8 h-8"/>} title="Turmas" onClick={() => document.getElementById('turmas-list')?.scrollIntoView({ behavior: 'smooth' })} />
         <MenuCard icon={<CalendarSearch className="w-8 h-8"/>} title="Histórico" onClick={() => navigate('/history')} />
+        <MenuCard icon={<Star className="w-8 h-8"/>} title="Notas Bimestrais" onClick={() => navigate('/grades')} />
         <MenuCard icon={<Download className="w-8 h-8"/>} title="Importar Lista" onClick={() => setShowImportModal(true)} />
         <MenuCard icon={<Edit className="w-8 h-8"/>} title="Editar Turma" onClick={() => document.getElementById('turmas-list')?.scrollIntoView({ behavior: 'smooth' })} />
         <MenuCard icon={<Trash2 className="w-8 h-8"/>} title="Reset Histórico" onClick={() => navigate('/reset')} />
@@ -512,12 +513,12 @@ export function Dashboard() {
 const MenuCard = ({ icon, title, onClick }: { icon: React.ReactNode, title: string, onClick: () => void }) => (
   <button 
     onClick={onClick}
-    className="bg-white border border-gray-100 rounded-[1.5rem] p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col items-center justify-center gap-3 hover:shadow-md hover:border-primary/20 hover:-translate-y-1 transition-all active:scale-95 text-center group"
+    className="bg-white border border-gray-100 rounded-2xl p-3 shadow-[0_4px_12px_rgb(0,0,0,0.03)] flex flex-col items-center justify-center gap-2 hover:shadow-sm hover:border-primary/20 hover:-translate-y-0.5 transition-all active:scale-95 text-center group"
   >
-    <div className="w-14 h-14 rounded-full bg-primary/5 group-hover:bg-primary/10 flex items-center justify-center text-primary transition-colors">
-       {icon}
+    <div className="w-10 h-10 rounded-full bg-primary/5 group-hover:bg-primary/10 flex items-center justify-center text-primary transition-colors">
+       {React.cloneElement(icon as React.ReactElement, { className: 'w-6 h-6' })}
     </div>
-    <span className="font-bold text-gray-700 text-sm leading-tight">{title}</span>
+    <span className="font-bold text-gray-700 text-xs leading-tight">{title}</span>
   </button>
 )
 

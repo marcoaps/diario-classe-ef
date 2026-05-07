@@ -2,7 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://rsifjxeqitgiecqwvien.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJzaWZqeGVxaXRnaWVjcXd2aWVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5NDU3NjEsImV4cCI6MjA5MzUyMTc2MX0.MDZTmUKDNQgd_eNMBYcHw8wmoRTAeCgbmh6twOv4YRQ';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_Vw7h5WZ5BF-GzaAM0hOECg_TMjwdiby';
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export async function salvarChamada(
@@ -48,7 +49,7 @@ export async function salvarChamada(
 
 export async function buscarHistoricoFrequencia(turmaId?: string, dt?: string) {
   let freqQuery = supabase.from("frequencia").select("*");
-
+  
   if (dt) {
     freqQuery = freqQuery.eq("data", dt);
   }
@@ -80,17 +81,17 @@ export async function buscarHistoricoFrequencia(turmaId?: string, dt?: string) {
   });
 
   const historico = [];
-
+  
   for (const registro of dataFrequencia || []) {
     const aluno = alunosMap.get(registro.aluno_id);
-
+    
     // Fazer o join ("frequencia.aluno_id = alunos.id")
     if (aluno) {
       // Filtrar por turma_id se houver filtro
       if (turmaNormalizada && aluno.turma_id !== turmaNormalizada) {
         continue;
       }
-
+      
       historico.push({
         id: registro.id,
         aluno_id: registro.aluno_id,
@@ -107,7 +108,7 @@ export async function buscarHistoricoFrequencia(turmaId?: string, dt?: string) {
     const numA = (a.numero_chamada !== null && a.numero_chamada !== undefined) ? a.numero_chamada : Infinity;
     const numB = (b.numero_chamada !== null && b.numero_chamada !== undefined) ? b.numero_chamada : Infinity;
     if (numA !== numB) {
-      return numA - numB;
+       return numA - numB;
     }
     return a.nome.localeCompare(b.nome);
   });
@@ -142,7 +143,7 @@ export async function buscarAlunos(turmaId: string) {
 
 export async function buscarRelatorioFrequencia(turmaId?: string, dataInicio?: string, dataFim?: string) {
   let freqQuery = supabase.from("frequencia").select("*");
-
+  
   if (dataInicio) {
     freqQuery = freqQuery.gte("data", dataInicio);
   }
@@ -215,15 +216,94 @@ export async function buscarRelatorioFrequencia(turmaId?: string, dataInicio?: s
       });
     }
   });
-
+  
   relatorio.sort((a, b) => {
     const numA = (a.numero_chamada !== null && a.numero_chamada !== undefined) ? a.numero_chamada : Infinity;
     const numB = (b.numero_chamada !== null && b.numero_chamada !== undefined) ? b.numero_chamada : Infinity;
     if (numA !== numB) {
-      return numA - numB;
+       return numA - numB;
     }
     return a.nome.localeCompare(b.nome);
   });
 
   return relatorio;
+}
+
+export async function salvarNotas(
+  turmaId: string,
+  bimestre: number,
+  notas: { aluno_id: string; nota: number }[]
+) {
+  const turmaNormalizada = turmaId
+    .replace("º", "")
+    .replace(/\s/g, "")
+    .toUpperCase();
+
+  // 1. Fetch all students in the class
+  const { data: alunos, error: alunosError } = await supabase
+    .from("alunos")
+    .select("id")
+    .eq("turma_id", turmaNormalizada);
+    
+  if (alunosError) throw alunosError;
+  const alunoIds = alunos?.map(a => a.id) || [];
+
+  // 2. Fetch existing notes for these students and this bimestre
+  const { data: existingNotas, error: fetchError } = await supabase
+    .from("notas")
+    .select("id, aluno_id")
+    .eq("bimestre", bimestre)
+    .in("aluno_id", alunoIds);
+
+  if (fetchError) throw fetchError;
+  const existingMap = new Map(existingNotas?.map(n => [n.aluno_id, n.id]));
+
+  // 3. Prepare upsert data
+  const upsertData = notas.map(n => ({
+    id: existingMap.get(n.aluno_id) || uuidv4(),
+    aluno_id: n.aluno_id,
+    bimestre: bimestre,
+    nota: n.nota,
+    updated_at: new Date().toISOString()
+  }));
+
+  // 4. Batch upsert
+  const { error: upsertError } = await supabase
+    .from("notas")
+    .upsert(upsertData);
+
+  if (upsertError) throw upsertError;
+}
+
+export async function buscarNotas(turmaId: string, bimestre: number) {
+  const turmaNormalizada = turmaId
+    .replace("º", "")
+    .replace(/\s/g, "")
+    .toUpperCase();
+
+  const { data, error } = await supabase
+    .from("alunos")
+    .select(`
+      id, 
+      nome, 
+      numero_chamada,
+      notas (
+        nota,
+        bimestre
+      )
+    `)
+    .eq("turma_id", turmaNormalizada)
+    .order("numero_chamada", { ascending: true });
+
+  if (error) throw error;
+
+  return (data || []).map((aluno: any) => {
+    const notaDoBimestre = aluno.notas?.find((n: any) => n.bimestre === bimestre);
+    return {
+      id: aluno.id,
+      nome: aluno.nome,
+      numero_chamada: aluno.numero_chamada,
+      nota: notaDoBimestre ? notaDoBimestre.nota : null
+    };
+  });
 }
