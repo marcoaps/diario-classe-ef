@@ -1,9 +1,5 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-import React, { useEffect, useState } from 'react';
+@'
+  import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { StoreProvider } from './store';
 import { AppLayout } from './ui/AppLayout';
@@ -17,24 +13,19 @@ import { SystemReset } from './ui/pages/SystemReset';
 import { Login } from './ui/pages/Login';
 import { supabase } from './data/supabase';
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<boolean | null>(null);
+function ProtectedRoute({ children }) {
+  const [session, setSession] = useState(null);
 
   useEffect(() => {
-    // Verifica sessão atual
     supabase.auth.getSession().then(({ data }) => {
       setSession(!!data.session);
     });
-
-    // Escuta mudanças de autenticação (login/logout)
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(!!session);
     });
-
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  // Carregando sessão
   if (session === null) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0a1628]">
@@ -43,11 +34,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Não autenticado → redireciona para login
-  if (!session) {
-    return <Navigate to="/login" replace />;
-  }
-
+  if (!session) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
 
@@ -56,17 +43,8 @@ export default function App() {
     <StoreProvider>
       <BrowserRouter>
         <Routes>
-          {/* Rota pública */}
           <Route path="/login" element={<Login />} />
-
-          {/* Rotas protegidas */}
-          <Route
-            element={
-              <ProtectedRoute>
-                <AppLayout />
-              </ProtectedRoute>
-            }
-          >
+          <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/attendance" element={<Attendance />} />
             <Route path="/history" element={<AttendanceHistory />} />
@@ -75,11 +53,10 @@ export default function App() {
             <Route path="/grades" element={<GradeReport />} />
             <Route path="/reset" element={<SystemReset />} />
           </Route>
-
-          {/* Qualquer rota desconhecida → home */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </StoreProvider>
   );
 }
+'@ | Set-Content "src/App.tsx" -Encoding UTF8
