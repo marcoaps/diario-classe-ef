@@ -208,7 +208,7 @@ export function GradeReport() {
                   {alunos.map(aluno => {
                     const status = getStatus(aluno.nota);
                     return (
-                      <div key={aluno.nome} className="p-3 pl-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
+                      <div key={aluno.nome} className="py-1 px-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="font-mono text-gray-400 text-xs w-5 shrink-0">{aluno.num}</span>
                           <span className="font-semibold text-textPrimary text-xs truncate">{aluno.nome}</span>
