@@ -184,7 +184,7 @@ export function AttendanceReport() {
                         <td className="px-4 py-4 text-center text-gray-700 font-semibold">{aluno.total}</td>
                         <td className="px-4 py-4 text-center text-highlight font-semibold">{aluno.faltas}</td>
                         <td className="px-4 py-4 text-center font-bold text-gray-900">
-                          {(aluno.presencas * 0.5).toFixed(1)} pts
+                          {(aluno.presencas * 0.5).toFixed(1).replace(".", ",")} pts
                         </td>
                         <td className="px-4 py-4 text-center">
                           <span className={cn(
@@ -218,7 +218,7 @@ export function AttendanceReport() {
                     </div>
                     
                     <div className="flex justify-between items-center mt-1 pt-2 border-t border-gray-50">
-                       <span className="font-bold text-lg text-gray-900">{(aluno.presencas * 0.5).toFixed(1)} pts</span>
+                       <span className="font-bold text-lg text-gray-900">{(aluno.presencas * 0.5).toFixed(1).replace(".", ",")} pts</span>
                        <span className={cn(
                           "px-2 py-1 rounded-full text-[10px] font-bold text-white",
                           aluno.frequencia >= 50 ? 'bg-green-500' : 'bg-red-500'
