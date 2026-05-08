@@ -24,7 +24,7 @@ export function GradeReport() {
     try {
       const data = await buscarNotas(turma, bimestre);
       setAlunos(data.map((d: any) => ({ num: d.numero, nome: d.nome, nota: d.nota })));
-      setSaved(true);
+      setSaved(true); setTimeout(() => setSaved(false), 3000);
     } catch (e) {
       setAlunos([]);
     } finally {
@@ -79,7 +79,7 @@ export function GradeReport() {
     setIsSaving(true);
     try {
       await salvarNotas(turma, bimestre, alunos.map(a => ({ numero: a.num, nome: a.nome, nota: a.nota })));
-      setSaved(true);
+      setSaved(true); setTimeout(() => setSaved(false), 3000);
       alert("Notas salvas com sucesso!");
     } catch (e: any) {
       alert("Erro ao salvar: " + e.message);
