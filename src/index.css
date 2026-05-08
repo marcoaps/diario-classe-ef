@@ -27,3 +27,4 @@
     color: #1d4ed8 !important;
   }
 }
+@media print { #report-content .divide-y > div { padding-top: 1px !important; padding-bottom: 1px !important; } #report-content { font-size: 9px !important; } }
