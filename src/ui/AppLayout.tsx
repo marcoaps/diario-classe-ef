@@ -20,7 +20,7 @@ export function AppLayout() {
            <img 
              src={LOGO_URL} 
              alt="Diário de Classe EF" 
-             className="w-12 h-12 object-contain rounded-lg flex-shrink-0 print:w-16 print:h-16"
+             className="w-16 h-16 object-contain rounded-lg flex-shrink-0 print:w-20 print:h-20"
            />
            <span className="font-bold text-base text-primary">Diário de Classe EF</span>
         </div>
