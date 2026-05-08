@@ -153,8 +153,8 @@ export function GradeReport() {
                   return (
                     <div key={aluno.nome} className="p-3 pl-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-gray-400 text-sm">{aluno.num}</span>
-                        <span className="font-semibold text-textPrimary">{aluno.nome}</span>
+                        <span className="font-mono text-gray-400 text-xs w-5 shrink-0">{aluno.num}</span>
+                        <span className="font-semibold text-textPrimary text-sm leading-tight">{aluno.nome}</span>
                       </div>
                       <div className="flex items-center gap-4">
                         <span className="font-bold text-gray-700">{Number(aluno.nota).toFixed(1).replace(".", ",")}</span>
