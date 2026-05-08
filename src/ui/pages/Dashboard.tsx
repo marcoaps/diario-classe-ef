@@ -78,7 +78,7 @@ export function Dashboard() {
   }, [sortedClassRooms]);
 
   // Anos ordenados
-  const years = useMemo<number[]>(() => [...groupedByYear.keys()].sort((a, b) => a - b), [groupedByYear]);
+  const years = useMemo(() => Array.from(groupedByYear.keys()).sort((a, b) => a - b), [groupedByYear]);
 
   const fetchCounts = async () => {
     const counts: Record<string, number> = {};
@@ -307,9 +307,9 @@ export function Dashboard() {
   };
 
   return (
-    <div className="p-4 flex flex-col gap-6">
+    <div className="p-4 flex flex-col gap-2">
       {/* Header */}
-      <div className="flex justify-between items-center bg-primary rounded-[2rem] p-6 text-white shadow-lg shadow-primary/30 relative overflow-hidden mt-2">
+      <div className="flex justify-between items-center bg-primary rounded-[2rem] p-4 text-white shadow-lg shadow-primary/30 relative overflow-hidden mt-2">
         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
         <div className="absolute bottom-0 left-0 w-24 h-24 bg-highlight/20 rounded-full blur-2xl -ml-10 -mb-10"></div>
         <div className="relative z-10 w-full">
@@ -319,7 +319,7 @@ export function Dashboard() {
       </div>
 
       {/* Menu */}
-      <div className="grid grid-cols-2 gap-4 mt-2">
+      <div className="grid grid-cols-2 gap-3 mt-1">
         <MenuCard icon={<CheckSquare className="w-8 h-8" />} title="Fazer Chamada" onClick={() => navigate('/attendance')} />
         <MenuCard icon={<BarChart3 className="w-8 h-8" />} title="Relatórios" onClick={() => navigate('/report')} />
         <MenuCard icon={<Users className="w-8 h-8" />} title="Turmas" onClick={() => document.getElementById('turmas-list')?.scrollIntoView({ behavior: 'smooth' })} />
@@ -331,8 +331,8 @@ export function Dashboard() {
       </div>
 
       {/* Turmas com Acordeão */}
-      <div id="turmas-list" className="pt-2 scroll-mt-20">
-        <div className="flex justify-between items-center mb-4">
+      <div id="turmas-list" className="pt-1 scroll-mt-20">
+        <div className="flex justify-between items-center mb-2">
           <h2 className="text-xl font-bold tracking-tight text-primary">
             Turmas e Alunos ({totalStudents})
           </h2>
@@ -344,7 +344,7 @@ export function Dashboard() {
           </button>
         </div>
 
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
           {years.map(year => {
             const turmas = groupedByYear.get(year) || [];
             const isOpen = openYears.has(year);
@@ -356,7 +356,7 @@ export function Dashboard() {
                 <button
                   onClick={() => toggleYear(year)}
                   className={cn(
-                    "w-full flex items-center justify-between px-4 py-3.5 transition-all",
+                    "w-full flex items-center justify-between px-4 py-2.5 transition-all",
                     isOpen
                       ? "bg-primary text-white"
                       : "bg-white hover:bg-primary/5 text-textPrimary"
@@ -540,7 +540,7 @@ export function Dashboard() {
             </button>
             <h3 className="text-xl font-bold text-textPrimary">Importar Alunos</h3>
 
-            <div className="flex flex-col gap-3 text-sm">
+            <div className="flex flex-col gap-2 text-sm">
               <div>
                 <label className="font-semibold text-gray-600 block mb-1">Turma de Destino</label>
                 <select
@@ -654,4 +654,4 @@ const StudentRiskCard: React.FC<{ student: Student }> = ({ student }) => {
       </div>
     </div>
   );
-} 
+}
