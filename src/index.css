@@ -1,0 +1,1 @@
+@media print { nav { display: none !important; } header { display: none !important; } .print\:hidden { display: none !important; } body { -webkit-print-color-adjust: exact; } th { color: #1d4ed8 !important; } td { color: #1d4ed8 !important; } h2 { color: #1d4ed8 !important; } }
