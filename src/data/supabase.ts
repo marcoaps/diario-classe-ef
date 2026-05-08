@@ -228,3 +228,28 @@ export async function buscarRelatorioFrequencia(turmaId?: string, dataInicio?: s
 
   return relatorio;
 }
+
+export async function salvarNotas(turma: string, bimestre: number, alunos: { numero: number; nome: string; nota: number }[]) {
+  const upsertData = alunos.map(a => ({
+    turma,
+    bimestre,
+    numero: a.numero,
+    nome: a.nome,
+    nota: a.nota
+  }));
+  const { error } = await supabase
+    .from("notas")
+    .upsert(upsertData, { onConflict: "turma,bimestre,nome" });
+  if (error) throw error;
+}
+
+export async function buscarNotas(turma: string, bimestre: number) {
+  const { data, error } = await supabase
+    .from("notas")
+    .select("*")
+    .eq("turma", turma)
+    .eq("bimestre", bimestre)
+    .order("numero");
+  if (error) throw error;
+  return data || [];
+}
