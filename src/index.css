@@ -25,3 +25,4 @@
     color: #1d4ed8 !important;
   }
 }
+@media print { * { overflow: visible !important; max-height: none !important; height: auto !important; } }
