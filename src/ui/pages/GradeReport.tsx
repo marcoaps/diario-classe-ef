@@ -78,7 +78,7 @@ export function GradeReport() {
   const handleSalvar = async () => {
     setIsSaving(true);
     try {
-      await salvarNotas(turma, bimestre, alunos.map(a => ({ numero: a.num, nome: a.nome, nota: a.nota })));
+      await salvarNotas(turma, bimestre, alunos.filter(a => a.nota !== null && a.nota !== undefined).map(a => ({ numero: a.num, nome: a.nome, nota: a.nota })));
       setSaved(true); setTimeout(() => setSaved(false), 3000);
       alert("Notas salvas com sucesso!");
     } catch (e: any) {
