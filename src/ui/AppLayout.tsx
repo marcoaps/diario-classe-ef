@@ -14,7 +14,7 @@ export function AppLayout() {
   const { isSynced, triggerSync } = useStore();
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-background text-on-surface overflow-hidden font-sans" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+    <div className="flex flex-col h-[100dvh] bg-background text-on-surface overflow-hidden font-sans print:h-auto print:overflow-visible" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
       <header className="flex-shrink-0 flex items-center justify-between px-margin-mobile h-20 bg-surface z-50 sticky top-0 shadow-sm border-b border-outline-variant pt-2">
         <div className="flex items-center gap-2 px-2 py-1">
            <img 
@@ -42,7 +42,7 @@ export function AppLayout() {
         </div>
       </header>
       
-      <main className="flex-1 overflow-y-auto w-full pb-24">
+      <main className="flex-1 overflow-y-auto w-full pb-24 print:overflow-visible print:h-auto">
         <div className="max-w-2xl mx-auto h-full w-full px-margin-mobile">
           <Outlet />
         </div>
