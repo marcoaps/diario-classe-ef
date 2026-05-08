@@ -151,10 +151,10 @@ export function GradeReport() {
                 {alunos.map(aluno => {
                   const status = getStatus(aluno.nota);
                   return (
-                    <div key={aluno.nome} className="p-3 pl-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
-                      <div className="flex items-center gap-2">
+                    <div key={aluno.nome} className="p-3 pl-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors overflow-hidden">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
                         <span className="font-mono text-gray-400 text-xs w-5 shrink-0">{aluno.num}</span>
-                        <span className="font-semibold text-textPrimary text-xs truncate max-w-[160px]">{aluno.nome}</span>
+                        <span className="font-semibold text-textPrimary text-xs truncate">{aluno.nome}</span>
                       </div>
                       <div className="flex items-center gap-4">
                         <span className="font-bold text-gray-700">{Number(aluno.nota).toFixed(1).replace(".", ",")}</span>
