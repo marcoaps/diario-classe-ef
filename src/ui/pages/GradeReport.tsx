@@ -101,7 +101,7 @@ export function GradeReport() {
 
         <div className="mb-3">
           <label className="text-xs font-semibold text-gray-500 mb-1 block">TURMA</label>
-          <div className="flex gap-1 flex-wrap">
+          <div className="grid grid-cols-9 gap-1">
             {TURMAS.map(t => (
               <button key={t} onClick={() => setTurma(t)}
                 className={cn("px-3 py-1 rounded-lg text-xs font-bold transition-all",
