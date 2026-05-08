@@ -202,7 +202,7 @@ export function GradeReport() {
         ) : view === "notas" ? (
           alunos.length > 0 ? (
             <>
-              {saved && <div className="mb-2 text-xs text-center text-green-600 font-semibold">Dados salvos</div>}
+              {saved && <div className="print:hidden mb-2 text-xs text-center text-green-600 font-semibold">Dados salvos</div>}
               <div className="bg-surface rounded-3xl border border-gray-200 overflow-hidden shadow-sm">
                 <div className="flex flex-col divide-y divide-gray-100">
                   {alunos.map(aluno => {
