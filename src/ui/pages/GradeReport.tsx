@@ -50,7 +50,7 @@ export function GradeReport() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: "claude-sonnet-4-5",
-          max_tokens: 4000,
+          max_tokens: 8000,
           messages: [{
             role: "user",
             content: [
@@ -63,7 +63,7 @@ export function GradeReport() {
       const json = await resp.json();
       if (!resp.ok) throw new Error("API erro " + resp.status + ": " + JSON.stringify(json));
       const text = json.content[0].text;
-      const clean = text.replace(/```json|```/g, "").trim();
+      let clean = text.replace(/```json|```/g, "").trim(); const lastBracket = clean.lastIndexOf("}"); if (lastBracket !== -1 && !clean.endsWith("]")) { clean = clean.substring(0, lastBracket + 1) + "]"; }
       const notas = JSON.parse(clean);
       setAlunos(notas);
       setSaved(false);
