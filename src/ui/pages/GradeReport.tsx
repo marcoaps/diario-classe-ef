@@ -55,7 +55,7 @@ export function GradeReport() {
             role: "user",
             content: [
               { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 }},
-              { type: "text", text: "Extraia APENAS JSON sem explicacoes: [{\"num\":1,\"nome\":\"NOME\",\"nota\":7.0}]" }
+              { type: "text", text: "Extraia as notas dos alunos deste PDF. Retorne SOMENTE um array JSON valido, sem markdown, sem explicacoes, sem texto extra. Formato exato: [{"num":1,"nome":"NOME COMPLETO","nota":7.0}]. Use aspas duplas. Numeros decimais com ponto." }
             ]
           }]
         })
