@@ -9,6 +9,8 @@ import { AttendanceReport } from './ui/pages/AttendanceReport';
 import { Evaluations } from './ui/pages/Evaluations';
 import { GradeReport } from './ui/pages/GradeReport';
 import { SystemReset } from './ui/pages/SystemReset';
+import { ProvasOnline } from './ui/pages/ProvasOnline';
+import { ResponderProva } from './ui/pages/ResponderProva';
 import { Login } from './ui/pages/Login';
 import { supabase } from './data/supabase';
 
@@ -29,6 +31,7 @@ export default function App() {
     <StoreProvider>
       <BrowserRouter>
         <Routes>
+          <Route path='/prova' element={<ResponderProva />} />
           <Route path='/login' element={<Login />} />
           <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
             <Route path='/' element={<Dashboard />} />
@@ -37,6 +40,7 @@ export default function App() {
             <Route path='/report' element={<AttendanceReport />} />
             <Route path='/evaluations' element={<Evaluations />} />
             <Route path='/grades' element={<GradeReport />} />
+            <Route path='/provas' element={<ProvasOnline />} />
             <Route path='/reset' element={<SystemReset />} />
           </Route>
           <Route path='*' element={<Navigate to='/' replace />} />
