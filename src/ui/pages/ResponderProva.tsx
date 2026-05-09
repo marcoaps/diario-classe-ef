@@ -32,7 +32,6 @@ interface CorrecaoDissertativa {
 
 const LETRAS = ['A', 'B', 'C', 'D', 'E'];
 
-// ── Correção via Claude ───────────────────────────────────────────────────────
 async function corrigirDissertativaComIA(
   enunciado: string,
   resposta: string,
@@ -77,8 +76,6 @@ Responda APENAS com JSON neste formato exato (sem markdown, sem explicações fo
     return { pontosObtidos: 0, justificativa: 'Erro na correção automática. Professor revisará.' };
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 export function ResponderProva() {
   const [step, setStep] = useState<'codigo' | 'identificacao' | 'prova' | 'corrigindo' | 'resultado'>('codigo');
@@ -146,14 +143,10 @@ export function ResponderProva() {
     if (naoRespondidas.length > 0) {
       if (!confirm(`Você deixou ${naoRespondidas.length} questão(ões) sem resposta. Deseja enviar assim mesmo?`)) return;
     }
-
     setEnviando(true);
     setStep('corrigindo');
 
-    // ── 1. Corrigir múltipla escolha ────────────────────────────────────────
-    let totalPontos = 0;
-    let pontosObtidos = 0;
-
+    let totalPontos = 0, pontosObtidos = 0;
     questoes.forEach(q => {
       if (q.tipo === 'multipla_escolha') {
         totalPontos += q.pontos;
@@ -161,7 +154,6 @@ export function ResponderProva() {
       }
     });
 
-    // ── 2. Corrigir dissertativas com IA ────────────────────────────────────
     const dissertativas = questoes.filter(q => q.tipo === 'dissertativa');
     const correcoes: CorrecaoDissertativa[] = [];
 
@@ -169,13 +161,9 @@ export function ResponderProva() {
       const q = dissertativas[i];
       setEtapaCorrecao(`Corrigindo questão dissertativa ${i + 1} de ${dissertativas.length}...`);
       totalPontos += q.pontos;
-
       const { pontosObtidos: pts, justificativa } = await corrigirDissertativaComIA(
-        q.enunciado,
-        respostas[q.id] || '',
-        q.pontos
+        q.enunciado, respostas[q.id] || '', q.pontos
       );
-
       pontosObtidos += pts;
       correcoes.push({
         questao_id: q.id,
@@ -186,25 +174,18 @@ export function ResponderProva() {
       });
     }
 
-    // ── 3. Calcular nota final (máx 9.5) ────────────────────────────────────
     setEtapaCorrecao('Calculando nota final...');
     const notaBruta = totalPontos > 0 ? (pontosObtidos / totalPontos) * 10 : null;
     const notaFinal = notaBruta !== null ? (notaBruta >= 10 ? 9.5 : notaBruta) : null;
 
-    // ── 4. Salvar no Supabase ────────────────────────────────────────────────
     try {
       await supabase.from('respostas').insert({
-        prova_id: prova.id,
-        aluno_nome: nome.trim(),
+        prova_id: prova.id, aluno_nome: nome.trim(),
         aluno_numero: numero ? parseInt(numero) : null,
-        turma_id: prova.turma_id,
-        respostas,
-        nota: notaFinal,
+        turma_id: prova.turma_id, respostas, nota: notaFinal,
         correcoes_dissertativas: correcoes,
       });
-    } catch (e: any) {
-      alert('Erro ao salvar: ' + e.message);
-    }
+    } catch (e: any) { alert('Erro ao salvar: ' + e.message); }
 
     setCorrecoesDissertativas(correcoes);
     setNota(notaFinal);
@@ -235,7 +216,7 @@ export function ResponderProva() {
           {erro && (
             <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 flex items-center gap-3">
               <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
-              <p className="text-red-600 text-base font-medium">{erro}</p>
+              <p className="text-red-600 text-lg font-medium">{erro}</p>
             </div>
           )}
           <button onClick={buscarProva} disabled={loading}
@@ -255,29 +236,29 @@ export function ResponderProva() {
       style={{ background: 'linear-gradient(135deg, #0a1628 0%, #0d1f3c 100%)' }}>
       <div className="w-full max-w-2xl">
         <div className="bg-white/10 border border-white/20 rounded-3xl p-8 mb-5 text-white">
-          <p className="text-blue-300 text-sm font-black uppercase tracking-widest mb-3">✓ Avaliação encontrada</p>
+          <p className="text-blue-300 text-base font-black uppercase tracking-widest mb-3">✓ Avaliação encontrada</p>
           <h2 className="font-black text-3xl mb-2">{prova.titulo}</h2>
-          {prova.descricao && <p className="text-white/60 text-lg mb-4">{prova.descricao}</p>}
+          {prova.descricao && <p className="text-white/60 text-xl mb-4">{prova.descricao}</p>}
           <div className="flex gap-3">
-            <span className="bg-blue-500/20 border border-blue-400/30 text-blue-300 px-4 py-2 rounded-full text-base font-bold">{questoes.length} questões</span>
-            <span className="bg-white/10 border border-white/20 text-white/50 px-4 py-2 rounded-full text-base">Turma {prova.turma_id}</span>
+            <span className="bg-blue-500/20 border border-blue-400/30 text-blue-300 px-4 py-2 rounded-full text-lg font-bold">{questoes.length} questões</span>
+            <span className="bg-white/10 border border-white/20 text-white/50 px-4 py-2 rounded-full text-lg">Turma {prova.turma_id}</span>
           </div>
         </div>
         <div className="bg-white rounded-3xl p-10 shadow-2xl flex flex-col gap-5">
           <h3 className="text-gray-800 font-black text-2xl">Sua identificação</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="text-gray-500 text-sm font-bold uppercase tracking-wider mb-2 block">Nome completo</label>
+              <label className="text-gray-500 text-base font-bold uppercase tracking-wider mb-2 block">Nome completo</label>
               <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Seu nome completo"
-                className="w-full border-2 border-gray-200 rounded-xl px-5 py-4 text-gray-800 text-lg outline-none focus:border-blue-500 transition-all" />
+                className="w-full border-2 border-gray-200 rounded-xl px-5 py-4 text-gray-800 text-xl outline-none focus:border-blue-500 transition-all" />
             </div>
             <div>
-              <label className="text-gray-500 text-sm font-bold uppercase tracking-wider mb-2 block">Nº de chamada</label>
+              <label className="text-gray-500 text-base font-bold uppercase tracking-wider mb-2 block">Nº de chamada</label>
               <input value={numero} onChange={e => setNumero(e.target.value)} placeholder="Ex: 15" type="number"
-                className="w-full border-2 border-gray-200 rounded-xl px-5 py-4 text-gray-800 text-lg outline-none focus:border-blue-500 transition-all" />
+                className="w-full border-2 border-gray-200 rounded-xl px-5 py-4 text-gray-800 text-xl outline-none focus:border-blue-500 transition-all" />
             </div>
           </div>
-          {erro && <p className="text-red-500 text-base font-medium">{erro}</p>}
+          {erro && <p className="text-red-500 text-lg font-medium">{erro}</p>}
           <button onClick={iniciarProva}
             className="w-full py-5 rounded-2xl font-black text-white text-xl transition-all active:scale-95 hover:brightness-110 shadow-lg"
             style={{ background: 'linear-gradient(135deg, #1a3a7c, #2d5fd4)' }}>
@@ -288,7 +269,7 @@ export function ResponderProva() {
     </div>
   );
 
-  // ── CORRIGINDO (tela de espera) ──────────────────────────────────────────
+  // ── CORRIGINDO ───────────────────────────────────────────────────────────
   if (step === 'corrigindo') return (
     <div className="min-h-screen flex items-center justify-center p-8 bg-gray-50">
       <div className="w-full max-w-md text-center">
@@ -297,12 +278,10 @@ export function ResponderProva() {
             <Brain className="w-12 h-12 text-blue-600 animate-pulse" />
           </div>
           <h2 className="text-gray-800 font-black text-2xl mb-3">Corrigindo sua prova...</h2>
-          <p className="text-gray-500 text-base mb-6">
-            A inteligência artificial está avaliando suas respostas dissertativas.
-          </p>
+          <p className="text-gray-500 text-lg mb-6">A inteligência artificial está avaliando suas respostas dissertativas.</p>
           <div className="bg-blue-50 border-2 border-blue-100 rounded-2xl px-6 py-4 flex items-center gap-3">
             <Loader className="w-5 h-5 text-blue-600 animate-spin shrink-0" />
-            <p className="text-blue-700 text-sm font-medium text-left">{etapaCorrecao || 'Iniciando correção...'}</p>
+            <p className="text-blue-700 text-base font-medium text-left">{etapaCorrecao || 'Iniciando correção...'}</p>
           </div>
         </div>
       </div>
@@ -319,7 +298,7 @@ export function ResponderProva() {
             <img src="/Logo_IOP.png" alt="IOP" className="w-12 h-12 rounded-full border-2 border-blue-100 object-cover" />
             <div>
               <p className="text-gray-800 font-black text-xl leading-tight">{prova?.titulo}</p>
-              <p className="text-gray-400 text-sm">{nome} · Turma {prova?.turma_id}</p>
+              <p className="text-gray-400 text-base">{nome} · Turma {prova?.turma_id}</p>
             </div>
           </div>
           <div className="flex items-center gap-5">
@@ -349,11 +328,9 @@ export function ResponderProva() {
                 {questoes.map((qq, i) => (
                   <button key={qq.id} onClick={() => setQuestaoAtual(i)}
                     className={`w-12 h-12 rounded-xl text-base font-black transition-all shadow-sm ${
-                      i === questaoAtual
-                        ? 'bg-blue-600 text-white scale-110 shadow-blue-200 shadow-md'
-                        : respostas[qq.id]
-                          ? 'bg-green-100 border-2 border-green-400 text-green-700'
-                          : 'bg-gray-100 border-2 border-gray-200 text-gray-500 hover:bg-blue-50 hover:border-blue-300'
+                      i === questaoAtual ? 'bg-blue-600 text-white scale-110 shadow-blue-200 shadow-md'
+                        : respostas[qq.id] ? 'bg-green-100 border-2 border-green-400 text-green-700'
+                        : 'bg-gray-100 border-2 border-gray-200 text-gray-500 hover:bg-blue-50 hover:border-blue-300'
                     }`}>
                     {i + 1}
                   </button>
@@ -385,7 +362,7 @@ export function ResponderProva() {
                 <div className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-500"
                   style={{ width: `${progresso}%` }} />
               </div>
-              <p className="text-sm text-gray-400 mt-2">{respondidas} de {questoes.length} respondidas</p>
+              <p className="text-base text-gray-400 mt-2">{respondidas} de {questoes.length} respondidas</p>
             </div>
 
             <div className="mt-auto">
@@ -412,7 +389,7 @@ export function ResponderProva() {
                 }`}>
                   {q.tipo === 'multipla_escolha' ? 'Múltipla Escolha' : 'Dissertativa'}
                 </span>
-                <p className="text-gray-400 text-base mt-2">{q.pontos} {q.pontos === 1 ? 'ponto' : 'pontos'}</p>
+                <p className="text-gray-400 text-lg mt-2">{q.pontos} {q.pontos === 1 ? 'ponto' : 'pontos'}</p>
               </div>
             </div>
 
@@ -434,27 +411,23 @@ export function ResponderProva() {
                         : 'bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50'
                     }`}>
                     <span className={`w-12 h-12 rounded-xl border-2 flex items-center justify-center shrink-0 font-black text-xl transition-all ${
-                      respostas[q.id] === String(i)
-                        ? 'border-white/40 bg-white/20 text-white'
-                        : 'border-gray-300 text-gray-500 bg-gray-50'
+                      respostas[q.id] === String(i) ? 'border-white/40 bg-white/20 text-white' : 'border-gray-300 text-gray-500 bg-gray-50'
                     }`}>
                       {LETRAS[i]}
                     </span>
                     <span className={`text-xl font-medium transition-colors ${
                       respostas[q.id] === String(i) ? 'text-white' : 'text-gray-700'
                     }`}>{op}</span>
-                    {respostas[q.id] === String(i) && (
-                      <CheckCircle className="w-7 h-7 text-white ml-auto shrink-0" />
-                    )}
+                    {respostas[q.id] === String(i) && <CheckCircle className="w-7 h-7 text-white ml-auto shrink-0" />}
                   </button>
                 ))}
               </div>
             )}
 
             {q.tipo === 'dissertativa' && (
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2 text-purple-600 text-sm font-bold">
-                  <Brain className="w-4 h-4" />
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-2 text-purple-600 text-base font-bold">
+                  <Brain className="w-5 h-5" />
                   <span>Esta questão será corrigida automaticamente por IA</span>
                 </div>
                 <textarea value={respostas[q.id] || ''} onChange={e => responder(q.id, e.target.value)}
@@ -516,13 +489,13 @@ export function ResponderProva() {
             <CheckCircle className={`w-20 h-20 ${nota !== null && nota >= 6 ? 'text-green-500' : 'text-red-500'}`} />
           </div>
 
-          <p className="text-gray-400 text-lg mb-2">Avaliação enviada com sucesso!</p>
+          <p className="text-gray-400 text-xl mb-2">Avaliação enviada com sucesso!</p>
           <h2 className="text-gray-800 font-black text-4xl mb-2">{nome}</h2>
-          <p className="text-gray-400 text-lg mb-8">Turma {prova?.turma_id} · {prova?.titulo}</p>
+          <p className="text-gray-500 text-xl mb-8">Turma {prova?.turma_id} · {prova?.titulo}</p>
 
           {nota !== null && (
             <div className={`rounded-2xl p-10 mb-6 border-2 ${nota >= 6 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-              <p className="text-gray-500 text-lg mb-3">Nota final</p>
+              <p className="text-gray-500 text-xl mb-3">Nota final</p>
               <p className={`text-9xl font-black mb-4 ${nota >= 6 ? 'text-green-600' : 'text-red-600'}`}>
                 {nota.toFixed(1)}
               </p>
@@ -530,17 +503,16 @@ export function ResponderProva() {
                 <div className={`h-full rounded-full ${nota >= 6 ? 'bg-green-500' : 'bg-red-500'}`}
                   style={{ width: `${nota * 10}%` }} />
               </div>
-              <p className={`text-xl font-black ${nota >= 6 ? 'text-green-600' : 'text-red-600'}`}>
-                {nota >= 9.5
-                  ? '🏆 Nota máxima! Parabéns!'
-                  : nota >= 6
-                    ? '✓ Aprovado'
-                    : '⚠ Abaixo da média'}
+              <p className={`text-2xl font-black ${nota >= 6 ? 'text-green-600' : 'text-red-600'}`}>
+                {nota >= 9.5 ? '🏆 Nota máxima! Parabéns!'
+                  : nota >= 6 ? '✓ Aprovado'
+                  : '⚠ Abaixo da média'}
               </p>
             </div>
           )}
 
-          <div className="flex items-center justify-center gap-6 text-gray-400 text-base">
+          {/* Estatísticas com fonte maior */}
+          <div className="flex items-center justify-center gap-6 text-gray-500 text-lg font-medium">
             <span>⏱ {formatarTempo(tempo)}</span>
             <span>·</span>
             <span>📝 {questoes.length} questões</span>
@@ -549,26 +521,26 @@ export function ResponderProva() {
           </div>
         </div>
 
-        {/* Detalhes das dissertativas corrigidas por IA */}
+        {/* Correção das dissertativas */}
         {correcoesDissertativas.length > 0 && (
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8 flex flex-col gap-4">
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8 flex flex-col gap-5">
             <div className="flex items-center gap-3 mb-2">
-              <Brain className="w-6 h-6 text-purple-600" />
-              <h3 className="text-gray-800 font-black text-xl">Correção das Dissertativas (IA)</h3>
+              <Brain className="w-7 h-7 text-purple-600" />
+              <h3 className="text-gray-800 font-black text-2xl">Correção das Dissertativas (IA)</h3>
             </div>
             {correcoesDissertativas.map((c, i) => {
               const questao = questoes.find(q => q.id === c.questao_id);
               return (
-                <div key={c.questao_id} className={`rounded-2xl p-5 border-2 ${
+                <div key={c.questao_id} className={`rounded-2xl p-6 border-2 ${
                   c.percentual >= 70 ? 'bg-green-50 border-green-200'
                     : c.percentual >= 40 ? 'bg-yellow-50 border-yellow-200'
                     : 'bg-red-50 border-red-200'
                 }`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-gray-600 text-sm font-bold uppercase tracking-wide">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-gray-600 text-base font-black uppercase tracking-wide">
                       Dissertativa {i + 1}
                     </p>
-                    <span className={`font-black text-lg ${
+                    <span className={`font-black text-xl ${
                       c.percentual >= 70 ? 'text-green-600'
                         : c.percentual >= 40 ? 'text-yellow-600'
                         : 'text-red-600'
@@ -576,15 +548,15 @@ export function ResponderProva() {
                       {c.pontos_obtidos.toFixed(1)}/{c.pontos_total} pts
                     </span>
                   </div>
-                  <p className="text-gray-500 text-sm mb-2 line-clamp-2">{questao?.enunciado}</p>
-                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden mb-2">
+                  <p className="text-gray-600 text-base mb-3 line-clamp-2">{questao?.enunciado}</p>
+                  <div className="h-3 bg-gray-200 rounded-full overflow-hidden mb-3">
                     <div className={`h-full rounded-full ${
                       c.percentual >= 70 ? 'bg-green-500'
                         : c.percentual >= 40 ? 'bg-yellow-500'
                         : 'bg-red-500'
                     }`} style={{ width: `${c.percentual}%` }} />
                   </div>
-                  <p className="text-gray-600 text-sm italic">💬 {c.justificativa}</p>
+                  <p className="text-gray-700 text-base italic">💬 {c.justificativa}</p>
                 </div>
               );
             })}
@@ -592,7 +564,7 @@ export function ResponderProva() {
         )}
 
         <div className="bg-blue-50 border-2 border-blue-100 rounded-2xl p-6">
-          <p className="text-blue-700 text-base font-medium text-center">
+          <p className="text-blue-700 text-lg font-medium text-center">
             O professor poderá revisar a correção e ajustar a nota final no boletim.
           </p>
         </div>
