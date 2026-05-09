@@ -1,7 +1,7 @@
 ﻿import React, { useEffect, useState, useMemo } from 'react';
 import { useStore } from '../../store';
 import { MIN_PASSING_GRADE, MAX_ABSENCES_TOTAL, ClassRoom, Student } from '../../domain/types';
-import { AlertCircle, ChevronRight, UserX, Activity, CalendarDays, Users, Flame, Download, X, CheckSquare, BarChart3, CalendarSearch, Edit, Trash2, Star, ChevronDown } from 'lucide-react';
+import { AlertCircle, ChevronRight, UserX, Activity, CalendarDays, Users, Flame, Download, X, CheckSquare, BarChart3, CalendarSearch, Edit, Trash2, Star, ChevronDown, Link2 } from 'lucide-react';
 import { cn } from '../AppLayout';
 import { buscarAlunos, supabase } from '../../data/supabase';
 import { v4 as uuidv4 } from 'uuid';
