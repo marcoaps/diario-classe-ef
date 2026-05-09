@@ -3,7 +3,7 @@ import { supabase } from '../../data/supabase';
 import {
   Plus, Trash2, Eye, Copy, CheckCircle, X,
   FileText, Users, Upload, Image as ImageIcon,
-  BookOpen, AlertCircle
+  BookOpen, AlertCircle, Share2
 } from 'lucide-react';
 import mammoth from 'mammoth';
 
@@ -97,6 +97,7 @@ export function ProvasOnline() {
   const [provas, setProvas] = useState<Prova[]>([]);
   const [loading, setLoading] = useState(false);
   const [copiado, setCopiado] = useState<string | null>(null);
+  const [compartilhado, setCompartilhado] = useState<string | null>(null);
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
   const [turma, setTurma] = useState('');
@@ -223,6 +224,22 @@ export function ProvasOnline() {
     setTimeout(() => setCopiado(null), 2000);
   };
 
+  // ── Compartilhar link + código ─────────────────────────────────────────────
+  const compartilharProva = (prova: Prova) => {
+    const baseUrl = window.location.origin;
+    const texto =
+      `📝 *${prova.titulo}*\n` +
+      `🏫 Turma ${prova.turma_id}\n\n` +
+      `Acesse a avaliação pelo link:\n` +
+      `${baseUrl}/responder\n\n` +
+      `🔑 Código de acesso: *${prova.codigo}*\n\n` +
+      `_Instituto Odilon Pratagi_`;
+
+    navigator.clipboard.writeText(texto);
+    setCompartilhado(prova.id);
+    setTimeout(() => setCompartilhado(null), 3000);
+  };
+
   const verResultados = async (prova: Prova) => {
     setProvaResultados(prova);
     const { data } = await supabase.from('respostas').select('*').eq('prova_id', prova.id).order('enviado_em', { ascending: false });
@@ -241,14 +258,12 @@ export function ProvasOnline() {
   return (
     <div className="p-4 flex flex-col gap-4 pb-36">
 
-      {/* Header */}
       <div className="bg-primary rounded-[2rem] p-5 text-white shadow-lg shadow-primary/30 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10" />
         <h2 className="text-xl font-bold relative z-10">📝 Provas Online</h2>
         <p className="text-primary-light text-sm relative z-10 mt-0.5">Crie e gerencie avaliações para os alunos</p>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-2 bg-gray-100 rounded-2xl p-1">
         {[{ key: 'lista', label: 'Minhas Provas' }, { key: 'criar', label: 'Criar Prova' }].map(t => (
           <button key={t.key} onClick={() => setTab(t.key as any)}
@@ -280,6 +295,8 @@ export function ProvasOnline() {
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
+
+              {/* Código de acesso */}
               <div className="bg-primary/5 rounded-xl px-3 py-2 flex items-center justify-between">
                 <div>
                   <p className="text-xs text-gray-400">Código de acesso</p>
@@ -289,6 +306,23 @@ export function ProvasOnline() {
                   {copiado === prova.codigo ? <CheckCircle className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5" />}
                 </button>
               </div>
+
+              {/* Botão Compartilhar */}
+              <button
+                onClick={() => compartilharProva(prova)}
+                className={`w-full py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
+                  compartilhado === prova.id
+                    ? 'bg-green-500 text-white'
+                    : 'bg-blue-500 hover:bg-blue-600 text-white'
+                }`}
+              >
+                {compartilhado === prova.id ? (
+                  <><CheckCircle className="w-4 h-4" /> Link copiado! Cole no WhatsApp</>
+                ) : (
+                  <><Share2 className="w-4 h-4" /> Compartilhar link + código</>
+                )}
+              </button>
+
               <button onClick={() => verResultados(prova)}
                 className="w-full py-2 rounded-xl bg-primary/10 text-primary font-bold text-sm flex items-center justify-center gap-2 hover:bg-primary/20 transition-colors">
                 <Eye className="w-4 h-4" /> Ver Resultados
@@ -308,7 +342,6 @@ export function ProvasOnline() {
             </div>
           )}
 
-          {/* Dados gerais */}
           <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-col gap-3 shadow-sm">
             <p className="font-bold text-gray-700 text-sm">Informações da Prova</p>
             <input value={titulo} onChange={e => setTitulo(e.target.value)}
@@ -380,7 +413,6 @@ export function ProvasOnline() {
                 placeholder="Enunciado da questão..." rows={3}
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 resize-none" />
 
-              {/* Imagem */}
               <div>
                 {q.imagem ? (
                   <div className="relative rounded-xl overflow-hidden border border-gray-200">
@@ -402,7 +434,6 @@ export function ProvasOnline() {
                 )}
               </div>
 
-              {/* Alternativas */}
               {q.tipo === 'multipla_escolha' && (
                 <div className="flex flex-col gap-2">
                   <p className="text-xs font-semibold text-gray-500">
@@ -437,7 +468,6 @@ export function ProvasOnline() {
                 </div>
               )}
 
-              {/* Pontos */}
               <div className="flex items-center gap-2 pt-1 border-t border-gray-100">
                 <label className="text-xs text-gray-500 font-semibold">Pontos:</label>
                 <input type="number" value={q.pontos} onChange={e => atualizarQuestao(q.id, 'pontos', parseFloat(e.target.value) || 0)}
@@ -448,7 +478,6 @@ export function ProvasOnline() {
             </div>
           ))}
 
-          {/* Botões adicionar questão */}
           <div className="grid grid-cols-2 gap-2">
             <button onClick={() => adicionarQuestao('multipla_escolha')}
               className="py-3 rounded-2xl border-2 border-dashed border-primary/30 text-primary font-bold text-sm hover:bg-primary/5 transition-colors flex items-center justify-center gap-2">
@@ -503,21 +532,15 @@ export function ProvasOnline() {
         </div>
       )}
 
-      {/* Botão Publicar — fixo na parte inferior, visível em qualquer posição da página */}
+      {/* Botão Publicar fixo */}
       {tab === 'criar' && (
         <div className="fixed bottom-20 left-0 right-0 px-4 z-50">
-          <button
-            onClick={salvarProva}
-            disabled={salvando || sucesso}
+          <button onClick={salvarProva} disabled={salvando || sucesso}
             className="w-full py-4 rounded-2xl font-bold text-white shadow-xl hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-            style={{ background: 'linear-gradient(135deg, #1a3a7c, #3b6fd4)' }}
-          >
-            {salvando
-              ? <><span className="animate-spin">⟳</span> Salvando...</>
-              : sucesso
-                ? <><CheckCircle className="w-5 h-5" /> Publicada!</>
-                : <>✓ Publicar Prova</>
-            }
+            style={{ background: 'linear-gradient(135deg, #1a3a7c, #3b6fd4)' }}>
+            {salvando ? <><span className="animate-spin">⟳</span> Salvando...</>
+              : sucesso ? <><CheckCircle className="w-5 h-5" /> Publicada!</>
+              : <>✓ Publicar Prova</>}
           </button>
         </div>
       )}
