@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+﻿import React, { useEffect, useState, useMemo } from 'react';
 import { useStore } from '../../store';
 import { MIN_PASSING_GRADE, MAX_ABSENCES_TOTAL, ClassRoom, Student } from '../../domain/types';
 import { AlertCircle, ChevronRight, UserX, Activity, CalendarDays, Users, Flame, Download, X, CheckSquare, BarChart3, CalendarSearch, Edit, Trash2, Star, ChevronDown } from 'lucide-react';
@@ -7,13 +7,13 @@ import { buscarAlunos, supabase } from '../../data/supabase';
 import { v4 as uuidv4 } from 'uuid';
 import { useNavigate } from 'react-router-dom';
 
-// Extrai o ano (número) do nome da turma
-// Suporta: "6º A", "6ºA", "6A", "6 A", "6°A", "6ano A", etc.
+// Extrai o ano (nÃºmero) do nome da turma
+// Suporta: "6Âº A", "6ÂºA", "6A", "6 A", "6Â°A", "6ano A", etc.
 function extractYear(name: string): number {
-  // Pega o primeiro número da string
+  // Pega o primeiro nÃºmero da string
   const match = name.match(/^(\d+)/);
   if (match) return parseInt(match[1], 10);
-  // Fallback: qualquer número na string
+  // Fallback: qualquer nÃºmero na string
   const fallback = name.match(/(\d+)/);
   return fallback ? parseInt(fallback[1], 10) : 0;
 }
@@ -49,7 +49,7 @@ export function Dashboard() {
 
   const [cardMessage, setCardMessage] = useState<string | null>(null);
 
-  // Controla quais anos estão abertos no acordeão (todos fechados por padrão)
+  // Controla quais anos estÃ£o abertos no acordeÃ£o (todos fechados por padrÃ£o)
   const [openYears, setOpenYears] = useState<Set<number>>(new Set<number>());
 
   const toggleYear = (year: number) => {
@@ -85,7 +85,7 @@ export function Dashboard() {
 
     await Promise.all(uniqueClassRooms.map(async (cr) => {
       try {
-        const turmaId = cr.name.replace("º", "");
+        const turmaId = cr.name.replace("Âº", "");
         const alunos = await buscarAlunos(turmaId);
         counts[cr.id] = alunos.length;
       } catch (e) {
@@ -129,7 +129,7 @@ export function Dashboard() {
     setImporting(true);
 
     const turmaName = importClassId;
-    const turmaNormalizada = turmaName.replace("º", "").replace(/\s/g, "").toUpperCase();
+    const turmaNormalizada = turmaName.replace("Âº", "").replace(/\s/g, "").toUpperCase();
 
     const normalizeName = (name: string) => name.trim().toLowerCase().replace(/\s+/g, ' ');
 
@@ -179,7 +179,7 @@ export function Dashboard() {
         if (error) throw error;
       }
 
-      alert(`${filteredInsert.length} alunos novos adicionados.\n${ignoredCount} alunos já existiam e foram ignorados.`);
+      alert(`${filteredInsert.length} alunos novos adicionados.\n${ignoredCount} alunos jÃ¡ existiam e foram ignorados.`);
       setShowImportModal(false);
       setImportText('');
       setImportClassId('ALL');
@@ -218,7 +218,7 @@ export function Dashboard() {
       .map(line => line.trim().replace(/\s+/g, ' '))
       .filter(line => line.length > 0);
 
-    const turmaNormalizada = classToConfirm.name.replace("º", "").replace(/\s/g, "").toUpperCase();
+    const turmaNormalizada = classToConfirm.name.replace("Âº", "").replace(/\s/g, "").toUpperCase();
 
     const uniqueLines: string[] = [];
     const seen = new Set<string>();
@@ -279,7 +279,7 @@ export function Dashboard() {
     setFetchedStudents([]);
 
     try {
-      const turmaId = cr.name.replace("º", "");
+      const turmaId = cr.name.replace("Âº", "");
       let alunos = await buscarAlunos(turmaId);
 
       if (alunos.length > 0) {
@@ -313,24 +313,25 @@ export function Dashboard() {
         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
         <div className="absolute bottom-0 left-0 w-24 h-24 bg-highlight/20 rounded-full blur-2xl -ml-10 -mb-10"></div>
         <div className="relative z-10 w-full">
-          <h2 className="text-2xl font-bold mb-1">Olá, Professor! 👋</h2>
-          <p className="text-primary-light text-sm font-medium">Bem-vindo ao seu Diário Digital</p>
+          <h2 className="text-2xl font-bold mb-1">OlÃ¡, Professor! ðŸ‘‹</h2>
+          <p className="text-primary-light text-sm font-medium">Bem-vindo ao seu DiÃ¡rio Digital</p>
         </div>
       </div>
 
       {/* Menu */}
       <div className="grid grid-cols-2 gap-3 mt-1">
         <MenuCard icon={<CheckSquare className="w-8 h-8" />} title="Fazer Chamada" onClick={() => navigate('/attendance')} />
-        <MenuCard icon={<BarChart3 className="w-8 h-8" />} title="Relatórios" onClick={() => navigate('/report')} />
+        <MenuCard icon={<BarChart3 className="w-8 h-8" />} title="RelatÃ³rios" onClick={() => navigate('/report')} />
         <MenuCard icon={<Users className="w-8 h-8" />} title="Turmas" onClick={() => document.getElementById('turmas-list')?.scrollIntoView({ behavior: 'smooth' })} />
-        <MenuCard icon={<CalendarSearch className="w-8 h-8" />} title="Histórico" onClick={() => navigate('/history')} />
+        <MenuCard icon={<CalendarSearch className="w-8 h-8" />} title="HistÃ³rico" onClick={() => navigate('/history')} />
         <MenuCard icon={<Star className="w-8 h-8" />} title="Notas Bimestrais" onClick={() => navigate('/grades')} />
         <MenuCard icon={<Download className="w-8 h-8" />} title="Importar Lista" onClick={() => setShowImportModal(true)} />
         <MenuCard icon={<Edit className="w-8 h-8" />} title="Editar Turma" onClick={() => document.getElementById('turmas-list')?.scrollIntoView({ behavior: 'smooth' })} />
-        <MenuCard icon={<Trash2 className="w-8 h-8" />} title="Reset Histórico" onClick={() => navigate('/reset')} />
+        <MenuCard icon={<Trash2 className="w-8 h-8" />} title='Link Alunos' onClick={() => { navigator.clipboard.writeText(window.location.origin + '/prova'); alert('Link copiado!'); }} />
+        <MenuCard icon={<Trash2 className='w-8 h-8'/>} title="Reset HistÃ³rico" onClick={() => navigate('/reset')} />
       </div>
 
-      {/* Turmas com Acordeão */}
+      {/* Turmas com AcordeÃ£o */}
       <div id="turmas-list" className="pt-1 scroll-mt-20">
         <div className="flex justify-between items-center mb-2">
           <h2 className="text-xl font-bold tracking-tight text-primary">
@@ -352,7 +353,7 @@ export function Dashboard() {
 
             return (
               <div key={year} className="rounded-2xl border border-gray-200 overflow-hidden bg-surface shadow-sm">
-                {/* Cabeçalho do acordeão */}
+                {/* CabeÃ§alho do acordeÃ£o */}
                 <button
                   onClick={() => toggleYear(year)}
                   className={cn(
@@ -367,12 +368,12 @@ export function Dashboard() {
                       "w-9 h-9 rounded-xl flex items-center justify-center font-black text-base shrink-0",
                       isOpen ? "bg-white/20 text-white" : "bg-primary/10 text-primary"
                     )}>
-                      {year}º
+                      {year}Âº
                     </span>
                     <div className="text-left">
-                      <p className="font-bold text-sm leading-tight">{year}º Ano — EF II</p>
+                      <p className="font-bold text-sm leading-tight">{year}Âº Ano â€” EF II</p>
                       <p className={cn("text-xs mt-0.5", isOpen ? "text-white/70" : "text-gray-400")}>
-                        {turmas.length} {turmas.length === 1 ? 'turma' : 'turmas'} · {total} alunos
+                        {turmas.length} {turmas.length === 1 ? 'turma' : 'turmas'} Â· {total} alunos
                       </p>
                     </div>
                   </div>
@@ -382,7 +383,7 @@ export function Dashboard() {
                   )} />
                 </button>
 
-                {/* Conteúdo expandível */}
+                {/* ConteÃºdo expandÃ­vel */}
                 {isOpen && (
                   <div className="flex flex-col divide-y divide-gray-100 border-t border-gray-100">
                     {turmas.map(cr => (
@@ -423,7 +424,7 @@ export function Dashboard() {
       {selectedClassId && (
         <div className="bg-highlight/5 border border-highlight/20 p-4 rounded-2xl">
           <h2 className="text-lg font-bold tracking-tight mb-4 text-highlight flex items-center gap-2">
-            <AlertCircle className="w-5 h-5" /> Atenção Necessária
+            <AlertCircle className="w-5 h-5" /> AtenÃ§Ã£o NecessÃ¡ria
           </h2>
           <div className="grid gap-3">
             {students
@@ -441,11 +442,11 @@ export function Dashboard() {
         </div>
       )}
 
-      {/* Modal: Confirmar acesso à turma */}
+      {/* Modal: Confirmar acesso Ã  turma */}
       {classToConfirm && (
         <div className="fixed inset-0 bg-primary/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-surface border border-gray-100 rounded-[2rem] p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl">
-            <h3 className="text-xl font-bold text-textPrimary">Acessar Diário do {classToConfirm.name}?</h3>
+            <h3 className="text-xl font-bold text-textPrimary">Acessar DiÃ¡rio do {classToConfirm.name}?</h3>
 
             <div className="flex flex-col gap-2 text-gray-600">
               {(() => {
@@ -457,7 +458,7 @@ export function Dashboard() {
 
                 return (
                   <>
-                    <p className="text-sm">Os dados desta turma serão carregados para edição.</p>
+                    <p className="text-sm">Os dados desta turma serÃ£o carregados para ediÃ§Ã£o.</p>
                     <div className="bg-gray-50 rounded-2xl p-3 mt-2 border border-gray-200">
                       {fetching ? (
                         <p className="text-sm text-center py-4 text-secondary font-medium animate-pulse">Buscando alunos...</p>
@@ -467,7 +468,7 @@ export function Dashboard() {
                             <li className="list-none text-primary font-bold mb-2">
                               <strong>{classStudents.length}</strong> alunos matriculados
                               {studentsAtRisk.length > 0 && (
-                                <span className="text-highlight ml-2 font-semibold">• {studentsAtRisk.length} em risco</span>
+                                <span className="text-highlight ml-2 font-semibold">â€¢ {studentsAtRisk.length} em risco</span>
                               )}
                             </li>
                             {classStudents.length > 0 ? (
@@ -560,7 +561,7 @@ export function Dashboard() {
                 <textarea
                   value={importText}
                   onChange={(e) => setImportText(e.target.value)}
-                  placeholder="Maria Silva&#10;João Paulo"
+                  placeholder="Maria Silva&#10;JoÃ£o Paulo"
                   rows={6}
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-primary/20 resize-none font-medium"
                 />
@@ -598,7 +599,7 @@ export function Dashboard() {
                 value={editListText}
                 onChange={(e) => setEditListText(e.target.value)}
                 className="w-full h-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20 font-medium whitespace-pre"
-                placeholder="João&#10;Maria&#10;Pedro"
+                placeholder="JoÃ£o&#10;Maria&#10;Pedro"
                 spellCheck={false}
               />
             </div>
