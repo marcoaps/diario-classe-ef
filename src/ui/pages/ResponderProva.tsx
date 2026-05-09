@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { supabase } from '../../data/supabase';
 import { Search, CheckCircle, Send, BookOpen, AlertCircle } from 'lucide-react';
 
@@ -35,7 +35,7 @@ export function ResponderProva() {
   const [enviando, setEnviando] = useState(false);
 
   const buscarProva = async () => {
-    if (!codigo.trim()) { setErro('Digite o cÃ³digo da prova.'); return; }
+    if (!codigo.trim()) { setErro('Digite o código da prova.'); return; }
     setLoading(true);
     setErro(null);
     try {
@@ -45,10 +45,10 @@ export function ResponderProva() {
         .eq('codigo', codigo.trim().toUpperCase())
         .single();
 
-      if (error || !provaData) { setErro('CÃ³digo invÃ¡lido. Verifique com seu professor.'); setLoading(false); return; }
+      if (error || !provaData) { setErro('Código inválido. Verifique com seu professor.'); setLoading(false); return; }
 
       if (provaData.data_limite && new Date(provaData.data_limite) < new Date()) {
-        setErro('Esta prova jÃ¡ encerrou.'); setLoading(false); return;
+        setErro('Esta prova já encerrou.'); setLoading(false); return;
       }
 
       const { data: questoesData } = await supabase
@@ -80,12 +80,12 @@ export function ResponderProva() {
     if (!prova) return;
     const naoRespondidas = questoes.filter(q => !respostas[q.id]);
     if (naoRespondidas.length > 0) {
-      if (!confirm(`VocÃª deixou ${naoRespondidas.length} questÃ£o(Ãµes) sem resposta. Deseja enviar assim mesmo?`)) return;
+      if (!confirm(`Você deixou ${naoRespondidas.length} questão(ões) sem resposta. Deseja enviar assim mesmo?`)) return;
     }
 
     setEnviando(true);
 
-    // Calcular nota das mÃºltipla escolha
+    // Calcular nota das múltipla escolha
     let totalPontos = 0;
     let pontosObtidos = 0;
 
@@ -126,21 +126,21 @@ export function ResponderProva() {
         <img src="/Logo_IOP.png" alt="IOP" className="w-10 h-10 rounded-full border-2 border-white/20 object-cover" />
         <div>
           <p className="text-white font-bold text-sm">Instituto Odilon Pratagi</p>
-          <p className="text-blue-300/60 text-xs">AvaliaÃ§Ã£o Online</p>
+          <p className="text-blue-300/60 text-xs">Avaliação Online</p>
         </div>
       </div>
 
       <div className="flex-1 p-4 flex flex-col gap-4 max-w-lg mx-auto w-full">
 
-        {/* Passo 1: CÃ³digo */}
+        {/* Passo 1: Código */}
         {step === 'codigo' && (
           <>
             <div className="text-center pt-6 pb-2">
               <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-3">
                 <BookOpen className="w-8 h-8 text-blue-400" />
               </div>
-              <h1 className="text-white text-xl font-bold">Responder AvaliaÃ§Ã£o</h1>
-              <p className="text-white/40 text-sm mt-1">Digite o cÃ³digo fornecido pelo professor</p>
+              <h1 className="text-white text-xl font-bold">Responder Avaliação</h1>
+              <p className="text-white/40 text-sm mt-1">Digite o código fornecido pelo professor</p>
             </div>
 
             <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex flex-col gap-4">
@@ -166,24 +166,24 @@ export function ResponderProva() {
                 style={{ background: 'linear-gradient(135deg, #1a3a7c, #3b6fd4)' }}
               >
                 <Search className="w-4 h-4" />
-                {loading ? 'Buscando...' : 'Entrar na AvaliaÃ§Ã£o'}
+                {loading ? 'Buscando...' : 'Entrar na Avaliação'}
               </button>
             </div>
           </>
         )}
 
-        {/* Passo 2: IdentificaÃ§Ã£o */}
+        {/* Passo 2: Identificação */}
         {step === 'identificacao' && prova && (
           <>
             <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-              <p className="text-blue-300/60 text-xs font-semibold uppercase tracking-wider mb-1">AvaliaÃ§Ã£o encontrada</p>
+              <p className="text-blue-300/60 text-xs font-semibold uppercase tracking-wider mb-1">Avaliação encontrada</p>
               <p className="text-white font-bold text-lg">{prova.titulo}</p>
               {prova.descricao && <p className="text-white/50 text-sm mt-1">{prova.descricao}</p>}
-              <p className="text-white/30 text-xs mt-2">{questoes.length} questÃµes Â· Turma {prova.turma_id}</p>
+              <p className="text-white/30 text-xs mt-2">{questoes.length} questões · Turma {prova.turma_id}</p>
             </div>
 
             <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex flex-col gap-4">
-              <p className="text-white font-bold">Sua identificaÃ§Ã£o</p>
+              <p className="text-white font-bold">Sua identificação</p>
 
               <div className="flex flex-col gap-3">
                 <input
@@ -195,7 +195,7 @@ export function ResponderProva() {
                 <input
                   value={numero}
                   onChange={e => setNumero(e.target.value)}
-                  placeholder="NÃºmero de chamada (opcional)"
+                  placeholder="Número de chamada (opcional)"
                   type="number"
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 text-sm outline-none focus:border-blue-500 transition-all"
                 />
@@ -208,7 +208,7 @@ export function ResponderProva() {
                 className="w-full py-4 rounded-2xl font-bold text-white text-sm transition-all active:scale-95"
                 style={{ background: 'linear-gradient(135deg, #1a3a7c, #3b6fd4)' }}
               >
-                Iniciar AvaliaÃ§Ã£o â†’
+                Iniciar Avaliação →
               </button>
             </div>
           </>
@@ -275,7 +275,7 @@ export function ResponderProva() {
               style={{ background: 'linear-gradient(135deg, #1a3a7c, #3b6fd4)' }}
             >
               <Send className="w-4 h-4" />
-              {enviando ? 'Enviando...' : 'Enviar AvaliaÃ§Ã£o'}
+              {enviando ? 'Enviando...' : 'Enviar Avaliação'}
             </button>
           </>
         )}
@@ -288,25 +288,25 @@ export function ResponderProva() {
             </div>
 
             <div className="text-center">
-              <p className="text-white/60 text-sm">AvaliaÃ§Ã£o enviada com sucesso!</p>
+              <p className="text-white/60 text-sm">Avaliação enviada com sucesso!</p>
               <p className="text-white font-bold text-xl mt-1">{nome}</p>
             </div>
 
             {nota !== null && (
               <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-center w-full">
-                <p className="text-white/40 text-sm mb-1">Sua nota (mÃºltipla escolha)</p>
+                <p className="text-white/40 text-sm mb-1">Sua nota (múltipla escolha)</p>
                 <p className={`text-5xl font-black ${nota >= 6 ? 'text-green-400' : 'text-red-400'}`}>
                   {nota.toFixed(1)}
                 </p>
                 <p className={`text-sm font-bold mt-2 ${nota >= 6 ? 'text-green-400' : 'text-red-400'}`}>
-                  {nota >= 6 ? 'âœ“ Aprovado nas questÃµes objetivas' : 'âš  Abaixo da mÃ©dia nas questÃµes objetivas'}
+                  {nota >= 6 ? '✓ Aprovado nas questões objetivas' : '⚠ Abaixo da média nas questões objetivas'}
                 </p>
               </div>
             )}
 
             <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4 w-full">
               <p className="text-blue-300 text-sm text-center">
-                As questÃµes dissertativas serÃ£o corrigidas pelo professor e a nota final serÃ¡ atualizada no seu boletim.
+                As questões dissertativas serão corrigidas pelo professor e a nota final será atualizada no seu boletim.
               </p>
             </div>
           </div>
@@ -315,5 +315,3 @@ export function ResponderProva() {
     </div>
   );
 }
-
-
