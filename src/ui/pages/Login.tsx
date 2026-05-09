@@ -1,4 +1,4 @@
-@'
+﻿@'
     import React, { useState } from 'react';
 import { supabase } from '../../data/supabase';
 import { useNavigate } from 'react-router-dom';
@@ -34,14 +34,14 @@ export function Login() {
                 <div className="flex flex-col items-center mb-8">
                     <img src="/Logo_IOP.png" alt="Logo I.O.P." className="w-28 h-28 rounded-full object-cover shadow-2xl border-4 border-white/10 mb-4" />
                     <h1 className="text-white text-2xl font-black tracking-wide text-center">Instituto Odilon Pratagi</h1>
-                    <p className="text-blue-300/70 text-sm mt-1 font-medium tracking-widest uppercase">Escola Estadual · Brasiléia - AC</p>
+                    <p className="text-blue-300/70 text-sm mt-1 font-medium tracking-widest uppercase">Escola Estadual Â· BrasilÃ©ia - AC</p>
                     <div className="mt-3 px-4 py-1 rounded-full bg-white/5 border border-white/10">
-                        <p className="text-white/50 text-xs font-medium tracking-wider">📚 Diário de Classe Digital</p>
+                        <p className="text-white/50 text-xs font-medium tracking-wider">ðŸ“š DiÃ¡rio de Classe Digital</p>
                     </div>
                 </div>
                 <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-2xl">
                     <h2 className="text-white text-lg font-bold mb-1">Bem-vindo, Professor!</h2>
-                    <p className="text-white/40 text-sm mb-6">Faça login para acessar o diário.</p>
+                    <p className="text-white/40 text-sm mb-6">FaÃ§a login para acessar o diÃ¡rio.</p>
                     <form onSubmit={handleLogin} className="flex flex-col gap-4">
                         <div className="flex flex-col gap-1.5">
                             <label className="text-white/60 text-xs font-semibold tracking-wider uppercase">E-mail</label>
@@ -54,7 +54,7 @@ export function Login() {
                             <label className="text-white/60 text-xs font-semibold tracking-wider uppercase">Senha</label>
                             <div className="relative">
                                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
-                                <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-10 py-3 text-white placeholder-white/20 text-sm outline-none focus:border-blue-500 transition-all" />
+                                <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" required className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-10 py-3 text-white placeholder-white/20 text-sm outline-none focus:border-blue-500 transition-all" />
                                 <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors">
                                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                 </button>
@@ -66,9 +66,8 @@ export function Login() {
                         </button>
                     </form>
                 </div>
-                <p className="text-center text-white/20 text-xs mt-6">Desde 1934 · Instituto Odilon Pratagi</p>
+                <p className="text-center text-white/20 text-xs mt-6">Desde 1934 Â· Instituto Odilon Pratagi</p>
             </div>
         </div>
     );
 }
-'@ | Set-Content "src/ui/pages/Login.tsx" -Encoding UTF8
