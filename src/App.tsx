@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { StoreProvider } from './store';
 import { AppLayout } from './ui/AppLayout';
@@ -21,7 +21,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const { data: listener } = supabase.auth.onAuthStateChange((_e, s) => setSession(!!s));
     return () => listener.subscription.unsubscribe();
   }, []);
-  if (session === null) return <div className='min-h-screen flex items-center justify-center bg-[#0a1628]'><div className='w-8 h-8 border-4 border-blue-400/30 border-t-blue-400 rounded-full animate-spin' /></div>;
+  if (session === null) return (
+    <div className='min-h-screen flex items-center justify-center bg-[#0a1628]'>
+      <div className='w-8 h-8 border-4 border-blue-400/30 border-t-blue-400 rounded-full animate-spin' />
+    </div>
+  );
   if (!session) return <Navigate to='/login' replace />;
   return <>{children}</>;
 }
@@ -31,8 +35,12 @@ export default function App() {
     <StoreProvider>
       <BrowserRouter>
         <Routes>
+          {/* Rotas públicas — acessíveis sem login */}
           <Route path='/prova' element={<ResponderProva />} />
+          <Route path='/responder' element={<ResponderProva />} />
           <Route path='/login' element={<Login />} />
+
+          {/* Rotas protegidas — exigem login do professor */}
           <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
             <Route path='/' element={<Dashboard />} />
             <Route path='/attendance' element={<Attendance />} />
@@ -43,6 +51,7 @@ export default function App() {
             <Route path='/provas' element={<ProvasOnline />} />
             <Route path='/reset' element={<SystemReset />} />
           </Route>
+
           <Route path='*' element={<Navigate to='/' replace />} />
         </Routes>
       </BrowserRouter>
