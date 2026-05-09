@@ -159,18 +159,15 @@ export function ResponderProva() {
 
     for (let i = 0; i < dissertativas.length; i++) {
       const q = dissertativas[i];
-      setEtapaCorrecao(`Corrigindo questão dissertativa ${i + 1} de ${dissertativas.length}...`);
+      setEtapaCorrecao(`Corrigindo questão ${i + 1} de ${dissertativas.length}...`);
       totalPontos += q.pontos;
       const { pontosObtidos: pts, justificativa } = await corrigirDissertativaComIA(
         q.enunciado, respostas[q.id] || '', q.pontos
       );
       pontosObtidos += pts;
       correcoes.push({
-        questao_id: q.id,
-        pontos_obtidos: pts,
-        pontos_total: q.pontos,
-        percentual: q.pontos > 0 ? (pts / q.pontos) * 100 : 0,
-        justificativa,
+        questao_id: q.id, pontos_obtidos: pts, pontos_total: q.pontos,
+        percentual: q.pontos > 0 ? (pts / q.pontos) * 100 : 0, justificativa,
       });
     }
 
@@ -199,90 +196,87 @@ export function ResponderProva() {
 
   // ── CÓDIGO ───────────────────────────────────────────────────────────────
   if (step === 'codigo') return (
-    <div className="min-h-screen flex items-center justify-center p-8"
-      style={{ background: 'linear-gradient(135deg, #0a1628 0%, #0d1f3c 100%)' }}>
-      <div className="w-full max-w-lg">
-        <div className="text-center mb-10">
-          <img src="/Logo_IOP.png" alt="IOP" className="w-24 h-24 rounded-full border-4 border-white/20 mx-auto mb-5 object-cover" />
-          <h1 className="text-white text-5xl font-black mb-3">Avaliação Online</h1>
-          <p className="text-white/40 text-xl">Instituto Odilon Pratagi</p>
-        </div>
-        <div className="bg-white rounded-3xl p-10 shadow-2xl flex flex-col gap-5">
-          <label className="text-gray-500 text-base font-bold uppercase tracking-wider">Código da Prova</label>
-          <input value={codigo} onChange={e => setCodigo(e.target.value.toUpperCase())}
-            placeholder="ABC123" maxLength={6}
-            onKeyDown={e => e.key === 'Enter' && buscarProva()}
-            className="w-full border-2 border-gray-200 rounded-2xl px-5 py-6 text-gray-800 placeholder-gray-300 text-4xl font-mono font-black text-center outline-none focus:border-blue-500 tracking-[0.4em] transition-all" />
-          {erro && (
-            <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 flex items-center gap-3">
-              <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
-              <p className="text-red-600 text-lg font-medium">{erro}</p>
-            </div>
-          )}
-          <button onClick={buscarProva} disabled={loading}
-            className="w-full py-5 rounded-2xl font-black text-white text-xl flex items-center justify-center gap-3 transition-all active:scale-95 disabled:opacity-50 hover:brightness-110 shadow-lg"
-            style={{ background: 'linear-gradient(135deg, #1a3a7c, #2d5fd4)' }}>
-            <Search className="w-6 h-6" />
-            {loading ? 'Buscando...' : 'Entrar na Avaliação'}
-          </button>
-        </div>
+    <div className="min-h-screen flex flex-col items-center justify-center p-5"
+      style={{ background: 'linear-gradient(160deg, #0a1628 0%, #1a3a7c 100%)' }}>
+      <img src="/Logo_IOP.png" alt="IOP" className="w-20 h-20 rounded-full border-4 border-white/20 mb-5 object-cover shadow-xl" />
+      <h1 className="text-white text-3xl font-black mb-1 text-center">Avaliação Online</h1>
+      <p className="text-white/40 text-base mb-8 text-center">Instituto Odilon Pratagi</p>
+
+      <div className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4">
+        <label className="text-gray-500 text-xs font-black uppercase tracking-widest">Código da Prova</label>
+        <input value={codigo} onChange={e => setCodigo(e.target.value.toUpperCase())}
+          placeholder="ABC123" maxLength={6}
+          onKeyDown={e => e.key === 'Enter' && buscarProva()}
+          className="w-full border-2 border-gray-200 rounded-2xl px-4 py-5 text-gray-800 placeholder-gray-300 text-3xl font-mono font-black text-center outline-none focus:border-blue-500 tracking-[0.4em] transition-all" />
+        {erro && (
+          <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+            <p className="text-red-600 text-sm font-medium">{erro}</p>
+          </div>
+        )}
+        <button onClick={buscarProva} disabled={loading}
+          className="w-full py-4 rounded-2xl font-black text-white text-lg flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+          style={{ background: 'linear-gradient(135deg, #1a3a7c, #2d5fd4)' }}>
+          <Search className="w-5 h-5" />
+          {loading ? 'Buscando...' : 'Entrar na Avaliação'}
+        </button>
       </div>
     </div>
   );
 
   // ── IDENTIFICAÇÃO ────────────────────────────────────────────────────────
   if (step === 'identificacao' && prova) return (
-    <div className="min-h-screen flex items-center justify-center p-8"
-      style={{ background: 'linear-gradient(135deg, #0a1628 0%, #0d1f3c 100%)' }}>
-      <div className="w-full max-w-2xl">
-        <div className="bg-white/10 border border-white/20 rounded-3xl p-8 mb-5 text-white">
-          <p className="text-blue-300 text-base font-black uppercase tracking-widest mb-3">✓ Avaliação encontrada</p>
-          <h2 className="font-black text-3xl mb-2">{prova.titulo}</h2>
-          {prova.descricao && <p className="text-white/60 text-xl mb-4">{prova.descricao}</p>}
-          <div className="flex gap-3">
-            <span className="bg-blue-500/20 border border-blue-400/30 text-blue-300 px-4 py-2 rounded-full text-lg font-bold">{questoes.length} questões</span>
-            <span className="bg-white/10 border border-white/20 text-white/50 px-4 py-2 rounded-full text-lg">Turma {prova.turma_id}</span>
-          </div>
+    <div className="min-h-screen flex flex-col p-5"
+      style={{ background: 'linear-gradient(160deg, #0a1628 0%, #1a3a7c 100%)' }}>
+      <div className="flex items-center gap-3 mb-5 pt-2">
+        <img src="/Logo_IOP.png" alt="IOP" className="w-10 h-10 rounded-full border-2 border-white/20 object-cover" />
+        <p className="text-white font-bold text-base">Instituto Odilon Pratagi</p>
+      </div>
+
+      <div className="bg-white/10 border border-white/20 rounded-2xl p-5 mb-4 text-white">
+        <p className="text-blue-300 text-xs font-black uppercase tracking-widest mb-1">✓ Avaliação encontrada</p>
+        <h2 className="font-black text-xl mb-1">{prova.titulo}</h2>
+        {prova.descricao && <p className="text-white/60 text-sm mb-2">{prova.descricao}</p>}
+        <div className="flex gap-2 flex-wrap">
+          <span className="bg-blue-500/20 border border-blue-400/30 text-blue-300 px-3 py-1 rounded-full text-sm font-bold">{questoes.length} questões</span>
+          <span className="bg-white/10 border border-white/20 text-white/50 px-3 py-1 rounded-full text-sm">Turma {prova.turma_id}</span>
         </div>
-        <div className="bg-white rounded-3xl p-10 shadow-2xl flex flex-col gap-5">
-          <h3 className="text-gray-800 font-black text-2xl">Sua identificação</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-gray-500 text-base font-bold uppercase tracking-wider mb-2 block">Nome completo</label>
-              <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Seu nome completo"
-                className="w-full border-2 border-gray-200 rounded-xl px-5 py-4 text-gray-800 text-xl outline-none focus:border-blue-500 transition-all" />
-            </div>
-            <div>
-              <label className="text-gray-500 text-base font-bold uppercase tracking-wider mb-2 block">Nº de chamada</label>
-              <input value={numero} onChange={e => setNumero(e.target.value)} placeholder="Ex: 15" type="number"
-                className="w-full border-2 border-gray-200 rounded-xl px-5 py-4 text-gray-800 text-xl outline-none focus:border-blue-500 transition-all" />
-            </div>
-          </div>
-          {erro && <p className="text-red-500 text-lg font-medium">{erro}</p>}
-          <button onClick={iniciarProva}
-            className="w-full py-5 rounded-2xl font-black text-white text-xl transition-all active:scale-95 hover:brightness-110 shadow-lg"
-            style={{ background: 'linear-gradient(135deg, #1a3a7c, #2d5fd4)' }}>
-            Iniciar Avaliação →
-          </button>
+      </div>
+
+      <div className="bg-white rounded-2xl p-5 shadow-xl flex flex-col gap-4">
+        <h3 className="text-gray-800 font-black text-lg">Sua identificação</h3>
+        <div>
+          <label className="text-gray-500 text-xs font-black uppercase tracking-wider mb-1.5 block">Nome completo</label>
+          <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Seu nome completo"
+            className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-800 text-base outline-none focus:border-blue-500 transition-all" />
         </div>
+        <div>
+          <label className="text-gray-500 text-xs font-black uppercase tracking-wider mb-1.5 block">Número de chamada</label>
+          <input value={numero} onChange={e => setNumero(e.target.value)} placeholder="Ex: 15" type="number"
+            className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-800 text-base outline-none focus:border-blue-500 transition-all" />
+        </div>
+        {erro && <p className="text-red-500 text-sm font-medium">{erro}</p>}
+        <button onClick={iniciarProva}
+          className="w-full py-4 rounded-2xl font-black text-white text-lg transition-all active:scale-95"
+          style={{ background: 'linear-gradient(135deg, #1a3a7c, #2d5fd4)' }}>
+          Iniciar Avaliação →
+        </button>
       </div>
     </div>
   );
 
   // ── CORRIGINDO ───────────────────────────────────────────────────────────
   if (step === 'corrigindo') return (
-    <div className="min-h-screen flex items-center justify-center p-8 bg-gray-50">
-      <div className="w-full max-w-md text-center">
-        <div className="bg-white rounded-3xl p-12 shadow-xl border border-gray-100">
-          <div className="w-24 h-24 rounded-full bg-blue-100 border-4 border-blue-200 flex items-center justify-center mx-auto mb-6">
-            <Brain className="w-12 h-12 text-blue-600 animate-pulse" />
-          </div>
-          <h2 className="text-gray-800 font-black text-2xl mb-3">Corrigindo sua prova...</h2>
-          <p className="text-gray-500 text-lg mb-6">A inteligência artificial está avaliando suas respostas dissertativas.</p>
-          <div className="bg-blue-50 border-2 border-blue-100 rounded-2xl px-6 py-4 flex items-center gap-3">
-            <Loader className="w-5 h-5 text-blue-600 animate-spin shrink-0" />
-            <p className="text-blue-700 text-base font-medium text-left">{etapaCorrecao || 'Iniciando correção...'}</p>
-          </div>
+    <div className="min-h-screen flex items-center justify-center p-5 bg-gray-50">
+      <div className="w-full max-w-sm text-center bg-white rounded-3xl p-8 shadow-xl border border-gray-100">
+        <div className="w-20 h-20 rounded-full bg-blue-100 border-4 border-blue-200 flex items-center justify-center mx-auto mb-4">
+          <Brain className="w-10 h-10 text-blue-600 animate-pulse" />
+        </div>
+        <h2 className="text-gray-800 font-black text-xl mb-2">Corrigindo sua prova...</h2>
+        <p className="text-gray-400 text-sm mb-5">A IA está avaliando suas respostas dissertativas.</p>
+        <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 flex items-center gap-2">
+          <Loader className="w-4 h-4 text-blue-600 animate-spin shrink-0" />
+          <p className="text-blue-700 text-sm font-medium text-left">{etapaCorrecao || 'Iniciando...'}</p>
         </div>
       </div>
     </div>
@@ -292,43 +286,45 @@ export function ResponderProva() {
   if (step === 'prova' && q) return (
     <div className="min-h-screen flex flex-col bg-gray-50">
 
-      <header className="bg-white border-b-2 border-blue-100 sticky top-0 z-40 shadow-sm">
-        <div className="flex items-center justify-between px-8 py-4">
-          <div className="flex items-center gap-4">
-            <img src="/Logo_IOP.png" alt="IOP" className="w-12 h-12 rounded-full border-2 border-blue-100 object-cover" />
-            <div>
-              <p className="text-gray-800 font-black text-xl leading-tight">{prova?.titulo}</p>
-              <p className="text-gray-400 text-base">{nome} · Turma {prova?.turma_id}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-5">
-            <div className="flex items-center gap-2 bg-blue-50 border-2 border-blue-200 rounded-full px-5 py-2.5">
-              <Clock className="w-5 h-5 text-blue-600" />
-              <span className="text-blue-700 font-mono text-2xl font-black">{formatarTempo(tempo)}</span>
-            </div>
-            <div className="hidden md:block text-base text-gray-500 font-semibold">
-              <span className="text-blue-600 font-black text-2xl">{respondidas}</span>
-              <span className="text-gray-400">/{questoes.length} respondidas</span>
-            </div>
-          </div>
+      {/* Header compacto */}
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
+        {/* Barra de progresso no topo */}
+        <div className="h-1.5 bg-gray-100">
+          <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${progresso}%` }} />
         </div>
-        <div className="h-2 bg-gray-100">
-          <div className="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-500"
-            style={{ width: `${progresso}%` }} />
+        <div className="flex items-center justify-between px-4 py-2.5">
+          <div className="flex items-center gap-2 min-w-0">
+            <img src="/Logo_IOP.png" alt="IOP" className="w-8 h-8 rounded-full border border-gray-200 object-cover shrink-0" />
+            <div className="min-w-0">
+              <p className="text-gray-800 font-black text-sm leading-tight truncate">{prova?.titulo}</p>
+              <p className="text-gray-400 text-xs truncate">{nome} · T. {prova?.turma_id}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 shrink-0 ml-2">
+            <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
+              <Clock className="w-3.5 h-3.5 text-blue-600" />
+              <span className="text-blue-700 font-mono text-sm font-black">{formatarTempo(tempo)}</span>
+            </div>
+            <span className="text-xs text-gray-400 font-semibold hidden sm:block">
+              <span className="text-blue-600 font-black">{respondidas}</span>/{questoes.length}
+            </span>
+          </div>
         </div>
       </header>
 
+      {/* Conteúdo scrollável */}
       <div className="flex flex-1">
 
-        <aside className="hidden md:flex flex-col bg-white border-r-2 border-gray-100 w-80 shrink-0 sticky top-[82px] h-[calc(100vh-82px)] overflow-y-auto">
-          <div className="p-7 flex flex-col gap-7 h-full">
+        {/* Sidebar apenas no desktop */}
+        <aside className="hidden lg:flex flex-col bg-white border-r-2 border-gray-100 w-72 shrink-0 sticky top-[57px] h-[calc(100vh-57px)] overflow-y-auto">
+          <div className="p-6 flex flex-col gap-6 h-full">
             <div>
-              <p className="text-gray-400 text-sm font-black uppercase tracking-widest mb-4">Questões</p>
-              <div className="grid grid-cols-5 gap-3">
+              <p className="text-gray-400 text-xs font-black uppercase tracking-widest mb-3">Questões</p>
+              <div className="grid grid-cols-5 gap-2">
                 {questoes.map((qq, i) => (
                   <button key={qq.id} onClick={() => setQuestaoAtual(i)}
-                    className={`w-12 h-12 rounded-xl text-base font-black transition-all shadow-sm ${
-                      i === questaoAtual ? 'bg-blue-600 text-white scale-110 shadow-blue-200 shadow-md'
+                    className={`w-10 h-10 rounded-xl text-sm font-black transition-all ${
+                      i === questaoAtual ? 'bg-blue-600 text-white scale-110 shadow-md shadow-blue-200'
                         : respostas[qq.id] ? 'bg-green-100 border-2 border-green-400 text-green-700'
                         : 'bg-gray-100 border-2 border-gray-200 text-gray-500 hover:bg-blue-50 hover:border-blue-300'
                     }`}>
@@ -337,173 +333,180 @@ export function ResponderProva() {
                 ))}
               </div>
             </div>
-
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-5 h-5 rounded-lg bg-blue-600" />
-                <span className="text-base text-gray-600 font-medium">Atual</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-5 h-5 rounded-lg bg-green-100 border-2 border-green-400" />
-                <span className="text-base text-gray-600 font-medium">Respondida</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-5 h-5 rounded-lg bg-gray-100 border-2 border-gray-200" />
-                <span className="text-base text-gray-600 font-medium">Pendente</span>
-              </div>
+            <div className="flex flex-col gap-2 text-sm">
+              <div className="flex items-center gap-2"><div className="w-4 h-4 rounded bg-blue-600" /><span className="text-gray-600">Atual</span></div>
+              <div className="flex items-center gap-2"><div className="w-4 h-4 rounded bg-green-100 border-2 border-green-400" /><span className="text-gray-600">Respondida</span></div>
+              <div className="flex items-center gap-2"><div className="w-4 h-4 rounded bg-gray-100 border-2 border-gray-200" /><span className="text-gray-600">Pendente</span></div>
             </div>
-
             <div>
-              <div className="flex justify-between text-base mb-2">
+              <div className="flex justify-between text-sm mb-1.5">
                 <span className="text-gray-500 font-semibold">Progresso</span>
-                <span className="text-blue-600 font-black text-lg">{Math.round(progresso)}%</span>
+                <span className="text-blue-600 font-black">{Math.round(progresso)}%</span>
               </div>
-              <div className="h-4 bg-gray-100 rounded-full overflow-hidden border border-gray-200">
-                <div className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-500"
-                  style={{ width: `${progresso}%` }} />
+              <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${progresso}%` }} />
               </div>
-              <p className="text-base text-gray-400 mt-2">{respondidas} de {questoes.length} respondidas</p>
+              <p className="text-xs text-gray-400 mt-1">{respondidas} de {questoes.length} respondidas</p>
             </div>
-
             <div className="mt-auto">
               <button onClick={enviarProva} disabled={enviando}
-                className="w-full py-5 rounded-2xl font-black text-white text-lg flex items-center justify-center gap-3 transition-all hover:brightness-110 disabled:opacity-50 shadow-lg shadow-blue-200"
+                className="w-full py-4 rounded-2xl font-black text-white text-base flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-50 shadow-lg shadow-blue-200"
                 style={{ background: 'linear-gradient(135deg, #1a3a7c, #2d5fd4)' }}>
-                <Send className="w-6 h-6" />
+                <Send className="w-5 h-5" />
                 {enviando ? 'Enviando...' : 'Enviar Prova'}
               </button>
             </div>
           </div>
         </aside>
 
-        <main className="flex-1 flex flex-col p-6 md:p-10 gap-6 overflow-y-auto">
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8 md:p-12 flex flex-col gap-8">
+        {/* Área principal */}
+        <main className="flex-1 flex flex-col pb-28">
 
-            <div className="flex items-center gap-5">
-              <div className="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-200 shrink-0">
-                <span className="text-white font-black text-2xl">{questaoAtual + 1}</span>
+          {/* Indicador de questão — mobile */}
+          <div className="lg:hidden flex items-center justify-between px-4 pt-4 pb-2">
+            <span className="text-xs text-gray-400 font-semibold">
+              Questão <span className="text-blue-600 font-black text-sm">{questaoAtual + 1}</span> de {questoes.length}
+            </span>
+            <span className={`text-xs font-black px-2.5 py-1 rounded-full ${
+              q.tipo === 'multipla_escolha' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+            }`}>
+              {q.tipo === 'multipla_escolha' ? 'Múltipla Escolha' : 'Dissertativa'}
+            </span>
+          </div>
+
+          {/* Card da questão */}
+          <div className="mx-4 lg:mx-8 lg:mt-6 bg-white rounded-2xl shadow-sm border border-gray-100 p-5 lg:p-10 flex flex-col gap-5">
+
+            {/* Número — desktop */}
+            <div className="hidden lg:flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-200 shrink-0">
+                <span className="text-white font-black text-xl">{questaoAtual + 1}</span>
               </div>
               <div>
-                <span className={`text-base font-black uppercase tracking-wider px-4 py-2 rounded-full ${
+                <span className={`text-sm font-black uppercase tracking-wider px-3 py-1.5 rounded-full ${
                   q.tipo === 'multipla_escolha' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
                 }`}>
                   {q.tipo === 'multipla_escolha' ? 'Múltipla Escolha' : 'Dissertativa'}
                 </span>
-                <p className="text-gray-400 text-lg mt-2">{q.pontos} {q.pontos === 1 ? 'ponto' : 'pontos'}</p>
+                <p className="text-gray-400 text-sm mt-1.5">{q.pontos} {q.pontos === 1 ? 'ponto' : 'pontos'}</p>
               </div>
             </div>
 
-            <p className="text-gray-800 text-2xl md:text-3xl font-medium leading-relaxed">{q.enunciado}</p>
+            {/* Enunciado — tamanho adaptado por tela */}
+            <p className="text-gray-800 text-base lg:text-2xl font-medium leading-relaxed">{q.enunciado}</p>
 
             {q.imagem_base64 && (
-              <div className="rounded-2xl overflow-hidden border-2 border-gray-100">
-                <img src={q.imagem_base64} alt="Imagem da questão" className="w-full max-h-96 object-contain bg-gray-50" />
+              <div className="rounded-xl overflow-hidden border border-gray-100">
+                <img src={q.imagem_base64} alt="Imagem da questão" className="w-full max-h-56 object-contain bg-gray-50" />
               </div>
             )}
 
+            {/* Alternativas — compactas no mobile */}
             {q.tipo === 'multipla_escolha' && (
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2.5">
                 {q.opcoes.map((op, i) => (
                   <button key={i} onClick={() => responder(q.id, String(i))}
-                    className={`flex items-center gap-6 px-7 py-5 rounded-2xl text-left transition-all border-2 ${
+                    className={`flex items-center gap-3 px-4 py-3 lg:px-6 lg:py-4 rounded-xl text-left transition-all border-2 ${
                       respostas[q.id] === String(i)
-                        ? 'bg-blue-600 border-blue-600 shadow-lg shadow-blue-200'
-                        : 'bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                        ? 'bg-blue-600 border-blue-600 shadow-md shadow-blue-200'
+                        : 'bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50 active:bg-blue-50'
                     }`}>
-                    <span className={`w-12 h-12 rounded-xl border-2 flex items-center justify-center shrink-0 font-black text-xl transition-all ${
+                    <span className={`w-9 h-9 lg:w-11 lg:h-11 rounded-lg border-2 flex items-center justify-center shrink-0 font-black text-base transition-all ${
                       respostas[q.id] === String(i) ? 'border-white/40 bg-white/20 text-white' : 'border-gray-300 text-gray-500 bg-gray-50'
                     }`}>
                       {LETRAS[i]}
                     </span>
-                    <span className={`text-xl font-medium transition-colors ${
+                    <span className={`text-base lg:text-lg font-medium transition-colors leading-snug ${
                       respostas[q.id] === String(i) ? 'text-white' : 'text-gray-700'
                     }`}>{op}</span>
-                    {respostas[q.id] === String(i) && <CheckCircle className="w-7 h-7 text-white ml-auto shrink-0" />}
+                    {respostas[q.id] === String(i) && <CheckCircle className="w-5 h-5 text-white ml-auto shrink-0" />}
                   </button>
                 ))}
               </div>
             )}
 
             {q.tipo === 'dissertativa' && (
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-2 text-purple-600 text-base font-bold">
-                  <Brain className="w-5 h-5" />
-                  <span>Esta questão será corrigida automaticamente por IA</span>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-1.5 text-purple-600 text-xs font-bold">
+                  <Brain className="w-3.5 h-3.5" />
+                  <span>Corrigida automaticamente por IA</span>
                 </div>
                 <textarea value={respostas[q.id] || ''} onChange={e => responder(q.id, e.target.value)}
-                  placeholder="Digite sua resposta aqui..." rows={7}
-                  className="w-full border-2 border-gray-200 rounded-2xl px-6 py-5 text-gray-800 text-xl placeholder-gray-300 outline-none focus:border-purple-400 transition-all resize-none" />
+                  placeholder="Digite sua resposta aqui..." rows={5}
+                  className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-800 text-base placeholder-gray-300 outline-none focus:border-purple-400 transition-all resize-none" />
               </div>
             )}
           </div>
-
-          <div className="flex items-center gap-4">
-            <button onClick={() => setQuestaoAtual(i => Math.max(0, i - 1))}
-              disabled={questaoAtual === 0}
-              className="flex items-center gap-2 px-7 py-5 rounded-2xl bg-white border-2 border-gray-200 text-gray-600 font-black text-lg hover:border-blue-300 hover:bg-blue-50 disabled:opacity-30 transition-all shadow-sm">
-              <ChevronLeft className="w-6 h-6" /> Anterior
-            </button>
-
-            <div className="flex-1 flex md:hidden gap-2 justify-center overflow-x-auto">
-              {questoes.map((qq, i) => (
-                <button key={qq.id} onClick={() => setQuestaoAtual(i)}
-                  className={`w-10 h-10 rounded-xl text-sm font-black shrink-0 transition-all border-2 ${
-                    i === questaoAtual ? 'bg-blue-600 border-blue-600 text-white'
-                      : respostas[qq.id] ? 'bg-green-100 border-green-400 text-green-700'
-                      : 'bg-white border-gray-200 text-gray-400'
-                  }`}>
-                  {i + 1}
-                </button>
-              ))}
-            </div>
-
-            {questaoAtual < questoes.length - 1 ? (
-              <button onClick={() => setQuestaoAtual(i => Math.min(questoes.length - 1, i + 1))}
-                className="flex items-center gap-2 px-7 py-5 rounded-2xl font-black text-white text-lg hover:brightness-110 transition-all ml-auto shadow-lg shadow-blue-200"
-                style={{ background: 'linear-gradient(135deg, #1a3a7c, #2d5fd4)' }}>
-                Próxima <ChevronRight className="w-6 h-6" />
-              </button>
-            ) : (
-              <button onClick={enviarProva} disabled={enviando}
-                className="flex items-center gap-2 px-7 py-5 rounded-2xl font-black text-white text-lg hover:brightness-110 disabled:opacity-50 transition-all ml-auto shadow-lg shadow-blue-200"
-                style={{ background: 'linear-gradient(135deg, #1a3a7c, #2d5fd4)' }}>
-                <Send className="w-6 h-6" />
-                {enviando ? 'Enviando...' : 'Enviar Avaliação'}
-              </button>
-            )}
-          </div>
         </main>
+      </div>
+
+      {/* Navegação fixa na parte inferior — mobile e desktop */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-3 flex items-center gap-3 z-40 shadow-lg">
+        <button onClick={() => setQuestaoAtual(i => Math.max(0, i - 1))}
+          disabled={questaoAtual === 0}
+          className="flex items-center gap-1.5 px-4 py-3 rounded-xl bg-gray-100 text-gray-600 font-black text-sm hover:bg-gray-200 disabled:opacity-30 transition-all">
+          <ChevronLeft className="w-4 h-4" /> Anterior
+        </button>
+
+        {/* Miniaturas compactas — mobile */}
+        <div className="flex-1 flex gap-1.5 justify-center overflow-x-auto scrollbar-none">
+          {questoes.map((qq, i) => (
+            <button key={qq.id} onClick={() => setQuestaoAtual(i)}
+              className={`w-8 h-8 rounded-lg text-xs font-black shrink-0 transition-all border ${
+                i === questaoAtual ? 'bg-blue-600 border-blue-600 text-white'
+                  : respostas[qq.id] ? 'bg-green-100 border-green-400 text-green-700'
+                  : 'bg-gray-100 border-gray-200 text-gray-500'
+              }`}>
+              {i + 1}
+            </button>
+          ))}
+        </div>
+
+        {questaoAtual < questoes.length - 1 ? (
+          <button onClick={() => setQuestaoAtual(i => Math.min(questoes.length - 1, i + 1))}
+            className="flex items-center gap-1.5 px-4 py-3 rounded-xl font-black text-white text-sm transition-all"
+            style={{ background: 'linear-gradient(135deg, #1a3a7c, #2d5fd4)' }}>
+            Próxima <ChevronRight className="w-4 h-4" />
+          </button>
+        ) : (
+          <button onClick={enviarProva} disabled={enviando}
+            className="flex items-center gap-1.5 px-4 py-3 rounded-xl font-black text-white text-sm disabled:opacity-50 transition-all"
+            style={{ background: 'linear-gradient(135deg, #1a3a7c, #2d5fd4)' }}>
+            <Send className="w-4 h-4" />
+            {enviando ? 'Enviando...' : 'Enviar'}
+          </button>
+        )}
       </div>
     </div>
   );
 
   // ── RESULTADO ────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-8">
-      <div className="w-full max-w-2xl flex flex-col gap-5">
+    <div className="min-h-screen bg-gray-50 p-4 lg:p-8 flex items-start lg:items-center justify-center">
+      <div className="w-full max-w-lg flex flex-col gap-4 pt-4 lg:pt-0">
 
-        <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-10 md:p-14 text-center">
-          <div className={`w-36 h-36 rounded-full flex items-center justify-center mx-auto mb-8 ${
+        <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-7 text-center">
+          <div className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-5 ${
             nota !== null && nota >= 6 ? 'bg-green-100 border-4 border-green-300' : 'bg-red-100 border-4 border-red-300'
           }`}>
-            <CheckCircle className={`w-20 h-20 ${nota !== null && nota >= 6 ? 'text-green-500' : 'text-red-500'}`} />
+            <CheckCircle className={`w-14 h-14 ${nota !== null && nota >= 6 ? 'text-green-500' : 'text-red-500'}`} />
           </div>
 
-          <p className="text-gray-400 text-xl mb-2">Avaliação enviada com sucesso!</p>
-          <h2 className="text-gray-800 font-black text-4xl mb-2">{nome}</h2>
-          <p className="text-gray-500 text-xl mb-8">Turma {prova?.turma_id} · {prova?.titulo}</p>
+          <p className="text-gray-400 text-base mb-1">Avaliação enviada com sucesso!</p>
+          <h2 className="text-gray-800 font-black text-2xl mb-1">{nome}</h2>
+          <p className="text-gray-500 text-base mb-6">Turma {prova?.turma_id} · {prova?.titulo}</p>
 
           {nota !== null && (
-            <div className={`rounded-2xl p-10 mb-6 border-2 ${nota >= 6 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-              <p className="text-gray-500 text-xl mb-3">Nota final</p>
-              <p className={`text-9xl font-black mb-4 ${nota >= 6 ? 'text-green-600' : 'text-red-600'}`}>
+            <div className={`rounded-2xl p-7 mb-5 border-2 ${nota >= 6 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+              <p className="text-gray-500 text-base mb-2">Nota final</p>
+              <p className={`text-8xl font-black mb-3 ${nota >= 6 ? 'text-green-600' : 'text-red-600'}`}>
                 {nota.toFixed(1)}
               </p>
-              <div className="h-4 bg-gray-200 rounded-full overflow-hidden mb-4">
+              <div className="h-3 bg-gray-200 rounded-full overflow-hidden mb-3">
                 <div className={`h-full rounded-full ${nota >= 6 ? 'bg-green-500' : 'bg-red-500'}`}
                   style={{ width: `${nota * 10}%` }} />
               </div>
-              <p className={`text-2xl font-black ${nota >= 6 ? 'text-green-600' : 'text-red-600'}`}>
+              <p className={`text-lg font-black ${nota >= 6 ? 'text-green-600' : 'text-red-600'}`}>
                 {nota >= 9.5 ? '🏆 Nota máxima! Parabéns!'
                   : nota >= 6 ? '✓ Aprovado'
                   : '⚠ Abaixo da média'}
@@ -511,8 +514,7 @@ export function ResponderProva() {
             </div>
           )}
 
-          {/* Estatísticas com fonte maior */}
-          <div className="flex items-center justify-center gap-6 text-gray-500 text-lg font-medium">
+          <div className="flex items-center justify-center gap-4 text-gray-400 text-sm">
             <span>⏱ {formatarTempo(tempo)}</span>
             <span>·</span>
             <span>📝 {questoes.length} questões</span>
@@ -521,50 +523,41 @@ export function ResponderProva() {
           </div>
         </div>
 
-        {/* Correção das dissertativas */}
         {correcoesDissertativas.length > 0 && (
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8 flex flex-col gap-5">
-            <div className="flex items-center gap-3 mb-2">
-              <Brain className="w-7 h-7 text-purple-600" />
-              <h3 className="text-gray-800 font-black text-2xl">Correção das Dissertativas (IA)</h3>
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col gap-4">
+            <div className="flex items-center gap-2">
+              <Brain className="w-5 h-5 text-purple-600" />
+              <h3 className="text-gray-800 font-black text-lg">Correção das Dissertativas (IA)</h3>
             </div>
             {correcoesDissertativas.map((c, i) => {
               const questao = questoes.find(q => q.id === c.questao_id);
               return (
-                <div key={c.questao_id} className={`rounded-2xl p-6 border-2 ${
+                <div key={c.questao_id} className={`rounded-2xl p-4 border-2 ${
                   c.percentual >= 70 ? 'bg-green-50 border-green-200'
                     : c.percentual >= 40 ? 'bg-yellow-50 border-yellow-200'
                     : 'bg-red-50 border-red-200'
                 }`}>
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-gray-600 text-base font-black uppercase tracking-wide">
-                      Dissertativa {i + 1}
-                    </p>
-                    <span className={`font-black text-xl ${
-                      c.percentual >= 70 ? 'text-green-600'
-                        : c.percentual >= 40 ? 'text-yellow-600'
-                        : 'text-red-600'
-                    }`}>
-                      {c.pontos_obtidos.toFixed(1)}/{c.pontos_total} pts
-                    </span>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-gray-600 text-sm font-black uppercase tracking-wide">Dissertativa {i + 1}</p>
+                    <span className={`font-black text-base ${
+                      c.percentual >= 70 ? 'text-green-600' : c.percentual >= 40 ? 'text-yellow-600' : 'text-red-600'
+                    }`}>{c.pontos_obtidos.toFixed(1)}/{c.pontos_total} pts</span>
                   </div>
-                  <p className="text-gray-600 text-base mb-3 line-clamp-2">{questao?.enunciado}</p>
-                  <div className="h-3 bg-gray-200 rounded-full overflow-hidden mb-3">
+                  <p className="text-gray-500 text-sm mb-2 line-clamp-2">{questao?.enunciado}</p>
+                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden mb-2">
                     <div className={`h-full rounded-full ${
-                      c.percentual >= 70 ? 'bg-green-500'
-                        : c.percentual >= 40 ? 'bg-yellow-500'
-                        : 'bg-red-500'
+                      c.percentual >= 70 ? 'bg-green-500' : c.percentual >= 40 ? 'bg-yellow-500' : 'bg-red-500'
                     }`} style={{ width: `${c.percentual}%` }} />
                   </div>
-                  <p className="text-gray-700 text-base italic">💬 {c.justificativa}</p>
+                  <p className="text-gray-600 text-sm italic">💬 {c.justificativa}</p>
                 </div>
               );
             })}
           </div>
         )}
 
-        <div className="bg-blue-50 border-2 border-blue-100 rounded-2xl p-6">
-          <p className="text-blue-700 text-lg font-medium text-center">
+        <div className="bg-blue-50 border-2 border-blue-100 rounded-2xl p-4">
+          <p className="text-blue-700 text-sm font-medium text-center">
             O professor poderá revisar a correção e ajustar a nota final no boletim.
           </p>
         </div>
