@@ -4,7 +4,13 @@ import { v4 as uuidv4 } from 'uuid';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://rsifjxeqitgiecqwvien.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_Vw7h5WZ5BF-GzaAM0hOECg_TMjwdiby';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false,
+  }
+});
 
 export async function salvarChamada(
   registros: { aluno_id: string; data: string; presente: boolean }[]
@@ -27,7 +33,6 @@ export async function salvarChamada(
   const existingMap = new Map(existingRecords?.map((r) => [r.aluno_id, r.id]));
 
   const upsertData = registros.map((r) => {
-    // Generate an ID if it doesn't exist
     const recordId = existingMap.get(r.aluno_id) || uuidv4();
     return {
       id: recordId,
@@ -49,7 +54,7 @@ export async function salvarChamada(
 
 export async function buscarHistoricoFrequencia(turmaId?: string, dt?: string) {
   let freqQuery = supabase.from("frequencia").select("*");
-  
+
   if (dt) {
     freqQuery = freqQuery.eq("data", dt);
   }
@@ -81,17 +86,15 @@ export async function buscarHistoricoFrequencia(turmaId?: string, dt?: string) {
   });
 
   const historico = [];
-  
+
   for (const registro of dataFrequencia || []) {
     const aluno = alunosMap.get(registro.aluno_id);
-    
-    // Fazer o join ("frequencia.aluno_id = alunos.id")
+
     if (aluno) {
-      // Filtrar por turma_id se houver filtro
       if (turmaNormalizada && aluno.turma_id !== turmaNormalizada) {
         continue;
       }
-      
+
       historico.push({
         id: registro.id,
         aluno_id: registro.aluno_id,
@@ -107,13 +110,9 @@ export async function buscarHistoricoFrequencia(turmaId?: string, dt?: string) {
   historico.sort((a, b) => {
     const numA = (a.numero_chamada !== null && a.numero_chamada !== undefined) ? a.numero_chamada : Infinity;
     const numB = (b.numero_chamada !== null && b.numero_chamada !== undefined) ? b.numero_chamada : Infinity;
-    if (numA !== numB) {
-       return numA - numB;
-    }
+    if (numA !== numB) return numA - numB;
     return a.nome.localeCompare(b.nome);
   });
-
-  console.log("Dados retornados do Supabase (histórico após join):", historico);
 
   return historico;
 }
@@ -124,15 +123,11 @@ export async function buscarAlunos(turmaId: string) {
     .replace(/\s/g, "")
     .toUpperCase();
 
-  console.log("VALOR EXATO:", JSON.stringify(turmaNormalizada));
-
   const { data, error } = await supabase
     .from("alunos")
     .select("*")
     .eq("turma_id", turmaNormalizada)
     .order("numero_chamada", { ascending: true, nullsFirst: false });
-
-  console.log("RESULTADO:", data);
 
   if (error) {
     console.error('Erro ao buscar alunos:', error);
@@ -143,13 +138,9 @@ export async function buscarAlunos(turmaId: string) {
 
 export async function buscarRelatorioFrequencia(turmaId?: string, dataInicio?: string, dataFim?: string) {
   let freqQuery = supabase.from("frequencia").select("*");
-  
-  if (dataInicio) {
-    freqQuery = freqQuery.gte("data", dataInicio);
-  }
-  if (dataFim) {
-    freqQuery = freqQuery.lte("data", dataFim);
-  }
+
+  if (dataInicio) freqQuery = freqQuery.gte("data", dataInicio);
+  if (dataFim) freqQuery = freqQuery.lte("data", dataFim);
 
   const { data: dataFrequencia, error: errorFrequencia } = await freqQuery;
 
@@ -191,11 +182,8 @@ export async function buscarRelatorioFrequencia(turmaId?: string, dataInicio?: s
     const aluno = alunosMap.get(registro.aluno_id);
     if (aluno) {
       aluno.total += 2;
-      if (registro.presente) {
-        aluno.presencas += 2;
-      } else {
-        aluno.faltas += 2;
-      }
+      if (registro.presente) aluno.presencas += 2;
+      else aluno.faltas += 2;
     }
   }
 
@@ -209,20 +197,14 @@ export async function buscarRelatorioFrequencia(turmaId?: string, dataInicio?: s
       else if (frequencia >= 50) status = 'Atenção';
       else status = 'Crítico';
 
-      relatorio.push({
-        ...aluno,
-        frequencia,
-        status
-      });
+      relatorio.push({ ...aluno, frequencia, status });
     }
   });
-  
+
   relatorio.sort((a, b) => {
     const numA = (a.numero_chamada !== null && a.numero_chamada !== undefined) ? a.numero_chamada : Infinity;
     const numB = (b.numero_chamada !== null && b.numero_chamada !== undefined) ? b.numero_chamada : Infinity;
-    if (numA !== numB) {
-       return numA - numB;
-    }
+    if (numA !== numB) return numA - numB;
     return a.nome.localeCompare(b.nome);
   });
 

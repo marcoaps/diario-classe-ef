@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, NavLink, Link } from 'react-router-dom';
-import { Users, CheckSquare, GraduationCap, CloudOff, Cloud, CalendarSearch, BarChart3, Settings } from 'lucide-react';
+import { Users, CheckSquare, GraduationCap, CloudOff, Cloud, CalendarSearch, BarChart3, Settings, QrCode } from 'lucide-react';
 import { useStore } from '../store';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -54,6 +54,7 @@ export function AppLayout() {
          <NavItem to="/history" icon={<CalendarSearch />} label="Histórico" />
          <NavItem to="/report" icon={<BarChart3 />} label="Relatórios" />
          <NavItem to="/grades" icon={<GraduationCap />} label="Notas" />
+         <NavItem to="/qrcodes" icon={<QrCode />} label="QR Codes" />
       </nav>
     </div>
   );

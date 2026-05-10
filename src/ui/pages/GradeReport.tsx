@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
+import * as XLSX from "xlsx";
 import { cn } from "../AppLayout";
-import { X, FileDown, Save, Upload } from "lucide-react";
+import { X, FileDown, FileSpreadsheet, Save, Trash2, Upload } from "lucide-react";
 import { salvarNotas, buscarNotas } from "../../data/supabase";
 
 const TURMAS = ["6F", "7B", "7C", "7D", "7E", "7F", "8A", "8B", "8C", "8D", "8E", "8F", "9A", "9B", "9C", "9D", "9E", "9F"];
@@ -83,8 +84,8 @@ export function GradeReport() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-5",
-          max_tokens: 8000,
+          model: "claude-sonnet-4-6",
+          max_tokens: 16000,
           messages: [{
             role: "user",
             content: [
@@ -132,6 +133,30 @@ export function GradeReport() {
     return { text: "Reprov.", color: "text-red-600" };
   };
 
+  const exportarExcel = () => {
+    if (alunos.length === 0) return;
+    const linhas = alunos.map(a => ({
+      numero: a.num,
+      nome: a.nome,
+      nota: a.nota,
+      situacao: a.nota !== null && a.nota !== undefined ? getStatus(a.nota).text : "-",
+      turma,
+      bimestre,
+    }));
+    const ws = XLSX.utils.json_to_sheet(linhas);
+    ws["!cols"] = [{ wch: 6 }, { wch: 38 }, { wch: 8 }, { wch: 12 }, { wch: 8 }, { wch: 10 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, `${turma}_B${bimestre}`);
+    XLSX.writeFile(wb, `notas_${turma}_bim${bimestre}.xlsx`);
+  };
+
+  const limparLista = () => {
+    if (alunos.length === 0) return;
+    if (!window.confirm("Limpar a lista atual? Os dados salvos no banco NÃO serão afetados.")) return;
+    setAlunos([]);
+    setSaved(false);
+  };
+
   const fmtNota = (n: any) => n !== null && n !== undefined ? Number(n).toFixed(1).replace(".", ",") : "-";
 
   return (
@@ -176,7 +201,7 @@ export function GradeReport() {
                 </button>
               ))}
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button onClick={() => setShowImport(true)}
                 className="flex-1 py-3 bg-primary text-white rounded-xl font-bold shadow-md hover:bg-primary-dark transition-all flex items-center justify-center gap-2">
                 <Upload className="w-4 h-4" /> Carregar PDF
@@ -185,6 +210,18 @@ export function GradeReport() {
                 <button onClick={handleSalvar} disabled={isSaving}
                   className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold shadow-md hover:bg-green-700 transition-all flex items-center justify-center gap-2">
                   <Save className="w-4 h-4" /> {isSaving ? "Salvando..." : "Salvar"}
+                </button>
+              )}
+              {alunos.length > 0 && (
+                <button onClick={exportarExcel}
+                  className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold shadow-md hover:bg-emerald-700 transition-all flex items-center justify-center gap-2">
+                  <FileSpreadsheet className="w-4 h-4" /> Excel
+                </button>
+              )}
+              {alunos.length > 0 && (
+                <button onClick={limparLista}
+                  className="py-3 px-4 bg-red-600 text-white rounded-xl font-bold shadow-md hover:bg-red-700 transition-all flex items-center justify-center gap-2">
+                  <Trash2 className="w-5 h-5" />
                 </button>
               )}
               <button onClick={() => window.print()}
