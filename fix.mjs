@@ -1,0 +1,1 @@
+import {readFileSync,writeFileSync} from "fs"; const f="src/ui/pages/ProvasOnline.tsx"; let c=readFileSync(f,"utf8"); c=c.replace("const result = await mammoth.extractRawText({ arrayBuffer });","const imagensMap={};\n  const result = await mammoth.extractRawText({ arrayBuffer });"); writeFileSync(f,c,"utf8"); console.log("OK");

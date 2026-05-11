@@ -13,8 +13,17 @@ interface AlunoQR {
   token_acesso: string;
 }
 
+// CORRIGIDO: extrai formato curto "6F" de "6º Ano F" para bater com o banco
 function normalizarTurma(turmaId: string) {
-  return turmaId.replace('º', '').replace(/\s/g, '').toUpperCase();
+  // Se já está no formato curto (ex: "6F"), retorna direto
+  if (/^\d+[A-Z]$/i.test(turmaId.trim())) {
+    return turmaId.trim().toUpperCase();
+  }
+  // Converte "6º Ano F" → "6F"
+  const match = turmaId.match(/(\d+).*?([A-Z])$/i);
+  if (match) return `${match[1]}${match[2].toUpperCase()}`;
+  // Fallback
+  return turmaId.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
 }
 
 export function GerarQRCodes() {
