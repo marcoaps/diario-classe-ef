@@ -17,6 +17,7 @@ import { ResponderProva } from './ui/pages/ResponderProva';
 import { TestePublico } from './ui/pages/TestePublico';
 import { supabase } from './data/supabase';
 
+// useAuth removido
 export function useAuth() {
   const [session, setSession] = useState<boolean | null>(null);
   useEffect(() => {
