@@ -33,19 +33,19 @@ export const PONTOS_MAXIMOS = AULAS_POR_BIMESTRE * PONTOS_POR_REGISTRO * 2;
 export function getPeriodoBimestre(bimestre: Bimestre, ano?: number) {
   const y = ano ?? new Date().getFullYear();
   switch (bimestre) {
-    case 1:
-      return { inicio: `${y}-02-01`, fim: `${y}-04-30` };
-    case 2:
-      return { inicio: `${y}-05-01`, fim: `${y}-07-15` };
-    case 3:
-      return { inicio: `${y}-07-16`, fim: `${y}-09-30` };
-    case 4:
-      return { inicio: `${y}-10-01`, fim: `${y}-12-20` };
+    case 1: return { inicio: `${y}-02-01`, fim: `${y}-04-30` };
+    case 2: return { inicio: `${y}-05-01`, fim: `${y}-07-15` };
+    case 3: return { inicio: `${y}-07-16`, fim: `${y}-09-30` };
+    case 4: return { inicio: `${y}-10-01`, fim: `${y}-12-20` };
   }
 }
 
+// CORRIGIDO: extrai formato curto "6F" de "6º Ano F"
 function normalizarTurma(turmaId: string) {
-  return turmaId.replace('º', '').replace(/\s/g, '').toUpperCase();
+  if (/^\d+[A-Z]$/i.test(turmaId.trim())) return turmaId.trim().toUpperCase();
+  const match = turmaId.match(/(\d+).*?([A-Z])$/i);
+  if (match) return `${match[1]}${match[2].toUpperCase()}`;
+  return turmaId.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
 }
 
 export function useRelatorioFrequencia(turmaId: string | null, bimestre: Bimestre, ano?: number) {
