@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { StoreProvider } from './store';
 import { AppLayout } from './ui/AppLayout';
@@ -15,17 +15,16 @@ import { GerarQRCodes } from './ui/pages/GerarQRCodes';
 import { ProvasOnline } from './ui/pages/ProvasOnline';
 import { ResponderProva } from './ui/pages/ResponderProva';
 import { TestePublico } from './ui/pages/TestePublico';
+import { CentralAluno } from './ui/pages/CentralAluno';
 import { supabase } from './data/supabase';
 
 export function useAuth() {
   const [session, setSession] = useState<boolean | null>(null);
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      console.log('[useAuth] getSession result:', !!data.session, 'url:', window.location.pathname);
       setSession(!!data.session);
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_e, s) => {
-      console.log('[useAuth] onAuthStateChange:', !!s, 'url:', window.location.pathname);
       setSession(!!s);
     });
     return () => listener.subscription.unsubscribe();
@@ -35,8 +34,6 @@ export function useAuth() {
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const session = useAuth();
-  console.log('[AuthGuard] rendering, session=', session, 'url:', window.location.pathname);
-
   if (session === null) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0a1628]">
@@ -44,10 +41,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-  if (!session) {
-    console.log('[AuthGuard] NO SESSION — redirecting to login from:', window.location.pathname);
-    return <Navigate to="/login" replace />;
-  }
+  if (!session) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
 
@@ -62,18 +56,15 @@ function LayoutProtegido() {
 }
 
 export default function App() {
-  console.log('[App] rendering, url:', window.location.pathname);
   return (
     <BrowserRouter>
       <Routes>
-        {/* Rotas públicas */}
         <Route path="/teste" element={<TestePublico />} />
         <Route path="/aluno" element={<PortalAluno />} />
         <Route path="/aluno/:token" element={<PortalAluno />} />
         <Route path="/responder" element={<ResponderProva />} />
         <Route path="/login" element={<Login />} />
 
-        {/* Rotas protegidas */}
         <Route element={<LayoutProtegido />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/attendance" element={<Attendance />} />
@@ -84,6 +75,7 @@ export default function App() {
           <Route path="/reset" element={<SystemReset />} />
           <Route path="/provas" element={<ProvasOnline />} />
           <Route path="/qrcodes" element={<GerarQRCodes />} />
+          <Route path="/alunos" element={<CentralAluno />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />
