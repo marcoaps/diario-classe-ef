@@ -82,7 +82,7 @@ async function parsearDocx(file: File): Promise<{ questoes: Questao[]; titulo: s
 
   for (let i = 0; i < htmlLinhas.length; i++) {
     const linhaHtml = htmlLinhas[i];
-    const matchImg = linhaHtml.match(/src="(img_\\d+)"/);
+    const matchImg = linhaHtml.match(/src="(img_\d+)"/);
     if (matchImg && imagensMap[matchImg[1]]) {
       ultimaImagem = imagensMap[matchImg[1]];
       if (questaoAtual && !questaoAtual.imagem) {
