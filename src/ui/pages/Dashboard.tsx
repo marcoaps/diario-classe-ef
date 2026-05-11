@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useStore } from '../../store';
 import { MIN_PASSING_GRADE, MAX_ABSENCES_TOTAL, ClassRoom, Student } from '../../domain/types';
-import { AlertCircle, ChevronRight, UserX, Users, Download, X, CheckSquare, BarChart3, CalendarSearch, Edit, Trash2, Star, ChevronDown, Link2 } from 'lucide-react';
+import { ChevronRight, UserX, Users, Download, X, CheckSquare, BarChart3, CalendarSearch, Edit, Trash2, Star, ChevronDown, GraduationCap } from 'lucide-react';
 import { cn } from '../AppLayout';
 import { buscarAlunos, supabase } from '../../data/supabase';
 import { v4 as uuidv4 } from 'uuid';
@@ -33,7 +33,7 @@ const MENU_ITEMS = [
   { Icon: Download, title: 'Importar Lista', color: '#0284c7', bg: '#f0f9ff', action: 'import', value: '' },
   { Icon: Edit, title: 'Editar Turma', color: '#64748b', bg: '#f8fafc', action: 'scroll', value: 'turmas-list' },
   { Icon: Trash2, title: 'Reset Histórico', color: '#dc2626', bg: '#fef2f2', action: 'route', value: '/reset' },
-  { Icon: Link2, title: 'Link Alunos', color: '#7c3aed', bg: '#faf5ff', action: 'copy', value: '' },
+  { Icon: GraduationCap, title: 'Central do Aluno', color: '#0f766e', bg: '#f0fdfa', action: 'route', value: '/alunos' },
 ] as const;
 
 export function Dashboard() {
@@ -94,7 +94,6 @@ export function Dashboard() {
     if (action === 'route') navigate(value);
     else if (action === 'scroll') document.getElementById(value)?.scrollIntoView({ behavior: 'smooth' });
     else if (action === 'import') setShowImportModal(true);
-    else if (action === 'copy') { navigator.clipboard.writeText(window.location.origin + '/prova'); alert('Link copiado!'); }
   };
 
   const handleImport = async () => {
@@ -191,7 +190,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Menu redesenhado */}
+      {/* Menu */}
       <div className="grid grid-cols-2 gap-3">
         {MENU_ITEMS.map((item) => (
           <button
