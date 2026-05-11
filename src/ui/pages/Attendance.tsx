@@ -1,117 +1,110 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../../store';
 import { cn } from '../AppLayout';
-import { Check, X, Save, Loader2 } from 'lucide-react';
+import { Save, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '../../data/supabase';
 
+interface AlunoSupabase {
+  id: string;
+  nome: string;
+  turma_id: string;
+  numero_chamada: number | null;
+}
+
 function normalizarTurma(turmaId: string) {
-  if (/^\d+[A-Z]$/i.test(turmaId.trim())) {
-    return turmaId.trim().toUpperCase();
-  }
+  if (/^\d+[A-Z]$/i.test(turmaId.trim())) return turmaId.trim().toUpperCase();
   const match = turmaId.match(/(\d+).*?([A-Z])$/i);
   if (match) return `${match[1]}${match[2].toUpperCase()}`;
   return turmaId.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
 }
 
 export function Attendance() {
-  const { students, selectedClassId, classRooms } = useStore();
+  const { selectedClassId, classRooms } = useStore();
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [alunos, setAlunos] = useState<AlunoSupabase[]>([]);
   const [records, setRecords] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const classStudents = students.filter(s => s.classRoomId === selectedClassId);
+  const turmaAtual = classRooms.find(cr => cr.id === selectedClassId);
+  const turmaNorm = turmaAtual ? normalizarTurma(turmaAtual.name) : null;
 
+  // Busca alunos do Supabase pela turma
   useEffect(() => {
-    if (!selectedClassId || classStudents.length === 0) return;
-
+    if (!turmaNorm) return;
     let mounted = true;
     setLoading(true);
 
-    const loadRecords = async () => {
+    const carregar = async () => {
       try {
-        const studentIds = classStudents.map(s => s.id);
-        const { data: existingRecords, error } = await supabase
-          .from("frequencia")
-          .select("aluno_id, presente")
-          .eq("data", date)
-          .in("aluno_id", studentIds);
+        const { data, error } = await supabase
+          .from('alunos')
+          .select('id, nome, turma_id, numero_chamada')
+          .eq('turma_id', turmaNorm)
+          .order('numero_chamada', { ascending: true, nullsFirst: false });
 
         if (error) throw error;
+        if (!mounted) return;
 
-        if (mounted) {
-          const newRecords: Record<string, boolean> = {};
-          classStudents.forEach(s => {
-            newRecords[s.id] = true;
-          });
+        const lista = (data || []) as AlunoSupabase[];
+        setAlunos(lista);
 
-          if (existingRecords) {
-            existingRecords.forEach(r => {
-              newRecords[r.aluno_id] = r.presente;
-            });
-          }
-          setRecords(newRecords);
+        // Carrega frequência existente para a data
+        const ids = lista.map(a => a.id);
+        if (ids.length > 0) {
+          const { data: freqData, error: freqErr } = await supabase
+            .from('frequencia')
+            .select('aluno_id, presente')
+            .eq('data', date)
+            .in('aluno_id', ids);
+
+          if (freqErr) throw freqErr;
+
+          const novosRecords: Record<string, boolean> = {};
+          lista.forEach(a => { novosRecords[a.id] = true; }); // default: presente
+          (freqData || []).forEach((r: any) => { novosRecords[r.aluno_id] = r.presente; });
+          if (mounted) setRecords(novosRecords);
         }
       } catch (err) {
-        console.error("Erro ao carregar frequência:", err);
+        console.error('Erro ao carregar alunos:', err);
       } finally {
         if (mounted) setLoading(false);
       }
     };
 
-    loadRecords();
-
+    carregar();
     return () => { mounted = false; };
-  }, [selectedClassId, date, classStudents.length]);
+  }, [turmaNorm, date]);
 
   if (!selectedClassId) {
     return <div className="p-8 text-center text-gray-500 mt-10 font-medium">Por favor, selecione uma turma na aba "Turmas".</div>;
   }
 
-  const handleToggle = (studentId: string) => {
-    setRecords(prev => ({
-      ...prev,
-      [studentId]: !prev[studentId]
-    }));
+  const handleToggle = (alunoId: string) => {
+    setRecords(prev => ({ ...prev, [alunoId]: !prev[alunoId] }));
   };
 
   const handleSave = async () => {
-    if (!selectedClassId || classStudents.length === 0) return;
-
+    if (!turmaNorm || alunos.length === 0) return;
     setSaving(true);
     try {
-      const turmaAtual = classRooms.find(cr => cr.id === selectedClassId);
-      if (!turmaAtual) throw new Error("Turma não encontrada");
+      const ids = alunos.map(a => a.id);
 
-      const turmaNormalizada = normalizarTurma(turmaAtual.name);
+      // Remove registros antigos da data
+      const { error: errDel } = await supabase
+        .from('frequencia')
+        .delete()
+        .in('aluno_id', ids)
+        .eq('data', date);
+      if (errDel) throw errDel;
 
-      const { data: alunos, error: errAlunos } = await supabase
-        .from("alunos")
-        .select("id")
-        .eq("turma_id", turmaNormalizada);
-
-      if (errAlunos) throw errAlunos;
-
-      const alunosIds = (alunos || []).map(a => a.id);
-
-      if (alunosIds.length > 0) {
-        const { error: errDel } = await supabase
-          .from("frequencia")
-          .delete()
-          .in("aluno_id", alunosIds)
-          .eq("data", date);
-
-        if (errDel) throw errDel;
-      }
-
-      const recordsToSave = classStudents.map(s => ({
-        aluno_id: s.id,
+      // Insere novos registros
+      const recordsToSave = alunos.map(a => ({
+        aluno_id: a.id,
         data: date,
-        presente: records[s.id] ?? true
+        presente: records[a.id] ?? true,
       }));
-
-      console.log('Enviando dados para o Supabase (frequência):', recordsToSave);
 
       const { error: insError } = await supabase.from('frequencia').insert(recordsToSave);
       if (insError) throw insError;
@@ -146,41 +139,33 @@ export function Attendance() {
             <span>Carregando dados da chamada...</span>
           </div>
         ) : (
-          classStudents.map(student => {
-            const isPresent = records[student.id];
+          alunos.map(aluno => {
+            const isPresent = records[aluno.id] ?? true;
             return (
               <button
-                key={student.id}
-                onClick={() => handleToggle(student.id)}
+                key={aluno.id}
+                onClick={() => handleToggle(aluno.id)}
                 className={cn(
                   "p-3 rounded-xl border transition-all flex items-center justify-between shadow-sm active:scale-[0.98]",
-                  isPresent
-                    ? "bg-white border-teal-500/30 ring-1 ring-teal-200"
-                    : "bg-white border-red-500/30 ring-1 ring-red-200"
+                  isPresent ? "bg-white border-teal-500/30 ring-1 ring-teal-200" : "bg-white border-red-500/30 ring-1 ring-red-200"
                 )}
               >
-                <span className={cn(
-                  "font-semibold text-base transition-colors",
-                  isPresent ? "text-teal-800" : "text-red-800"
-                )}>
-                  {student.numero_chamada ? <span className="font-mono text-gray-500 mr-2 text-sm">{student.numero_chamada}</span> : null}
-                  {student.name}
+                <span className={cn("font-semibold text-base transition-colors", isPresent ? "text-teal-800" : "text-red-800")}>
+                  {aluno.numero_chamada ? <span className="font-mono text-gray-500 mr-2 text-sm">{aluno.numero_chamada}</span> : null}
+                  {aluno.nome}
                 </span>
-
                 <div className={cn(
                   "w-10 h-10 rounded-lg flex justify-center items-center font-bold text-lg shadow-sm border",
-                  isPresent
-                    ? "bg-teal-600 text-white border-teal-700"
-                    : "bg-red-600 text-white border-red-700"
+                  isPresent ? "bg-teal-600 text-white border-teal-700" : "bg-red-600 text-white border-red-700"
                 )}>
                   {isPresent ? "P" : "F"}
                 </div>
               </button>
-            )
+            );
           })
         )}
 
-        {!loading && classStudents.length === 0 && (
+        {!loading && alunos.length === 0 && (
           <div className="text-center text-gray-500 py-10 font-medium">Nenhum aluno nesta turma.</div>
         )}
       </div>
@@ -188,11 +173,11 @@ export function Attendance() {
       <div className="fixed bottom-20 left-4 right-4 max-w-md mx-auto z-20">
         <button
           onClick={handleSave}
-          disabled={saving || loading || classStudents.length === 0}
+          disabled={saving || loading || alunos.length === 0}
           className="w-full h-14 bg-primary text-white font-bold text-lg rounded-2xl shadow-[0_8px_16px_rgba(31,44,151,0.2)] flex items-center justify-center gap-2 hover:bg-primary-dark active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100"
         >
           {saving ? <Loader2 className="w-6 h-6 animate-spin" /> : <Save className="w-6 h-6" />}
-          {saving ? 'Salvando...' : 'Registar Chamada'}
+          {saving ? 'Salvando...' : 'Registrar Chamada'}
         </button>
       </div>
     </div>
