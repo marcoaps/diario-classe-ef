@@ -6,7 +6,7 @@ import {defineConfig, loadEnv} from 'vite';
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   return {
-    base: './',
+    base: '/',
     assetsInclude: ['**/*.jpeg', '**/*.jpg', '**/*.png'],
     plugins: [react(), tailwindcss()],
     define: {
