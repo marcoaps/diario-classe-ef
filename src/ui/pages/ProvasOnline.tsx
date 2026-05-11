@@ -41,6 +41,7 @@ function gerarCodigo() {
 
 async function parsearDocx(file: File): Promise<{ questoes: Questao[]; titulo: string }> {
   const arrayBuffer = await file.arrayBuffer();
+  const imagensMap={};
   const result = await mammoth.extractRawText({ arrayBuffer });
   const texto = result.value;
   const linhas = texto.split('\n').map(l => l.trim()).filter(Boolean);
