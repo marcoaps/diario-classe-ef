@@ -71,11 +71,28 @@ async function parsearDocx(file: File): Promise<{ questoes: Questao[]; titulo: s
     matches.forEach(m => { gabaritoMap[parseInt(m[1])] = m[2].toUpperCase().charCodeAt(0) - 65; });
   }
 
+  const htmlLinhas = resultHtml.value
+    .replace(/<p>/g, "\n").replace(/<\/p>/g, "")
+    .replace(/<br\s*\/?>/g, "\n")
+    .split("\n").map(l => l.trim()).filter(Boolean);
+
   let questaoAtual: Questao | null = null;
   let numQuestao = 0;
+  let ultimaImagem: string | null = null;
 
-  for (let i = 0; i < linhas.length; i++) {
-    const linha = linhas[i];
+  for (let i = 0; i < htmlLinhas.length; i++) {
+    const linhaHtml = htmlLinhas[i];
+    const matchImg = linhaHtml.match(/src="(img_\\d+)"/);
+    if (matchImg && imagensMap[matchImg[1]]) {
+      ultimaImagem = imagensMap[matchImg[1]];
+      if (questaoAtual && !questaoAtual.imagem) {
+        questaoAtual.imagem = ultimaImagem;
+        ultimaImagem = null;
+      }
+      continue;
+    }
+    const linha = linhaHtml.replace(/<[^>]*>/g, "").trim();
+    if (!linha) continue;
     const matchQuestao = linha.match(/^(?:questão\s*)?(\d+)\s*[.)]\s*(.*)$/i);
     if (matchQuestao) {
       if (questaoAtual) questoes.push(questaoAtual);
