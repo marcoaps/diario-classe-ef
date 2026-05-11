@@ -12,14 +12,28 @@ export function Login() {
   const [error, setError] = useState(null);
 
   const handleLogin = async (e) => {
-    e.preventDefault(); setError(null); setLoading(true);
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-      if (error) { setError('E-mail ou senha incorretos.'); return; }
+      const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (error) {
+        setError('E-mail ou senha incorretos.');
+        return;
+      }
+      // Aguarda a sessão ser persistida no localStorage antes de navegar
+      if (data.session) {
+        await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+      }
       navigate('/');
+    } catch {
+      setError('Erro ao conectar.');
+    } finally {
+      setLoading(false);
     }
-    catch { setError('Erro ao conectar.'); }
-    finally { setLoading(false); }
   };
 
   return (
