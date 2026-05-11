@@ -70,7 +70,7 @@ export default function App() {
         <Route path="/teste" element={<TestePublico />} />
         <Route path="/aluno" element={<PortalAluno />} />
         <Route path="/aluno/:token" element={<PortalAluno />} />
-        <Route path="/prova" element={<ProvasOnline />} />
+        
         <Route path="/responder" element={<ResponderProva />} />
         <Route path="/login" element={<Login />} />
 
@@ -82,7 +82,8 @@ export default function App() {
           <Route path="/evaluations" element={<Evaluations />} />
           <Route path="/grades" element={<GradeReport />} />
           <Route path="/reset" element={<SystemReset />} />
-          <Route path="/qrcodes" element={<GerarQRCodes />} />
+
+          <Route path="/provas" element={<ProvasOnline />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />
@@ -90,3 +91,5 @@ export default function App() {
     </BrowserRouter>
   );
 }
+
+
