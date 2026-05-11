@@ -1,14 +1,23 @@
 import React, { useMemo, useState } from 'react';
 import { useStore } from '../../store';
-import { Loader2, BarChart3, AlertTriangle, FileSpreadsheet, FileText, ShieldCheck, Users, Percent, Award } from 'lucide-react';
+import { supabase } from '../../data/supabase';
+import { Loader2, BarChart3, AlertTriangle, FileSpreadsheet, FileText, ShieldCheck, Users, Percent, Award, Trash2 } from 'lucide-react';
 import { cn } from '../AppLayout';
-import { useRelatorioFrequencia, type Bimestre, PONTOS_MAXIMOS } from '../../domain/useRelatorioFrequencia';
+import { useRelatorioFrequencia, type Bimestre, PONTOS_MAXIMOS, getPeriodoBimestre } from '../../domain/useRelatorioFrequencia';
 import { exportarExcel, exportarPDF } from '../../domain/exportarFrequencia';
 
 const BIMESTRES: Bimestre[] = [1, 2, 3, 4];
 
+function normalizarTurma(turmaId: string) {
+  if (/^\d+[A-Z]$/i.test(turmaId.trim())) return turmaId.trim().toUpperCase();
+  const match = turmaId.match(/(\d+).*?([A-Z])$/i);
+  if (match) return `${match[1]}${match[2].toUpperCase()}`;
+  return turmaId.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+}
+
 export function AttendanceReport() {
   const { classRooms } = useStore();
+  const [deleting, setDeleting] = useState(false);
 
   const uniqueClassRooms = useMemo(
     () =>
@@ -27,16 +36,57 @@ export function AttendanceReport() {
     }
   }, [uniqueClassRooms, turmaId]);
 
-  const { alunos, resumo, loading, erro, periodo } = useRelatorioFrequencia(turmaId || null, bimestre);
+  const { alunos, resumo, loading, erro, periodo, recarregar } = useRelatorioFrequencia(turmaId || null, bimestre);
 
   const emRisco = alunos.filter((a) => a.em_risco || a.critico);
 
-  const handleExcel = () => {
-    exportarExcel({ turma: turmaId, bimestre, periodo, alunos, resumo });
-  };
+  const handleExcel = () => exportarExcel({ turma: turmaId, bimestre, periodo, alunos, resumo });
+  const handlePDF = () => exportarPDF({ turma: turmaId, bimestre, periodo, alunos, resumo });
 
-  const handlePDF = () => {
-    exportarPDF({ turma: turmaId, bimestre, periodo, alunos, resumo });
+  const handleExcluir = async () => {
+    const confirmado = window.confirm(
+      `Excluir TODOS os registros de frequência da turma ${turmaId} no ${bimestre}º Bimestre?\n\nEsta ação não pode ser desfeita.`
+    );
+    if (!confirmado) return;
+
+    setDeleting(true);
+    try {
+      const turmaNorm = normalizarTurma(turmaId);
+      const ano = new Date().getFullYear();
+      const periodo = getPeriodoBimestre(bimestre, ano);
+
+      // Busca os IDs dos alunos da turma
+      const { data: alunosData, error: errAlunos } = await supabase
+        .from('alunos')
+        .select('id')
+        .eq('turma_id', turmaNorm);
+
+      if (errAlunos) throw errAlunos;
+
+      const alunoIds = (alunosData || []).map((a: any) => a.id);
+      if (alunoIds.length === 0) {
+        alert('Nenhum aluno encontrado para essa turma.');
+        return;
+      }
+
+      // Exclui registros de frequência no período do bimestre
+      const { error } = await supabase
+        .from('frequencia')
+        .delete()
+        .in('aluno_id', alunoIds)
+        .gte('data', periodo.inicio)
+        .lte('data', periodo.fim);
+
+      if (error) throw error;
+
+      alert(`Frequência do ${bimestre}º Bimestre da turma ${turmaId} excluída com sucesso!`);
+      if (recarregar) recarregar();
+    } catch (err: any) {
+      console.error('Erro ao excluir frequência:', err);
+      alert('Erro ao excluir. Tente novamente.');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -66,6 +116,15 @@ export function AttendanceReport() {
             <FileText className="w-4 h-4" />
             PDF
           </button>
+          <button
+            type="button"
+            onClick={handleExcluir}
+            disabled={loading || deleting || alunos.length === 0}
+            className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-gray-800 text-white hover:bg-gray-900 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+          >
+            {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            {deleting ? 'Excluindo...' : 'Limpar'}
+          </button>
         </div>
       </div>
 
@@ -80,9 +139,7 @@ export function AttendanceReport() {
             >
               {uniqueClassRooms.length === 0 ? <option value="">Nenhuma turma</option> : null}
               {uniqueClassRooms.map((cr: any) => (
-                <option key={cr.id} value={cr.name}>
-                  {cr.name}
-                </option>
+                <option key={cr.id} value={cr.name}>{cr.name}</option>
               ))}
             </select>
           </div>
@@ -132,45 +189,18 @@ export function AttendanceReport() {
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <ResumoCard
-              icon={<Users className="w-4 h-4" />}
-              label="Alunos"
-              value={resumo.total_alunos}
-              tone="neutral"
-            />
-            <ResumoCard
-              icon={<Percent className="w-4 h-4" />}
-              label="Freq. média"
-              value={`${resumo.media_percentual}%`}
-              tone="primary"
-            />
-            <ResumoCard
-              icon={<Award className="w-4 h-4" />}
-              label="Pontos médios"
-              value={resumo.media_pontos}
-              tone="primary"
-            />
-            <ResumoCard
-              icon={<ShieldCheck className="w-4 h-4" />}
-              label="OK"
-              value={resumo.total_ok}
-              tone="success"
-            />
-            <ResumoCard
-              icon={<AlertTriangle className="w-4 h-4" />}
-              label="Em risco / Crítico"
-              value={`${resumo.total_em_risco} / ${resumo.total_criticos}`}
-              tone={resumo.total_criticos > 0 ? 'danger' : 'warning'}
-            />
+            <ResumoCard icon={<Users className="w-4 h-4" />} label="Alunos" value={resumo.total_alunos} tone="neutral" />
+            <ResumoCard icon={<Percent className="w-4 h-4" />} label="Freq. média" value={`${resumo.media_percentual}%`} tone="primary" />
+            <ResumoCard icon={<Award className="w-4 h-4" />} label="Pontos médios" value={resumo.media_pontos} tone="primary" />
+            <ResumoCard icon={<ShieldCheck className="w-4 h-4" />} label="OK" value={resumo.total_ok} tone="success" />
+            <ResumoCard icon={<AlertTriangle className="w-4 h-4" />} label="Em risco / Crítico" value={`${resumo.total_em_risco} / ${resumo.total_criticos}`} tone={resumo.total_criticos > 0 ? 'danger' : 'warning'} />
           </div>
 
-          {emRisco.length > 0 ? (
+          {emRisco.length > 0 && (
             <div className="bg-amber-50 border border-amber-200 rounded-3xl p-4 md:p-5">
               <div className="flex items-center gap-2 mb-3">
                 <AlertTriangle className="w-5 h-5 text-amber-600" />
-                <h3 className="font-bold text-amber-900 text-sm md:text-base">
-                  Alunos em risco ({emRisco.length})
-                </h3>
+                <h3 className="font-bold text-amber-900 text-sm md:text-base">Alunos em risco ({emRisco.length})</h3>
               </div>
               <div className="flex flex-wrap gap-2">
                 {emRisco.map((a) => (
@@ -178,20 +208,17 @@ export function AttendanceReport() {
                     key={a.id}
                     className={cn(
                       'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border',
-                      a.critico
-                        ? 'bg-red-100 text-red-800 border-red-200'
-                        : 'bg-amber-100 text-amber-800 border-amber-200',
+                      a.critico ? 'bg-red-100 text-red-800 border-red-200' : 'bg-amber-100 text-amber-800 border-amber-200',
                     )}
                     title={`${a.percentual}% de presença`}
                   >
-                    {a.numero_chamada ? `${a.numero_chamada} ` : ''}
-                    {a.nome}
+                    {a.numero_chamada ? `${a.numero_chamada} ` : ''}{a.nome}
                     <span className="font-mono opacity-80">{a.percentual.toFixed(0)}%</span>
                   </span>
                 ))}
               </div>
             </div>
-          ) : null}
+          )}
 
           <div className="hidden md:block w-full overflow-x-auto rounded-3xl border border-gray-100 shadow-sm bg-white">
             <table className="w-full text-sm text-left">
@@ -211,40 +238,20 @@ export function AttendanceReport() {
                     key={a.id}
                     className={cn(
                       'transition-colors',
-                      a.critico
-                        ? 'bg-red-50/60 hover:bg-red-100/50'
-                        : a.em_risco
-                          ? 'bg-amber-50/60 hover:bg-amber-100/50'
-                          : 'hover:bg-cyan-50/40 odd:bg-white even:bg-gray-50/30',
+                      a.critico ? 'bg-red-50/60 hover:bg-red-100/50' : a.em_risco ? 'bg-amber-50/60 hover:bg-amber-100/50' : 'hover:bg-cyan-50/40 odd:bg-white even:bg-gray-50/30',
                     )}
                   >
                     <td className="px-5 py-3 font-semibold text-gray-900">
                       <div className="flex items-center gap-2">
-                        {a.numero_chamada ? (
-                          <span className="font-mono text-gray-400 text-xs w-6 text-right">
-                            {a.numero_chamada}
-                          </span>
-                        ) : (
-                          <span className="w-6" />
-                        )}
+                        {a.numero_chamada ? <span className="font-mono text-gray-400 text-xs w-6 text-right">{a.numero_chamada}</span> : <span className="w-6" />}
                         <span>{a.nome}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-center text-gray-700 font-semibold">
-                      {a.registros_total}
-                    </td>
-                    <td className="px-4 py-3 text-center text-rose-600 font-semibold">
-                      {a.ausentes}
-                    </td>
-                    <td className="px-4 py-3 text-center font-bold text-gray-900">
-                      {a.pontos.toFixed(1).replace('.', ',')}
-                    </td>
-                    <td className="px-4 py-3">
-                      <BarraProgresso percentual={a.percentual} critico={a.critico} emRisco={a.em_risco} />
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <BadgeSituacao aluno={a} />
-                    </td>
+                    <td className="px-4 py-3 text-center text-gray-700 font-semibold">{a.registros_total}</td>
+                    <td className="px-4 py-3 text-center text-rose-600 font-semibold">{a.ausentes}</td>
+                    <td className="px-4 py-3 text-center font-bold text-gray-900">{a.pontos.toFixed(1).replace('.', ',')}</td>
+                    <td className="px-4 py-3"><BarraProgresso percentual={a.percentual} critico={a.critico} emRisco={a.em_risco} /></td>
+                    <td className="px-4 py-3 text-center"><BadgeSituacao aluno={a} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -253,30 +260,15 @@ export function AttendanceReport() {
 
           <div className="md:hidden flex flex-col gap-3">
             {alunos.map((a) => (
-              <div
-                key={a.id}
-                className={cn(
-                  'p-4 rounded-2xl shadow-sm border flex flex-col gap-3',
-                  a.critico
-                    ? 'bg-red-50 border-red-200'
-                    : a.em_risco
-                      ? 'bg-amber-50 border-amber-200'
-                      : 'bg-white border-gray-100',
-                )}
-              >
+              <div key={a.id} className={cn('p-4 rounded-2xl shadow-sm border flex flex-col gap-3', a.critico ? 'bg-red-50 border-red-200' : a.em_risco ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-100')}>
                 <div className="flex justify-between items-start gap-2">
-                  <span className="font-bold text-gray-900 text-sm">
-                    {a.numero_chamada ? `${a.numero_chamada} - ` : ''}
-                    {a.nome}
-                  </span>
+                  <span className="font-bold text-gray-900 text-sm">{a.numero_chamada ? `${a.numero_chamada} - ` : ''}{a.nome}</span>
                   <BadgeSituacao aluno={a} />
                 </div>
                 <div className="flex justify-between text-xs font-medium text-gray-600">
                   <span>Aulas: {a.registros_total}</span>
                   <span className="text-rose-600 font-semibold">Faltas: {a.ausentes}</span>
-                  <span className="text-gray-900 font-bold">
-                    {a.pontos.toFixed(1).replace('.', ',')} pts
-                  </span>
+                  <span className="text-gray-900 font-bold">{a.pontos.toFixed(1).replace('.', ',')} pts</span>
                 </div>
                 <BarraProgresso percentual={a.percentual} critico={a.critico} emRisco={a.em_risco} />
               </div>
@@ -293,78 +285,32 @@ function formatarBR(iso: string) {
   return `${d}/${m}/${y}`;
 }
 
-function ResumoCard({
-  icon,
-  label,
-  value,
-  tone,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: React.ReactNode;
-  tone: 'neutral' | 'primary' | 'success' | 'warning' | 'danger';
-}) {
-  const tones: Record<typeof tone, string> = {
-    neutral: 'text-gray-700',
-    primary: 'text-primary',
-    success: 'text-emerald-600',
-    warning: 'text-amber-600',
-    danger: 'text-rose-600',
-  };
+function ResumoCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: React.ReactNode; tone: 'neutral' | 'primary' | 'success' | 'warning' | 'danger' }) {
+  const tones = { neutral: 'text-gray-700', primary: 'text-primary', success: 'text-emerald-600', warning: 'text-amber-600', danger: 'text-rose-600' };
   return (
     <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-      <div className={cn('flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide', tones[tone])}>
-        {icon}
-        {label}
-      </div>
+      <div className={cn('flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide', tones[tone])}>{icon}{label}</div>
       <p className={cn('text-2xl font-bold mt-1', tones[tone])}>{value}</p>
     </div>
   );
 }
 
-function BarraProgresso({
-  percentual,
-  critico,
-  emRisco,
-}: {
-  percentual: number;
-  critico: boolean;
-  emRisco: boolean;
-}) {
+function BarraProgresso({ percentual, critico, emRisco }: { percentual: number; critico: boolean; emRisco: boolean }) {
   const cor = critico ? 'bg-rose-500' : emRisco ? 'bg-amber-500' : 'bg-emerald-500';
   const fundo = critico ? 'bg-rose-100' : emRisco ? 'bg-amber-100' : 'bg-emerald-100';
-  const w = Math.max(0, Math.min(100, percentual));
   return (
     <div className="flex items-center gap-2">
       <div className={cn('flex-1 h-2.5 rounded-full overflow-hidden', fundo)}>
-        <div className={cn('h-full transition-all', cor)} style={{ width: `${w}%` }} />
+        <div className={cn('h-full transition-all', cor)} style={{ width: `${Math.max(0, Math.min(100, percentual))}%` }} />
       </div>
-      <span className="text-xs font-bold text-gray-700 w-12 text-right">
-        {percentual.toFixed(1).replace('.', ',')}%
-      </span>
+      <span className="text-xs font-bold text-gray-700 w-12 text-right">{percentual.toFixed(1).replace('.', ',')}%</span>
     </div>
   );
 }
 
 function BadgeSituacao({ aluno }: { aluno: { critico: boolean; em_risco: boolean; registros_total: number } }) {
-  if (aluno.registros_total === 0) {
-    return (
-      <span className="px-2 py-1 rounded-full text-[10px] font-bold text-gray-600 bg-gray-200">
-        Sem dados
-      </span>
-    );
-  }
-  if (aluno.critico) {
-    return (
-      <span className="px-2 py-1 rounded-full text-[10px] font-bold text-white bg-rose-500">Crítico</span>
-    );
-  }
-  if (aluno.em_risco) {
-    return (
-      <span className="px-2 py-1 rounded-full text-[10px] font-bold text-white bg-amber-500">
-        Em risco
-      </span>
-    );
-  }
+  if (aluno.registros_total === 0) return <span className="px-2 py-1 rounded-full text-[10px] font-bold text-gray-600 bg-gray-200">Sem dados</span>;
+  if (aluno.critico) return <span className="px-2 py-1 rounded-full text-[10px] font-bold text-white bg-rose-500">Crítico</span>;
+  if (aluno.em_risco) return <span className="px-2 py-1 rounded-full text-[10px] font-bold text-white bg-amber-500">Em risco</span>;
   return <span className="px-2 py-1 rounded-full text-[10px] font-bold text-white bg-emerald-500">OK</span>;
 }
