@@ -37,6 +37,7 @@ export function Attendance() {
 
     const carregar = async () => {
       try {
+        // 1. Busca alunos
         const { data, error } = await supabase
           .from('alunos')
           .select('id, nome, turma_id, numero_chamada')
@@ -49,22 +50,27 @@ export function Attendance() {
         const lista = (data || []) as AlunoSupabase[];
         setAlunos(lista);
 
-        const ids = lista.map(a => a.id);
-        if (ids.length > 0) {
-          const { data: freqData, error: freqErr } = await supabase
+        // 2. Inicia todos como FALTA (false)
+        const novosRecords: Record<string, boolean> = {};
+        lista.forEach(a => { novosRecords[a.id] = false; });
+
+        // 3. Busca frequência existente e sobrescreve
+        if (lista.length > 0) {
+          const ids = lista.map(a => a.id);
+          const { data: freqData } = await supabase
             .from('frequencia')
             .select('aluno_id, presente')
             .eq('data', date)
             .in('aluno_id', ids);
 
-          if (freqErr) throw freqErr;
-
-          const novosRecords: Record<string, boolean> = {};
-          // ALTERADO: padrão agora é FALTA (false)
-          lista.forEach(a => { novosRecords[a.id] = false; });
-          (freqData || []).forEach((r: any) => { novosRecords[r.aluno_id] = r.presente; });
-          if (mounted) setRecords(novosRecords);
+          (freqData || []).forEach((r: any) => {
+            novosRecords[r.aluno_id] = r.presente;
+          });
         }
+
+        // 4. Sempre chama setRecords
+        if (mounted) setRecords(novosRecords);
+
       } catch (err) {
         console.error('Erro ao carregar alunos:', err);
       } finally {
@@ -100,7 +106,6 @@ export function Attendance() {
       const recordsToSave = alunos.map(a => ({
         aluno_id: a.id,
         data: date,
-        // ALTERADO: padrão é FALTA (false)
         presente: records[a.id] ?? false,
       }));
 
@@ -138,8 +143,7 @@ export function Attendance() {
           </div>
         ) : (
           alunos.map(aluno => {
-            // ALTERADO: padrão é FALTA (false)
-            const isPresent = records[aluno.id] ?? false;
+            const isPresent = records[aluno.id] === true;
             return (
               <button
                 key={aluno.id}
