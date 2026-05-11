@@ -41,7 +41,19 @@ function gerarCodigo() {
 
 async function parsearDocx(file: File): Promise<{ questoes: Questao[]; titulo: string }> {
   const arrayBuffer = await file.arrayBuffer();
-  const imagensMap={};
+  const imagensMap: Record<string, string> = {};
+  const resultHtml = await mammoth.convertToHtml(
+    { arrayBuffer },
+    {
+      convertImage: mammoth.images.imgElement(async (image) => {
+        const base64 = await image.read("base64");
+        const src = `data:${image.contentType};base64,${base64}`;
+        const imgId = `img_${Object.keys(imagensMap).length}`;
+        imagensMap[imgId] = src;
+        return { src: imgId };
+      }),
+    }
+  );
   const result = await mammoth.extractRawText({ arrayBuffer });
   const texto = result.value;
   const linhas = texto.split('\n').map(l => l.trim()).filter(Boolean);
