@@ -30,7 +30,6 @@ export function Attendance() {
   const turmaAtual = classRooms.find(cr => cr.id === selectedClassId);
   const turmaNorm = turmaAtual ? normalizarTurma(turmaAtual.name) : null;
 
-  // Busca alunos do Supabase pela turma
   useEffect(() => {
     if (!turmaNorm) return;
     let mounted = true;
@@ -50,7 +49,6 @@ export function Attendance() {
         const lista = (data || []) as AlunoSupabase[];
         setAlunos(lista);
 
-        // Carrega frequência existente para a data
         const ids = lista.map(a => a.id);
         if (ids.length > 0) {
           const { data: freqData, error: freqErr } = await supabase
@@ -62,7 +60,8 @@ export function Attendance() {
           if (freqErr) throw freqErr;
 
           const novosRecords: Record<string, boolean> = {};
-          lista.forEach(a => { novosRecords[a.id] = true; }); // default: presente
+          // ALTERADO: padrão agora é FALTA (false)
+          lista.forEach(a => { novosRecords[a.id] = false; });
           (freqData || []).forEach((r: any) => { novosRecords[r.aluno_id] = r.presente; });
           if (mounted) setRecords(novosRecords);
         }
@@ -91,7 +90,6 @@ export function Attendance() {
     try {
       const ids = alunos.map(a => a.id);
 
-      // Remove registros antigos da data
       const { error: errDel } = await supabase
         .from('frequencia')
         .delete()
@@ -99,11 +97,11 @@ export function Attendance() {
         .eq('data', date);
       if (errDel) throw errDel;
 
-      // Insere novos registros
       const recordsToSave = alunos.map(a => ({
         aluno_id: a.id,
         data: date,
-        presente: records[a.id] ?? true,
+        // ALTERADO: padrão é FALTA (false)
+        presente: records[a.id] ?? false,
       }));
 
       const { error: insError } = await supabase.from('frequencia').insert(recordsToSave);
@@ -140,7 +138,8 @@ export function Attendance() {
           </div>
         ) : (
           alunos.map(aluno => {
-            const isPresent = records[aluno.id] ?? true;
+            // ALTERADO: padrão é FALTA (false)
+            const isPresent = records[aluno.id] ?? false;
             return (
               <button
                 key={aluno.id}
