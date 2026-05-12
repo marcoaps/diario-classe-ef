@@ -95,7 +95,6 @@ export function usePortalAluno(token: string | undefined) {
       setLoading(true);
       setError(null);
       try {
-        console.log('[usePortalAluno] buscando aluno por token=', token);
         // 1) Aluno por token
         const { data: alunoRow, error: alunoErr } = await supabase
           .from('alunos')
@@ -103,10 +102,7 @@ export function usePortalAluno(token: string | undefined) {
           .eq('token_acesso', token)
           .maybeSingle();
 
-        console.log('[usePortalAluno] resposta supabase:', { data: alunoRow, error: alunoErr });
-
         if (alunoErr) {
-          // Não navega — apenas mostra a mensagem do Supabase para debug.
           if (!cancelled) {
             setAluno(null);
             setError(`Erro do Supabase: ${alunoErr.message || JSON.stringify(alunoErr)}${alunoErr.code ? ` (code ${alunoErr.code})` : ''}`);
@@ -116,7 +112,7 @@ export function usePortalAluno(token: string | undefined) {
         if (!alunoRow) {
           if (!cancelled) {
             setAluno(null);
-            setError('Token não encontrado. A coluna token_acesso pode não existir, RLS pode estar bloqueando, ou o UUID está incorreto.');
+            setError('Token não encontrado. Peça um novo QR Code ao seu professor.');
           }
           return;
         }
@@ -126,12 +122,12 @@ export function usePortalAluno(token: string | undefined) {
 
         const ano = new Date().getFullYear();
 
-        // 2) Notas — match por turma + nome (esquema atual de notas usa nome+turma)
+        // 2) Notas — usa ilike para ignorar diferença de maiúsculas/minúsculas
         const { data: notasData, error: notasErr } = await supabase
           .from('notas')
           .select('bimestre, nota')
           .eq('turma', alunoRow.turma_id)
-          .eq('nome', alunoRow.nome);
+          .ilike('nome', alunoRow.nome);
         if (notasErr) console.warn('Erro ao buscar notas:', notasErr.message);
 
         const notasMap = new Map<number, number>();
@@ -141,7 +137,7 @@ export function usePortalAluno(token: string | undefined) {
           nota: notasMap.has(b) ? (notasMap.get(b) as number) : null,
         }));
 
-        // 3) Frequência do ano todo (filtra em memória por bimestre)
+        // 3) Frequência do ano todo
         const inicioAno = `${ano}-01-01`;
         const fimAno = `${ano}-12-31`;
         const { data: freqData, error: freqErr } = await supabase
@@ -171,12 +167,12 @@ export function usePortalAluno(token: string | undefined) {
           acc.percentual = acc.total > 0 ? +((acc.presentes / acc.total) * 100).toFixed(2) : 0;
         }
 
-        // 4) Provas/respostas — match por turma_id + aluno_nome
+        // 4) Provas/respostas — usa ilike para nome também
         const { data: respostasData, error: respErr } = await supabase
           .from('respostas')
           .select('id, prova_id, nota, enviado_em, respostas, correcoes_dissertativas')
           .eq('turma_id', alunoRow.turma_id)
-          .eq('aluno_nome', alunoRow.nome)
+          .ilike('aluno_nome', alunoRow.nome)
           .order('enviado_em', { ascending: false });
         if (respErr) console.warn('Erro ao buscar respostas:', respErr.message);
 
