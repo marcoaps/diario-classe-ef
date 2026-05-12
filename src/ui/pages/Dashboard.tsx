@@ -7,6 +7,9 @@ import { buscarAlunos, supabase } from '../../data/supabase';
 import { v4 as uuidv4 } from 'uuid';
 import { useNavigate } from 'react-router-dom';
 
+const LOGO_URL = "https://i.imgur.com/3t5GEnQ.jpeg";
+const LOGO_IOP = "/Logo_IOP.png";
+
 function extractYear(name: string): number {
   const match = name.match(/^(\d+)/);
   if (match) return parseInt(match[1], 10);
@@ -24,16 +27,21 @@ function groupByYear(classRooms: ClassRoom[]): Map<number, ClassRoom[]> {
   return map;
 }
 
+const YEAR_COLORS: Record<number, { bg: string; text: string; dot: string }> = {
+  6: { bg: '#eff6ff', text: '#1d4ed8', dot: '#2563eb' },
+  7: { bg: '#f5f3ff', text: '#6d28d9', dot: '#7c3aed' },
+  8: { bg: '#ecfdf5', text: '#065f46', dot: '#059669' },
+  9: { bg: '#fff7ed', text: '#92400e', dot: '#d97706' },
+};
+
 const MENU_ITEMS = [
-  { Icon: CheckSquare,    title: 'Fazer Chamada',    color: '#2563eb', bg: '#eff6ff', action: 'route', value: '/attendance' },
-  { Icon: BarChart3,      title: 'Relatórios',       color: '#7c3aed', bg: '#f5f3ff', action: 'route', value: '/report' },
-  { Icon: Users,          title: 'Turmas',           color: '#0891b2', bg: '#ecfeff', action: 'turmas', value: '' },
-  { Icon: CalendarSearch, title: 'Histórico',        color: '#059669', bg: '#ecfdf5', action: 'route', value: '/history' },
-  { Icon: Star,           title: 'Notas Bimestrais', color: '#d97706', bg: '#fffbeb', action: 'route', value: '/grades' },
-  { Icon: Download,       title: 'Importar Lista',   color: '#0284c7', bg: '#f0f9ff', action: 'import', value: '' },
-  { Icon: Edit,           title: 'Editar Turma',     color: '#64748b', bg: '#f8fafc', action: 'turmas', value: '' },
-  { Icon: Trash2,         title: 'Reset Histórico',  color: '#dc2626', bg: '#fef2f2', action: 'route', value: '/reset' },
-  { Icon: GraduationCap,  title: 'Central do Aluno', color: '#0f766e', bg: '#f0fdfa', action: 'route', value: '/alunos' },
+  { Icon: CheckSquare,    title: 'Fazer Chamada',    sub: 'Registrar presença',   color: '#2563eb', bg: '#eff6ff', action: 'route',  value: '/attendance', destaque: false },
+  { Icon: BarChart3,      title: 'Relatórios',       sub: 'Frequência e notas',   color: '#7c3aed', bg: '#f5f3ff', action: 'route',  value: '/report',     destaque: false },
+  { Icon: CalendarSearch, title: 'Histórico',        sub: 'Chamadas passadas',    color: '#059669', bg: '#ecfdf5', action: 'route',  value: '/history',    destaque: false },
+  { Icon: Star,           title: 'Notas Bimestrais', sub: 'Lançar e consultar',   color: '#d97706', bg: '#fffbeb', action: 'route',  value: '/grades',     destaque: false },
+  { Icon: Download,       title: 'Importar Lista',   sub: 'Adicionar alunos',     color: '#0284c7', bg: '#f0f9ff', action: 'import', value: '',            destaque: false },
+  { Icon: Edit,           title: 'Editar Turma',     sub: 'Gerenciar lista',      color: '#64748b', bg: '#f8fafc', action: 'turmas', value: '',            destaque: false },
+  { Icon: Trash2,         title: 'Reset Histórico',  sub: 'Apagar registros',     color: '#dc2626', bg: '#fef2f2', action: 'route',  value: '/reset',      destaque: false },
 ] as const;
 
 export function Dashboard() {
@@ -180,118 +188,173 @@ export function Dashboard() {
   if (loading) return <div className="p-4 text-center mt-10">Carregando dados offline...</div>;
 
   return (
-    <div className="p-4 flex flex-col gap-4">
-      {/* Header */}
-      <div className="flex justify-between items-center bg-primary rounded-[2rem] p-4 text-white shadow-lg shadow-primary/30 relative overflow-hidden mt-2">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10" />
-        <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full blur-2xl -ml-10 -mb-10" />
-        <div className="relative z-10 w-full">
-          <h2 className="text-2xl font-bold mb-1">Olá, Professor! 👋</h2>
-          <p className="text-white/70 text-sm font-medium">Bem-vindo ao seu Diário Digital</p>
+    <div className="flex flex-col gap-4 pb-28 bg-gray-50 min-h-screen">
+
+      {/* Header branco com logo */}
+      <div className="bg-white border-b-4 border-red-600 px-4 pt-4 pb-3">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-14 h-14 rounded-full border-2 border-red-600 overflow-hidden shrink-0 bg-red-50 flex items-center justify-center">
+            <img src={LOGO_IOP} alt="IOP" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-black text-sm text-[#1a2e6e] leading-tight">Instituto Odilon Pratagi</p>
+            <p className="text-xs text-gray-500">Escola Estadual · Brasiléia - AC</p>
+            <p className="text-lg font-black text-gray-900 mt-0.5">Olá, Professor! 👋</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 border border-red-200 text-red-700 text-xs font-bold">
+            📚 {totalStudents} alunos
+          </span>
+          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 border border-red-200 text-red-700 text-xs font-bold">
+            🏫 {sortedClassRooms.length} turmas
+          </span>
         </div>
       </div>
 
-      {/* Menu */}
-      <div className="grid grid-cols-2 gap-3">
-        {MENU_ITEMS.map((item) => (
-          <button
-            key={item.title}
-            onClick={() => handleMenuClick(item.action, item.value)}
-            className="group relative flex flex-col items-start gap-3 p-4 rounded-2xl border border-gray-100 bg-white shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-95 transition-all text-left overflow-hidden"
-          >
-            <div className="absolute top-0 right-0 w-20 h-20 rounded-full opacity-10 -mr-6 -mt-6 group-hover:opacity-20 transition-opacity" style={{ background: item.color }} />
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center shadow-sm transition-transform group-hover:scale-110" style={{ background: item.bg }}>
-              <item.Icon className="w-5 h-5" style={{ color: item.color }} />
-            </div>
-            <span className="font-bold text-gray-800 text-sm leading-tight">{item.title}</span>
-          </button>
-        ))}
-      </div>
+      <div className="px-4 flex flex-col gap-4">
 
-      {/* Turmas — colapsável */}
-      <div id="turmas-list" className="scroll-mt-20">
+        {/* Botão Central do Aluno — destaque */}
         <button
-          onClick={() => setShowTurmas(prev => !prev)}
-          className="w-full flex items-center justify-between px-4 py-3 bg-white rounded-2xl border border-gray-200 shadow-sm hover:bg-gray-50 transition-colors"
+          onClick={() => navigate('/alunos')}
+          className="w-full flex items-center gap-4 p-4 rounded-2xl text-left transition-all active:scale-95"
+          style={{ background: '#1a2e6e' }}
         >
-          <div className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-primary" />
-            <h2 className="text-base font-bold text-primary">Turmas e Alunos ({totalStudents})</h2>
+          <div className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.12)' }}>
+            <GraduationCap className="w-7 h-7 text-white" />
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={(e) => { e.stopPropagation(); setShowImportModal(true); }}
-              className="flex items-center gap-1 px-2.5 py-1 bg-primary/10 hover:bg-primary/20 text-primary font-bold rounded-lg text-xs transition-colors"
-            >
-              <Download className="w-3.5 h-3.5" /> Importar
-            </button>
-            {showTurmas
-              ? <ChevronUp className="w-5 h-5 text-gray-400" />
-              : <ChevronDown className="w-5 h-5 text-gray-400" />}
+          <div className="flex-1 min-w-0">
+            <p className="font-black text-white text-base">Central do Aluno</p>
+            <p className="text-blue-300 text-xs mt-0.5">QR Codes · Provas · Resultados</p>
           </div>
+          <span className="px-3 py-1.5 rounded-full text-xs font-black text-white shrink-0" style={{ background: '#dc2626' }}>
+            ACESSAR →
+          </span>
         </button>
 
-        {showTurmas && (
-          <div className="flex flex-col gap-2 mt-2">
-            {years.map(year => {
-              const turmas = groupedByYear.get(year) || [];
-              const isOpen = openYears.has(year);
-              return (
-                <div key={year} className="rounded-2xl border border-gray-200 overflow-hidden bg-white shadow-sm">
-                  <button onClick={() => toggleYear(year)} className={cn("w-full flex items-center justify-between px-4 py-2.5 transition-all", isOpen ? "bg-primary text-white" : "bg-white hover:bg-primary/5 text-gray-900")}>
-                    <div className="flex items-center gap-3">
-                      <span className={cn("w-9 h-9 rounded-xl flex items-center justify-center font-black text-base shrink-0", isOpen ? "bg-white/20 text-white" : "bg-primary/10 text-primary")}>{year}º</span>
-                      <div className="text-left">
-                        <p className="font-bold text-sm leading-tight">{year}º Ano — EF II</p>
-                        <p className={cn("text-xs mt-0.5", isOpen ? "text-white/70" : "text-gray-400")}>{turmas.length} {turmas.length === 1 ? 'turma' : 'turmas'} · {totalByYear(year)} alunos</p>
-                      </div>
-                    </div>
-                    <ChevronDown className={cn("w-5 h-5 transition-transform duration-300 shrink-0", isOpen ? "rotate-180 text-white" : "text-gray-400")} />
-                  </button>
-                  {isOpen && (
-                    <div className="flex flex-col divide-y divide-gray-100 border-t border-gray-100">
-                      {turmas.map(cr => (
-                        <div key={cr.id} onClick={() => handleClassClick(cr)} className={cn("flex items-center justify-between px-4 py-3.5 transition-all cursor-pointer group", selectedClassId === cr.id ? "bg-primary/5 border-l-4 border-l-primary" : "bg-white hover:bg-gray-50 border-l-4 border-l-transparent")}>
-                          <div>
-                            <span className="text-base font-semibold block text-gray-900">{cr.name}</span>
-                            <span className="text-xs text-gray-400 mt-0.5 flex items-center gap-1"><Users className="w-3 h-3" />{studentCounts[cr.id] || 0} alunos</span>
-                          </div>
-                          <ChevronRight className={cn("w-5 h-5 transition-transform shrink-0", selectedClassId === cr.id ? "text-primary" : "text-gray-300 group-hover:translate-x-1")} />
+        {/* Grid de botões */}
+        <div className="grid grid-cols-2 gap-3">
+          {MENU_ITEMS.map((item) => (
+            <button
+              key={item.title}
+              onClick={() => handleMenuClick(item.action, item.value)}
+              className="flex items-center gap-3 p-3.5 rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-md active:scale-95 transition-all text-left"
+            >
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: item.bg }}>
+                <item.Icon className="w-5 h-5" style={{ color: item.color }} />
+              </div>
+              <div className="min-w-0">
+                <p className="font-bold text-gray-900 text-sm leading-tight">{item.title}</p>
+                <p className="text-gray-400 text-xs mt-0.5 leading-tight">{item.sub}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {/* Bloco Turmas colapsável */}
+        <div id="turmas-list" className="scroll-mt-20">
+          <button
+            onClick={() => setShowTurmas(prev => !prev)}
+            className="w-full flex items-center justify-between px-4 py-3 bg-white rounded-2xl border border-gray-100 shadow-sm hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-red-600" />
+              <span className="text-base font-black text-gray-900">Turmas e Alunos</span>
+              <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-700 text-xs font-bold border border-red-200">{totalStudents}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowImportModal(true); }}
+                className="flex items-center gap-1 px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 font-bold rounded-lg text-xs transition-colors border border-red-200"
+              >
+                <Download className="w-3.5 h-3.5" /> Importar
+              </button>
+              {showTurmas ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+            </div>
+          </button>
+
+          {showTurmas && (
+            <div className="flex flex-col gap-2 mt-2">
+              {years.map(year => {
+                const turmas = groupedByYear.get(year) || [];
+                const isOpen = openYears.has(year);
+                const colors = YEAR_COLORS[year] || { bg: '#f8fafc', text: '#475569', dot: '#64748b' };
+                return (
+                  <div key={year} className="rounded-2xl border border-gray-100 overflow-hidden bg-white shadow-sm">
+                    <button onClick={() => toggleYear(year)} className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm shrink-0" style={{ background: colors.bg, color: colors.text }}>
+                          {year}º
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+                        <div className="text-left">
+                          <p className="font-bold text-sm text-gray-900">{year}º Ano — EF II</p>
+                          <p className="text-xs text-gray-400">{turmas.length} {turmas.length === 1 ? 'turma' : 'turmas'} · {totalByYear(year)} alunos</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{ background: colors.dot }} />
+                        <ChevronDown className={cn("w-4 h-4 text-gray-400 transition-transform duration-300", isOpen ? "rotate-180" : "")} />
+                      </div>
+                    </button>
+                    {isOpen && (
+                      <div className="flex flex-col divide-y divide-gray-50 border-t border-gray-100">
+                        {turmas.map(cr => (
+                          <div key={cr.id} onClick={() => handleClassClick(cr)}
+                            className={cn("flex items-center justify-between px-4 py-3 cursor-pointer transition-colors", selectedClassId === cr.id ? "bg-blue-50" : "hover:bg-gray-50")}>
+                            <div>
+                              <span className="text-sm font-bold text-gray-900">{cr.name}</span>
+                              <span className="text-xs text-gray-400 ml-2">{studentCounts[cr.id] || 0} alunos</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {selectedClassId === cr.id && <span className="text-xs font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">Selecionada</span>}
+                              <ChevronRight className="w-4 h-4 text-gray-300" />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Modal: Confirmar turma */}
       {classToConfirm && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-[2rem] p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl">
-            <h3 className="text-xl font-bold text-gray-900">Acessar {classToConfirm.name}?</h3>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#fef2f2' }}>
+                <Users className="w-5 h-5 text-red-600" />
+              </div>
+              <h3 className="text-lg font-black text-gray-900">Acessar {classToConfirm.name}?</h3>
+            </div>
             <div className="bg-gray-50 rounded-2xl p-3 border border-gray-200">
               {fetching ? <p className="text-sm text-center py-4 text-gray-500 animate-pulse">Buscando alunos...</p> : (
                 <>
-                  <p className="text-primary font-bold text-sm mb-2">{fetchedStudents.length} alunos matriculados</p>
+                  <p className="text-[#1a2e6e] font-bold text-sm mb-2">{fetchedStudents.length} alunos matriculados</p>
                   <ul className="text-sm flex flex-col gap-1 max-h-40 overflow-y-auto">
                     {fetchedStudents.length > 0
-                      ? fetchedStudents.map(s => <li key={s.id} className="truncate">{s.numero_chamada ? <span className="font-mono text-gray-400 mr-2">{s.numero_chamada} -</span> : null}{s.name}</li>)
+                      ? fetchedStudents.map(s => <li key={s.id} className="truncate text-gray-700">{s.numero_chamada ? <span className="font-mono text-gray-400 mr-2">{s.numero_chamada} -</span> : null}{s.name}</li>)
                       : <li className="text-gray-400">Nenhum aluno encontrado.</li>}
                   </ul>
                   {fetchedStudents.length > 0 && (
-                    <button onClick={handleEditList} className="w-full mt-3 py-2 rounded-xl font-bold bg-primary/10 text-primary hover:bg-primary/20 text-xs transition-colors">Editar Lista da Turma</button>
+                    <button onClick={handleEditList} className="w-full mt-3 py-2 rounded-xl font-bold bg-red-50 text-red-700 hover:bg-red-100 text-xs transition-colors border border-red-200">Editar Lista da Turma</button>
                   )}
-                  {cardMessage && <p className="text-xs font-bold text-primary text-center mt-1">{cardMessage}</p>}
+                  {cardMessage && <p className="text-xs font-bold text-[#1a2e6e] text-center mt-1">{cardMessage}</p>}
                 </>
               )}
             </div>
             <div className="flex gap-3">
               <button onClick={() => setClassToConfirm(null)} className="flex-1 py-3 rounded-2xl font-bold bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">Cancelar</button>
-              <button onClick={() => { setStudents(prev => [...prev.filter(s => s.classRoomId !== classToConfirm.id), ...fetchedStudents]); setSelectedClassId(classToConfirm.id); setClassToConfirm(null); }} className="flex-1 py-3 rounded-2xl font-bold bg-primary text-white shadow-lg hover:opacity-90 active:scale-95 transition-all">Acessar</button>
+              <button
+                onClick={() => { setStudents(prev => [...prev.filter(s => s.classRoomId !== classToConfirm.id), ...fetchedStudents]); setSelectedClassId(classToConfirm.id); setClassToConfirm(null); }}
+                className="flex-1 py-3 rounded-2xl font-black text-white transition-all active:scale-95"
+                style={{ background: '#1a2e6e' }}>
+                Acessar
+              </button>
             </div>
           </div>
         </div>
@@ -302,21 +365,23 @@ export function Dashboard() {
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-[2rem] p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl relative">
             <button onClick={() => setShowImportModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
-            <h3 className="text-xl font-bold text-gray-900">Importar Alunos</h3>
+            <h3 className="text-xl font-black text-gray-900">Importar Alunos</h3>
             <div className="flex flex-col gap-3 text-sm">
               <div>
-                <label className="font-semibold text-gray-600 block mb-1">Turma de Destino</label>
-                <select value={importClassId} onChange={(e) => setImportClassId(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-primary/20">
+                <label className="font-bold text-gray-600 block mb-1">Turma de Destino</label>
+                <select value={importClassId} onChange={(e) => setImportClassId(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-red-200">
                   <option value="ALL">Selecione uma turma</option>
                   {sortedClassRooms.map(cr => <option key={cr.id} value={cr.name}>{cr.name}</option>)}
                 </select>
               </div>
               <div>
-                <label className="font-semibold text-gray-600 block mb-1">Lista de Nomes (um por linha)</label>
-                <textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder="Maria Silva&#10;João Paulo" rows={6} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-primary/20 resize-none font-medium" />
+                <label className="font-bold text-gray-600 block mb-1">Lista de Nomes (um por linha)</label>
+                <textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder="Maria Silva&#10;João Paulo" rows={6} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-red-200 resize-none font-medium" />
               </div>
             </div>
-            <button onClick={handleImport} disabled={importing} className="w-full py-3 rounded-2xl font-bold bg-primary text-white shadow-lg hover:opacity-90 active:scale-95 transition-all disabled:opacity-50">{importing ? 'Importando...' : 'Importar Alunos'}</button>
+            <button onClick={handleImport} disabled={importing} className="w-full py-3 rounded-2xl font-black text-white transition-all active:scale-95 disabled:opacity-50" style={{ background: '#1a2e6e' }}>
+              {importing ? 'Importando...' : 'Importar Alunos'}
+            </button>
           </div>
         </div>
       )}
@@ -326,12 +391,14 @@ export function Dashboard() {
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-[2rem] p-6 w-full max-w-lg max-h-[90vh] flex flex-col gap-4 shadow-2xl relative">
             <button onClick={() => setShowEditListModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
-            <h3 className="text-xl font-bold text-gray-900">Editar Lista da Turma</h3>
+            <h3 className="text-xl font-black text-gray-900">Editar Lista da Turma</h3>
             <p className="text-sm text-gray-500">Corrija nomes, altere a ordem ou adicione novos alunos.</p>
             <div className="flex-1 overflow-y-auto min-h-[300px]">
-              <textarea value={editListText} onChange={(e) => setEditListText(e.target.value)} className="w-full h-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20 font-medium" placeholder="João&#10;Maria&#10;Pedro" spellCheck={false} />
+              <textarea value={editListText} onChange={(e) => setEditListText(e.target.value)} className="w-full h-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-red-200 font-medium" placeholder="João&#10;Maria&#10;Pedro" spellCheck={false} />
             </div>
-            <button onClick={handleSaveList} disabled={savingList} className="w-full py-3 rounded-2xl font-bold bg-primary text-white shadow-lg hover:opacity-90 active:scale-95 transition-all disabled:opacity-50">{savingList ? 'Salvando...' : 'Salvar Lista'}</button>
+            <button onClick={handleSaveList} disabled={savingList} className="w-full py-3 rounded-2xl font-black text-white transition-all active:scale-95 disabled:opacity-50" style={{ background: '#1a2e6e' }}>
+              {savingList ? 'Salvando...' : 'Salvar Lista'}
+            </button>
           </div>
         </div>
       )}
@@ -345,7 +412,7 @@ const StudentRiskCard: React.FC<{ student: Student }> = ({ student }) => {
   return (
     <div className="p-3 rounded-2xl bg-white border border-red-100 flex flex-col gap-2 relative overflow-hidden shadow-sm">
       <div className={cn("absolute left-0 top-0 bottom-0 w-1.5", isAbsenceRisk ? "bg-amber-400" : "bg-red-500")} />
-      <span className="font-semibold text-gray-900 pl-2">{student.name}</span>
+      <span className="font-bold text-gray-900 pl-2">{student.name}</span>
       <div className="flex gap-2 flex-wrap pl-2">
         {isGradeRisk && <span className="px-2 py-0.5 rounded bg-red-50 text-red-600 text-xs font-bold">Nota baixa</span>}
         {isAbsenceRisk && <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-700 text-xs font-bold flex items-center gap-1"><UserX className="w-3 h-3" /> Faltas Altas</span>}
