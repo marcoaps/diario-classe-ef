@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useStore } from '../../store';
 import { MIN_PASSING_GRADE, MAX_ABSENCES_TOTAL, ClassRoom, Student } from '../../domain/types';
-import { ChevronRight, UserX, Users, Download, X, CheckSquare, BarChart3, CalendarSearch, Edit, Trash2, Star, ChevronDown, GraduationCap } from 'lucide-react';
+import { ChevronRight, UserX, Users, Download, X, CheckSquare, BarChart3, CalendarSearch, Edit, Trash2, Star, ChevronDown, GraduationCap, ChevronUp } from 'lucide-react';
 import { cn } from '../AppLayout';
 import { buscarAlunos, supabase } from '../../data/supabase';
 import { v4 as uuidv4 } from 'uuid';
@@ -25,15 +25,15 @@ function groupByYear(classRooms: ClassRoom[]): Map<number, ClassRoom[]> {
 }
 
 const MENU_ITEMS = [
-  { Icon: CheckSquare, title: 'Fazer Chamada', color: '#2563eb', bg: '#eff6ff', action: 'route', value: '/attendance' },
-  { Icon: BarChart3, title: 'Relatórios', color: '#7c3aed', bg: '#f5f3ff', action: 'route', value: '/report' },
-  { Icon: Users, title: 'Turmas', color: '#0891b2', bg: '#ecfeff', action: 'scroll', value: 'turmas-list' },
-  { Icon: CalendarSearch, title: 'Histórico', color: '#059669', bg: '#ecfdf5', action: 'route', value: '/history' },
-  { Icon: Star, title: 'Notas Bimestrais', color: '#d97706', bg: '#fffbeb', action: 'route', value: '/grades' },
-  { Icon: Download, title: 'Importar Lista', color: '#0284c7', bg: '#f0f9ff', action: 'import', value: '' },
-  { Icon: Edit, title: 'Editar Turma', color: '#64748b', bg: '#f8fafc', action: 'scroll', value: 'turmas-list' },
-  { Icon: Trash2, title: 'Reset Histórico', color: '#dc2626', bg: '#fef2f2', action: 'route', value: '/reset' },
-  { Icon: GraduationCap, title: 'Central do Aluno', color: '#0f766e', bg: '#f0fdfa', action: 'route', value: '/alunos' },
+  { Icon: CheckSquare,    title: 'Fazer Chamada',    color: '#2563eb', bg: '#eff6ff', action: 'route', value: '/attendance' },
+  { Icon: BarChart3,      title: 'Relatórios',       color: '#7c3aed', bg: '#f5f3ff', action: 'route', value: '/report' },
+  { Icon: Users,          title: 'Turmas',           color: '#0891b2', bg: '#ecfeff', action: 'turmas', value: '' },
+  { Icon: CalendarSearch, title: 'Histórico',        color: '#059669', bg: '#ecfdf5', action: 'route', value: '/history' },
+  { Icon: Star,           title: 'Notas Bimestrais', color: '#d97706', bg: '#fffbeb', action: 'route', value: '/grades' },
+  { Icon: Download,       title: 'Importar Lista',   color: '#0284c7', bg: '#f0f9ff', action: 'import', value: '' },
+  { Icon: Edit,           title: 'Editar Turma',     color: '#64748b', bg: '#f8fafc', action: 'turmas', value: '' },
+  { Icon: Trash2,         title: 'Reset Histórico',  color: '#dc2626', bg: '#fef2f2', action: 'route', value: '/reset' },
+  { Icon: GraduationCap,  title: 'Central do Aluno', color: '#0f766e', bg: '#f0fdfa', action: 'route', value: '/alunos' },
 ] as const;
 
 export function Dashboard() {
@@ -52,6 +52,7 @@ export function Dashboard() {
   const [savingList, setSavingList] = useState(false);
   const [cardMessage, setCardMessage] = useState<string | null>(null);
   const [openYears, setOpenYears] = useState<Set<number>>(new Set<number>());
+  const [showTurmas, setShowTurmas] = useState(false);
 
   const toggleYear = (year: number) => {
     setOpenYears(prev => {
@@ -92,7 +93,7 @@ export function Dashboard() {
 
   const handleMenuClick = (action: string, value: string) => {
     if (action === 'route') navigate(value);
-    else if (action === 'scroll') document.getElementById(value)?.scrollIntoView({ behavior: 'smooth' });
+    else if (action === 'turmas') { setShowTurmas(true); setTimeout(() => document.getElementById('turmas-list')?.scrollIntoView({ behavior: 'smooth' }), 100); }
     else if (action === 'import') setShowImportModal(true);
   };
 
@@ -207,47 +208,64 @@ export function Dashboard() {
         ))}
       </div>
 
-      {/* Turmas */}
+      {/* Turmas — colapsável */}
       <div id="turmas-list" className="scroll-mt-20">
-        <div className="flex justify-between items-center mb-3">
-          <h2 className="text-xl font-bold tracking-tight text-primary">Turmas e Alunos ({totalStudents})</h2>
-          <button onClick={() => setShowImportModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary font-bold rounded-xl text-sm transition-colors">
-            <Download className="w-4 h-4" /> Importar
-          </button>
-        </div>
-        <div className="flex flex-col gap-2">
-          {years.map(year => {
-            const turmas = groupedByYear.get(year) || [];
-            const isOpen = openYears.has(year);
-            return (
-              <div key={year} className="rounded-2xl border border-gray-200 overflow-hidden bg-white shadow-sm">
-                <button onClick={() => toggleYear(year)} className={cn("w-full flex items-center justify-between px-4 py-2.5 transition-all", isOpen ? "bg-primary text-white" : "bg-white hover:bg-primary/5 text-gray-900")}>
-                  <div className="flex items-center gap-3">
-                    <span className={cn("w-9 h-9 rounded-xl flex items-center justify-center font-black text-base shrink-0", isOpen ? "bg-white/20 text-white" : "bg-primary/10 text-primary")}>{year}º</span>
-                    <div className="text-left">
-                      <p className="font-bold text-sm leading-tight">{year}º Ano — EF II</p>
-                      <p className={cn("text-xs mt-0.5", isOpen ? "text-white/70" : "text-gray-400")}>{turmas.length} {turmas.length === 1 ? 'turma' : 'turmas'} · {totalByYear(year)} alunos</p>
-                    </div>
-                  </div>
-                  <ChevronDown className={cn("w-5 h-5 transition-transform duration-300 shrink-0", isOpen ? "rotate-180 text-white" : "text-gray-400")} />
-                </button>
-                {isOpen && (
-                  <div className="flex flex-col divide-y divide-gray-100 border-t border-gray-100">
-                    {turmas.map(cr => (
-                      <div key={cr.id} onClick={() => handleClassClick(cr)} className={cn("flex items-center justify-between px-4 py-3.5 transition-all cursor-pointer group", selectedClassId === cr.id ? "bg-primary/5 border-l-4 border-l-primary" : "bg-white hover:bg-gray-50 border-l-4 border-l-transparent")}>
-                        <div>
-                          <span className="text-base font-semibold block text-gray-900">{cr.name}</span>
-                          <span className="text-xs text-gray-400 mt-0.5 flex items-center gap-1"><Users className="w-3 h-3" />{studentCounts[cr.id] || 0} alunos</span>
-                        </div>
-                        <ChevronRight className={cn("w-5 h-5 transition-transform shrink-0", selectedClassId === cr.id ? "text-primary" : "text-gray-300 group-hover:translate-x-1")} />
+        <button
+          onClick={() => setShowTurmas(prev => !prev)}
+          className="w-full flex items-center justify-between px-4 py-3 bg-white rounded-2xl border border-gray-200 shadow-sm hover:bg-gray-50 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <Users className="w-5 h-5 text-primary" />
+            <h2 className="text-base font-bold text-primary">Turmas e Alunos ({totalStudents})</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowImportModal(true); }}
+              className="flex items-center gap-1 px-2.5 py-1 bg-primary/10 hover:bg-primary/20 text-primary font-bold rounded-lg text-xs transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" /> Importar
+            </button>
+            {showTurmas
+              ? <ChevronUp className="w-5 h-5 text-gray-400" />
+              : <ChevronDown className="w-5 h-5 text-gray-400" />}
+          </div>
+        </button>
+
+        {showTurmas && (
+          <div className="flex flex-col gap-2 mt-2">
+            {years.map(year => {
+              const turmas = groupedByYear.get(year) || [];
+              const isOpen = openYears.has(year);
+              return (
+                <div key={year} className="rounded-2xl border border-gray-200 overflow-hidden bg-white shadow-sm">
+                  <button onClick={() => toggleYear(year)} className={cn("w-full flex items-center justify-between px-4 py-2.5 transition-all", isOpen ? "bg-primary text-white" : "bg-white hover:bg-primary/5 text-gray-900")}>
+                    <div className="flex items-center gap-3">
+                      <span className={cn("w-9 h-9 rounded-xl flex items-center justify-center font-black text-base shrink-0", isOpen ? "bg-white/20 text-white" : "bg-primary/10 text-primary")}>{year}º</span>
+                      <div className="text-left">
+                        <p className="font-bold text-sm leading-tight">{year}º Ano — EF II</p>
+                        <p className={cn("text-xs mt-0.5", isOpen ? "text-white/70" : "text-gray-400")}>{turmas.length} {turmas.length === 1 ? 'turma' : 'turmas'} · {totalByYear(year)} alunos</p>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                    </div>
+                    <ChevronDown className={cn("w-5 h-5 transition-transform duration-300 shrink-0", isOpen ? "rotate-180 text-white" : "text-gray-400")} />
+                  </button>
+                  {isOpen && (
+                    <div className="flex flex-col divide-y divide-gray-100 border-t border-gray-100">
+                      {turmas.map(cr => (
+                        <div key={cr.id} onClick={() => handleClassClick(cr)} className={cn("flex items-center justify-between px-4 py-3.5 transition-all cursor-pointer group", selectedClassId === cr.id ? "bg-primary/5 border-l-4 border-l-primary" : "bg-white hover:bg-gray-50 border-l-4 border-l-transparent")}>
+                          <div>
+                            <span className="text-base font-semibold block text-gray-900">{cr.name}</span>
+                            <span className="text-xs text-gray-400 mt-0.5 flex items-center gap-1"><Users className="w-3 h-3" />{studentCounts[cr.id] || 0} alunos</span>
+                          </div>
+                          <ChevronRight className={cn("w-5 h-5 transition-transform shrink-0", selectedClassId === cr.id ? "text-primary" : "text-gray-300 group-hover:translate-x-1")} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Modal: Confirmar turma */}
