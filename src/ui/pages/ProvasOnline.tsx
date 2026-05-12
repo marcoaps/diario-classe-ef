@@ -27,11 +27,20 @@ interface Prova {
   criado_em: string;
 }
 
-const turmas = [
-  '6F','7A','7B','7C','7D','7E',
-  '8A','8B','8C','8D','8E','8F',
-  '9A','9B','9C','9D','9E','9F','9G',
+// Grupos de turmas
+const GRUPOS = [
+  { id: '6-7', label: '6º e 7º Ano', turmas: ['6F','7A','7B','7C','7D','7E','7F'] },
+  { id: '8',   label: '8º Ano',      turmas: ['8A','8B','8C','8D','8E','8F'] },
+  { id: '9',   label: '9º Ano',      turmas: ['9A','9B','9C','9D','9E','9F'] },
 ];
+
+export function getTurmasDoGrupo(grupoId: string): string[] {
+  return GRUPOS.find(g => g.id === grupoId)?.turmas || [];
+}
+
+export function getLabelGrupo(grupoId: string): string {
+  return GRUPOS.find(g => g.id === grupoId)?.label || grupoId;
+}
 
 const LETRAS = ['A','B','C','D','E'];
 
@@ -130,7 +139,7 @@ export function ProvasOnline() {
   const [compartilhado, setCompartilhado] = useState<string | null>(null);
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
-  const [turma, setTurma] = useState('');
+  const [grupo, setGrupo] = useState<string>(GRUPOS[0].id);
   const [dataLimite, setDataLimite] = useState('');
   const [questoes, setQuestoes] = useState<Questao[]>([]);
   const [salvando, setSalvando] = useState(false);
@@ -215,7 +224,7 @@ export function ProvasOnline() {
 
   const salvarProva = async () => {
     if (!titulo.trim()) { alert('Preencha o título da prova.'); return; }
-    if (!turma) { alert('Selecione a turma.'); return; }
+    if (!grupo) { alert('Selecione o grupo de turmas.'); return; }
     if (questoes.length === 0) { alert('Adicione pelo menos uma questão.'); return; }
     const semGabarito = questoes.filter(q => q.tipo === 'multipla_escolha' && q.resposta_correta === '');
     if (semGabarito.length > 0) {
@@ -226,7 +235,7 @@ export function ProvasOnline() {
       const codigo = gerarCodigo();
       const { data: prova, error } = await supabase.from('provas').insert({
         titulo: titulo.trim(), descricao: descricao.trim(),
-        turma_id: turma, codigo, data_limite: dataLimite || null,
+        turma_id: grupo, codigo, data_limite: dataLimite || null,
       }).select().single();
       if (error) throw error;
       const questoesInsert = questoes.map((q, i) => ({
@@ -241,7 +250,7 @@ export function ProvasOnline() {
       setSucesso(true);
       setTimeout(() => {
         setSucesso(false); setTitulo(''); setDescricao('');
-        setTurma(''); setDataLimite(''); setQuestoes([]);
+        setGrupo(GRUPOS[0].id); setDataLimite(''); setQuestoes([]);
         setTab('lista'); carregarProvas();
       }, 2500);
     } catch (e: any) { alert('Erro ao salvar: ' + e.message); }
@@ -254,17 +263,16 @@ export function ProvasOnline() {
     setTimeout(() => setCopiado(null), 2000);
   };
 
-  // ── Compartilhar link + código ─────────────────────────────────────────────
   const compartilharProva = (prova: Prova) => {
     const baseUrl = window.location.origin;
+    const labelGrupo = getLabelGrupo(prova.turma_id);
     const texto =
       `📝 *${prova.titulo}*\n` +
-      `🏫 Turma ${prova.turma_id}\n\n` +
+      `🏫 ${labelGrupo}\n\n` +
       `Acesse a avaliação pelo link:\n` +
       `${baseUrl}/responder\n\n` +
       `🔑 Código de acesso: *${prova.codigo}*\n\n` +
       `_Instituto Odilon Pratagi_`;
-
     navigator.clipboard.writeText(texto);
     setCompartilhado(prova.id);
     setTimeout(() => setCompartilhado(null), 3000);
@@ -287,7 +295,6 @@ export function ProvasOnline() {
 
   return (
     <div className="p-4 flex flex-col gap-4 pb-36">
-
       <div className="bg-primary rounded-[2rem] p-5 text-white shadow-lg shadow-primary/30 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10" />
         <h2 className="text-xl font-bold relative z-10">📝 Provas Online</h2>
@@ -319,14 +326,15 @@ export function ProvasOnline() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="font-bold text-gray-800">{prova.titulo}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">Turma {prova.turma_id} · {new Date(prova.criado_em).toLocaleDateString('pt-BR')}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {getLabelGrupo(prova.turma_id)} · {new Date(prova.criado_em).toLocaleDateString('pt-BR')}
+                  </p>
                 </div>
                 <button onClick={() => deletarProva(prova.id)} className="text-gray-300 hover:text-red-400 transition-colors">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
 
-              {/* Código de acesso */}
               <div className="bg-primary/5 rounded-xl px-3 py-2 flex items-center justify-between">
                 <div>
                   <p className="text-xs text-gray-400">Código de acesso</p>
@@ -337,20 +345,15 @@ export function ProvasOnline() {
                 </button>
               </div>
 
-              {/* Botão Compartilhar */}
               <button
                 onClick={() => compartilharProva(prova)}
                 className={`w-full py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
-                  compartilhado === prova.id
-                    ? 'bg-green-500 text-white'
-                    : 'bg-blue-500 hover:bg-blue-600 text-white'
+                  compartilhado === prova.id ? 'bg-green-500 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'
                 }`}
               >
-                {compartilhado === prova.id ? (
-                  <><CheckCircle className="w-4 h-4" /> Link copiado! Cole no WhatsApp</>
-                ) : (
-                  <><Share2 className="w-4 h-4" /> Compartilhar link + código</>
-                )}
+                {compartilhado === prova.id
+                  ? <><CheckCircle className="w-4 h-4" /> Link copiado! Cole no WhatsApp</>
+                  : <><Share2 className="w-4 h-4" /> Compartilhar link + código</>}
               </button>
 
               <button onClick={() => verResultados(prova)}
@@ -382,12 +385,16 @@ export function ProvasOnline() {
               className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 resize-none" />
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-xs text-gray-500 font-semibold mb-1 block">Turma</label>
-                <select value={turma} onChange={e => setTurma(e.target.value)}
+                <label className="text-xs text-gray-500 font-semibold mb-1 block">Grupo de Turmas</label>
+                <select value={grupo} onChange={e => setGrupo(e.target.value)}
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20">
-                  <option value="">Selecione</option>
-                  {turmas.map(t => <option key={t} value={t}>{t}</option>)}
+                  {GRUPOS.map(g => (
+                    <option key={g.id} value={g.id}>{g.label}</option>
+                  ))}
                 </select>
+                <p className="text-xs text-gray-400 mt-1">
+                  Turmas: {getTurmasDoGrupo(grupo).join(', ')}
+                </p>
               </div>
               <div>
                 <label className="text-xs text-gray-500 font-semibold mb-1 block">Data Limite</label>
@@ -405,7 +412,6 @@ export function ProvasOnline() {
             </div>
             <p className="text-xs text-blue-600 leading-relaxed">
               Selecione um arquivo <strong>.docx</strong> com questões numeradas (ex: <em>1. Enunciado / a) Alternativa</em>).
-              O gabarito será importado se estiver no formato <em>"Gabarito: 1-A 2-C..."</em>.
             </p>
             <input ref={fileInputRef} type="file" accept=".docx,.doc" onChange={handleImportarWord} className="hidden" id="word-import" />
             <label htmlFor="word-import"
@@ -427,7 +433,6 @@ export function ProvasOnline() {
             </p>
           )}
 
-          {/* Questões */}
           {questoes.map((q, idx) => (
             <div key={q.id} className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-col gap-3 shadow-sm">
               <div className="flex items-center justify-between">
@@ -503,7 +508,6 @@ export function ProvasOnline() {
                 <input type="number" value={q.pontos} onChange={e => atualizarQuestao(q.id, 'pontos', parseFloat(e.target.value) || 0)}
                   min="0.5" max="10" step="0.5"
                   className="w-20 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 text-sm outline-none text-center" />
-                <span className="text-xs text-gray-400">de 10 máx.</span>
               </div>
             </div>
           ))}
@@ -533,7 +537,7 @@ export function ProvasOnline() {
         <div className="flex flex-col gap-3">
           <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
             <p className="font-bold text-gray-800">{provaResultados.titulo}</p>
-            <p className="text-xs text-gray-400 mt-0.5">{resultados.length} respostas recebidas</p>
+            <p className="text-xs text-gray-400 mt-0.5">{getLabelGrupo(provaResultados.turma_id)} · {resultados.length} respostas</p>
           </div>
           {resultados.length === 0 && (
             <div className="text-center py-8 text-gray-400">
@@ -547,6 +551,7 @@ export function ProvasOnline() {
                 <p className="font-bold text-gray-800 text-sm">{r.aluno_nome}</p>
                 <p className="text-xs text-gray-400">
                   {r.aluno_numero ? `Nº ${r.aluno_numero} · ` : ''}
+                  {r.turma_id ? `Turma ${r.turma_id} · ` : ''}
                   {new Date(r.enviado_em).toLocaleDateString('pt-BR')}
                 </p>
               </div>
@@ -562,7 +567,6 @@ export function ProvasOnline() {
         </div>
       )}
 
-      {/* Botão Publicar fixo */}
       {tab === 'criar' && (
         <div className="fixed bottom-20 left-0 right-0 px-4 z-50">
           <button onClick={salvarProva} disabled={salvando || sucesso}

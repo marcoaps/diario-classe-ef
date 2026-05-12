@@ -30,6 +30,19 @@ interface CorrecaoDissertativa {
   justificativa: string;
 }
 
+// Grupos de turmas — mesma lógica do ProvasOnline
+const GRUPOS: Record<string, string[]> = {
+  '6-7': ['6F','7A','7B','7C','7D','7E','7F'],
+  '8':   ['8A','8B','8C','8D','8E','8F'],
+  '9':   ['9A','9B','9C','9D','9E','9F'],
+};
+
+function getTurmasDoGrupo(grupoId: string): string[] {
+  // Se for uma turma específica (formato antigo), retorna só ela
+  if (!GRUPOS[grupoId]) return [grupoId];
+  return GRUPOS[grupoId];
+}
+
 const LETRAS = ['A', 'B', 'C', 'D', 'E'];
 
 async function corrigirDissertativaComIA(
@@ -84,6 +97,7 @@ export function ResponderProva() {
   const [questoes, setQuestoes] = useState<Questao[]>([]);
   const [nome, setNome] = useState('');
   const [numero, setNumero] = useState('');
+  const [turmaAluno, setTurmaAluno] = useState('');
   const [respostas, setRespostas] = useState<Record<string, string>>({});
   const [nota, setNota] = useState<number | null>(null);
   const [correcoesDissertativas, setCorrecoesDissertativas] = useState<CorrecaoDissertativa[]>([]);
@@ -106,6 +120,8 @@ export function ResponderProva() {
     return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
   };
 
+  const turmasDisponiveis = prova ? getTurmasDoGrupo(prova.turma_id) : [];
+
   const buscarProva = async () => {
     if (!codigo.trim()) { setErro('Digite o código da prova.'); return; }
     setLoading(true); setErro(null);
@@ -122,6 +138,9 @@ export function ResponderProva() {
         .eq('prova_id', provaData.id).order('ordem');
       setProva(provaData);
       setQuestoes(questoesData || []);
+      // Define turma padrão como a primeira do grupo
+      const turmas = getTurmasDoGrupo(provaData.turma_id);
+      setTurmaAluno(turmas[0] || provaData.turma_id);
       setStep('identificacao');
     } catch (e) { setErro('Erro ao buscar prova. Tente novamente.'); }
     setLoading(false);
@@ -130,6 +149,7 @@ export function ResponderProva() {
   const iniciarProva = () => {
     if (!nome.trim()) { setErro('Digite seu nome completo.'); return; }
     if (!numero.trim()) { setErro('Digite seu número de chamada.'); return; }
+    if (!turmaAluno) { setErro('Selecione sua turma.'); return; }
     setErro(null);
     setStep('prova');
   };
@@ -179,7 +199,7 @@ export function ResponderProva() {
       await supabase.from('respostas').insert({
         prova_id: prova.id, aluno_nome: nome.trim(),
         aluno_numero: numero ? parseInt(numero) : null,
-        turma_id: prova.turma_id, respostas, nota: notaFinal,
+        turma_id: turmaAluno, respostas, nota: notaFinal,
         correcoes_dissertativas: correcoes,
       });
     } catch (e: any) { alert('Erro ao salvar: ' + e.message); }
@@ -239,7 +259,6 @@ export function ResponderProva() {
         {prova.descricao && <p className="text-white/60 text-sm mb-2">{prova.descricao}</p>}
         <div className="flex gap-2 flex-wrap">
           <span className="bg-blue-500/20 border border-blue-400/30 text-blue-300 px-3 py-1 rounded-full text-sm font-bold">{questoes.length} questões</span>
-          <span className="bg-white/10 border border-white/20 text-white/50 px-3 py-1 rounded-full text-sm">Turma {prova.turma_id}</span>
         </div>
       </div>
 
@@ -254,6 +273,21 @@ export function ResponderProva() {
           <label className="text-gray-500 text-xs font-black uppercase tracking-wider mb-1.5 block">Número de chamada</label>
           <input value={numero} onChange={e => setNumero(e.target.value)} placeholder="Ex: 15" type="number"
             className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-800 text-base outline-none focus:border-blue-500 transition-all" />
+        </div>
+        <div>
+          <label className="text-gray-500 text-xs font-black uppercase tracking-wider mb-1.5 block">Sua turma</label>
+          <div className="grid grid-cols-4 gap-2">
+            {turmasDisponiveis.map(t => (
+              <button key={t} onClick={() => setTurmaAluno(t)}
+                className={`py-2.5 rounded-xl text-sm font-black border-2 transition-all ${
+                  turmaAluno === t
+                    ? 'bg-blue-600 border-blue-600 text-white'
+                    : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300'
+                }`}>
+                {t}
+              </button>
+            ))}
+          </div>
         </div>
         {erro && <p className="text-red-500 text-sm font-medium">{erro}</p>}
         <button onClick={iniciarProva}
@@ -285,10 +319,7 @@ export function ResponderProva() {
   // ── PROVA ────────────────────────────────────────────────────────────────
   if (step === 'prova' && q) return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-
-      {/* Header compacto */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
-        {/* Barra de progresso no topo */}
         <div className="h-1.5 bg-gray-100">
           <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${progresso}%` }} />
         </div>
@@ -297,7 +328,7 @@ export function ResponderProva() {
             <img src="/Logo_IOP.png" alt="IOP" className="w-8 h-8 rounded-full border border-gray-200 object-cover shrink-0" />
             <div className="min-w-0">
               <p className="text-gray-800 font-black text-sm leading-tight truncate">{prova?.titulo}</p>
-              <p className="text-gray-400 text-xs truncate">{nome} · T. {prova?.turma_id}</p>
+              <p className="text-gray-400 text-xs truncate">{nome} · Turma {turmaAluno}</p>
             </div>
           </div>
           <div className="flex items-center gap-3 shrink-0 ml-2">
@@ -312,10 +343,7 @@ export function ResponderProva() {
         </div>
       </header>
 
-      {/* Conteúdo scrollável */}
       <div className="flex flex-1">
-
-        {/* Sidebar apenas no desktop */}
         <aside className="hidden lg:flex flex-col bg-white border-r-2 border-gray-100 w-72 shrink-0 sticky top-[57px] h-[calc(100vh-57px)] overflow-y-auto">
           <div className="p-6 flex flex-col gap-6 h-full">
             <div>
@@ -333,21 +361,6 @@ export function ResponderProva() {
                 ))}
               </div>
             </div>
-            <div className="flex flex-col gap-2 text-sm">
-              <div className="flex items-center gap-2"><div className="w-4 h-4 rounded bg-blue-600" /><span className="text-gray-600">Atual</span></div>
-              <div className="flex items-center gap-2"><div className="w-4 h-4 rounded bg-green-100 border-2 border-green-400" /><span className="text-gray-600">Respondida</span></div>
-              <div className="flex items-center gap-2"><div className="w-4 h-4 rounded bg-gray-100 border-2 border-gray-200" /><span className="text-gray-600">Pendente</span></div>
-            </div>
-            <div>
-              <div className="flex justify-between text-sm mb-1.5">
-                <span className="text-gray-500 font-semibold">Progresso</span>
-                <span className="text-blue-600 font-black">{Math.round(progresso)}%</span>
-              </div>
-              <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${progresso}%` }} />
-              </div>
-              <p className="text-xs text-gray-400 mt-1">{respondidas} de {questoes.length} respondidas</p>
-            </div>
             <div className="mt-auto">
               <button onClick={enviarProva} disabled={enviando}
                 className="w-full py-4 rounded-2xl font-black text-white text-base flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-50 shadow-lg shadow-blue-200"
@@ -359,10 +372,7 @@ export function ResponderProva() {
           </div>
         </aside>
 
-        {/* Área principal */}
         <main className="flex-1 flex flex-col pb-28">
-
-          {/* Indicador de questão — mobile */}
           <div className="lg:hidden flex items-center justify-between px-4 pt-4 pb-2">
             <span className="text-xs text-gray-400 font-semibold">
               Questão <span className="text-blue-600 font-black text-sm">{questaoAtual + 1}</span> de {questoes.length}
@@ -374,25 +384,7 @@ export function ResponderProva() {
             </span>
           </div>
 
-          {/* Card da questão */}
           <div className="mx-4 lg:mx-8 lg:mt-6 bg-white rounded-2xl shadow-sm border border-gray-100 p-5 lg:p-10 flex flex-col gap-5">
-
-            {/* Número — desktop */}
-            <div className="hidden lg:flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-200 shrink-0">
-                <span className="text-white font-black text-xl">{questaoAtual + 1}</span>
-              </div>
-              <div>
-                <span className={`text-sm font-black uppercase tracking-wider px-3 py-1.5 rounded-full ${
-                  q.tipo === 'multipla_escolha' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
-                }`}>
-                  {q.tipo === 'multipla_escolha' ? 'Múltipla Escolha' : 'Dissertativa'}
-                </span>
-                <p className="text-gray-400 text-sm mt-1.5">{q.pontos} {q.pontos === 1 ? 'ponto' : 'pontos'}</p>
-              </div>
-            </div>
-
-            {/* Enunciado — tamanho adaptado por tela */}
             <p className="text-gray-800 text-base lg:text-2xl font-medium leading-relaxed">{q.enunciado}</p>
 
             {q.imagem_base64 && (
@@ -401,7 +393,6 @@ export function ResponderProva() {
               </div>
             )}
 
-            {/* Alternativas — compactas no mobile */}
             {q.tipo === 'multipla_escolha' && (
               <div className="flex flex-col gap-2.5">
                 {q.opcoes.map((op, i) => (
@@ -440,7 +431,6 @@ export function ResponderProva() {
         </main>
       </div>
 
-      {/* Navegação fixa na parte inferior — mobile e desktop */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-3 flex items-center gap-3 z-40 shadow-lg">
         <button onClick={() => setQuestaoAtual(i => Math.max(0, i - 1))}
           disabled={questaoAtual === 0}
@@ -448,7 +438,6 @@ export function ResponderProva() {
           <ChevronLeft className="w-4 h-4" /> Anterior
         </button>
 
-        {/* Miniaturas compactas — mobile */}
         <div className="flex-1 flex gap-1.5 justify-center overflow-x-auto scrollbar-none">
           {questoes.map((qq, i) => (
             <button key={qq.id} onClick={() => setQuestaoAtual(i)}
@@ -484,7 +473,6 @@ export function ResponderProva() {
   return (
     <div className="min-h-screen bg-gray-50 p-4 lg:p-8 flex items-start lg:items-center justify-center">
       <div className="w-full max-w-lg flex flex-col gap-4 pt-4 lg:pt-0">
-
         <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-7 text-center">
           <div className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-5 ${
             nota !== null && nota >= 6 ? 'bg-green-100 border-4 border-green-300' : 'bg-red-100 border-4 border-red-300'
@@ -494,7 +482,7 @@ export function ResponderProva() {
 
           <p className="text-gray-400 text-base mb-1">Avaliação enviada com sucesso!</p>
           <h2 className="text-gray-800 font-black text-2xl mb-1">{nome}</h2>
-          <p className="text-gray-500 text-base mb-6">Turma {prova?.turma_id} · {prova?.titulo}</p>
+          <p className="text-gray-500 text-base mb-6">Turma {turmaAluno} · {prova?.titulo}</p>
 
           {nota !== null && (
             <div className={`rounded-2xl p-7 mb-5 border-2 ${nota >= 6 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
