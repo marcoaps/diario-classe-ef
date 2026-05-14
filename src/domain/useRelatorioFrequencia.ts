@@ -48,12 +48,23 @@ function normalizarTurma(turmaId: string) {
   return turmaId.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
 }
 
-export function useRelatorioFrequencia(turmaId: string | null, bimestre: Bimestre, ano?: number) {
+export function useRelatorioFrequencia(
+  turmaId: string | null,
+  bimestre: Bimestre,
+  ano?: number,
+  dataFiltro?: string | null, // data específica no formato yyyy-MM-dd
+) {
   const [alunos, setAlunos] = useState<AlunoFrequencia[]>([]);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
   const periodo = useMemo(() => getPeriodoBimestre(bimestre, ano), [bimestre, ano]);
+
+  // Período efetivo: se dataFiltro preenchida, usa só aquele dia
+  const periodoEfetivo = useMemo(() => {
+    if (dataFiltro) return { inicio: dataFiltro, fim: dataFiltro };
+    return periodo;
+  }, [dataFiltro, periodo]);
 
   const carregar = useCallback(async () => {
     if (!turmaId) {
@@ -84,8 +95,8 @@ export function useRelatorioFrequencia(turmaId: string | null, bimestre: Bimestr
       const { data: freqData, error: freqErr } = await supabase
         .from('frequencia')
         .select('aluno_id, data, presente')
-        .gte('data', periodo.inicio)
-        .lte('data', periodo.fim)
+        .gte('data', periodoEfetivo.inicio)
+        .lte('data', periodoEfetivo.fim)
         .in('aluno_id', ids);
 
       if (freqErr) throw freqErr;
@@ -108,17 +119,10 @@ export function useRelatorioFrequencia(turmaId: string | null, bimestre: Bimestr
         const critico = registros_total > 0 && percentual < 50;
         const em_risco = registros_total > 0 && percentual < 75 && !critico;
         return {
-          id: a.id,
-          nome: a.nome,
-          turma_id: a.turma_id,
+          id: a.id, nome: a.nome, turma_id: a.turma_id,
           numero_chamada: a.numero_chamada ?? null,
-          registros_total,
-          presentes: m.presentes,
-          ausentes: m.ausentes,
-          pontos,
-          percentual,
-          em_risco,
-          critico,
+          registros_total, presentes: m.presentes, ausentes: m.ausentes,
+          pontos, percentual, em_risco, critico,
         };
       });
 
@@ -137,7 +141,7 @@ export function useRelatorioFrequencia(turmaId: string | null, bimestre: Bimestr
     } finally {
       setLoading(false);
     }
-  }, [turmaId, periodo.inicio, periodo.fim]);
+  }, [turmaId, periodoEfetivo.inicio, periodoEfetivo.fim]);
 
   useEffect(() => {
     carregar();
@@ -156,11 +160,9 @@ export function useRelatorioFrequencia(turmaId: string | null, bimestre: Bimestr
       total_alunos: alunos.length,
       media_percentual: +(soma_pct / alunos.length).toFixed(1),
       media_pontos: +(soma_pts / alunos.length).toFixed(2),
-      total_em_risco,
-      total_criticos,
-      total_ok,
+      total_em_risco, total_criticos, total_ok,
     };
   }, [alunos]);
 
-  return { alunos, resumo, loading, erro, periodo, recarregar: carregar };
+  return { alunos, resumo, loading, erro, periodo, periodoEfetivo, recarregar: carregar };
 }
