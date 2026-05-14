@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { useStore } from '../../store';
 import { supabase } from '../../data/supabase';
-import { Loader2, BarChart3, AlertTriangle, FileSpreadsheet, FileText, ShieldCheck, Users, Percent, Award, Trash2, Calendar, X } from 'lucide-react';
+import { Loader2, BarChart3, AlertTriangle, FileSpreadsheet, FileText, ShieldCheck, Users, Percent, Award, Trash2, Calendar, X, BookOpen } from 'lucide-react';
 import { cn } from '../AppLayout';
 import { useRelatorioFrequencia, type Bimestre, PONTOS_MAXIMOS, getPeriodoBimestre } from '../../domain/useRelatorioFrequencia';
 import { exportarExcel, exportarPDF } from '../../domain/exportarFrequencia';
+import { exportarDiario } from '../../domain/exportarDiario';
 
 const BIMESTRES: Bimestre[] = [1, 2, 3, 4];
 
@@ -19,6 +20,7 @@ export function AttendanceReport() {
   const { classRooms } = useStore();
   const [deleting, setDeleting] = useState(false);
   const [dataFiltro, setDataFiltro] = useState<string>('');
+  const [exportandoDiario, setExportandoDiario] = useState(false);
 
   const uniqueClassRooms = useMemo(
     () =>
@@ -55,6 +57,45 @@ export function AttendanceReport() {
     periodoEfetivo, dataFiltro: dataFiltro || null,
     alunos, resumo,
   });
+
+  const handleDiario = async () => {
+    if (alunos.length === 0) return;
+    setExportandoDiario(true);
+    try {
+      const turmaNorm = normalizarTurma(turmaId);
+      const ano = new Date().getFullYear();
+      const p = getPeriodoBimestre(bimestre, ano);
+
+      const alunoIds = alunos.map(a => a.id);
+
+      const { data: freqData, error: freqErr } = await supabase
+        .from('frequencia')
+        .select('aluno_id, data, presente')
+        .in('aluno_id', alunoIds)
+        .gte('data', p.inicio)
+        .lte('data', p.fim);
+
+      if (freqErr) throw freqErr;
+
+      // Agrupa por data -> alunoId -> presente
+      const frequenciaPorDia: Record<string, Record<string, boolean>> = {};
+      (freqData || []).forEach((r: any) => {
+        if (!frequenciaPorDia[r.data]) frequenciaPorDia[r.data] = {};
+        frequenciaPorDia[r.data][r.aluno_id] = r.presente;
+      });
+
+      await exportarDiario({
+        turma: turmaNorm,
+        bimestre,
+        alunos,
+        frequenciaPorDia,
+      });
+    } catch (e: any) {
+      alert('Erro ao gerar diário: ' + e.message);
+    } finally {
+      setExportandoDiario(false);
+    }
+  };
 
   const handleExcluir = async () => {
     const label = dataFiltro
@@ -103,7 +144,7 @@ export function AttendanceReport() {
           <BarChart3 className="w-6 h-6 text-primary" />
           Relatório de Frequência
         </h2>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button type="button" onClick={handleExcel} disabled={loading || alunos.length === 0}
             className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 transition-all disabled:opacity-50 shadow-sm">
             <FileSpreadsheet className="w-4 h-4" /> Excel
@@ -111,6 +152,11 @@ export function AttendanceReport() {
           <button type="button" onClick={handlePDF} disabled={loading || alunos.length === 0}
             className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-rose-600 text-white hover:bg-rose-700 active:scale-95 transition-all disabled:opacity-50 shadow-sm">
             <FileText className="w-4 h-4" /> PDF
+          </button>
+          <button type="button" onClick={handleDiario} disabled={loading || exportandoDiario || alunos.length === 0}
+            className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-blue-700 text-white hover:bg-blue-800 active:scale-95 transition-all disabled:opacity-50 shadow-sm">
+            {exportandoDiario ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
+            {exportandoDiario ? 'Gerando...' : 'Diário'}
           </button>
           <button type="button" onClick={handleExcluir} disabled={loading || deleting || alunos.length === 0}
             className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-gray-800 text-white hover:bg-gray-900 active:scale-95 transition-all disabled:opacity-50 shadow-sm">
@@ -151,18 +197,14 @@ export function AttendanceReport() {
             <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
             <div className="flex-1">
               <label className="text-xs font-semibold text-gray-500 block mb-1">
-                Filtrar por data específica <span className="text-gray-400 font-normal">(opcional)</span>
+                Filtrar por data específica <span className="text-gray-400 font-normal">(opcional — não afeta o Diário)</span>
               </label>
               <div className="flex items-center gap-2">
-                <input
-                  type="date"
-                  value={dataFiltro}
-                  onChange={(e) => setDataFiltro(e.target.value)}
-                  className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none"
-                />
+                <input type="date" value={dataFiltro} onChange={(e) => setDataFiltro(e.target.value)}
+                  className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none" />
                 {dataFiltro && (
                   <button onClick={() => setDataFiltro('')}
-                    className="flex items-center gap-1 px-3 py-2 rounded-xl bg-red-50 text-red-600 text-xs font-bold hover:bg-red-100 transition-colors border border-red-200">
+                    className="flex items-center gap-1 px-3 py-2 rounded-xl bg-red-50 text-red-600 text-xs font-bold hover:bg-red-100 border border-red-200">
                     <X className="w-3.5 h-3.5" /> Limpar filtro
                   </button>
                 )}
