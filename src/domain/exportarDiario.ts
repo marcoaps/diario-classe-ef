@@ -1,38 +1,25 @@
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import type { AlunoFrequencia, Bimestre } from './useRelatorioFrequencia';
 
-// Feriados e dias não letivos de 2026 (formato yyyy-MM-dd)
+// Feriados e dias não letivos de 2026
 const FERIADOS_2026 = new Set([
-  // Carnaval
   '2026-02-16', '2026-02-17', '2026-02-18',
-  // Semana Santa
   '2026-04-02', '2026-04-03',
-  // Dia do Trabalho
   '2026-05-01',
-  // Corpus Christi
   '2026-06-04',
-  // Férias/Recesso Julho
   '2026-07-01', '2026-07-02', '2026-07-03', '2026-07-04', '2026-07-05',
   '2026-07-06', '2026-07-07', '2026-07-08', '2026-07-09', '2026-07-10',
   '2026-07-11', '2026-07-12', '2026-07-13', '2026-07-14', '2026-07-15',
   '2026-07-16', '2026-07-17',
-  // Independência do Brasil
-  '2026-09-07',
-  // Dia da Amazônia (Feriado Estadual)
   '2026-09-05',
-  // Nossa Senhora Aparecida / Dia da Criança
+  '2026-09-07',
   '2026-10-12',
-  // Finados
   '2026-11-02',
-  // Proclamação da República
   '2026-11-15',
-  // Consciência Negra
   '2026-11-20',
-  // Véspera e Natal
   '2026-12-24', '2026-12-25',
 ]);
 
-// Períodos dos bimestres
 const PERIODOS_BIMESTRE: Record<Bimestre, { inicio: string; fim: string }> = {
   1: { inicio: '2026-02-02', fim: '2026-04-30' },
   2: { inicio: '2026-05-01', fim: '2026-07-15' },
@@ -41,11 +28,10 @@ const PERIODOS_BIMESTRE: Record<Bimestre, { inicio: string; fim: string }> = {
 };
 
 function isDiaUtil(data: Date): boolean {
-  const dow = data.getDay(); // 0=Dom, 6=Sab
+  const dow = data.getDay();
   if (dow === 0 || dow === 6) return false;
   const iso = data.toISOString().split('T')[0];
-  if (FERIADOS_2026.has(iso)) return false;
-  return true;
+  return !FERIADOS_2026.has(iso);
 }
 
 function getDiasLetivos(bimestre: Bimestre): Date[] {
@@ -53,24 +39,11 @@ function getDiasLetivos(bimestre: Bimestre): Date[] {
   const dias: Date[] = [];
   const atual = new Date(inicio + 'T12:00:00');
   const fimDate = new Date(fim + 'T12:00:00');
-
   while (atual <= fimDate) {
-    if (isDiaUtil(atual)) {
-      dias.push(new Date(atual));
-    }
+    if (isDiaUtil(atual)) dias.push(new Date(atual));
     atual.setDate(atual.getDate() + 1);
   }
   return dias;
-}
-
-function formatarDia(data: Date): string {
-  return String(data.getDate()).padStart(2, '0');
-}
-
-function formatarMes(data: Date): string {
-  const meses = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun',
-    'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-  return meses[data.getMonth()];
 }
 
 function toISO(data: Date): string {
@@ -87,11 +60,13 @@ function extrairLetra(turma: string): string {
   return match ? match[1].toUpperCase() : '';
 }
 
+const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+
 interface DiarioContext {
   turma: string;
   bimestre: Bimestre;
   alunos: AlunoFrequencia[];
-  frequenciaPorDia: Record<string, Record<string, boolean>>; // data -> alunoId -> presente
+  frequenciaPorDia: Record<string, Record<string, boolean>>;
 }
 
 export async function exportarDiario(ctx: DiarioContext) {
@@ -100,87 +75,197 @@ export async function exportarDiario(ctx: DiarioContext) {
   const serie = extrairSerie(turma);
   const letra = extrairLetra(turma);
 
-  const wb = XLSX.utils.book_new();
-  const ws: XLSX.WorkSheet = {};
-  const range = { s: { r: 0, c: 0 }, e: { r: 0, c: 0 } };
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet(`${bimestre}º Bim`);
 
-  function setCell(r: number, c: number, v: any, style?: any) {
-    const addr = XLSX.utils.encode_cell({ r, c });
-    ws[addr] = { v, t: typeof v === 'number' ? 'n' : 's' };
-    if (r > range.e.r) range.e.r = r;
-    if (c > range.e.c) range.e.c = c;
-  }
+  // Estilos reutilizáveis
+  const headerFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F3D7A' } };
+  const headerFont: Partial<ExcelJS.Font> = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+  const borderThin: Partial<ExcelJS.Borders> = {
+    top: { style: 'thin' }, bottom: { style: 'thin' },
+    left: { style: 'thin' }, right: { style: 'thin' },
+  };
+  const centerAlign: Partial<ExcelJS.Alignment> = { horizontal: 'center', vertical: 'middle' };
 
-  // ── LINHA 0: Cabeçalho principal ──────────────────────────────────────────
-  setCell(0, 0, 'DIÁRIO DE CLASSE ANO LETIVO: 2026');
-  setCell(0, 3, `TURMA: ${letra}`);
-  setCell(0, 5, `SÉRIE: ${serie}`);
-  setCell(0, 7, 'AULAS PREVISTAS:');
-  setCell(0, 9, dias.length);
-  setCell(0, 10, 'AULAS DADAS:');
-  setCell(0, 11, ''); // preenchido manualmente
-  setCell(0, 12, `${bimestre}º BM`);
+  // ── LINHA 1: Cabeçalho principal ──────────────────────────────────────────
+  const totalCols = 2 + dias.length + 1; // Nome + Nº + dias + Faltas
+  const row1 = ws.addRow([]);
+  row1.height = 20;
 
-  // ── LINHA 1: NOME + datas (dia) ───────────────────────────────────────────
-  setCell(1, 0, 'NOME');
-  setCell(1, 1, 'Nº');
-  dias.forEach((d, i) => setCell(1, 2 + i, formatarDia(d)));
-  setCell(1, 2 + dias.length, 'FALTAS');
+  // Título
+  const tituloCell = ws.getCell(1, 1);
+  tituloCell.value = 'DIÁRIO DE CLASSE ANO LETIVO: 2026';
+  tituloCell.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+  tituloCell.fill = headerFill;
+  tituloCell.alignment = centerAlign;
+  ws.mergeCells(1, 1, 1, 3);
 
-  // ── LINHA 2: mês embaixo das datas ───────────────────────────────────────
-  setCell(2, 0, '');
-  setCell(2, 1, '');
-  dias.forEach((d, i) => setCell(2, 2 + i, formatarMes(d)));
-  setCell(2, 2 + dias.length, '');
+  // Turma
+  const turmaCell = ws.getCell(1, 4);
+  turmaCell.value = `TURMA: ${letra}`;
+  turmaCell.font = headerFont;
+  turmaCell.fill = headerFill;
+  turmaCell.alignment = centerAlign;
+  ws.mergeCells(1, 4, 1, 5);
 
-  // ── LINHAS 3+: Alunos ────────────────────────────────────────────────────
-  const alunosOrdenados = [...alunos].sort((a, b) => {
-    const na = a.numero_chamada ?? 999;
-    const nb = b.numero_chamada ?? 999;
-    return na - nb;
+  // Série
+  const serieCell = ws.getCell(1, 6);
+  serieCell.value = `SÉRIE: ${serie}`;
+  serieCell.font = headerFont;
+  serieCell.fill = headerFill;
+  serieCell.alignment = centerAlign;
+  ws.mergeCells(1, 6, 1, 7);
+
+  // Aulas Previstas
+  const aulasCell = ws.getCell(1, 8);
+  aulasCell.value = 'AULAS PREVISTAS:';
+  aulasCell.font = headerFont;
+  aulasCell.fill = headerFill;
+  aulasCell.alignment = centerAlign;
+
+  const aulasValCell = ws.getCell(1, 9);
+  aulasValCell.value = dias.length;
+  aulasValCell.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+  aulasValCell.fill = headerFill;
+  aulasValCell.alignment = centerAlign;
+
+  // Bimestre
+  const bimCell = ws.getCell(1, 10);
+  bimCell.value = `${bimestre}º BM`;
+  bimCell.font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
+  bimCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDC2626' } };
+  bimCell.alignment = centerAlign;
+  ws.mergeCells(1, 10, 1, 11);
+
+  // ── LINHA 2: Nome + Nº + datas (dia) + Faltas ────────────────────────────
+  const row2 = ws.addRow([]);
+  row2.height = 18;
+
+  const nomeH = ws.getCell(2, 1);
+  nomeH.value = 'NOME';
+  nomeH.font = headerFont;
+  nomeH.fill = headerFill;
+  nomeH.alignment = centerAlign;
+  nomeH.border = borderThin;
+  ws.mergeCells(2, 1, 3, 1);
+
+  const numH = ws.getCell(2, 2);
+  numH.value = 'Nº';
+  numH.font = headerFont;
+  numH.fill = headerFill;
+  numH.alignment = centerAlign;
+  numH.border = borderThin;
+  ws.mergeCells(2, 2, 3, 2);
+
+  dias.forEach((d, i) => {
+    const col = 3 + i;
+    const cell = ws.getCell(2, col);
+    cell.value = String(d.getDate()).padStart(2, '0');
+    cell.font = headerFont;
+    cell.fill = headerFill;
+    cell.alignment = centerAlign;
+    cell.border = borderThin;
   });
+
+  const faltasH = ws.getCell(2, 3 + dias.length);
+  faltasH.value = 'FALTAS';
+  faltasH.font = headerFont;
+  faltasH.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDC2626' } };
+  faltasH.alignment = centerAlign;
+  faltasH.border = borderThin;
+  ws.mergeCells(2, 3 + dias.length, 3, 3 + dias.length);
+
+  // ── LINHA 3: Mês ──────────────────────────────────────────────────────────
+  const row3 = ws.addRow([]);
+  row3.height = 14;
+
+  dias.forEach((d, i) => {
+    const col = 3 + i;
+    const cell = ws.getCell(3, col);
+    cell.value = MESES[d.getMonth()];
+    cell.font = { bold: true, size: 8, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2D5BA8' } };
+    cell.alignment = centerAlign;
+    cell.border = borderThin;
+  });
+
+  // ── LINHAS 4+: Alunos ────────────────────────────────────────────────────
+  const alunosOrdenados = [...alunos].sort((a, b) => (a.numero_chamada ?? 999) - (b.numero_chamada ?? 999));
 
   alunosOrdenados.forEach((aluno, idx) => {
-    const row = 3 + idx;
-    setCell(row, 0, aluno.nome);
-    setCell(row, 1, aluno.numero_chamada ?? '');
+    const rowIdx = 4 + idx;
+    const isEven = idx % 2 === 0;
+    const rowBg = isEven ? 'FFFFFFFF' : 'FFF1F5FF';
+
+    const rowData = ws.addRow([]);
+    rowData.height = 16;
+
+    // Nome
+    const nomeCell = ws.getCell(rowIdx, 1);
+    nomeCell.value = aluno.nome;
+    nomeCell.font = { size: 9 };
+    nomeCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowBg } };
+    nomeCell.border = borderThin;
+    nomeCell.alignment = { vertical: 'middle' };
+
+    // Número
+    const numCell = ws.getCell(rowIdx, 2);
+    numCell.value = aluno.numero_chamada ?? '';
+    numCell.font = { size: 9, bold: true };
+    numCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowBg } };
+    numCell.border = borderThin;
+    numCell.alignment = centerAlign;
 
     let faltas = 0;
+
     dias.forEach((d, i) => {
+      const col = 3 + i;
       const iso = toISO(d);
       const diaFreq = frequenciaPorDia[iso];
-      let valor = '';
-      if (diaFreq) {
+      const cell = ws.getCell(rowIdx, col);
+      cell.border = borderThin;
+      cell.alignment = centerAlign;
+
+      if (diaFreq && aluno.id in diaFreq) {
         const presente = diaFreq[aluno.id];
-        if (presente === true) valor = 'P';
-        else if (presente === false) { valor = 'F'; faltas++; }
+        if (presente) {
+          cell.value = 'P';
+          cell.font = { bold: true, size: 9, color: { argb: 'FF1E40AF' } }; // azul
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } }; // azul claro
+        } else {
+          cell.value = 'F';
+          cell.font = { bold: true, size: 9, color: { argb: 'FF991B1B' } }; // vermelho
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } }; // vermelho claro
+          faltas++;
+        }
+      } else {
+        cell.value = '';
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowBg } };
       }
-      setCell(row, 2 + i, valor);
     });
 
-    setCell(row, 2 + dias.length, faltas > 0 ? faltas : 0);
+    // Faltas
+    const faltasCell = ws.getCell(rowIdx, 3 + dias.length);
+    faltasCell.value = faltas;
+    faltasCell.font = { bold: true, size: 10, color: faltas > 0 ? { argb: 'FF991B1B' } : { argb: 'FF166534' } };
+    faltasCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: faltas > 0 ? 'FFFEE2E2' : 'FFF0FDF4' } };
+    faltasCell.border = borderThin;
+    faltasCell.alignment = centerAlign;
   });
 
-  ws['!ref'] = XLSX.utils.encode_range(range);
+  // ── Larguras das colunas ──────────────────────────────────────────────────
+  ws.getColumn(1).width = 34; // Nome
+  ws.getColumn(2).width = 5;  // Nº
+  dias.forEach((_, i) => { ws.getColumn(3 + i).width = 5; });
+  ws.getColumn(3 + dias.length).width = 8; // Faltas
 
-  // Larguras das colunas
-  const colWidths: XLSX.ColInfo[] = [
-    { wch: 36 }, // Nome
-    { wch: 4 },  // Nº
-    ...dias.map(() => ({ wch: 5 })), // datas
-    { wch: 8 },  // Faltas
-  ];
-  ws['!cols'] = colWidths;
-
-  // Mesclagens do cabeçalho
-  ws['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 2 } }, // Título
-    { s: { r: 1, c: 0 }, e: { r: 2, c: 0 } }, // NOME
-    { s: { r: 1, c: 1 }, e: { r: 2, c: 1 } }, // Nº
-    { s: { r: 1, c: 2 + dias.length }, e: { r: 2, c: 2 + dias.length } }, // FALTAS
-  ];
-
-  const nomeArquivo = `diario_${turma.replace(/\s/g, '')}_bim${bimestre}.xlsx`;
-  XLSX.utils.book_append_sheet(wb, ws, `${bimestre}º Bim`);
-  XLSX.writeFile(wb, nomeArquivo);
+  // ── Download ──────────────────────────────────────────────────────────────
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `diario_${turma}_bim${bimestre}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
