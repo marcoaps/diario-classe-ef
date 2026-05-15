@@ -323,6 +323,7 @@ export function GradeReport() {
       } else {
         notaCell.value = a.nota !== null && a.nota !== undefined ? Number(a.nota) : '-';
         notaCell.font = { bold: true, size: 10, color: { argb: AZUL } };
+        if (a.nota !== null && a.nota !== undefined) notaCell.numFmt = '0.0';
       }
       notaCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
       notaCell.alignment = { horizontal: 'center', vertical: 'middle' };
