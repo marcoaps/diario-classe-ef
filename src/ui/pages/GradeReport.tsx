@@ -1,10 +1,92 @@
 import React, { useState, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { cn } from "../AppLayout";
-import { X, FileDown, FileSpreadsheet, Save, Trash2, Upload } from "lucide-react";
+import { X, FileDown, FileSpreadsheet, Save, Trash2, Upload, Table2, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { salvarNotas, buscarNotas } from "../../data/supabase";
 
 const TURMAS = ["6F", "7B", "7C", "7D", "7E", "7F", "8A", "8B", "8C", "8D", "8E", "8F", "9A", "9B", "9C", "9D", "9E", "9F"];
+
+// Extrai bimestre do título da aba (ex: "Diário de Classe EF — 9º F — 1º Bimestre 2026")
+function extrairBimestre(titulo: string): number | null {
+  const match = titulo.match(/(\d)[ºo°]\s*Bimestre/i);
+  return match ? parseInt(match[1]) : null;
+}
+
+// Extrai turma do nome da aba (ex: "9º F" -> "9F")
+function normalizarNomeAba(nomeAba: string): string {
+  return nomeAba.replace(/º|°/g, '').replace(/\s/g, '').toUpperCase();
+}
+
+// Verifica se nota é especial (Remaj., Transf., etc)
+function isNotaEspecial(valor: any): boolean {
+  if (valor === null || valor === undefined) return false;
+  return typeof valor === 'string' && isNaN(parseFloat(valor));
+}
+
+function parsearPlanilhaExcel(file: File): Promise<{
+  turma: string;
+  bimestre: number;
+  alunos: { numero: number; nome: string; nota: number | null; notaTexto?: string }[];
+}[]> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const wb = XLSX.read(data, { type: 'array' });
+        const resultado: any[] = [];
+
+        wb.SheetNames.forEach((nomeAba) => {
+          const ws = wb.Sheets[nomeAba];
+          const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+          if (rows.length < 3) return;
+
+          // Linha 1: título com bimestre
+          const titulo = String(rows[0]?.[0] || rows[0]?.[1] || '');
+          const bimestre = extrairBimestre(titulo);
+          if (!bimestre) return;
+
+          const turma = normalizarNomeAba(nomeAba);
+          if (!TURMAS.includes(turma)) return;
+
+          // Linha 2: cabeçalho (Nº, Nome, Nota) — pula
+          // Linha 3+: dados dos alunos
+          const alunos: any[] = [];
+          for (let i = 2; i < rows.length; i++) {
+            const row = rows[i];
+            const num = row[0];
+            const nome = String(row[1] || '').trim();
+            const notaRaw = row[2];
+
+            if (!nome || !num) continue;
+
+            const numInt = parseInt(String(num));
+            if (isNaN(numInt)) continue;
+
+            if (isNotaEspecial(notaRaw)) {
+              // Remaj., Transf. etc — salva com nota nula e texto especial
+              alunos.push({ numero: numInt, nome, nota: null, notaTexto: String(notaRaw).trim() });
+            } else {
+              const notaNum = parseFloat(String(notaRaw).replace(',', '.'));
+              alunos.push({ numero: numInt, nome, nota: isNaN(notaNum) ? null : notaNum });
+            }
+          }
+
+          if (alunos.length > 0) {
+            resultado.push({ turma, bimestre, alunos });
+          }
+        });
+
+        resolve(resultado);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
 
 export function GradeReport() {
   const [view, setView] = useState<"notas" | "desempenho">("notas");
@@ -16,7 +98,15 @@ export function GradeReport() {
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showImportExcel, setShowImportExcel] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  // Estado da importação Excel
+  const [importandoExcel, setImportandoExcel] = useState(false);
+  const [resultadoImport, setResultadoImport] = useState<{
+    turma: string; bimestre: number; total: number; status: 'ok' | 'erro'; msg?: string;
+  }[]>([]);
+  const [importConcluido, setImportConcluido] = useState(false);
 
   useEffect(() => {
     if (view === "notas") carregarNotas();
@@ -40,10 +130,8 @@ export function GradeReport() {
     setIsLoading(true);
     try {
       const [b1, b2, b3, b4] = await Promise.all([
-        buscarNotas(turma, 1),
-        buscarNotas(turma, 2),
-        buscarNotas(turma, 3),
-        buscarNotas(turma, 4),
+        buscarNotas(turma, 1), buscarNotas(turma, 2),
+        buscarNotas(turma, 3), buscarNotas(turma, 4),
       ]);
       const nomes = new Set([...b1, ...b2, ...b3, ...b4].map((a: any) => a.nome));
       const resultado = Array.from(nomes).map(nome => {
@@ -67,6 +155,7 @@ export function GradeReport() {
     }
   };
 
+  // Importação PDF via Claude
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -96,13 +185,11 @@ export function GradeReport() {
         })
       });
       const json = await resp.json();
-      if (!resp.ok) throw new Error("API erro " + resp.status + ": " + JSON.stringify(json));
+      if (!resp.ok) throw new Error("API erro " + resp.status);
       let text = json.content[0].text;
       let clean = text.replace(/```json|```/g, "").trim();
       const lastBracket = clean.lastIndexOf("}");
-      if (lastBracket !== -1 && !clean.endsWith("]")) {
-        clean = clean.substring(0, lastBracket + 1) + "]";
-      }
+      if (lastBracket !== -1 && !clean.endsWith("]")) clean = clean.substring(0, lastBracket + 1) + "]";
       const notas = JSON.parse(clean);
       setAlunos(notas);
       setSaved(false);
@@ -111,6 +198,50 @@ export function GradeReport() {
       alert("Erro: " + (e?.message || JSON.stringify(e)));
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  // Importação Excel com múltiplas abas
+  const handleImportExcel = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setImportandoExcel(true);
+    setResultadoImport([]);
+    setImportConcluido(false);
+
+    try {
+      const turmas = await parsearPlanilhaExcel(file);
+
+      if (turmas.length === 0) {
+        alert('Nenhuma aba válida encontrada. Verifique o formato da planilha.');
+        setImportandoExcel(false);
+        return;
+      }
+
+      const resultados: typeof resultadoImport = [];
+
+      for (const t of turmas) {
+        try {
+          // Filtra apenas alunos com nota numérica para salvar
+          const alunosComNota = t.alunos.filter(a => a.nota !== null);
+          await salvarNotas(t.turma, t.bimestre as any, alunosComNota.map(a => ({
+            numero: a.numero, nome: a.nome, nota: a.nota!,
+          })));
+          resultados.push({ turma: t.turma, bimestre: t.bimestre, total: t.alunos.length, status: 'ok' });
+        } catch (e: any) {
+          resultados.push({ turma: t.turma, bimestre: t.bimestre, total: t.alunos.length, status: 'erro', msg: e.message });
+        }
+      }
+
+      setResultadoImport(resultados);
+      setImportConcluido(true);
+
+      // Recarrega notas da turma atual
+      carregarNotas();
+    } catch (e: any) {
+      alert('Erro ao ler a planilha: ' + e.message);
+    } finally {
+      setImportandoExcel(false);
     }
   };
 
@@ -136,12 +267,9 @@ export function GradeReport() {
   const exportarExcel = () => {
     if (alunos.length === 0) return;
     const linhas = alunos.map(a => ({
-      numero: a.num,
-      nome: a.nome,
-      nota: a.nota,
+      numero: a.num, nome: a.nome, nota: a.nota,
       situacao: a.nota !== null && a.nota !== undefined ? getStatus(a.nota).text : "-",
-      turma,
-      bimestre,
+      turma, bimestre,
     }));
     const ws = XLSX.utils.json_to_sheet(linhas);
     ws["!cols"] = [{ wch: 6 }, { wch: 38 }, { wch: 8 }, { wch: 12 }, { wch: 8 }, { wch: 10 }];
@@ -204,7 +332,12 @@ export function GradeReport() {
             <div className="flex gap-2 flex-wrap">
               <button onClick={() => setShowImport(true)}
                 className="flex-1 py-3 bg-primary text-white rounded-xl font-bold shadow-md hover:bg-primary-dark transition-all flex items-center justify-center gap-2">
-                <Upload className="w-4 h-4" /> Carregar PDF
+                <Upload className="w-4 h-4" /> PDF
+              </button>
+              {/* NOVO: Importar Excel */}
+              <button onClick={() => { setShowImportExcel(true); setResultadoImport([]); setImportConcluido(false); }}
+                className="flex-1 py-3 bg-emerald-700 text-white rounded-xl font-bold shadow-md hover:bg-emerald-800 transition-all flex items-center justify-center gap-2">
+                <Table2 className="w-4 h-4" /> Excel
               </button>
               {alunos.length > 0 && !saved && (
                 <button onClick={handleSalvar} disabled={isSaving}
@@ -215,7 +348,7 @@ export function GradeReport() {
               {alunos.length > 0 && (
                 <button onClick={exportarExcel}
                   className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold shadow-md hover:bg-emerald-700 transition-all flex items-center justify-center gap-2">
-                  <FileSpreadsheet className="w-4 h-4" /> Excel
+                  <FileSpreadsheet className="w-4 h-4" /> Exportar
                 </button>
               )}
               {alunos.length > 0 && (
@@ -243,12 +376,15 @@ export function GradeReport() {
               <div className="bg-surface rounded-3xl border border-gray-200 overflow-hidden shadow-sm">
                 <div className="flex flex-col divide-y divide-gray-100">
                   {alunos.map(aluno => {
-                    const status = getStatus(aluno.nota);
+                    const isEspecial = typeof aluno.nota === 'string' || aluno.nota === null;
+                    const status = !isEspecial && aluno.nota !== null ? getStatus(aluno.nota) : { text: '', color: 'text-gray-400' };
                     return (
                       <div key={aluno.nome} className="py-0.5 px-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors print:py-0">
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="font-mono text-gray-400 text-xs w-5 shrink-0">{aluno.num}</span>
-                          <span className="font-semibold text-textPrimary text-xs truncate">{aluno.nome.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())}</span>
+                          <span className="font-semibold text-textPrimary text-xs truncate">
+                            {aluno.nome.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                          </span>
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
                           <span className="font-bold text-gray-700 text-sm">{fmtNota(aluno.nota)}</span>
@@ -261,7 +397,7 @@ export function GradeReport() {
               </div>
             </>
           ) : (
-            <div className="text-center p-10 text-gray-500">Nenhum dado. Carregue um PDF do Simaed.</div>
+            <div className="text-center p-10 text-gray-500">Nenhum dado. Carregue um PDF ou importe o Excel.</div>
           )
         ) : (
           desempenho.length > 0 ? (
@@ -305,6 +441,7 @@ export function GradeReport() {
         )}
       </div>
 
+      {/* Modal: Importar PDF */}
       {showImport && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white p-6 rounded-2xl w-full max-w-lg">
@@ -320,6 +457,74 @@ export function GradeReport() {
             ) : (
               <input type="file" accept="application/pdf" onChange={handleFileUpload}
                 className="w-full p-3 border border-gray-300 rounded-xl" />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Importar Excel com múltiplas abas */}
+      {showImportExcel && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white p-6 rounded-2xl w-full max-w-lg flex flex-col gap-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-bold">Importar Notas — Excel</h3>
+              <button onClick={() => setShowImportExcel(false)}><X /></button>
+            </div>
+
+            {!importConcluido ? (
+              <>
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm text-emerald-800">
+                  <p className="font-bold mb-1">📊 Formato esperado:</p>
+                  <ul className="list-disc list-inside space-y-1 text-xs">
+                    <li>Cada aba = uma turma (ex: "9º F")</li>
+                    <li>Linha 1: Título com bimestre (ex: "...1º Bimestre 2026")</li>
+                    <li>Linha 2: Cabeçalho (Nº, Nome, Nota)</li>
+                    <li>Linha 3+: Dados dos alunos</li>
+                    <li>Notas especiais (Remaj., Transf.) são preservadas</li>
+                  </ul>
+                </div>
+
+                {importandoExcel ? (
+                  <div className="flex flex-col items-center gap-3 py-6">
+                    <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
+                    <p className="text-sm font-semibold text-gray-600">Importando notas de todas as turmas...</p>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center gap-3 py-8 border-2 border-dashed border-emerald-300 rounded-xl cursor-pointer hover:bg-emerald-50 transition-colors">
+                    <Table2 className="w-10 h-10 text-emerald-600" />
+                    <p className="font-bold text-emerald-700">Clique para selecionar a planilha</p>
+                    <p className="text-xs text-gray-400">.xlsx ou .xls</p>
+                    <input type="file" accept=".xlsx,.xls" onChange={handleImportExcel} className="hidden" />
+                  </label>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="flex flex-col gap-2 max-h-80 overflow-y-auto">
+                  {resultadoImport.map((r, i) => (
+                    <div key={i} className={cn(
+                      "flex items-center justify-between px-4 py-2.5 rounded-xl text-sm",
+                      r.status === 'ok' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+                    )}>
+                      <div className="flex items-center gap-2">
+                        {r.status === 'ok'
+                          ? <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
+                          : <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />}
+                        <span className="font-bold">Turma {r.turma}</span>
+                        <span className="text-gray-500 text-xs">· {r.bimestre}º Bim · {r.total} alunos</span>
+                      </div>
+                      {r.status === 'erro' && <span className="text-xs text-red-600">{r.msg}</span>}
+                    </div>
+                  ))}
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-700 font-medium text-center">
+                  ✅ {resultadoImport.filter(r => r.status === 'ok').length} turmas importadas com sucesso!
+                </div>
+                <button onClick={() => setShowImportExcel(false)}
+                  className="w-full py-3 rounded-xl font-bold bg-primary text-white hover:opacity-90 transition-all">
+                  Fechar
+                </button>
+              </>
             )}
           </div>
         </div>
