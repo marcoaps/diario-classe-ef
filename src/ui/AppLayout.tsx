@@ -15,7 +15,7 @@ export function AppLayout() {
   return (
     <div className="flex flex-col h-[100dvh] bg-gray-50 text-gray-900 overflow-hidden font-sans" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
 
-      <main className="flex-1 overflow-y-auto w-full pb-24">
+      <main className="flex-1 overflow-y-auto w-full pb-20 md:pb-24">
         <div className="max-w-2xl mx-auto h-full w-full">
           <Outlet />
         </div>

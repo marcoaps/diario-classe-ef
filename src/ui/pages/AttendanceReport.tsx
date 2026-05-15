@@ -138,7 +138,7 @@ export function AttendanceReport() {
   };
 
   return (
-    <div className="flex flex-col gap-6 font-sans animate-in fade-in pb-24 bg-[#f5f7fb] min-h-screen p-4 md:p-6">
+    <div className="flex flex-col gap-6 font-sans animate-in fade-in pb-32 bg-[#f5f7fb] min-h-screen p-4 md:p-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="text-2xl font-bold tracking-tight text-gray-900 flex items-center gap-2">
           <BarChart3 className="w-6 h-6 text-primary" />
