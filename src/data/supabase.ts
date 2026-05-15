@@ -25,55 +25,29 @@ export async function salvarChamada(
     .eq("data", data)
     .in("aluno_id", studentIds);
 
-  if (fetchError) {
-    console.error("Erro ao buscar registros existentes da chamada:", fetchError);
-    throw fetchError;
-  }
+  if (fetchError) throw fetchError;
 
   const existingMap = new Map(existingRecords?.map((r) => [r.aluno_id, r.id]));
 
   const upsertData = registros.map((r) => {
     const recordId = existingMap.get(r.aluno_id) || uuidv4();
-    return {
-      id: recordId,
-      aluno_id: r.aluno_id,
-      data: r.data,
-      presente: r.presente,
-    };
+    return { id: recordId, aluno_id: r.aluno_id, data: r.data, presente: r.presente };
   });
 
-  const { error: upsertError } = await supabase
-    .from("frequencia")
-    .upsert(upsertData);
-
-  if (upsertError) {
-    console.error("Erro ao salvar chamada:", upsertError);
-    throw upsertError;
-  }
+  const { error: upsertError } = await supabase.from("frequencia").upsert(upsertData);
+  if (upsertError) throw upsertError;
 }
 
 export async function buscarHistoricoFrequencia(turmaId?: string, dt?: string) {
   let freqQuery = supabase.from("frequencia").select("*");
-
-  if (dt) {
-    freqQuery = freqQuery.eq("data", dt);
-  }
+  if (dt) freqQuery = freqQuery.eq("data", dt);
 
   const { data: dataFrequencia, error: errorFrequencia } = await freqQuery;
-
-  if (errorFrequencia) {
-    console.error("Erro ao buscar histórico (frequencia):", errorFrequencia);
-    throw errorFrequencia;
-  }
+  if (errorFrequencia) throw errorFrequencia;
 
   const { data: dataAlunos, error: errorAlunos } = await supabase
-    .from("alunos")
-    .select("id, nome, turma_id, numero_chamada");
-
-  if (errorAlunos) {
-    console.error("Erro ao buscar alunos para join:", errorAlunos);
-    throw errorAlunos;
-  }
+    .from("alunos").select("id, nome, turma_id, numero_chamada");
+  if (errorAlunos) throw errorAlunos;
 
   let turmaNormalizada: string | null = null;
   if (turmaId && turmaId !== 'ALL') {
@@ -81,35 +55,24 @@ export async function buscarHistoricoFrequencia(turmaId?: string, dt?: string) {
   }
 
   const alunosMap = new Map();
-  dataAlunos?.forEach((aluno: any) => {
-    alunosMap.set(aluno.id, aluno);
-  });
+  dataAlunos?.forEach((aluno: any) => { alunosMap.set(aluno.id, aluno); });
 
   const historico = [];
-
   for (const registro of dataFrequencia || []) {
     const aluno = alunosMap.get(registro.aluno_id);
-
     if (aluno) {
-      if (turmaNormalizada && aluno.turma_id !== turmaNormalizada) {
-        continue;
-      }
-
+      if (turmaNormalizada && aluno.turma_id !== turmaNormalizada) continue;
       historico.push({
-        id: registro.id,
-        aluno_id: registro.aluno_id,
-        data: registro.data,
-        presente: registro.presente,
-        nome: aluno.nome,
-        turma_id: aluno.turma_id,
+        id: registro.id, aluno_id: registro.aluno_id, data: registro.data,
+        presente: registro.presente, nome: aluno.nome, turma_id: aluno.turma_id,
         numero_chamada: aluno.numero_chamada,
       });
     }
   }
 
   historico.sort((a, b) => {
-    const numA = (a.numero_chamada !== null && a.numero_chamada !== undefined) ? a.numero_chamada : Infinity;
-    const numB = (b.numero_chamada !== null && b.numero_chamada !== undefined) ? b.numero_chamada : Infinity;
+    const numA = a.numero_chamada ?? Infinity;
+    const numB = b.numero_chamada ?? Infinity;
     if (numA !== numB) return numA - numB;
     return a.nome.localeCompare(b.nome);
   });
@@ -118,45 +81,25 @@ export async function buscarHistoricoFrequencia(turmaId?: string, dt?: string) {
 }
 
 export async function buscarAlunos(turmaId: string) {
-  const turmaNormalizada = turmaId
-    .replace("º", "")
-    .replace(/\s/g, "")
-    .toUpperCase();
-
+  const turmaNormalizada = turmaId.replace("º", "").replace(/\s/g, "").toUpperCase();
   const { data, error } = await supabase
-    .from("alunos")
-    .select("*")
-    .eq("turma_id", turmaNormalizada)
+    .from("alunos").select("*").eq("turma_id", turmaNormalizada)
     .order("numero_chamada", { ascending: true, nullsFirst: false });
-
-  if (error) {
-    console.error('Erro ao buscar alunos:', error);
-  }
-
+  if (error) console.error('Erro ao buscar alunos:', error);
   return data || [];
 }
 
 export async function buscarRelatorioFrequencia(turmaId?: string, dataInicio?: string, dataFim?: string) {
   let freqQuery = supabase.from("frequencia").select("*");
-
   if (dataInicio) freqQuery = freqQuery.gte("data", dataInicio);
   if (dataFim) freqQuery = freqQuery.lte("data", dataFim);
 
   const { data: dataFrequencia, error: errorFrequencia } = await freqQuery;
-
-  if (errorFrequencia) {
-    console.error("Erro ao buscar frequencia (relatório):", errorFrequencia);
-    throw errorFrequencia;
-  }
+  if (errorFrequencia) throw errorFrequencia;
 
   const { data: dataAlunos, error: errorAlunos } = await supabase
-    .from("alunos")
-    .select("id, nome, turma_id, numero_chamada");
-
-  if (errorAlunos) {
-    console.error("Erro ao buscar alunos para o relatorio:", errorAlunos);
-    throw errorAlunos;
-  }
+    .from("alunos").select("id, nome, turma_id, numero_chamada");
+  if (errorAlunos) throw errorAlunos;
 
   let turmaNormalizada: string | null = null;
   if (turmaId && turmaId !== 'ALL') {
@@ -166,15 +109,7 @@ export async function buscarRelatorioFrequencia(turmaId?: string, dataInicio?: s
   const alunosMap = new Map();
   dataAlunos?.forEach((aluno: any) => {
     if (!turmaNormalizada || aluno.turma_id === turmaNormalizada) {
-      alunosMap.set(aluno.id, {
-        id: aluno.id,
-        nome: aluno.nome,
-        turma_id: aluno.turma_id,
-        numero_chamada: aluno.numero_chamada,
-        total: 0,
-        presencas: 0,
-        faltas: 0
-      });
+      alunosMap.set(aluno.id, { id: aluno.id, nome: aluno.nome, turma_id: aluno.turma_id, numero_chamada: aluno.numero_chamada, total: 0, presencas: 0, faltas: 0 });
     }
   });
 
@@ -192,18 +127,14 @@ export async function buscarRelatorioFrequencia(turmaId?: string, dataInicio?: s
     if (aluno.total > 0) {
       const p = (aluno.presencas / aluno.total) * 100;
       const frequencia = parseFloat(p.toFixed(2));
-      let status = '';
-      if (frequencia >= 75) status = 'OK';
-      else if (frequencia >= 50) status = 'Atenção';
-      else status = 'Crítico';
-
+      let status = frequencia >= 75 ? 'OK' : frequencia >= 50 ? 'Atenção' : 'Crítico';
       relatorio.push({ ...aluno, frequencia, status });
     }
   });
 
   relatorio.sort((a, b) => {
-    const numA = (a.numero_chamada !== null && a.numero_chamada !== undefined) ? a.numero_chamada : Infinity;
-    const numB = (b.numero_chamada !== null && b.numero_chamada !== undefined) ? b.numero_chamada : Infinity;
+    const numA = a.numero_chamada ?? Infinity;
+    const numB = b.numero_chamada ?? Infinity;
     if (numA !== numB) return numA - numB;
     return a.nome.localeCompare(b.nome);
   });
@@ -211,13 +142,19 @@ export async function buscarRelatorioFrequencia(turmaId?: string, dataInicio?: s
   return relatorio;
 }
 
-export async function salvarNotas(turma: string, bimestre: number, alunos: { numero: number; nome: string; nota: number }[]) {
+// Salva notas — suporta nota numérica e nota_texto (Remaj., Transf., etc)
+export async function salvarNotas(
+  turma: string,
+  bimestre: number,
+  alunos: { numero: number; nome: string; nota: number | null; nota_texto?: string | null }[]
+) {
   const upsertData = alunos.map(a => ({
     turma,
     bimestre,
     numero: a.numero,
     nome: a.nome,
-    nota: a.nota
+    nota: a.nota ?? null,
+    nota_texto: a.nota_texto ?? null,
   }));
   const { error } = await supabase
     .from("notas")
@@ -227,10 +164,8 @@ export async function salvarNotas(turma: string, bimestre: number, alunos: { num
 
 export async function buscarNotas(turma: string, bimestre: number) {
   const { data, error } = await supabase
-    .from("notas")
-    .select("*")
-    .eq("turma", turma)
-    .eq("bimestre", bimestre)
+    .from("notas").select("*")
+    .eq("turma", turma).eq("bimestre", bimestre)
     .order("numero");
   if (error) throw error;
   return data || [];

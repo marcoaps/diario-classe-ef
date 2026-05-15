@@ -56,8 +56,9 @@ function parsearPlanilhaExcel(file: File): Promise<{
             const notaStr = String(notaRaw || '').trim();
             const notaNum = parseFloat(notaStr.replace(',', '.'));
             const nota = isNaN(notaNum) ? null : notaNum;
+            const nota_texto = isNaN(notaNum) && notaStr !== '' ? notaStr : null;
 
-            alunos.push({ numero: numInt, nome, nota });
+            alunos.push({ numero: numInt, nome, nota, nota_texto });
           }
 
           if (alunos.length > 0) resultado.push({ turma, bimestre, alunos });
@@ -98,7 +99,7 @@ export function GradeReport() {
     setIsLoading(true);
     try {
       const data = await buscarNotas(turma, bimestre);
-      setAlunos(data.map((d: any) => ({ num: d.numero, nome: d.nome, nota: d.nota })));
+      setAlunos(data.map((d: any) => ({ num: d.numero, nome: d.nome, nota: d.nota, nota_texto: d.nota_texto })));
       setSaved(true);
     } catch (e) { setAlunos([]); }
     finally { setIsLoading(false); }
@@ -200,10 +201,15 @@ export function GradeReport() {
             .eq('bimestre', t.bimestre);
           if (delErr) throw delErr;
 
-          // Insere apenas alunos com nota numérica
-          const alunosComNota = t.alunos.filter(a => a.nota !== null);
-          if (alunosComNota.length > 0) {
-            await salvarNotas(t.turma, t.bimestre as any, alunosComNota as any);
+          // Insere todos os alunos (com nota numérica ou nota_texto)
+          const todosAlunos = t.alunos.map((a: any) => ({
+            numero: a.numero,
+            nome: a.nome,
+            nota: a.nota ?? null,
+            nota_texto: a.nota_texto ?? null,
+          }));
+          if (todosAlunos.length > 0) {
+            await salvarNotas(t.turma, t.bimestre as any, todosAlunos);
           }
 
           resultados.push({ turma: t.turma, bimestre: t.bimestre, total: t.alunos.length, status: 'ok' });
@@ -325,7 +331,10 @@ export function GradeReport() {
                         <span className="font-mono text-gray-400 text-xs w-5 shrink-0">{aluno.num}</span>
                         <span className="font-semibold text-textPrimary text-xs truncate">{aluno.nome.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())}</span>
                       </div>
-                      <span className="font-black text-primary text-base shrink-0">{fmtNota(aluno.nota)}</span>
+                      {aluno.nota_texto
+                        ? <span className="font-black text-red-600 text-sm shrink-0">{aluno.nota_texto}</span>
+                        : <span className="font-black text-primary text-base shrink-0">{fmtNota(aluno.nota)}</span>
+                      }
                     </div>
                   ))}
                 </div>
