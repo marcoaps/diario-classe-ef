@@ -2,31 +2,23 @@ import React, { useState, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { cn } from "../AppLayout";
 import { X, FileDown, FileSpreadsheet, Save, Trash2, Upload, Table2, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
-import { salvarNotas, buscarNotas } from "../../data/supabase";
+import { salvarNotas, buscarNotas, supabase } from "../../data/supabase";
 
 const TURMAS = ["6F", "7B", "7C", "7D", "7E", "7F", "8A", "8B", "8C", "8D", "8E", "8F", "9A", "9B", "9C", "9D", "9E", "9F"];
 
-// Extrai bimestre do título da aba (ex: "Diário de Classe EF — 9º F — 1º Bimestre 2026")
 function extrairBimestre(titulo: string): number | null {
   const match = titulo.match(/(\d)[ºo°]\s*Bimestre/i);
   return match ? parseInt(match[1]) : null;
 }
 
-// Extrai turma do nome da aba (ex: "9º F" -> "9F")
 function normalizarNomeAba(nomeAba: string): string {
   return nomeAba.replace(/º|°/g, '').replace(/\s/g, '').toUpperCase();
-}
-
-// Verifica se nota é especial (Remaj., Transf., etc)
-function isNotaEspecial(valor: any): boolean {
-  if (valor === null || valor === undefined) return false;
-  return typeof valor === 'string' && isNaN(parseFloat(valor));
 }
 
 function parsearPlanilhaExcel(file: File): Promise<{
   turma: string;
   bimestre: number;
-  alunos: { numero: number; nome: string; nota: number | null; notaTexto?: string }[];
+  alunos: { numero: number; nome: string; nota: number | null }[];
 }[]> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -39,7 +31,6 @@ function parsearPlanilhaExcel(file: File): Promise<{
         wb.SheetNames.forEach((nomeAba) => {
           const ws = wb.Sheets[nomeAba];
           const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-
           if (rows.length < 3) return;
 
           // Linha 1: título com bimestre
@@ -50,8 +41,7 @@ function parsearPlanilhaExcel(file: File): Promise<{
           const turma = normalizarNomeAba(nomeAba);
           if (!TURMAS.includes(turma)) return;
 
-          // Linha 2: cabeçalho (Nº, Nome, Nota) — pula
-          // Linha 3+: dados dos alunos
+          // Linha 3+: dados
           const alunos: any[] = [];
           for (let i = 2; i < rows.length; i++) {
             const row = rows[i];
@@ -60,28 +50,21 @@ function parsearPlanilhaExcel(file: File): Promise<{
             const notaRaw = row[2];
 
             if (!nome || !num) continue;
-
             const numInt = parseInt(String(num));
             if (isNaN(numInt)) continue;
 
-            if (isNotaEspecial(notaRaw)) {
-              // Remaj., Transf. etc — salva com nota nula e texto especial
-              alunos.push({ numero: numInt, nome, nota: null, notaTexto: String(notaRaw).trim() });
-            } else {
-              const notaNum = parseFloat(String(notaRaw).replace(',', '.'));
-              alunos.push({ numero: numInt, nome, nota: isNaN(notaNum) ? null : notaNum });
-            }
+            const notaStr = String(notaRaw || '').trim();
+            const notaNum = parseFloat(notaStr.replace(',', '.'));
+            const nota = isNaN(notaNum) ? null : notaNum;
+
+            alunos.push({ numero: numInt, nome, nota });
           }
 
-          if (alunos.length > 0) {
-            resultado.push({ turma, bimestre, alunos });
-          }
+          if (alunos.length > 0) resultado.push({ turma, bimestre, alunos });
         });
 
         resolve(resultado);
-      } catch (err) {
-        reject(err);
-      }
+      } catch (err) { reject(err); }
     };
     reader.onerror = reject;
     reader.readAsArrayBuffer(file);
@@ -100,8 +83,6 @@ export function GradeReport() {
   const [showImport, setShowImport] = useState(false);
   const [showImportExcel, setShowImportExcel] = useState(false);
   const [saved, setSaved] = useState(false);
-
-  // Estado da importação Excel
   const [importandoExcel, setImportandoExcel] = useState(false);
   const [resultadoImport, setResultadoImport] = useState<{
     turma: string; bimestre: number; total: number; status: 'ok' | 'erro'; msg?: string;
@@ -119,11 +100,8 @@ export function GradeReport() {
       const data = await buscarNotas(turma, bimestre);
       setAlunos(data.map((d: any) => ({ num: d.numero, nome: d.nome, nota: d.nota })));
       setSaved(true);
-    } catch (e) {
-      setAlunos([]);
-    } finally {
-      setIsLoading(false);
-    }
+    } catch (e) { setAlunos([]); }
+    finally { setIsLoading(false); }
   };
 
   const carregarDesempenho = async () => {
@@ -148,14 +126,10 @@ export function GradeReport() {
       });
       resultado.sort((a, b) => (a.num || 999) - (b.num || 999));
       setDesempenho(resultado);
-    } catch (e) {
-      setDesempenho([]);
-    } finally {
-      setIsLoading(false);
-    }
+    } catch (e) { setDesempenho([]); }
+    finally { setIsLoading(false); }
   };
 
-  // Importação PDF via Claude
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -196,12 +170,9 @@ export function GradeReport() {
       setShowImport(false);
     } catch (e: any) {
       alert("Erro: " + (e?.message || JSON.stringify(e)));
-    } finally {
-      setIsProcessing(false);
-    }
+    } finally { setIsProcessing(false); }
   };
 
-  // Importação Excel com múltiplas abas
   const handleImportExcel = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -211,7 +182,6 @@ export function GradeReport() {
 
     try {
       const turmas = await parsearPlanilhaExcel(file);
-
       if (turmas.length === 0) {
         alert('Nenhuma aba válida encontrada. Verifique o formato da planilha.');
         setImportandoExcel(false);
@@ -222,11 +192,20 @@ export function GradeReport() {
 
       for (const t of turmas) {
         try {
-          // Filtra apenas alunos com nota numérica para salvar
+          // DELETE antes do INSERT para evitar duplicatas
+          const { error: delErr } = await supabase
+            .from('notas')
+            .delete()
+            .eq('turma', t.turma)
+            .eq('bimestre', t.bimestre);
+          if (delErr) throw delErr;
+
+          // Insere apenas alunos com nota numérica
           const alunosComNota = t.alunos.filter(a => a.nota !== null);
-          await salvarNotas(t.turma, t.bimestre as any, alunosComNota.map(a => ({
-            numero: a.numero, nome: a.nome, nota: a.nota!,
-          })));
+          if (alunosComNota.length > 0) {
+            await salvarNotas(t.turma, t.bimestre as any, alunosComNota as any);
+          }
+
           resultados.push({ turma: t.turma, bimestre: t.bimestre, total: t.alunos.length, status: 'ok' });
         } catch (e: any) {
           resultados.push({ turma: t.turma, bimestre: t.bimestre, total: t.alunos.length, status: 'erro', msg: e.message });
@@ -235,14 +214,10 @@ export function GradeReport() {
 
       setResultadoImport(resultados);
       setImportConcluido(true);
-
-      // Recarrega notas da turma atual
       carregarNotas();
     } catch (e: any) {
       alert('Erro ao ler a planilha: ' + e.message);
-    } finally {
-      setImportandoExcel(false);
-    }
+    } finally { setImportandoExcel(false); }
   };
 
   const handleSalvar = async () => {
@@ -251,11 +226,8 @@ export function GradeReport() {
       await salvarNotas(turma, bimestre, alunos.filter(a => a.nota !== null && a.nota !== undefined).map(a => ({ numero: a.num, nome: a.nome, nota: a.nota })));
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch (e: any) {
-      alert("Erro ao salvar: " + e.message);
-    } finally {
-      setIsSaving(false);
-    }
+    } catch (e: any) { alert("Erro ao salvar: " + e.message); }
+    finally { setIsSaving(false); }
   };
 
   const getStatus = (nota: number) => {
@@ -266,11 +238,7 @@ export function GradeReport() {
 
   const exportarExcel = () => {
     if (alunos.length === 0) return;
-    const linhas = alunos.map(a => ({
-      numero: a.num, nome: a.nome, nota: a.nota,
-      situacao: a.nota !== null && a.nota !== undefined ? getStatus(a.nota).text : "-",
-      turma, bimestre,
-    }));
+    const linhas = alunos.map(a => ({ numero: a.num, nome: a.nome, nota: a.nota, situacao: a.nota !== null ? getStatus(a.nota).text : "-", turma, bimestre }));
     const ws = XLSX.utils.json_to_sheet(linhas);
     ws["!cols"] = [{ wch: 6 }, { wch: 38 }, { wch: 8 }, { wch: 12 }, { wch: 8 }, { wch: 10 }];
     const wb = XLSX.utils.book_new();
@@ -281,8 +249,7 @@ export function GradeReport() {
   const limparLista = () => {
     if (alunos.length === 0) return;
     if (!window.confirm("Limpar a lista atual? Os dados salvos no banco NÃO serão afetados.")) return;
-    setAlunos([]);
-    setSaved(false);
+    setAlunos([]); setSaved(false);
   };
 
   const fmtNota = (n: any) => n !== null && n !== undefined ? Number(n).toFixed(1).replace(".", ",") : "-";
@@ -293,27 +260,15 @@ export function GradeReport() {
         <h2 className="text-2xl font-bold tracking-tight mb-3 text-primary-dark">Notas</h2>
 
         <div className="flex gap-2 w-full p-1 bg-gray-200/50 rounded-xl border border-gray-200 mb-3">
-          <button onClick={() => setView("notas")}
-            className={cn("flex-1 py-2 text-center rounded-lg text-sm font-semibold transition-all",
-              view === "notas" ? "bg-white text-primary ring-1 ring-gray-200" : "bg-transparent text-gray-500")}>
-            Notas
-          </button>
-          <button onClick={() => setView("desempenho")}
-            className={cn("flex-1 py-2 text-center rounded-lg text-sm font-semibold transition-all",
-              view === "desempenho" ? "bg-white text-primary ring-1 ring-gray-200" : "bg-transparent text-gray-500")}>
-            Desempenho
-          </button>
+          <button onClick={() => setView("notas")} className={cn("flex-1 py-2 text-center rounded-lg text-sm font-semibold transition-all", view === "notas" ? "bg-white text-primary ring-1 ring-gray-200" : "bg-transparent text-gray-500")}>Notas</button>
+          <button onClick={() => setView("desempenho")} className={cn("flex-1 py-2 text-center rounded-lg text-sm font-semibold transition-all", view === "desempenho" ? "bg-white text-primary ring-1 ring-gray-200" : "bg-transparent text-gray-500")}>Desempenho</button>
         </div>
 
         <div className="mb-3">
           <label className="text-xs font-semibold text-gray-500 mb-1 block">TURMA</label>
           <div className="grid grid-cols-9 gap-1">
             {TURMAS.map(t => (
-              <button key={t} onClick={() => setTurma(t)}
-                className={cn("py-1 rounded-lg text-xs font-bold transition-all",
-                  turma === t ? "bg-primary text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200")}>
-                {t}
-              </button>
+              <button key={t} onClick={() => setTurma(t)} className={cn("py-1 rounded-lg text-xs font-bold transition-all", turma === t ? "bg-primary text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200")}>{t}</button>
             ))}
           </div>
         </div>
@@ -322,43 +277,32 @@ export function GradeReport() {
           <>
             <div className="flex gap-2 w-full p-1 bg-gray-200/50 rounded-xl border border-gray-200 mb-3">
               {[1, 2, 3, 4].map(b => (
-                <button key={b} onClick={() => setBimestre(b as any)}
-                  className={cn("flex-1 py-2 text-center rounded-lg text-sm font-semibold transition-all",
-                    bimestre === b ? "bg-white text-primary ring-1 ring-gray-200" : "bg-transparent text-gray-500")}>
-                  {b}o Bim
-                </button>
+                <button key={b} onClick={() => setBimestre(b as any)} className={cn("flex-1 py-2 text-center rounded-lg text-sm font-semibold transition-all", bimestre === b ? "bg-white text-primary ring-1 ring-gray-200" : "bg-transparent text-gray-500")}>{b}o Bim</button>
               ))}
             </div>
             <div className="flex gap-2 flex-wrap">
-              <button onClick={() => setShowImport(true)}
-                className="flex-1 py-3 bg-primary text-white rounded-xl font-bold shadow-md hover:bg-primary-dark transition-all flex items-center justify-center gap-2">
+              <button onClick={() => setShowImport(true)} className="flex-1 py-3 bg-primary text-white rounded-xl font-bold shadow-md hover:bg-primary-dark transition-all flex items-center justify-center gap-2">
                 <Upload className="w-4 h-4" /> PDF
               </button>
-              {/* NOVO: Importar Excel */}
-              <button onClick={() => { setShowImportExcel(true); setResultadoImport([]); setImportConcluido(false); }}
-                className="flex-1 py-3 bg-emerald-700 text-white rounded-xl font-bold shadow-md hover:bg-emerald-800 transition-all flex items-center justify-center gap-2">
+              <button onClick={() => { setShowImportExcel(true); setResultadoImport([]); setImportConcluido(false); }} className="flex-1 py-3 bg-emerald-700 text-white rounded-xl font-bold shadow-md hover:bg-emerald-800 transition-all flex items-center justify-center gap-2">
                 <Table2 className="w-4 h-4" /> Excel
               </button>
               {alunos.length > 0 && !saved && (
-                <button onClick={handleSalvar} disabled={isSaving}
-                  className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold shadow-md hover:bg-green-700 transition-all flex items-center justify-center gap-2">
+                <button onClick={handleSalvar} disabled={isSaving} className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold shadow-md hover:bg-green-700 transition-all flex items-center justify-center gap-2">
                   <Save className="w-4 h-4" /> {isSaving ? "Salvando..." : "Salvar"}
                 </button>
               )}
               {alunos.length > 0 && (
-                <button onClick={exportarExcel}
-                  className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold shadow-md hover:bg-emerald-700 transition-all flex items-center justify-center gap-2">
+                <button onClick={exportarExcel} className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold shadow-md hover:bg-emerald-700 transition-all flex items-center justify-center gap-2">
                   <FileSpreadsheet className="w-4 h-4" /> Exportar
                 </button>
               )}
               {alunos.length > 0 && (
-                <button onClick={limparLista}
-                  className="py-3 px-4 bg-red-600 text-white rounded-xl font-bold shadow-md hover:bg-red-700 transition-all flex items-center justify-center gap-2">
+                <button onClick={limparLista} className="py-3 px-4 bg-red-600 text-white rounded-xl font-bold shadow-md hover:bg-red-700 transition-all flex items-center justify-center gap-2">
                   <Trash2 className="w-5 h-5" />
                 </button>
               )}
-              <button onClick={() => window.print()}
-                className="py-3 px-4 bg-gray-200 text-gray-800 rounded-xl font-bold hover:bg-gray-300 transition-all">
+              <button onClick={() => window.print()} className="py-3 px-4 bg-gray-200 text-gray-800 rounded-xl font-bold hover:bg-gray-300 transition-all">
                 <FileDown className="w-5 h-5" />
               </button>
             </div>
@@ -375,16 +319,14 @@ export function GradeReport() {
               {saved && <div className="print:hidden mb-2 text-xs text-center text-green-600 font-semibold">Dados salvos</div>}
               <div className="bg-surface rounded-3xl border border-gray-200 overflow-hidden shadow-sm">
                 <div className="flex flex-col divide-y divide-gray-100">
-                  {alunos.map(aluno => {
-                    const isEspecial = typeof aluno.nota === 'string' || aluno.nota === null;
-                    const status = !isEspecial && aluno.nota !== null ? getStatus(aluno.nota) : { text: '', color: 'text-gray-400' };
+                  {alunos.map((aluno, idx) => {
+                    const temNota = aluno.nota !== null && aluno.nota !== undefined;
+                    const status = temNota ? getStatus(aluno.nota) : { text: '-', color: 'text-gray-400' };
                     return (
-                      <div key={aluno.nome} className="py-0.5 px-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors print:py-0">
+                      <div key={`${aluno.nome}-${idx}`} className="py-0.5 px-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors print:py-0">
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="font-mono text-gray-400 text-xs w-5 shrink-0">{aluno.num}</span>
-                          <span className="font-semibold text-textPrimary text-xs truncate">
-                            {aluno.nome.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())}
-                          </span>
+                          <span className="font-semibold text-textPrimary text-xs truncate">{aluno.nome.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())}</span>
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
                           <span className="font-bold text-gray-700 text-sm">{fmtNota(aluno.nota)}</span>
@@ -441,7 +383,7 @@ export function GradeReport() {
         )}
       </div>
 
-      {/* Modal: Importar PDF */}
+      {/* Modal PDF */}
       {showImport && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white p-6 rounded-2xl w-full max-w-lg">
@@ -455,14 +397,13 @@ export function GradeReport() {
                 <p className="text-sm text-gray-500">Isso pode levar alguns segundos.</p>
               </div>
             ) : (
-              <input type="file" accept="application/pdf" onChange={handleFileUpload}
-                className="w-full p-3 border border-gray-300 rounded-xl" />
+              <input type="file" accept="application/pdf" onChange={handleFileUpload} className="w-full p-3 border border-gray-300 rounded-xl" />
             )}
           </div>
         </div>
       )}
 
-      {/* Modal: Importar Excel com múltiplas abas */}
+      {/* Modal Excel */}
       {showImportExcel && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white p-6 rounded-2xl w-full max-w-lg flex flex-col gap-4">
@@ -480,7 +421,7 @@ export function GradeReport() {
                     <li>Linha 1: Título com bimestre (ex: "...1º Bimestre 2026")</li>
                     <li>Linha 2: Cabeçalho (Nº, Nome, Nota)</li>
                     <li>Linha 3+: Dados dos alunos</li>
-                    <li>Notas especiais (Remaj., Transf.) são preservadas</li>
+                    <li>Notas especiais (Remaj., Transf.) são ignoradas na importação</li>
                   </ul>
                 </div>
 
@@ -488,6 +429,7 @@ export function GradeReport() {
                   <div className="flex flex-col items-center gap-3 py-6">
                     <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
                     <p className="text-sm font-semibold text-gray-600">Importando notas de todas as turmas...</p>
+                    <p className="text-xs text-gray-400">Os dados anteriores serão substituídos</p>
                   </div>
                 ) : (
                   <label className="flex flex-col items-center justify-center gap-3 py-8 border-2 border-dashed border-emerald-300 rounded-xl cursor-pointer hover:bg-emerald-50 transition-colors">
@@ -502,14 +444,10 @@ export function GradeReport() {
               <>
                 <div className="flex flex-col gap-2 max-h-80 overflow-y-auto">
                   {resultadoImport.map((r, i) => (
-                    <div key={i} className={cn(
-                      "flex items-center justify-between px-4 py-2.5 rounded-xl text-sm",
-                      r.status === 'ok' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
-                    )}>
+                    <div key={i} className={cn("flex items-center justify-between px-4 py-2.5 rounded-xl text-sm",
+                      r.status === 'ok' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200')}>
                       <div className="flex items-center gap-2">
-                        {r.status === 'ok'
-                          ? <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
-                          : <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />}
+                        {r.status === 'ok' ? <CheckCircle className="w-4 h-4 text-green-600 shrink-0" /> : <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />}
                         <span className="font-bold">Turma {r.turma}</span>
                         <span className="text-gray-500 text-xs">· {r.bimestre}º Bim · {r.total} alunos</span>
                       </div>
@@ -520,8 +458,7 @@ export function GradeReport() {
                 <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-700 font-medium text-center">
                   ✅ {resultadoImport.filter(r => r.status === 'ok').length} turmas importadas com sucesso!
                 </div>
-                <button onClick={() => setShowImportExcel(false)}
-                  className="w-full py-3 rounded-xl font-bold bg-primary text-white hover:opacity-90 transition-all">
+                <button onClick={() => setShowImportExcel(false)} className="w-full py-3 rounded-xl font-bold bg-primary text-white hover:opacity-90 transition-all">
                   Fechar
                 </button>
               </>
