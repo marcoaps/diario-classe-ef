@@ -319,22 +319,15 @@ export function GradeReport() {
               {saved && <div className="print:hidden mb-2 text-xs text-center text-green-600 font-semibold">Dados salvos</div>}
               <div className="bg-surface rounded-3xl border border-gray-200 overflow-hidden shadow-sm">
                 <div className="flex flex-col divide-y divide-gray-100">
-                  {alunos.map((aluno, idx) => {
-                    const temNota = aluno.nota !== null && aluno.nota !== undefined;
-                    const status = temNota ? getStatus(aluno.nota) : { text: '-', color: 'text-gray-400' };
-                    return (
-                      <div key={`${aluno.nome}-${idx}`} className="py-0.5 px-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors print:py-0">
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <span className="font-mono text-gray-400 text-xs w-5 shrink-0">{aluno.num}</span>
-                          <span className="font-semibold text-textPrimary text-xs truncate">{aluno.nome.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())}</span>
-                        </div>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <span className="font-bold text-gray-700 text-sm">{fmtNota(aluno.nota)}</span>
-                          <span className={cn("text-xs font-bold w-16 text-right", status.color)}>{status.text}</span>
-                        </div>
+                  {alunos.map((aluno, idx) => (
+                    <div key={`${aluno.nome}-${idx}`} className="py-1 px-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors print:py-0">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span className="font-mono text-gray-400 text-xs w-5 shrink-0">{aluno.num}</span>
+                        <span className="font-semibold text-textPrimary text-xs truncate">{aluno.nome.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())}</span>
                       </div>
-                    );
-                  })}
+                      <span className="font-black text-primary text-base shrink-0">{fmtNota(aluno.nota)}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </>
