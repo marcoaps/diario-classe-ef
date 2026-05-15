@@ -47,6 +47,7 @@ const MENU_ITEMS = [
 export function Dashboard() {
   const navigate = useNavigate();
   const { classRooms, students, setStudents, selectedClassId, setSelectedClassId, loading } = useStore();
+  const [classToConfirm, setClassToConfirm] = useState<ClassRoom | null>(null);
   const [showCompartilhar, setShowCompartilhar] = useState(false);
   const [copiado, setCopiado] = useState(false);
   const [fetching, setFetching] = useState(false);
