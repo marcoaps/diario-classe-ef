@@ -242,14 +242,108 @@ export function GradeReport() {
     return { text: "Reprov.", color: "text-red-600" };
   };
 
-  const exportarExcel = () => {
+  const exportarExcel = async () => {
     if (alunos.length === 0) return;
-    const linhas = alunos.map(a => ({ numero: a.num, nome: a.nome, nota: a.nota, situacao: a.nota !== null ? getStatus(a.nota).text : "-", turma, bimestre }));
-    const ws = XLSX.utils.json_to_sheet(linhas);
-    ws["!cols"] = [{ wch: 6 }, { wch: 38 }, { wch: 8 }, { wch: 12 }, { wch: 8 }, { wch: 10 }];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, `${turma}_B${bimestre}`);
-    XLSX.writeFile(wb, `notas_${turma}_bim${bimestre}.xlsx`);
+    const ExcelJS = (await import('exceljs')).default;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet(`${turma} - ${bimestre}º Bim`);
+
+    const AZUL = 'FF1A2E6E';
+    const VERMELHO = 'FFDC2626';
+    const BRANCO = 'FFFFFFFF';
+    const AZUL_CLARO = 'FFE8EDF8';
+    const border: Partial<ExcelJS.Borders> = {
+      top: { style: 'thin' }, bottom: { style: 'thin' },
+      left: { style: 'thin' }, right: { style: 'thin' },
+    };
+
+    // Linha 1: Título principal
+    ws.mergeCells('A1:C1');
+    const titulo = ws.getCell('A1');
+    titulo.value = `Notas do Bimestre - 2026`;
+    titulo.font = { bold: true, size: 14, color: { argb: BRANCO } };
+    titulo.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZUL } };
+    titulo.alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(1).height = 28;
+
+    // Linha 2: Disciplina
+    ws.mergeCells('A2:C2');
+    const disc = ws.getCell('A2');
+    disc.value = 'Disciplina: Educação Física';
+    disc.font = { bold: true, size: 11, color: { argb: BRANCO } };
+    disc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: VERMELHO } };
+    disc.alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(2).height = 22;
+
+    // Linha 3: Turma e Bimestre
+    ws.mergeCells('A3:C3');
+    const turmaCell = ws.getCell('A3');
+    turmaCell.value = `Turma: ${turma}   |   ${bimestre}º Bimestre`;
+    turmaCell.font = { bold: true, size: 11, color: { argb: AZUL } };
+    turmaCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZUL_CLARO } };
+    turmaCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(3).height = 20;
+
+    // Linha 4: Cabeçalho das colunas
+    const cabRow = ws.getRow(4);
+    cabRow.height = 20;
+    ['Nº', 'Nome do Aluno', 'Nota'].forEach((h, i) => {
+      const cell = ws.getCell(4, i + 1);
+      cell.value = h;
+      cell.font = { bold: true, size: 11, color: { argb: BRANCO } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZUL } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.border = border;
+    });
+
+    // Linhas de dados
+    alunos.forEach((a, idx) => {
+      const row = 5 + idx;
+      const isEven = idx % 2 === 0;
+      const bg = isEven ? BRANCO : AZUL_CLARO;
+
+      const numCell = ws.getCell(row, 1);
+      numCell.value = a.num ?? '';
+      numCell.font = { size: 10 };
+      numCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+      numCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      numCell.border = border;
+
+      const nomeCell = ws.getCell(row, 2);
+      nomeCell.value = a.nome;
+      nomeCell.font = { size: 10 };
+      nomeCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+      nomeCell.alignment = { vertical: 'middle' };
+      nomeCell.border = border;
+
+      const notaCell = ws.getCell(row, 3);
+      if (a.nota_texto) {
+        notaCell.value = a.nota_texto;
+        notaCell.font = { bold: true, size: 10, color: { argb: VERMELHO } };
+      } else {
+        notaCell.value = a.nota !== null && a.nota !== undefined ? Number(a.nota) : '-';
+        notaCell.font = { bold: true, size: 10, color: { argb: AZUL } };
+      }
+      notaCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+      notaCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      notaCell.border = border;
+
+      ws.getRow(row).height = 16;
+    });
+
+    // Larguras
+    ws.getColumn(1).width = 6;
+    ws.getColumn(2).width = 40;
+    ws.getColumn(3).width = 10;
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `notas_${turma}_bim${bimestre}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const limparLista = () => {
