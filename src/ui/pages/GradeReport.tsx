@@ -85,6 +85,7 @@ export function GradeReport() {
   const [showImportExcel, setShowImportExcel] = useState(false);
   const [saved, setSaved] = useState(false);
   const [importandoExcel, setImportandoExcel] = useState(false);
+  const [exportandoTodas, setExportandoTodas] = useState(false);
   const [resultadoImport, setResultadoImport] = useState<{
     turma: string; bimestre: number; total: number; status: 'ok' | 'erro'; msg?: string;
   }[]>([]);
@@ -353,6 +354,125 @@ export function GradeReport() {
     setAlunos([]); setSaved(false);
   };
 
+  const exportarTodasTurmas = async () => {
+    setExportandoTodas(true);
+    try {
+      const ExcelJS = (await import('exceljs')).default;
+      const wb = new ExcelJS.Workbook();
+
+      const AZUL = 'FF1A2E6E';
+      const VERMELHO = 'FFDC2626';
+      const BRANCO = 'FFFFFFFF';
+      const AZUL_CLARO = 'FFE8EDF8';
+      const border: Partial<ExcelJS.Borders> = {
+        top: { style: 'thin' }, bottom: { style: 'thin' },
+        left: { style: 'thin' }, right: { style: 'thin' },
+      };
+
+      for (const t of TURMAS) {
+        const data = await buscarNotas(t, bimestre);
+        if (data.length === 0) continue;
+
+        const ws = wb.addWorksheet(`${t}`);
+
+        // Linha 1: Título
+        ws.mergeCells('A1:C1');
+        const tituloCell = ws.getCell('A1');
+        tituloCell.value = 'Notas do Bimestre - 2026';
+        tituloCell.font = { bold: true, size: 14, color: { argb: BRANCO } };
+        tituloCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZUL } };
+        tituloCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        ws.getRow(1).height = 28;
+
+        // Linha 2: Disciplina
+        ws.mergeCells('A2:C2');
+        const discCell = ws.getCell('A2');
+        discCell.value = 'Disciplina: Educação Física';
+        discCell.font = { bold: true, size: 11, color: { argb: BRANCO } };
+        discCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: VERMELHO } };
+        discCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        ws.getRow(2).height = 22;
+
+        // Linha 3: Turma e Bimestre
+        ws.mergeCells('A3:C3');
+        const turmaCell = ws.getCell('A3');
+        turmaCell.value = `Turma: ${t}   |   ${bimestre}º Bimestre`;
+        turmaCell.font = { bold: true, size: 11, color: { argb: AZUL } };
+        turmaCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZUL_CLARO } };
+        turmaCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        ws.getRow(3).height = 20;
+
+        // Linha 4: Cabeçalho
+        ['Nº', 'Nome do Aluno', 'Nota'].forEach((h, i) => {
+          const cell = ws.getCell(4, i + 1);
+          cell.value = h;
+          cell.font = { bold: true, size: 11, color: { argb: BRANCO } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZUL } };
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cell.border = border;
+        });
+        ws.getRow(4).height = 20;
+
+        // Dados
+        data.forEach((a: any, idx: number) => {
+          const row = 5 + idx;
+          const bg = idx % 2 === 0 ? BRANCO : AZUL_CLARO;
+
+          const numCell = ws.getCell(row, 1);
+          numCell.value = a.numero ?? '';
+          numCell.font = { size: 10 };
+          numCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+          numCell.alignment = { horizontal: 'center', vertical: 'middle' };
+          numCell.border = border;
+
+          const nomeCell = ws.getCell(row, 2);
+          nomeCell.value = a.nome;
+          nomeCell.font = { size: 10 };
+          nomeCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+          nomeCell.alignment = { vertical: 'middle' };
+          nomeCell.border = border;
+
+          const notaCell = ws.getCell(row, 3);
+          if (a.nota_texto) {
+            notaCell.value = a.nota_texto;
+            notaCell.font = { bold: true, size: 10, color: { argb: VERMELHO } };
+          } else {
+            notaCell.value = a.nota !== null && a.nota !== undefined ? Number(a.nota) : '-';
+            notaCell.font = { bold: true, size: 10, color: { argb: AZUL } };
+            if (a.nota !== null && a.nota !== undefined) notaCell.numFmt = '0.0';
+          }
+          notaCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+          notaCell.alignment = { horizontal: 'center', vertical: 'middle' };
+          notaCell.border = border;
+
+          ws.getRow(row).height = 16;
+        });
+
+        ws.getColumn(1).width = 6;
+        ws.getColumn(2).width = 40;
+        ws.getColumn(3).width = 10;
+      }
+
+      if (wb.worksheets.length === 0) {
+        alert('Nenhuma turma com notas encontrada para este bimestre.');
+        return;
+      }
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `notas_todas_turmas_bim${bimestre}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      alert('Erro ao exportar: ' + e.message);
+    } finally {
+      setExportandoTodas(false);
+    }
+  };
+
   const fmtNota = (n: any) => n !== null && n !== undefined ? Number(n).toFixed(1).replace(".", ",") : "-";
 
   return (
@@ -398,6 +518,11 @@ export function GradeReport() {
                   <FileSpreadsheet className="w-4 h-4" /> Exportar
                 </button>
               )}
+              <button onClick={exportarTodasTurmas} disabled={exportandoTodas}
+                className="flex-1 py-3 bg-blue-700 text-white rounded-xl font-bold shadow-md hover:bg-blue-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+                {exportandoTodas ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+                {exportandoTodas ? 'Gerando...' : 'Todas'}
+              </button>
               {alunos.length > 0 && (
                 <button onClick={limparLista} className="py-3 px-4 bg-red-600 text-white rounded-xl font-bold shadow-md hover:bg-red-700 transition-all flex items-center justify-center gap-2">
                   <Trash2 className="w-5 h-5" />
