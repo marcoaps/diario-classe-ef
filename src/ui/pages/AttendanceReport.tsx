@@ -6,6 +6,7 @@ import { cn } from '../AppLayout';
 import { useRelatorioFrequencia, type Bimestre, PONTOS_MAXIMOS, getPeriodoBimestre } from '../../domain/useRelatorioFrequencia';
 import { exportarExcel, exportarPDF } from '../../domain/exportarFrequencia';
 import { exportarDiario } from '../../domain/exportarDiario';
+import { exportarDiarioOficial } from '../../domain/exportarDiarioOficial';
 
 const BIMESTRES: Bimestre[] = [1, 2, 3, 4];
 
@@ -21,6 +22,7 @@ export function AttendanceReport() {
   const [deleting, setDeleting] = useState(false);
   const [dataFiltro, setDataFiltro] = useState<string>('');
   const [exportandoDiario, setExportandoDiario] = useState(false);
+  const [exportandoDiarioOficial, setExportandoDiarioOficial] = useState(false);
 
   const uniqueClassRooms = useMemo(
     () =>
@@ -97,6 +99,43 @@ export function AttendanceReport() {
     }
   };
 
+  const handleDiarioOficial = async () => {
+    if (alunos.length === 0) return;
+    setExportandoDiarioOficial(true);
+    try {
+      const turmaNorm = normalizarTurma(turmaId);
+      const ano = new Date().getFullYear();
+      const p = getPeriodoBimestre(bimestre, ano);
+      const alunoIds = alunos.map(a => a.id);
+
+      const { data: freqData, error: freqErr } = await supabase
+        .from('frequencia')
+        .select('aluno_id, data, presente')
+        .in('aluno_id', alunoIds)
+        .gte('data', p.inicio)
+        .lte('data', p.fim);
+
+      if (freqErr) throw freqErr;
+
+      const frequenciaPorDia: Record<string, Record<string, boolean>> = {};
+      (freqData || []).forEach((r: any) => {
+        if (!frequenciaPorDia[r.data]) frequenciaPorDia[r.data] = {};
+        frequenciaPorDia[r.data][r.aluno_id] = r.presente;
+      });
+
+      await exportarDiarioOficial({
+        turma: turmaNorm,
+        bimestre,
+        alunos,
+        frequenciaPorDia,
+      });
+    } catch (e: any) {
+      alert('Erro ao gerar diário oficial: ' + e.message);
+    } finally {
+      setExportandoDiarioOficial(false);
+    }
+  };
+
   const handleExcluir = async () => {
     const label = dataFiltro
       ? `do dia ${formatarBR(dataFiltro)}`
@@ -156,7 +195,12 @@ export function AttendanceReport() {
           <button type="button" onClick={handleDiario} disabled={loading || exportandoDiario || alunos.length === 0}
             className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-blue-700 text-white hover:bg-blue-800 active:scale-95 transition-all disabled:opacity-50 shadow-sm">
             {exportandoDiario ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
-            {exportandoDiario ? 'Gerando...' : 'Diário'}
+            {exportandoDiario ? 'Gerando...' : 'Di\u00e1rio'}
+          </button>
+          <button type="button" onClick={handleDiarioOficial} disabled={loading || exportandoDiarioOficial || alunos.length === 0}
+            className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-indigo-700 text-white hover:bg-indigo-800 active:scale-95 transition-all disabled:opacity-50 shadow-sm">
+            {exportandoDiarioOficial ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+            {exportandoDiarioOficial ? 'Gerando...' : 'Oficial'}
           </button>
           <button type="button" onClick={handleExcluir} disabled={loading || deleting || alunos.length === 0}
             className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-gray-800 text-white hover:bg-gray-900 active:scale-95 transition-all disabled:opacity-50 shadow-sm">
