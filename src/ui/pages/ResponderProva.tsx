@@ -219,27 +219,49 @@ export function ResponderProva() {
     <div className="min-h-screen flex flex-col items-center justify-center p-5"
       style={{ background: 'linear-gradient(160deg, #0a1628 0%, #1a3a7c 100%)' }}>
       <img src="/Logo_IOP.png" alt="IOP" className="w-20 h-20 rounded-full border-4 border-white/20 mb-5 object-cover shadow-xl" />
-      <h1 className="text-white text-3xl font-black mb-1 text-center">Avaliação Online</h1>
+      <h1 className="text-white text-3xl font-black mb-1 text-center">Portal do Aluno</h1>
       <p className="text-white/40 text-base mb-8 text-center">Instituto Odilon Pratagi</p>
 
-      <div className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4">
-        <label className="text-gray-500 text-xs font-black uppercase tracking-widest">Código da Prova</label>
-        <input value={codigo} onChange={e => setCodigo(e.target.value.toUpperCase())}
-          placeholder="ABC123" maxLength={6}
-          onKeyDown={e => e.key === 'Enter' && buscarProva()}
-          className="w-full border-2 border-gray-200 rounded-2xl px-4 py-5 text-gray-800 placeholder-gray-300 text-3xl font-mono font-black text-center outline-none focus:border-blue-500 tracking-[0.4em] transition-all" />
-        {erro && (
-          <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
-            <p className="text-red-600 text-sm font-medium">{erro}</p>
+      <div className="w-full max-w-sm flex flex-col gap-4">
+
+        {/* Opção 1: Fazer Avaliação */}
+        <div className="bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
+              <BookOpen className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="font-black text-gray-900 text-base">Fazer Avaliação</p>
+              <p className="text-gray-400 text-xs">Digite o código da prova</p>
+            </div>
           </div>
-        )}
-        <button onClick={buscarProva} disabled={loading}
-          className="w-full py-4 rounded-2xl font-black text-white text-lg flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
-          style={{ background: 'linear-gradient(135deg, #1a3a7c, #2d5fd4)' }}>
-          <Search className="w-5 h-5" />
-          {loading ? 'Buscando...' : 'Entrar na Avaliação'}
-        </button>
+          <input value={codigo} onChange={e => setCodigo(e.target.value.toUpperCase())}
+            placeholder="ABC123" maxLength={6}
+            onKeyDown={e => e.key === 'Enter' && buscarProva()}
+            className="w-full border-2 border-gray-200 rounded-2xl px-4 py-4 text-gray-800 placeholder-gray-300 text-2xl font-mono font-black text-center outline-none focus:border-blue-500 tracking-[0.4em] transition-all" />
+          {erro && step === 'codigo' && (
+            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+              <p className="text-red-600 text-sm font-medium">{erro}</p>
+            </div>
+          )}
+          <button onClick={buscarProva} disabled={loading}
+            className="w-full py-4 rounded-2xl font-black text-white text-lg flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+            style={{ background: 'linear-gradient(135deg, #1a3a7c, #2d5fd4)' }}>
+            <Search className="w-5 h-5" />
+            {loading ? 'Buscando...' : 'Entrar na Avaliação'}
+          </button>
+        </div>
+
+        {/* Divisor */}
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px bg-white/20" />
+          <span className="text-white/40 text-sm font-bold">ou</span>
+          <div className="flex-1 h-px bg-white/20" />
+        </div>
+
+        {/* Opção 2: Consultar Portal */}
+        <ConsultarPortal />
       </div>
     </div>
   );
@@ -550,6 +572,88 @@ export function ResponderProva() {
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+const TODAS_TURMAS = ['6F','7A','7B','7C','7D','7E','7F','8A','8B','8C','8D','8E','8F','9A','9B','9C','9D','9E','9F'];
+
+function ConsultarPortal() {
+  const [nome, setNome] = useState('');
+  const [turma, setTurma] = useState('');
+  const [buscando, setBuscando] = useState(false);
+  const [erro, setErro] = useState('');
+
+  const buscar = async () => {
+    if (!nome.trim()) { setErro('Digite seu nome completo.'); return; }
+    if (!turma) { setErro('Selecione sua turma.'); return; }
+    setBuscando(true); setErro('');
+    try {
+      const { data, error } = await supabase
+        .from('alunos')
+        .select('token_acesso')
+        .eq('turma_id', turma)
+        .ilike('nome', nome.trim())
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!data?.token_acesso) {
+        setErro('Aluno não encontrado. Verifique o nome e a turma.');
+        setBuscando(false);
+        return;
+      }
+      window.location.href = `/aluno/${data.token_acesso}`;
+    } catch (e: any) {
+      setErro('Erro ao buscar. Tente novamente.');
+      setBuscando(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center shrink-0">
+          <CheckCircle className="w-5 h-5 text-green-600" />
+        </div>
+        <div>
+          <p className="font-black text-gray-900 text-base">Consultar Notas e Frequência</p>
+          <p className="text-gray-400 text-xs">Digite seu nome e selecione sua turma</p>
+        </div>
+      </div>
+
+      <input
+        value={nome}
+        onChange={e => setNome(e.target.value)}
+        placeholder="Seu nome completo"
+        className="w-full border-2 border-gray-200 rounded-2xl px-4 py-3 text-gray-800 text-base outline-none focus:border-green-500 transition-all"
+      />
+
+      <div>
+        <p className="text-xs font-bold text-gray-500 mb-2 uppercase tracking-wide">Sua turma</p>
+        <div className="grid grid-cols-5 gap-1.5">
+          {TODAS_TURMAS.map(t => (
+            <button key={t} onClick={() => setTurma(t)}
+              className={`py-2 rounded-xl text-xs font-black transition-all border-2 ${
+                turma === t ? 'bg-green-600 border-green-600 text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-green-300'
+              }`}>
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {erro && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+          <p className="text-red-600 text-sm font-medium">{erro}</p>
+        </div>
+      )}
+
+      <button onClick={buscar} disabled={buscando}
+        className="w-full py-4 rounded-2xl font-black text-white text-lg flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50 bg-green-600 hover:bg-green-700">
+        {buscando ? <Loader className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
+        {buscando ? 'Buscando...' : 'Acessar Meu Portal'}
+      </button>
     </div>
   );
 }
