@@ -1,19 +1,18 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { cn } from "../AppLayout";
 import { X, FileDown, FileSpreadsheet, Save, Trash2, Upload, Table2, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { salvarNotas, buscarNotas, supabase } from "../../data/supabase";
-import { logoIOPBase64 } from "../../assets/logoIOP";
 
 const TURMAS = ["6F", "7B", "7C", "7D", "7E", "7F", "8A", "8B", "8C", "8D", "8E", "8F", "9A", "9B", "9C", "9D", "9E", "9F"];
 
 function extrairBimestre(titulo: string): number | null {
-  const match = titulo.match(/(\d)[ÂºoÂ°]\s*Bimestre/i);
+  const match = titulo.match(/(\d)[ºo°]\s*Bimestre/i);
   return match ? parseInt(match[1]) : null;
 }
 
 function normalizarNomeAba(nomeAba: string): string {
-  return nomeAba.replace(/Âº|Â°/g, '').replace(/\s/g, '').toUpperCase();
+  return nomeAba.replace(/º|°/g, '').replace(/\s/g, '').toUpperCase();
 }
 
 function parsearPlanilhaExcel(file: File): Promise<{
@@ -34,7 +33,7 @@ function parsearPlanilhaExcel(file: File): Promise<{
           const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
           if (rows.length < 3) return;
 
-          // Linha 1: tÃ­tulo com bimestre
+          // Linha 1: título com bimestre
           const titulo = String(rows[0]?.[0] || rows[0]?.[1] || '');
           const bimestre = extrairBimestre(titulo);
           if (!bimestre) return;
@@ -186,7 +185,7 @@ export function GradeReport() {
     try {
       const turmas = await parsearPlanilhaExcel(file);
       if (turmas.length === 0) {
-        alert('Nenhuma aba vÃ¡lida encontrada. Verifique o formato da planilha.');
+        alert('Nenhuma aba válida encontrada. Verifique o formato da planilha.');
         setImportandoExcel(false);
         return;
       }
@@ -203,7 +202,7 @@ export function GradeReport() {
             .eq('bimestre', t.bimestre);
           if (delErr) throw delErr;
 
-          // Insere todos os alunos (com nota numÃ©rica ou nota_texto)
+          // Insere todos os alunos (com nota numérica ou nota_texto)
           const todosAlunos = t.alunos.map((a: any) => ({
             numero: a.numero,
             nome: a.nome,
@@ -248,7 +247,9 @@ export function GradeReport() {
     if (alunos.length === 0) return;
     const ExcelJS = (await import('exceljs')).default;
     const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet(`${turma} - ${bimestre}Âº Bim`);
+    wb.creator = 'Diário IOP';
+    wb.created = new Date();
+    const ws = wb.addWorksheet(`${turma} - ${bimestre}º Bim`);
 
     const AZUL = 'FF1A2E6E';
     const VERMELHO = 'FFDC2626';
@@ -259,7 +260,7 @@ export function GradeReport() {
       left: { style: 'thin' }, right: { style: 'thin' },
     };
 
-    // Linha 1: TÃ­tulo principal
+    // Linha 1: Título principal
     ws.mergeCells('A1:C1');
     const titulo = ws.getCell('A1');
     titulo.value = `Notas do Bimestre - 2026`;
@@ -271,7 +272,7 @@ export function GradeReport() {
     // Linha 2: Disciplina
     ws.mergeCells('A2:C2');
     const disc = ws.getCell('A2');
-    disc.value = 'Disciplina: EducaÃ§Ã£o FÃ­sica';
+    disc.value = 'Disciplina: Educa\u00e7\u00e3o F\u00edsica';
     disc.font = { bold: true, size: 11, color: { argb: BRANCO } };
     disc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: VERMELHO } };
     disc.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -280,16 +281,16 @@ export function GradeReport() {
     // Linha 3: Turma e Bimestre
     ws.mergeCells('A3:C3');
     const turmaCell = ws.getCell('A3');
-    turmaCell.value = `Turma: ${turma}   |   ${bimestre}Âº Bimestre`;
+    turmaCell.value = `Turma: ${turma}   |   ${bimestre}\u00ba Bimestre`;
     turmaCell.font = { bold: true, size: 11, color: { argb: AZUL } };
     turmaCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZUL_CLARO } };
     turmaCell.alignment = { horizontal: 'center', vertical: 'middle' };
     ws.getRow(3).height = 20;
 
-    // Linha 4: CabeÃ§alho das colunas
+    // Linha 4: Cabeçalho das colunas
     const cabRow = ws.getRow(4);
     cabRow.height = 20;
-    ['NÂº', 'Nome do Aluno', 'Nota'].forEach((h, i) => {
+    ['Nº', 'Nome do Aluno', 'Nota'].forEach((h, i) => {
       const cell = ws.getCell(4, i + 1);
       cell.value = h;
       cell.font = { bold: true, size: 11, color: { argb: BRANCO } };
@@ -338,9 +339,6 @@ export function GradeReport() {
     ws.getColumn(1).width = 6;
     ws.getColumn(2).width = 40;
     ws.getColumn(3).width = 10;
-    ws.getColumn(4).width = 14;
-    const logoId = wb.addImage({ base64: logoIOPBase64.split(',')[1], extension: 'png' });
-    ws.addImage(logoId, { tl: { col: 3, row: 0 }, br: { col: 4, row: 3 }, editAs: 'oneCell' });
 
     const buffer = await wb.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -354,7 +352,7 @@ export function GradeReport() {
 
   const limparLista = () => {
     if (alunos.length === 0) return;
-    if (!window.confirm("Limpar a lista atual? Os dados salvos no banco NÃƒO serÃ£o afetados.")) return;
+    if (!window.confirm("Limpar a lista atual? Os dados salvos no banco NÃO serão afetados.")) return;
     setAlunos([]); setSaved(false);
   };
 
@@ -379,7 +377,7 @@ export function GradeReport() {
 
         const ws = wb.addWorksheet(`${t}`);
 
-        // Linha 1: TÃ­tulo
+        // Linha 1: Título
         ws.mergeCells('A1:C1');
         const tituloCell = ws.getCell('A1');
         tituloCell.value = 'Notas do Bimestre - 2026';
@@ -391,7 +389,7 @@ export function GradeReport() {
         // Linha 2: Disciplina
         ws.mergeCells('A2:C2');
         const discCell = ws.getCell('A2');
-        discCell.value = 'Disciplina: EducaÃ§Ã£o FÃ­sica';
+        discCell.value = 'Disciplina: Educa\u00e7\u00e3o F\u00edsica';
         discCell.font = { bold: true, size: 11, color: { argb: BRANCO } };
         discCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: VERMELHO } };
         discCell.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -400,14 +398,14 @@ export function GradeReport() {
         // Linha 3: Turma e Bimestre
         ws.mergeCells('A3:C3');
         const turmaCell = ws.getCell('A3');
-        turmaCell.value = `Turma: ${t}   |   ${bimestre}Âº Bimestre`;
+        turmaCell.value = `Turma: ${t}   |   ${bimestre}\u00ba Bimestre`;
         turmaCell.font = { bold: true, size: 11, color: { argb: AZUL } };
         turmaCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZUL_CLARO } };
         turmaCell.alignment = { horizontal: 'center', vertical: 'middle' };
         ws.getRow(3).height = 20;
 
-        // Linha 4: CabeÃ§alho
-        ['NÂº', 'Nome do Aluno', 'Nota'].forEach((h, i) => {
+        // Linha 4: Cabeçalho
+        ['Nº', 'Nome do Aluno', 'Nota'].forEach((h, i) => {
           const cell = ws.getCell(4, i + 1);
           cell.value = h;
           cell.font = { bold: true, size: 11, color: { argb: BRANCO } };
@@ -614,7 +612,7 @@ export function GradeReport() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white p-6 rounded-2xl w-full max-w-lg">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold">Carregar PDF â€” Turma {turma} | {bimestre}o Bim</h3>
+              <h3 className="text-lg font-bold">Carregar PDF — Turma {turma} | {bimestre}o Bim</h3>
               <button onClick={() => setShowImport(false)}><X /></button>
             </div>
             {isProcessing ? (
@@ -634,20 +632,20 @@ export function GradeReport() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white p-6 rounded-2xl w-full max-w-lg flex flex-col gap-4">
             <div className="flex justify-between items-center">
-              <h3 className="text-lg font-bold">Importar Notas â€” Excel</h3>
+              <h3 className="text-lg font-bold">Importar Notas — Excel</h3>
               <button onClick={() => setShowImportExcel(false)}><X /></button>
             </div>
 
             {!importConcluido ? (
               <>
                 <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm text-emerald-800">
-                  <p className="font-bold mb-1">ðŸ“Š Formato esperado:</p>
+                  <p className="font-bold mb-1">📊 Formato esperado:</p>
                   <ul className="list-disc list-inside space-y-1 text-xs">
-                    <li>Cada aba = uma turma (ex: "9Âº F")</li>
-                    <li>Linha 1: TÃ­tulo com bimestre (ex: "...1Âº Bimestre 2026")</li>
-                    <li>Linha 2: CabeÃ§alho (NÂº, Nome, Nota)</li>
+                    <li>Cada aba = uma turma (ex: "9º F")</li>
+                    <li>Linha 1: Título com bimestre (ex: "...1º Bimestre 2026")</li>
+                    <li>Linha 2: Cabeçalho (Nº, Nome, Nota)</li>
                     <li>Linha 3+: Dados dos alunos</li>
-                    <li>Notas especiais (Remaj., Transf.) sÃ£o ignoradas na importaÃ§Ã£o</li>
+                    <li>Notas especiais (Remaj., Transf.) são ignoradas na importação</li>
                   </ul>
                 </div>
 
@@ -655,7 +653,7 @@ export function GradeReport() {
                   <div className="flex flex-col items-center gap-3 py-6">
                     <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
                     <p className="text-sm font-semibold text-gray-600">Importando notas de todas as turmas...</p>
-                    <p className="text-xs text-gray-400">Os dados anteriores serÃ£o substituÃ­dos</p>
+                    <p className="text-xs text-gray-400">Os dados anteriores serão substituídos</p>
                   </div>
                 ) : (
                   <label className="flex flex-col items-center justify-center gap-3 py-8 border-2 border-dashed border-emerald-300 rounded-xl cursor-pointer hover:bg-emerald-50 transition-colors">
@@ -675,14 +673,14 @@ export function GradeReport() {
                       <div className="flex items-center gap-2">
                         {r.status === 'ok' ? <CheckCircle className="w-4 h-4 text-green-600 shrink-0" /> : <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />}
                         <span className="font-bold">Turma {r.turma}</span>
-                        <span className="text-gray-500 text-xs">Â· {r.bimestre}Âº Bim Â· {r.total} alunos</span>
+                        <span className="text-gray-500 text-xs">· {r.bimestre}º Bim · {r.total} alunos</span>
                       </div>
                       {r.status === 'erro' && <span className="text-xs text-red-600">{r.msg}</span>}
                     </div>
                   ))}
                 </div>
                 <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-700 font-medium text-center">
-                  âœ… {resultadoImport.filter(r => r.status === 'ok').length} turmas importadas com sucesso!
+                  ✅ {resultadoImport.filter(r => r.status === 'ok').length} turmas importadas com sucesso!
                 </div>
                 <button onClick={() => setShowImportExcel(false)} className="w-full py-3 rounded-xl font-bold bg-primary text-white hover:opacity-90 transition-all">
                   Fechar
