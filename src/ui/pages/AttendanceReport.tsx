@@ -199,7 +199,7 @@ export function AttendanceReport() {
           </button>
           <button type="button" onClick={handleDiarioOficial} disabled={loading || exportandoDiarioOficial || alunos.length === 0}
             className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-indigo-700 text-white hover:bg-indigo-800 active:scale-95 transition-all disabled:opacity-50 shadow-sm">
-            {exportandoDiarioOficial ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+            {exportandoDiarioOficial ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
             {exportandoDiarioOficial ? 'Gerando...' : 'Oficial'}
           </button>
           <button type="button" onClick={handleExcluir} disabled={loading || deleting || alunos.length === 0}
