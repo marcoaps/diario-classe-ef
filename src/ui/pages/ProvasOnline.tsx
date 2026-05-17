@@ -112,13 +112,6 @@ function extrairEnunciado(linha: string): string {
     .trim();
 }
 
-// Detecta sub-item: "a) texto", "b) texto"
-function detectarSubItem(linha: string): { letra: string; enunciado: string } | null {
-  const m = linha.match(/^([a-e])\s*[.)]\s*(.+)$/i);
-  if (m) return { letra: m[1].toLowerCase(), enunciado: m[2].trim() };
-  return null;
-}
-
 async function parsearDocx(file: File): Promise<{ questoes: Questao[]; titulo: string }> {
   const arrayBuffer = await file.arrayBuffer();
   const imagensMap: Record<string, string> = {};
@@ -165,7 +158,6 @@ async function parsearDocx(file: File): Promise<{ questoes: Questao[]; titulo: s
     if (!linha) continue;
     if (/^gabarito/i.test(linha)) continue;
 
-    // Detecta número de questão
     const numQuestao = detectarQuestao(linha);
     if (numQuestao !== null) {
       if (!encontrouPrimeiraQuestao) {
@@ -193,28 +185,24 @@ async function parsearDocx(file: File): Promise<{ questoes: Questao[]; titulo: s
       continue;
     }
 
-    // Detecta alternativa de múltipla escolha (A-E maiúsculo)
-    const matchAltMC = linha.match(/^([A-E])\s*[.)]\s*(.+)$/);
-    if (matchAltMC && questaoAtual.tipo === 'multipla_escolha' && (questaoAtual.subitens || []).length === 0) {
-      if (questaoAtual.opcoes.length < 5) {
-        questaoAtual.opcoes.push(matchAltMC[2].trim());
-      }
+    // ── CORREÇÃO PRINCIPAL ──────────────────────────────────────────────────
+    // Alternativa MC: letra MAIÚSCULA A-E (regex sem flag i = só maiúsculo)
+    const matchMC = linha.match(/^([A-E])\s*[.)]\s*(.+)$/);
+    if (matchMC) {
+      if (questaoAtual.opcoes.length < 5) questaoAtual.opcoes.push(matchMC[2].trim());
       continue;
     }
 
-    // Detecta sub-item (a-e minúsculo)
-    const subItem = detectarSubItem(linha);
-    if (subItem && questaoAtual) {
-      // Se tinha alternativas MC mas agora tem sub-item → era enunciado, não MC
-      if (questaoAtual.opcoes.length > 0) {
-        // Mantém como MC, ignora sub-item
-      } else {
-        if (!questaoAtual.subitens) questaoAtual.subitens = [];
-        questaoAtual.subitens.push(subItem);
-        questaoAtual.tipo = 'composta';
-      }
+    // Sub-item: letra minúscula a-e (regex sem flag i = só minúsculo)
+    // Só detecta se a questão ainda NÃO tem alternativas MC
+    const matchSub = linha.match(/^([a-e])\s*[.)]\s*(.+)$/);
+    if (matchSub && questaoAtual.opcoes.length === 0) {
+      if (!questaoAtual.subitens) questaoAtual.subitens = [];
+      questaoAtual.subitens.push({ letra: matchSub[1], enunciado: matchSub[2].trim() });
+      questaoAtual.tipo = 'composta';
       continue;
     }
+    // ───────────────────────────────────────────────────────────────────────
 
     // Continuação do enunciado
     if (questaoAtual.opcoes.length === 0 && (questaoAtual.subitens || []).length === 0) {
@@ -224,13 +212,11 @@ async function parsearDocx(file: File): Promise<{ questoes: Questao[]; titulo: s
 
   if (questaoAtual) questoes.push(questaoAtual);
 
-  // Pós-processamento
   questoes.forEach(q => {
     if (q.opcoes.length === 0 && q.tipo === 'multipla_escolha') {
       q.tipo = (q.subitens && q.subitens.length > 0) ? 'composta' : 'dissertativa';
       q.resposta_correta = '';
     }
-    // Pontos compostas: 1 por sub-item
     if (q.tipo === 'composta' && q.subitens) {
       q.pontos = q.subitens.length;
     }
@@ -525,7 +511,6 @@ export function ProvasOnline() {
         ))}
       </div>
 
-      {/* LISTA */}
       {tab === 'lista' && (
         <div className="flex flex-col gap-3">
           {loading && <p className="text-center text-gray-400 text-sm py-4">Carregando...</p>}
@@ -570,7 +555,6 @@ export function ProvasOnline() {
         </div>
       )}
 
-      {/* CRIAR */}
       {tab === 'criar' && (
         <div className="flex flex-col gap-4">
           {sucesso && (
@@ -658,7 +642,6 @@ export function ProvasOnline() {
                 </label>
               )}
 
-              {/* Múltipla escolha */}
               {q.tipo === 'multipla_escolha' && (
                 <div className="flex flex-col gap-2">
                   <p className="text-xs font-semibold text-gray-500">
@@ -685,7 +668,6 @@ export function ProvasOnline() {
                 </div>
               )}
 
-              {/* Composta com sub-itens */}
               {q.tipo === 'composta' && (
                 <div className="flex flex-col gap-2">
                   <p className="text-xs font-semibold text-orange-700">Sub-itens (corrigidos por IA)</p>
@@ -736,7 +718,6 @@ export function ProvasOnline() {
         </div>
       )}
 
-      {/* RESULTADOS */}
       {tab === 'resultados' && provaResultados && (
         <div className="flex flex-col gap-3">
           <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
@@ -792,7 +773,6 @@ export function ProvasOnline() {
         </div>
       )}
 
-      {/* Botão Publicar */}
       {tab === 'criar' && (
         <div className="fixed bottom-20 left-0 right-0 px-4 z-50">
           <button onClick={salvarProva} disabled={salvando || sucesso}
@@ -805,7 +785,6 @@ export function ProvasOnline() {
         </div>
       )}
 
-      {/* Modal Correção Manual */}
       {respostaCorrigir && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center p-0 md:p-4">
           <div className="bg-white w-full max-w-lg md:rounded-3xl rounded-t-3xl max-h-[90vh] flex flex-col">
