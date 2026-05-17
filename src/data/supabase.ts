@@ -35,7 +35,7 @@ export async function salvarChamada(
   });
 
   const { error: upsertError } = await supabase.from("frequencia").upsert(upsertData);
-  if (upsertError) throw upsertError;
+  if (upsertError) throw upsertErrclsor;
 }
 
 export async function buscarHistoricoFrequencia(turmaId?: string, dt?: string) {
