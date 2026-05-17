@@ -185,40 +185,53 @@ async function parsearDocx(file: File): Promise<{ questoes: Questao[]; titulo: s
       continue;
     }
 
-    // ── CORREÇÃO PRINCIPAL ──────────────────────────────────────────────────
-    // Alternativa MC: letra MAIÚSCULA A-E (regex sem flag i = só maiúsculo)
-    const matchMC = linha.match(/^([A-E])\s*[.)]\s*(.+)$/);
-    if (matchMC) {
-      if (questaoAtual.opcoes.length < 5) questaoAtual.opcoes.push(matchMC[2].trim());
-      continue;
-    }
-
-    // Sub-item: letra minúscula a-e (regex sem flag i = só minúsculo)
-    // Só detecta se a questão ainda NÃO tem alternativas MC
-    const matchSub = linha.match(/^([a-e])\s*[.)]\s*(.+)$/);
-    if (matchSub && questaoAtual.opcoes.length === 0) {
+    // Detecta alternativa/sub-item: letra a-e (maiúscula ou minúscula) seguida de ) ou .
+    // Usamos subitens como acumulador temporário — o pós-processamento decide o tipo
+    const matchOpcao = linha.match(/^([A-Ea-e])\s*[.)]\s*(.+)$/);
+    if (matchOpcao) {
       if (!questaoAtual.subitens) questaoAtual.subitens = [];
-      questaoAtual.subitens.push({ letra: matchSub[1], enunciado: matchSub[2].trim() });
-      questaoAtual.tipo = 'composta';
+      questaoAtual.subitens.push({
+        letra: matchOpcao[1].toLowerCase(),
+        enunciado: matchOpcao[2].trim(),
+      });
       continue;
     }
-    // ───────────────────────────────────────────────────────────────────────
 
-    // Continuação do enunciado
-    if (questaoAtual.opcoes.length === 0 && (questaoAtual.subitens || []).length === 0) {
+    // Continuação do enunciado (só adiciona se ainda não há opções/subitens)
+    if ((questaoAtual.subitens || []).length === 0) {
       questaoAtual.enunciado += (questaoAtual.enunciado ? ' ' : '') + linha;
     }
   }
 
   if (questaoAtual) questoes.push(questaoAtual);
 
+  // Pós-processamento: decide tipo com base na quantidade de alternativas
   questoes.forEach(q => {
-    if (q.opcoes.length === 0 && q.tipo === 'multipla_escolha') {
-      q.tipo = (q.subitens && q.subitens.length > 0) ? 'composta' : 'dissertativa';
-      q.resposta_correta = '';
+    const itens = q.subitens || [];
+
+    if (q.tipo === 'dissertativa') {
+      // Mantém dissertativa, ignora itens
+      q.subitens = [];
+      return;
     }
-    if (q.tipo === 'composta' && q.subitens) {
-      q.pontos = q.subitens.length;
+
+    if (itens.length >= 3) {
+      // 3 ou mais alternativas → múltipla escolha
+      q.tipo = 'multipla_escolha';
+      q.opcoes = itens.map(s => s.enunciado);
+      q.subitens = [];
+      q.pontos = 1;
+    } else if (itens.length >= 1) {
+      // 1 ou 2 alternativas → composta
+      q.tipo = 'composta';
+      q.opcoes = [];
+      q.subitens = itens;
+      q.pontos = itens.length;
+    } else {
+      // Nenhuma alternativa → dissertativa
+      q.tipo = 'dissertativa';
+      q.subitens = [];
+      q.pontos = 1;
     }
   });
 
@@ -446,11 +459,9 @@ export function ProvasOnline() {
         totalObj += q.pontos;
         if (respostaCorrigir.respostas?.[q.id] === q.resposta_correta) pontosObj += q.pontos;
       });
-
       const corrigiveis = questoesProva.filter(q => q.tipo === 'dissertativa' || q.tipo === 'composta');
       let pontosDisser = 0, totalDisser = 0;
       const novasCorrecoes: CorrecaoItem[] = [];
-
       corrigiveis.forEach(q => {
         if (q.tipo === 'composta' && q.subitens) {
           const ptsPorSubitem = q.pontos / q.subitens.length;
@@ -458,36 +469,23 @@ export function ProvasOnline() {
             const chave = `${q.id}_${s.letra}`;
             const pts = Math.min(Math.max(parseFloat(notasManual[chave] || '0'), 0), ptsPorSubitem);
             pontosDisser += pts; totalDisser += ptsPorSubitem;
-            novasCorrecoes.push({
-              questao_id: chave, pontos_obtidos: pts, pontos_total: ptsPorSubitem,
-              percentual: ptsPorSubitem > 0 ? (pts / ptsPorSubitem) * 100 : 0,
-              justificativa: 'Corrigido manualmente pelo professor.',
-            });
+            novasCorrecoes.push({ questao_id: chave, pontos_obtidos: pts, pontos_total: ptsPorSubitem,
+              percentual: ptsPorSubitem > 0 ? (pts / ptsPorSubitem) * 100 : 0, justificativa: 'Corrigido manualmente pelo professor.' });
           });
         } else {
           const pts = Math.min(Math.max(parseFloat(notasManual[q.id] || '0'), 0), q.pontos);
           pontosDisser += pts; totalDisser += q.pontos;
-          novasCorrecoes.push({
-            questao_id: q.id, pontos_obtidos: pts, pontos_total: q.pontos,
-            percentual: q.pontos > 0 ? (pts / q.pontos) * 100 : 0,
-            justificativa: 'Corrigido manualmente pelo professor.',
-          });
+          novasCorrecoes.push({ questao_id: q.id, pontos_obtidos: pts, pontos_total: q.pontos,
+            percentual: q.pontos > 0 ? (pts / q.pontos) * 100 : 0, justificativa: 'Corrigido manualmente pelo professor.' });
         }
       });
-
       const totalPontos = totalObj + totalDisser;
       const pontosTotal = pontosObj + pontosDisser;
       const novaNota = totalPontos > 0 ? parseFloat(((pontosTotal / totalPontos) * 10).toFixed(1)) : 0;
       const notaFinal = novaNota >= 10 ? 9.5 : novaNota;
-
-      const { error } = await supabase.from('respostas').update({
-        nota: notaFinal, correcoes_dissertativas: novasCorrecoes,
-      }).eq('id', respostaCorrigir.id);
+      const { error } = await supabase.from('respostas').update({ nota: notaFinal, correcoes_dissertativas: novasCorrecoes }).eq('id', respostaCorrigir.id);
       if (error) throw error;
-
-      setResultados(prev => prev.map(r =>
-        r.id === respostaCorrigir.id ? { ...r, nota: notaFinal, correcoes_dissertativas: novasCorrecoes } : r
-      ));
+      setResultados(prev => prev.map(r => r.id === respostaCorrigir.id ? { ...r, nota: notaFinal, correcoes_dissertativas: novasCorrecoes } : r));
       alert(`Correção salva! Nova nota: ${notaFinal.toFixed(1)}`);
       setRespostaCorrigir(null);
     } catch (e: any) { alert('Erro ao salvar correção: ' + e.message); }
@@ -542,9 +540,7 @@ export function ProvasOnline() {
               </div>
               <button onClick={() => compartilharProva(prova)}
                 className={`w-full py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${compartilhado === prova.id ? 'bg-green-500 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'}`}>
-                {compartilhado === prova.id
-                  ? <><CheckCircle className="w-4 h-4" /> Link copiado!</>
-                  : <><Share2 className="w-4 h-4" /> Compartilhar link + código</>}
+                {compartilhado === prova.id ? <><CheckCircle className="w-4 h-4" /> Link copiado!</> : <><Share2 className="w-4 h-4" /> Compartilhar link + código</>}
               </button>
               <button onClick={() => verResultados(prova)}
                 className="w-full py-2 rounded-xl bg-primary/10 text-primary font-bold text-sm flex items-center justify-center gap-2 hover:bg-primary/20 transition-colors">
@@ -619,11 +615,9 @@ export function ProvasOnline() {
                   <X className="w-4 h-4" />
                 </button>
               </div>
-
               <textarea value={q.enunciado} onChange={e => atualizarQuestao(q.id, 'enunciado', e.target.value)}
                 placeholder="Enunciado da questão..." rows={3}
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 resize-none" />
-
               {q.imagem ? (
                 <div className="relative rounded-xl overflow-hidden border border-gray-200">
                   <img src={q.imagem} alt="" className="w-full max-h-48 object-contain bg-gray-50" />
@@ -641,7 +635,6 @@ export function ProvasOnline() {
                   </div>
                 </label>
               )}
-
               {q.tipo === 'multipla_escolha' && (
                 <div className="flex flex-col gap-2">
                   <p className="text-xs font-semibold text-gray-500">
@@ -667,7 +660,6 @@ export function ProvasOnline() {
                   )}
                 </div>
               )}
-
               {q.tipo === 'composta' && (
                 <div className="flex flex-col gap-2">
                   <p className="text-xs font-semibold text-orange-700">Sub-itens (corrigidos por IA)</p>
@@ -689,12 +681,10 @@ export function ProvasOnline() {
                   )}
                 </div>
               )}
-
               <div className="flex items-center gap-2 pt-1 border-t border-gray-100">
                 <label className="text-xs text-gray-500 font-semibold">Pontos:</label>
                 <input type="number" value={q.pontos} onChange={e => atualizarQuestao(q.id, 'pontos', parseFloat(e.target.value) || 0)}
-                  min="0.5" max="10" step="0.5"
-                  disabled={q.tipo === 'composta'}
+                  min="0.5" max="10" step="0.5" disabled={q.tipo === 'composta'}
                   className="w-20 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 text-sm outline-none text-center disabled:opacity-50" />
                 {q.tipo === 'composta' && <span className="text-xs text-gray-400">(1 pt por sub-item)</span>}
               </div>
@@ -802,7 +792,6 @@ export function ProvasOnline() {
               {questoesProva.filter(q => q.tipo === 'dissertativa' || q.tipo === 'composta').map((q, idx) => {
                 const correcaoAtual = respostaCorrigir.correcoes_dissertativas?.find(c => c.questao_id === q.id);
                 const temErro = correcaoAtual?.justificativa?.includes('Erro');
-
                 if (q.tipo === 'composta' && q.subitens) {
                   const ptsPorSub = q.pontos / q.subitens.length;
                   return (
@@ -840,7 +829,6 @@ export function ProvasOnline() {
                     </div>
                   );
                 }
-
                 const respostaAluno = respostaCorrigir.respostas?.[q.id] || '';
                 return (
                   <div key={q.id} className="bg-gray-50 rounded-2xl p-4 flex flex-col gap-3">
