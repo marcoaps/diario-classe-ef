@@ -98,7 +98,7 @@ function detectarQuestao(linha: string): number | null {
   if (m) return parseInt(m[1]);
   m = linha.match(/^quest[aã]o\s*[-\u2013\u2014]\s*(\d+)/i);
   if (m) return parseInt(m[1]);
-  m = linha.match(/^(\d+)\s*[.)]\s+\S/);
+  m = linha.match(/^(\d+)\s*[.)]\s*\S/);
   if (m) return parseInt(m[1]);
   return null;
 }
