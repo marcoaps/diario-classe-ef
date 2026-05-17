@@ -2,15 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../data/supabase';
 import { Search, CheckCircle, Send, BookOpen, AlertCircle, ChevronLeft, ChevronRight, Clock, Brain, Loader } from 'lucide-react';
 
+interface SubItem {
+  letra: string;
+  enunciado: string;
+}
+
 interface Questao {
   id: string;
   enunciado: string;
   imagem_base64?: string | null;
-  tipo: 'multipla_escolha' | 'dissertativa';
+  tipo: 'multipla_escolha' | 'dissertativa' | 'composta';
   opcoes: string[];
   resposta_correta: string;
   pontos: number;
   ordem: number;
+  subitens?: SubItem[] | null;
 }
 
 interface Prova {
@@ -30,7 +36,6 @@ interface CorrecaoDissertativa {
   justificativa: string;
 }
 
-// Grupos de turmas — mesma lógica do ProvasOnline
 const GRUPOS: Record<string, string[]> = {
   '6-7': ['6F','7A','7B','7C','7D','7E','7F'],
   '8':   ['8A','8B','8C','8D','8E','8F'],
@@ -38,7 +43,6 @@ const GRUPOS: Record<string, string[]> = {
 };
 
 function getTurmasDoGrupo(grupoId: string): string[] {
-  // Se for uma turma específica (formato antigo), retorna só ela
   if (!GRUPOS[grupoId]) return [grupoId];
   return GRUPOS[grupoId];
 }
@@ -122,6 +126,14 @@ export function ResponderProva() {
 
   const turmasDisponiveis = prova ? getTurmasDoGrupo(prova.turma_id) : [];
 
+  // Verifica se uma questão está completamente respondida
+  const questaoRespondida = (q: Questao): boolean => {
+    if (q.tipo === 'composta' && q.subitens) {
+      return q.subitens.every(s => !!respostas[`${q.id}_${s.letra}`]?.trim());
+    }
+    return !!respostas[q.id]?.trim();
+  };
+
   const buscarProva = async () => {
     if (!codigo.trim()) { setErro('Digite o código da prova.'); return; }
     setLoading(true); setErro(null);
@@ -138,7 +150,6 @@ export function ResponderProva() {
         .eq('prova_id', provaData.id).order('ordem');
       setProva(provaData);
       setQuestoes(questoesData || []);
-      // Define turma padrão como a primeira do grupo
       const turmas = getTurmasDoGrupo(provaData.turma_id);
       setTurmaAluno(turmas[0] || provaData.turma_id);
       setStep('identificacao');
@@ -154,12 +165,12 @@ export function ResponderProva() {
     setStep('prova');
   };
 
-  const responder = (questaoId: string, resposta: string) =>
-    setRespostas(prev => ({ ...prev, [questaoId]: resposta }));
+  const responder = (chave: string, resposta: string) =>
+    setRespostas(prev => ({ ...prev, [chave]: resposta }));
 
   const enviarProva = async () => {
     if (!prova) return;
-    const naoRespondidas = questoes.filter(q => !respostas[q.id]);
+    const naoRespondidas = questoes.filter(q => !questaoRespondida(q));
     if (naoRespondidas.length > 0) {
       if (!confirm(`Você deixou ${naoRespondidas.length} questão(ões) sem resposta. Deseja enviar assim mesmo?`)) return;
     }
@@ -174,21 +185,46 @@ export function ResponderProva() {
       }
     });
 
-    const dissertativas = questoes.filter(q => q.tipo === 'dissertativa');
+    const corrigiveis = questoes.filter(q => q.tipo === 'dissertativa' || q.tipo === 'composta');
     const correcoes: CorrecaoDissertativa[] = [];
+    let contCorrecao = 0;
 
-    for (let i = 0; i < dissertativas.length; i++) {
-      const q = dissertativas[i];
-      setEtapaCorrecao(`Corrigindo questão ${i + 1} de ${dissertativas.length}...`);
-      totalPontos += q.pontos;
-      const { pontosObtidos: pts, justificativa } = await corrigirDissertativaComIA(
-        q.enunciado, respostas[q.id] || '', q.pontos
-      );
-      pontosObtidos += pts;
-      correcoes.push({
-        questao_id: q.id, pontos_obtidos: pts, pontos_total: q.pontos,
-        percentual: q.pontos > 0 ? (pts / q.pontos) * 100 : 0, justificativa,
-      });
+    // Calcula total de itens a corrigir
+    const totalItens = corrigiveis.reduce((acc, q) => {
+      if (q.tipo === 'composta' && q.subitens) return acc + q.subitens.length;
+      return acc + 1;
+    }, 0);
+
+    for (const q of corrigiveis) {
+      if (q.tipo === 'composta' && q.subitens) {
+        const ptsPorSub = q.pontos / q.subitens.length;
+        totalPontos += q.pontos;
+        for (const s of q.subitens) {
+          contCorrecao++;
+          setEtapaCorrecao(`Corrigindo item ${contCorrecao} de ${totalItens}...`);
+          const chave = `${q.id}_${s.letra}`;
+          const { pontosObtidos: pts, justificativa } = await corrigirDissertativaComIA(
+            s.enunciado, respostas[chave] || '', ptsPorSub
+          );
+          pontosObtidos += pts;
+          correcoes.push({
+            questao_id: chave, pontos_obtidos: pts, pontos_total: ptsPorSub,
+            percentual: ptsPorSub > 0 ? (pts / ptsPorSub) * 100 : 0, justificativa,
+          });
+        }
+      } else {
+        contCorrecao++;
+        setEtapaCorrecao(`Corrigindo questão ${contCorrecao} de ${totalItens}...`);
+        totalPontos += q.pontos;
+        const { pontosObtidos: pts, justificativa } = await corrigirDissertativaComIA(
+          q.enunciado, respostas[q.id] || '', q.pontos
+        );
+        pontosObtidos += pts;
+        correcoes.push({
+          questao_id: q.id, pontos_obtidos: pts, pontos_total: q.pontos,
+          percentual: q.pontos > 0 ? (pts / q.pontos) * 100 : 0, justificativa,
+        });
+      }
     }
 
     setEtapaCorrecao('Calculando nota final...');
@@ -210,7 +246,7 @@ export function ResponderProva() {
     setStep('resultado');
   };
 
-  const respondidas = questoes.filter(q => respostas[q.id]).length;
+  const respondidas = questoes.filter(q => questaoRespondida(q)).length;
   const progresso = questoes.length > 0 ? (respondidas / questoes.length) * 100 : 0;
   const q = questoes[questaoAtual];
 
@@ -223,8 +259,6 @@ export function ResponderProva() {
       <p className="text-white/40 text-base mb-8 text-center">Instituto Odilon Pratagi</p>
 
       <div className="w-full max-w-sm flex flex-col gap-4">
-
-        {/* Opção 1: Fazer Avaliação */}
         <div className="bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
@@ -253,14 +287,12 @@ export function ResponderProva() {
           </button>
         </div>
 
-        {/* Divisor */}
         <div className="flex items-center gap-3">
           <div className="flex-1 h-px bg-white/20" />
           <span className="text-white/40 text-sm font-bold">ou</span>
           <div className="flex-1 h-px bg-white/20" />
         </div>
 
-        {/* Opção 2: Consultar Portal */}
         <ConsultarPortal />
       </div>
     </div>
@@ -302,9 +334,7 @@ export function ResponderProva() {
             {turmasDisponiveis.map(t => (
               <button key={t} onClick={() => setTurmaAluno(t)}
                 className={`py-2.5 rounded-xl text-sm font-black border-2 transition-all ${
-                  turmaAluno === t
-                    ? 'bg-blue-600 border-blue-600 text-white'
-                    : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300'
+                  turmaAluno === t ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300'
                 }`}>
                 {t}
               </button>
@@ -375,7 +405,7 @@ export function ResponderProva() {
                   <button key={qq.id} onClick={() => setQuestaoAtual(i)}
                     className={`w-10 h-10 rounded-xl text-sm font-black transition-all ${
                       i === questaoAtual ? 'bg-blue-600 text-white scale-110 shadow-md shadow-blue-200'
-                        : respostas[qq.id] ? 'bg-green-100 border-2 border-green-400 text-green-700'
+                        : questaoRespondida(qq) ? 'bg-green-100 border-2 border-green-400 text-green-700'
                         : 'bg-gray-100 border-2 border-gray-200 text-gray-500 hover:bg-blue-50 hover:border-blue-300'
                     }`}>
                     {i + 1}
@@ -400,9 +430,11 @@ export function ResponderProva() {
               Questão <span className="text-blue-600 font-black text-sm">{questaoAtual + 1}</span> de {questoes.length}
             </span>
             <span className={`text-xs font-black px-2.5 py-1 rounded-full ${
-              q.tipo === 'multipla_escolha' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+              q.tipo === 'multipla_escolha' ? 'bg-blue-100 text-blue-700'
+              : q.tipo === 'composta' ? 'bg-orange-100 text-orange-700'
+              : 'bg-purple-100 text-purple-700'
             }`}>
-              {q.tipo === 'multipla_escolha' ? 'Múltipla Escolha' : 'Dissertativa'}
+              {q.tipo === 'multipla_escolha' ? 'Múltipla Escolha' : q.tipo === 'composta' ? 'Composta' : 'Dissertativa'}
             </span>
           </div>
 
@@ -415,6 +447,7 @@ export function ResponderProva() {
               </div>
             )}
 
+            {/* Múltipla Escolha */}
             {q.tipo === 'multipla_escolha' && (
               <div className="flex flex-col gap-2.5">
                 {q.opcoes.map((op, i) => (
@@ -438,6 +471,7 @@ export function ResponderProva() {
               </div>
             )}
 
+            {/* Dissertativa simples */}
             {q.tipo === 'dissertativa' && (
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-1.5 text-purple-600 text-xs font-bold">
@@ -447,6 +481,31 @@ export function ResponderProva() {
                 <textarea value={respostas[q.id] || ''} onChange={e => responder(q.id, e.target.value)}
                   placeholder="Digite sua resposta aqui..." rows={5}
                   className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-800 text-base placeholder-gray-300 outline-none focus:border-purple-400 transition-all resize-none" />
+              </div>
+            )}
+
+            {/* Composta com sub-itens */}
+            {q.tipo === 'composta' && q.subitens && (
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-1.5 text-orange-600 text-xs font-bold">
+                  <Brain className="w-3.5 h-3.5" />
+                  <span>Responda cada sub-item — corrigidos por IA</span>
+                </div>
+                {q.subitens.map(s => {
+                  const chave = `${q.id}_${s.letra}`;
+                  return (
+                    <div key={chave} className="flex flex-col gap-2 bg-orange-50 border border-orange-200 rounded-xl p-4">
+                      <p className="text-sm font-bold text-orange-800">{s.letra}) {s.enunciado}</p>
+                      <textarea
+                        value={respostas[chave] || ''}
+                        onChange={e => responder(chave, e.target.value)}
+                        placeholder={`Sua resposta para o item ${s.letra}...`}
+                        rows={3}
+                        className="w-full border-2 border-orange-200 rounded-xl px-3 py-2.5 text-gray-800 text-sm placeholder-gray-400 outline-none focus:border-orange-400 transition-all resize-none bg-white"
+                      />
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -465,7 +524,7 @@ export function ResponderProva() {
             <button key={qq.id} onClick={() => setQuestaoAtual(i)}
               className={`w-8 h-8 rounded-lg text-xs font-black shrink-0 transition-all border ${
                 i === questaoAtual ? 'bg-blue-600 border-blue-600 text-white'
-                  : respostas[qq.id] ? 'bg-green-100 border-green-400 text-green-700'
+                  : questaoRespondida(qq) ? 'bg-green-100 border-green-400 text-green-700'
                   : 'bg-gray-100 border-gray-200 text-gray-500'
               }`}>
               {i + 1}
@@ -529,7 +588,7 @@ export function ResponderProva() {
             <span>·</span>
             <span>📝 {questoes.length} questões</span>
             <span>·</span>
-            <span>✓ {Object.keys(respostas).length} respondidas</span>
+            <span>✓ {respondidas} respondidas</span>
           </div>
         </div>
 
@@ -537,23 +596,28 @@ export function ResponderProva() {
           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col gap-4">
             <div className="flex items-center gap-2">
               <Brain className="w-5 h-5 text-purple-600" />
-              <h3 className="text-gray-800 font-black text-lg">Correção das Dissertativas (IA)</h3>
+              <h3 className="text-gray-800 font-black text-lg">Correção por IA</h3>
             </div>
             {correcoesDissertativas.map((c, i) => {
+              // Tenta encontrar a questão ou sub-item
               const questao = questoes.find(q => q.id === c.questao_id);
+              const subItemMatch = c.questao_id.match(/^(.+)_([a-e])$/);
+              const questaoComposta = subItemMatch ? questoes.find(q => q.id === subItemMatch[1]) : null;
+              const subItem = questaoComposta?.subitens?.find(s => s.letra === subItemMatch?.[2]);
+              const label = subItem ? `${questaoComposta?.enunciado?.substring(0, 40)}... (${subItem.letra})` : questao?.enunciado?.substring(0, 60) + '...';
+
               return (
-                <div key={c.questao_id} className={`rounded-2xl p-4 border-2 ${
+                <div key={i} className={`rounded-2xl p-4 border-2 ${
                   c.percentual >= 70 ? 'bg-green-50 border-green-200'
                     : c.percentual >= 40 ? 'bg-yellow-50 border-yellow-200'
                     : 'bg-red-50 border-red-200'
                 }`}>
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-gray-600 text-sm font-black uppercase tracking-wide">Dissertativa {i + 1}</p>
+                    <p className="text-gray-600 text-sm font-black">{label}</p>
                     <span className={`font-black text-base ${
                       c.percentual >= 70 ? 'text-green-600' : c.percentual >= 40 ? 'text-yellow-600' : 'text-red-600'
                     }`}>{c.pontos_obtidos.toFixed(1)}/{c.pontos_total} pts</span>
                   </div>
-                  <p className="text-gray-500 text-sm mb-2 line-clamp-2">{questao?.enunciado}</p>
                   <div className="h-2 bg-gray-200 rounded-full overflow-hidden mb-2">
                     <div className={`h-full rounded-full ${
                       c.percentual >= 70 ? 'bg-green-500' : c.percentual >= 40 ? 'bg-yellow-500' : 'bg-red-500'

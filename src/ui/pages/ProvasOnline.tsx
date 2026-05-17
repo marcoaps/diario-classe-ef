@@ -7,25 +7,32 @@ import {
 } from 'lucide-react';
 import mammoth from 'mammoth';
 
+interface SubItem {
+  letra: string;
+  enunciado: string;
+}
+
 interface Questao {
   id: string;
   enunciado: string;
   imagem?: string | null;
-  tipo: 'multipla_escolha' | 'dissertativa';
+  tipo: 'multipla_escolha' | 'dissertativa' | 'composta';
   opcoes: string[];
   resposta_correta: string;
   pontos: number;
+  subitens?: SubItem[];
 }
 
 interface QuestaoCompleta {
   id: string;
   prova_id: string;
   enunciado: string;
-  tipo: 'multipla_escolha' | 'dissertativa';
+  tipo: 'multipla_escolha' | 'dissertativa' | 'composta';
   opcoes: string[] | null;
   resposta_correta: string | null;
   pontos: number;
   ordem: number;
+  subitens?: SubItem[] | null;
 }
 
 interface Resposta {
@@ -87,13 +94,10 @@ function limparLinha(html: string): string {
 }
 
 function detectarQuestao(linha: string): number | null {
-  // "Questao 1 -" ou "Questao 1 Discursiva"
   let m = linha.match(/^quest[aã]o\s+(\d+)\s*[-\u2013\u2014]/i);
   if (m) return parseInt(m[1]);
-  // "Questao - 1"
   m = linha.match(/^quest[aã]o\s*[-\u2013\u2014]\s*(\d+)/i);
   if (m) return parseInt(m[1]);
-  // "1." ou "1)"
   m = linha.match(/^(\d+)\s*[.)]\s+\S/);
   if (m) return parseInt(m[1]);
   return null;
@@ -106,6 +110,13 @@ function extrairEnunciado(linha: string): string {
     .replace(/^(\d+)\s*[.)]\s*/i, '')
     .replace(/^\s*[-\u2013\u2014\s]*(discursiva|dissertativa)\s*[-\u2013\u2014]?\s*/i, '')
     .trim();
+}
+
+// Detecta sub-item: "a) texto", "b) texto"
+function detectarSubItem(linha: string): { letra: string; enunciado: string } | null {
+  const m = linha.match(/^([a-e])\s*[.)]\s*(.+)$/i);
+  if (m) return { letra: m[1].toLowerCase(), enunciado: m[2].trim() };
+  return null;
 }
 
 async function parsearDocx(file: File): Promise<{ questoes: Questao[]; titulo: string }> {
@@ -154,6 +165,7 @@ async function parsearDocx(file: File): Promise<{ questoes: Questao[]; titulo: s
     if (!linha) continue;
     if (/^gabarito/i.test(linha)) continue;
 
+    // Detecta número de questão
     const numQuestao = detectarQuestao(linha);
     if (numQuestao !== null) {
       if (!encontrouPrimeiraQuestao) {
@@ -171,32 +183,56 @@ async function parsearDocx(file: File): Promise<{ questoes: Questao[]; titulo: s
         opcoes: [],
         resposta_correta: '',
         pontos: 1,
+        subitens: [],
       };
       continue;
     }
 
-    const matchAlt = linha.match(/^([A-Ea-e])\s*[.)]\s*(.+)$/);
-    if (matchAlt && questaoAtual) {
+    if (!questaoAtual) {
+      if (!encontrouPrimeiraQuestao) tituloCandidato.push(linha);
+      continue;
+    }
+
+    // Detecta alternativa de múltipla escolha (A-E maiúsculo)
+    const matchAltMC = linha.match(/^([A-E])\s*[.)]\s*(.+)$/);
+    if (matchAltMC && questaoAtual.tipo === 'multipla_escolha' && (questaoAtual.subitens || []).length === 0) {
       if (questaoAtual.opcoes.length < 5) {
-        questaoAtual.opcoes.push(matchAlt[2].trim());
+        questaoAtual.opcoes.push(matchAltMC[2].trim());
       }
       continue;
     }
 
-    if (questaoAtual) {
-      if (questaoAtual.opcoes.length === 0) {
-        questaoAtual.enunciado += (questaoAtual.enunciado ? ' ' : '') + linha;
+    // Detecta sub-item (a-e minúsculo)
+    const subItem = detectarSubItem(linha);
+    if (subItem && questaoAtual) {
+      // Se tinha alternativas MC mas agora tem sub-item → era enunciado, não MC
+      if (questaoAtual.opcoes.length > 0) {
+        // Mantém como MC, ignora sub-item
+      } else {
+        if (!questaoAtual.subitens) questaoAtual.subitens = [];
+        questaoAtual.subitens.push(subItem);
+        questaoAtual.tipo = 'composta';
       }
-    } else if (!encontrouPrimeiraQuestao) {
-      tituloCandidato.push(linha);
+      continue;
+    }
+
+    // Continuação do enunciado
+    if (questaoAtual.opcoes.length === 0 && (questaoAtual.subitens || []).length === 0) {
+      questaoAtual.enunciado += (questaoAtual.enunciado ? ' ' : '') + linha;
     }
   }
 
   if (questaoAtual) questoes.push(questaoAtual);
+
+  // Pós-processamento
   questoes.forEach(q => {
-    if (q.opcoes.length === 0) {
-      q.tipo = 'dissertativa';
+    if (q.opcoes.length === 0 && q.tipo === 'multipla_escolha') {
+      q.tipo = (q.subitens && q.subitens.length > 0) ? 'composta' : 'dissertativa';
       q.resposta_correta = '';
+    }
+    // Pontos compostas: 1 por sub-item
+    if (q.tipo === 'composta' && q.subitens) {
+      q.pontos = q.subitens.length;
     }
   });
 
@@ -235,12 +271,13 @@ export function ProvasOnline() {
     setLoading(false);
   };
 
-  const adicionarQuestao = (tipo: 'multipla_escolha' | 'dissertativa') => {
+  const adicionarQuestao = (tipo: 'multipla_escolha' | 'dissertativa' | 'composta') => {
     setQuestoes(prev => [...prev, {
       id: Math.random().toString(36).substring(2),
       enunciado: '', imagem: null, tipo,
       opcoes: tipo === 'multipla_escolha' ? ['', '', '', ''] : [],
-      resposta_correta: '', pontos: 1,
+      resposta_correta: '', pontos: tipo === 'composta' ? 2 : 1,
+      subitens: tipo === 'composta' ? [{ letra: 'a', enunciado: '' }, { letra: 'b', enunciado: '' }] : [],
     }]);
   };
 
@@ -252,6 +289,31 @@ export function ProvasOnline() {
       if (q.id !== qId) return q;
       const novasOpcoes = [...q.opcoes]; novasOpcoes[idx] = valor;
       return { ...q, opcoes: novasOpcoes };
+    }));
+
+  const atualizarSubItem = (qId: string, idx: number, valor: string) =>
+    setQuestoes(prev => prev.map(q => {
+      if (q.id !== qId) return q;
+      const novos = [...(q.subitens || [])];
+      novos[idx] = { ...novos[idx], enunciado: valor };
+      return { ...q, subitens: novos };
+    }));
+
+  const adicionarSubItem = (qId: string) =>
+    setQuestoes(prev => prev.map(q => {
+      if (q.id !== qId) return q;
+      const novos = [...(q.subitens || [])];
+      const letras = ['a','b','c','d','e'];
+      const proxLetra = letras[novos.length] || String.fromCharCode(97 + novos.length);
+      novos.push({ letra: proxLetra, enunciado: '' });
+      return { ...q, subitens: novos, pontos: novos.length };
+    }));
+
+  const removerSubItem = (qId: string, idx: number) =>
+    setQuestoes(prev => prev.map(q => {
+      if (q.id !== qId) return q;
+      const novos = (q.subitens || []).filter((_, i) => i !== idx);
+      return { ...q, subitens: novos, pontos: Math.max(1, novos.length) };
     }));
 
   const removerQuestao = (id: string) => setQuestoes(prev => prev.filter(q => q.id !== id));
@@ -320,6 +382,7 @@ export function ProvasOnline() {
         opcoes: q.tipo === 'multipla_escolha' ? q.opcoes : null,
         resposta_correta: q.tipo === 'multipla_escolha' ? q.resposta_correta : null,
         pontos: q.pontos, ordem: i + 1,
+        subitens: q.tipo === 'composta' ? q.subitens : null,
       }));
       const { error: errQ } = await supabase.from('questoes').insert(questoesInsert);
       if (errQ) throw errQ;
@@ -369,11 +432,19 @@ export function ProvasOnline() {
   };
 
   const abrirCorrecaoManual = (resposta: Resposta) => {
-    const dissertativas = questoesProva.filter(q => q.tipo === 'dissertativa');
+    const corrigiveis = questoesProva.filter(q => q.tipo === 'dissertativa' || q.tipo === 'composta');
     const notasIniciais: Record<string, string> = {};
-    dissertativas.forEach(q => {
-      const correcaoExistente = resposta.correcoes_dissertativas?.find(c => c.questao_id === q.id);
-      notasIniciais[q.id] = correcaoExistente ? String(correcaoExistente.pontos_obtidos) : '0';
+    corrigiveis.forEach(q => {
+      if (q.tipo === 'composta' && q.subitens) {
+        q.subitens.forEach(s => {
+          const chave = `${q.id}_${s.letra}`;
+          const corr = resposta.correcoes_dissertativas?.find(c => c.questao_id === chave);
+          notasIniciais[chave] = corr ? String(corr.pontos_obtidos) : '0';
+        });
+      } else {
+        const corr = resposta.correcoes_dissertativas?.find(c => c.questao_id === q.id);
+        notasIniciais[q.id] = corr ? String(corr.pontos_obtidos) : '0';
+      }
     });
     setNotasManual(notasIniciais);
     setRespostaCorrigir(resposta);
@@ -383,31 +454,51 @@ export function ProvasOnline() {
     if (!respostaCorrigir || !provaResultados) return;
     setSalvandoCorrecao(true);
     try {
-      const dissertativas = questoesProva.filter(q => q.tipo === 'dissertativa');
       const objetivas = questoesProva.filter(q => q.tipo === 'multipla_escolha');
       let pontosObj = 0, totalObj = 0;
       objetivas.forEach(q => {
         totalObj += q.pontos;
         if (respostaCorrigir.respostas?.[q.id] === q.resposta_correta) pontosObj += q.pontos;
       });
+
+      const corrigiveis = questoesProva.filter(q => q.tipo === 'dissertativa' || q.tipo === 'composta');
       let pontosDisser = 0, totalDisser = 0;
-      const novasCorrecoes: CorrecaoItem[] = dissertativas.map(q => {
-        const pts = Math.min(Math.max(parseFloat(notasManual[q.id] || '0'), 0), q.pontos);
-        pontosDisser += pts; totalDisser += q.pontos;
-        return {
-          questao_id: q.id, pontos_obtidos: pts, pontos_total: q.pontos,
-          percentual: q.pontos > 0 ? (pts / q.pontos) * 100 : 0,
-          justificativa: 'Corrigido manualmente pelo professor.',
-        };
+      const novasCorrecoes: CorrecaoItem[] = [];
+
+      corrigiveis.forEach(q => {
+        if (q.tipo === 'composta' && q.subitens) {
+          const ptsPorSubitem = q.pontos / q.subitens.length;
+          q.subitens.forEach(s => {
+            const chave = `${q.id}_${s.letra}`;
+            const pts = Math.min(Math.max(parseFloat(notasManual[chave] || '0'), 0), ptsPorSubitem);
+            pontosDisser += pts; totalDisser += ptsPorSubitem;
+            novasCorrecoes.push({
+              questao_id: chave, pontos_obtidos: pts, pontos_total: ptsPorSubitem,
+              percentual: ptsPorSubitem > 0 ? (pts / ptsPorSubitem) * 100 : 0,
+              justificativa: 'Corrigido manualmente pelo professor.',
+            });
+          });
+        } else {
+          const pts = Math.min(Math.max(parseFloat(notasManual[q.id] || '0'), 0), q.pontos);
+          pontosDisser += pts; totalDisser += q.pontos;
+          novasCorrecoes.push({
+            questao_id: q.id, pontos_obtidos: pts, pontos_total: q.pontos,
+            percentual: q.pontos > 0 ? (pts / q.pontos) * 100 : 0,
+            justificativa: 'Corrigido manualmente pelo professor.',
+          });
+        }
       });
+
       const totalPontos = totalObj + totalDisser;
       const pontosTotal = pontosObj + pontosDisser;
       const novaNota = totalPontos > 0 ? parseFloat(((pontosTotal / totalPontos) * 10).toFixed(1)) : 0;
       const notaFinal = novaNota >= 10 ? 9.5 : novaNota;
+
       const { error } = await supabase.from('respostas').update({
         nota: notaFinal, correcoes_dissertativas: novasCorrecoes,
       }).eq('id', respostaCorrigir.id);
       if (error) throw error;
+
       setResultados(prev => prev.map(r =>
         r.id === respostaCorrigir.id ? { ...r, nota: notaFinal, correcoes_dissertativas: novasCorrecoes } : r
       ));
@@ -416,8 +507,6 @@ export function ProvasOnline() {
     } catch (e: any) { alert('Erro ao salvar correção: ' + e.message); }
     finally { setSalvandoCorrecao(false); }
   };
-
-  const totalPontos = questoes.reduce((s, q) => s + q.pontos, 0);
 
   return (
     <div className="p-4 flex flex-col gap-4 pb-36">
@@ -535,16 +624,22 @@ export function ProvasOnline() {
           {questoes.map((q, idx) => (
             <div key={q.id} className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-col gap-3 shadow-sm">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-1 rounded-lg">
-                  {idx + 1}. {q.tipo === 'multipla_escolha' ? 'Múltipla Escolha' : 'Dissertativa'}
+                <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
+                  q.tipo === 'multipla_escolha' ? 'text-primary bg-primary/10'
+                  : q.tipo === 'composta' ? 'text-orange-700 bg-orange-100'
+                  : 'text-purple-700 bg-purple-100'
+                }`}>
+                  {idx + 1}. {q.tipo === 'multipla_escolha' ? 'Múltipla Escolha' : q.tipo === 'composta' ? 'Composta (sub-itens)' : 'Dissertativa'}
                 </span>
                 <button onClick={() => removerQuestao(q.id)} className="text-gray-300 hover:text-red-400 p-1">
                   <X className="w-4 h-4" />
                 </button>
               </div>
+
               <textarea value={q.enunciado} onChange={e => atualizarQuestao(q.id, 'enunciado', e.target.value)}
                 placeholder="Enunciado da questão..." rows={3}
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 resize-none" />
+
               {q.imagem ? (
                 <div className="relative rounded-xl overflow-hidden border border-gray-200">
                   <img src={q.imagem} alt="" className="w-full max-h-48 object-contain bg-gray-50" />
@@ -562,6 +657,8 @@ export function ProvasOnline() {
                   </div>
                 </label>
               )}
+
+              {/* Múltipla escolha */}
               {q.tipo === 'multipla_escolha' && (
                 <div className="flex flex-col gap-2">
                   <p className="text-xs font-semibold text-gray-500">
@@ -587,22 +684,53 @@ export function ProvasOnline() {
                   )}
                 </div>
               )}
+
+              {/* Composta com sub-itens */}
+              {q.tipo === 'composta' && (
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs font-semibold text-orange-700">Sub-itens (corrigidos por IA)</p>
+                  {(q.subitens || []).map((s, i) => (
+                    <div key={i} className="flex items-start gap-2 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2">
+                      <span className="font-black text-orange-700 text-sm mt-1 shrink-0">{s.letra})</span>
+                      <input value={s.enunciado} onChange={e => atualizarSubItem(q.id, i, e.target.value)}
+                        placeholder={`Enunciado do sub-item ${s.letra}`}
+                        className="flex-1 bg-transparent text-sm outline-none placeholder:text-gray-400" />
+                      {(q.subitens || []).length > 1 && (
+                        <button onClick={() => removerSubItem(q.id, i)} className="text-gray-300 hover:text-red-400 mt-0.5"><X className="w-3 h-3" /></button>
+                      )}
+                    </div>
+                  ))}
+                  {(q.subitens || []).length < 5 && (
+                    <button onClick={() => adicionarSubItem(q.id)} className="text-xs text-orange-700 font-semibold flex items-center gap-1 hover:underline">
+                      <Plus className="w-3 h-3" /> Adicionar sub-item
+                    </button>
+                  )}
+                </div>
+              )}
+
               <div className="flex items-center gap-2 pt-1 border-t border-gray-100">
                 <label className="text-xs text-gray-500 font-semibold">Pontos:</label>
                 <input type="number" value={q.pontos} onChange={e => atualizarQuestao(q.id, 'pontos', parseFloat(e.target.value) || 0)}
-                  min="0.5" max="10" step="0.5" className="w-20 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 text-sm outline-none text-center" />
+                  min="0.5" max="10" step="0.5"
+                  disabled={q.tipo === 'composta'}
+                  className="w-20 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 text-sm outline-none text-center disabled:opacity-50" />
+                {q.tipo === 'composta' && <span className="text-xs text-gray-400">(1 pt por sub-item)</span>}
               </div>
             </div>
           ))}
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <button onClick={() => adicionarQuestao('multipla_escolha')}
-              className="py-3 rounded-2xl border-2 border-dashed border-primary/30 text-primary font-bold text-sm hover:bg-primary/5 flex items-center justify-center gap-2">
-              <Plus className="w-4 h-4" /> Múltipla Escolha
+              className="py-3 rounded-2xl border-2 border-dashed border-primary/30 text-primary font-bold text-xs hover:bg-primary/5 flex items-center justify-center gap-1">
+              <Plus className="w-3 h-3" /> Múltipla Escolha
             </button>
             <button onClick={() => adicionarQuestao('dissertativa')}
-              className="py-3 rounded-2xl border-2 border-dashed border-gray-300 text-gray-500 font-bold text-sm hover:bg-gray-50 flex items-center justify-center gap-2">
-              <Plus className="w-4 h-4" /> Dissertativa
+              className="py-3 rounded-2xl border-2 border-dashed border-gray-300 text-gray-500 font-bold text-xs hover:bg-gray-50 flex items-center justify-center gap-1">
+              <Plus className="w-3 h-3" /> Dissertativa
+            </button>
+            <button onClick={() => adicionarQuestao('composta')}
+              className="py-3 rounded-2xl border-2 border-dashed border-orange-300 text-orange-600 font-bold text-xs hover:bg-orange-50 flex items-center justify-center gap-1">
+              <Plus className="w-3 h-3" /> Composta a/b
             </button>
           </div>
         </div>
@@ -623,6 +751,7 @@ export function ProvasOnline() {
           )}
           {resultados.map(r => {
             const temErroIA = r.correcoes_dissertativas?.some(c => c.justificativa?.includes('Erro'));
+            const temCorrigiveis = questoesProva.some(q => q.tipo === 'dissertativa' || q.tipo === 'composta');
             return (
               <div key={r.id} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
                 <div className="flex items-center justify-between">
@@ -638,7 +767,7 @@ export function ProvasOnline() {
                     <span className={`text-xl font-black ${r.nota !== null && r.nota >= 6 ? 'text-green-500' : 'text-red-500'}`}>
                       {r.nota?.toFixed(1) ?? '—'}
                     </span>
-                    {questoesProva.some(q => q.tipo === 'dissertativa') && (
+                    {temCorrigiveis && (
                       <button onClick={() => abrirCorrecaoManual(r)}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${temErroIA ? 'bg-amber-100 text-amber-700 border border-amber-300' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                         <Edit2 className="w-3.5 h-3.5" />
@@ -691,10 +820,49 @@ export function ProvasOnline() {
               </button>
             </div>
             <div className="overflow-y-auto px-4 py-4 flex flex-col gap-4">
-              {questoesProva.filter(q => q.tipo === 'dissertativa').map((q, idx) => {
-                const respostaAluno = respostaCorrigir.respostas?.[q.id] || '';
+              {questoesProva.filter(q => q.tipo === 'dissertativa' || q.tipo === 'composta').map((q, idx) => {
                 const correcaoAtual = respostaCorrigir.correcoes_dissertativas?.find(c => c.questao_id === q.id);
                 const temErro = correcaoAtual?.justificativa?.includes('Erro');
+
+                if (q.tipo === 'composta' && q.subitens) {
+                  const ptsPorSub = q.pontos / q.subitens.length;
+                  return (
+                    <div key={q.id} className="bg-orange-50 rounded-2xl p-4 flex flex-col gap-3 border border-orange-200">
+                      <p className="text-xs font-bold text-orange-700 uppercase tracking-wide">Questão Composta {idx + 1}</p>
+                      <p className="text-sm text-gray-700 leading-relaxed">{q.enunciado}</p>
+                      {q.subitens.map(s => {
+                        const chave = `${q.id}_${s.letra}`;
+                        const respAluno = respostaCorrigir.respostas?.[chave] || '';
+                        const corrSub = respostaCorrigir.correcoes_dissertativas?.find(c => c.questao_id === chave);
+                        return (
+                          <div key={chave} className="bg-white rounded-xl p-3 border border-orange-100 flex flex-col gap-2">
+                            <p className="text-sm font-bold text-orange-700">{s.letra}) {s.enunciado}</p>
+                            <div className="bg-gray-50 rounded-lg p-2 border border-gray-200">
+                              <p className="text-xs text-gray-400 font-bold mb-1">Resposta do aluno</p>
+                              <p className="text-sm text-gray-800">{respAluno || <span className="italic text-gray-400">(em branco)</span>}</p>
+                            </div>
+                            {corrSub && !corrSub.justificativa?.includes('Erro') && (
+                              <div className="flex items-center gap-1.5 text-xs text-purple-600">
+                                <Brain className="w-3 h-3" />
+                                <span>IA: {corrSub.pontos_obtidos}/{corrSub.pontos_total} pts — {corrSub.justificativa}</span>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-2">
+                              <label className="text-xs font-bold text-gray-600">Nota:</label>
+                              <input type="number" min="0" max={ptsPorSub} step="0.5"
+                                value={notasManual[chave] ?? '0'}
+                                onChange={e => setNotasManual(prev => ({ ...prev, [chave]: e.target.value }))}
+                                className="w-20 bg-white border-2 border-orange-300 rounded-xl px-2 py-1.5 text-center font-bold text-orange-700 outline-none text-sm" />
+                              <span className="text-xs text-gray-400">/ {ptsPorSub} pts</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                }
+
+                const respostaAluno = respostaCorrigir.respostas?.[q.id] || '';
                 return (
                   <div key={q.id} className="bg-gray-50 rounded-2xl p-4 flex flex-col gap-3">
                     <div className="flex items-start justify-between gap-2">
