@@ -59,9 +59,9 @@ interface Prova {
 }
 
 const GRUPOS = [
-  { id: '6-7', label: '6º e 7º Ano', turmas: ['6F','7A','7B','7C','7D','7E','7F'] },
-  { id: '8',   label: '8º Ano',      turmas: ['8A','8B','8C','8D','8E','8F'] },
-  { id: '9',   label: '9º Ano',      turmas: ['9A','9B','9C','9D','9E','9F'] },
+  { id: '6-7', label: '6\u00ba e 7\u00ba Ano', turmas: ['6F','7A','7B','7C','7D','7E','7F'] },
+  { id: '8',   label: '8\u00ba Ano',      turmas: ['8A','8B','8C','8D','8E','8F'] },
+  { id: '9',   label: '9\u00ba Ano',      turmas: ['9A','9B','9C','9D','9E','9F'] },
 ];
 
 export function getTurmasDoGrupo(grupoId: string): string[] {
@@ -78,9 +78,49 @@ function gerarCodigo() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
+// Limpa tags HTML e caracteres de formatacao markdown do mammoth
+function limparLinha(html: string): string {
+  return html
+    .replace(/<[^>]*>/g, '')   // remove tags HTML
+    .replace(/\*+/g, '')        // remove asteriscos do markdown
+    .replace(/\s+/g, ' ')       // normaliza espacos
+    .trim();
+}
+
+// Detecta se a linha e um cabecalho de questao
+// Suporta: "Questao 1 -", "Questao - 1", "1.", "1)"
+function detectarQuestao(linha: string): number | null {
+  // "Questao 1 -" ou "Questao 1 Discursiva" (numero antes)
+  let m = linha.match(/^quest[aã]o\s+(\d+)\s*[-\u2013\u2014]/i);
+  if (m) return parseInt(m[1]);
+
+  // "Questao - 1" ou "Questao - 5" (numero depois)
+  m = linha.match(/^quest[aã]o\s*[-\u2013\u2014]\s*(\d+)/i);
+  if (m) return parseInt(m[1]);
+
+  // "1." ou "1)"
+  m = linha.match(/^(\d+)\s*[.)]\s+\S/);
+  if (m) return parseInt(m[1]);
+
+  return null;
+}
+
+// Extrai texto do enunciado apos o marcador de questao
+function extrairEnunciado(linha: string): string {
+  // Remove "Questao N -" ou "Questao - N" do inicio
+  let s = linha
+    .replace(/^quest[aã]o\s+\d+\s*[-\u2013\u2014]\s*/i, '')
+    .replace(/^quest[aã]o\s*[-\u2013\u2014]\s*\d+\s*/i, '')
+    .replace(/^(\d+)\s*[.)]\s*/i, '')
+    .replace(/^\s*[-\u2013\u2014\s]*(discursiva|dissertativa)\s*[-\u2013\u2014]?\s*/i, '')
+    .trim();
+  return s;
+}
+
 async function parsearDocx(file: File): Promise<{ questoes: Questao[]; titulo: string }> {
   const arrayBuffer = await file.arrayBuffer();
   const imagensMap: Record<string, string> = {};
+
   const resultHtml = await mammoth.convertToHtml(
     { arrayBuffer },
     {
@@ -93,64 +133,95 @@ async function parsearDocx(file: File): Promise<{ questoes: Questao[]; titulo: s
       }),
     }
   );
-  const result = await mammoth.extractRawText({ arrayBuffer });
-  const texto = result.value;
-  const linhas = texto.split('\n').map(l => l.trim()).filter(Boolean);
+
   const questoes: Questao[] = [];
-  let titulo = file.name.replace('.docx', '').replace('.doc', '');
+  let titulo = file.name.replace(/\.(docx|doc)$/i, '');
 
-  const primeiraNumerada = linhas.findIndex(l => /^(questão|q\.|[\d]+[.)]\s)/i.test(l));
-  if (primeiraNumerada > 0) titulo = linhas.slice(0, primeiraNumerada).join(' ').substring(0, 80);
-
-  const gabaritoMap: Record<number, number> = {};
-  const gabaritoIdx = linhas.findIndex(l => /gabarito/i.test(l));
-  if (gabaritoIdx !== -1) {
-    const gabaritoLinha = linhas.slice(gabaritoIdx).join(' ');
-    const matches = [...gabaritoLinha.matchAll(/(\d+)\s*[-:]\s*([A-Ea-e])/g)];
-    matches.forEach(m => { gabaritoMap[parseInt(m[1])] = m[2].toUpperCase().charCodeAt(0) - 65; });
-  }
-
+  // Processar o HTML linha a linha
   const htmlLinhas = resultHtml.value
-    .replace(/<p>/g, "\n").replace(/<\/p>/g, "")
-    .replace(/<br\s*\/?>/g, "\n")
-    .split("\n").map(l => l.trim()).filter(Boolean);
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .split('\n')
+    .map(l => l.trim())
+    .filter(Boolean);
 
   let questaoAtual: Questao | null = null;
-  let numQuestao = 0;
+  let tituloCandidato: string[] = [];
+  let encontrouPrimeiraQuestao = false;
 
   for (let i = 0; i < htmlLinhas.length; i++) {
     const linhaHtml = htmlLinhas[i];
+
+    // Verifica imagem
     const matchImg = linhaHtml.match(/src="(img_\d+)"/);
     if (matchImg && imagensMap[matchImg[1]]) {
-      if (questaoAtual && !questaoAtual.imagem) questaoAtual.imagem = imagensMap[matchImg[1]];
+      if (questaoAtual && !questaoAtual.imagem) {
+        questaoAtual.imagem = imagensMap[matchImg[1]];
+      }
       continue;
     }
-    const linha = linhaHtml.replace(/<[^>]*>/g, "").trim();
+
+    const linha = limparLinha(linhaHtml);
     if (!linha) continue;
-    const matchQuestao = linha.match(/^(?:questão\s*)?(\d+)\s*[.)]\s*(.*)$/i);
-    if (matchQuestao) {
+
+    // Ignora linhas de gabarito
+    if (/^gabarito/i.test(linha)) continue;
+
+    // Detecta cabecalho de questao
+    const numQuestao = detectarQuestao(linha);
+    if (numQuestao !== null) {
+      if (!encontrouPrimeiraQuestao) {
+        titulo = tituloCandidato.join(' ').substring(0, 100) || titulo;
+        encontrouPrimeiraQuestao = true;
+      }
       if (questaoAtual) questoes.push(questaoAtual);
-      numQuestao = parseInt(matchQuestao[1]);
+
+      const enunciado = extrairEnunciado(linha);
+      // Detecta se e dissertativa pelo texto
+      const eDiscursiva = /discursiva|dissertativa/i.test(linha);
+
       questaoAtual = {
         id: Math.random().toString(36).substring(2),
-        enunciado: matchQuestao[2] || '',
-        imagem: null, tipo: 'multipla_escolha', opcoes: [],
-        resposta_correta: gabaritoMap[numQuestao] !== undefined ? String(gabaritoMap[numQuestao]) : '',
+        enunciado,
+        imagem: null,
+        tipo: eDiscursiva ? 'dissertativa' : 'multipla_escolha',
+        opcoes: [],
+        resposta_correta: '',
         pontos: 1,
       };
       continue;
     }
-    const matchAlternativa = linha.match(/^([A-Ea-e])\s*[.)]\s*(.+)$/);
-    if (matchAlternativa && questaoAtual) {
-      if (questaoAtual.opcoes.length < 5) questaoAtual.opcoes.push(matchAlternativa[2]);
+
+    // Detecta alternativa: "A)", "A.", "a)"
+    const matchAlt = linha.match(/^([A-Ea-e])\s*[.)]\s*(.+)$/);
+    if (matchAlt && questaoAtual) {
+      if (questaoAtual.opcoes.length < 5) {
+        questaoAtual.opcoes.push(matchAlt[2].trim());
+      }
       continue;
     }
-    if (questaoAtual && !/^gabarito/i.test(linha) && questaoAtual.opcoes.length === 0) {
-      questaoAtual.enunciado += ' ' + linha;
+
+    // Linha de continuacao do enunciado ou titulo
+    if (questaoAtual) {
+      // Adiciona ao enunciado se ainda nao tem alternativas
+      if (questaoAtual.opcoes.length === 0) {
+        questaoAtual.enunciado += (questaoAtual.enunciado ? ' ' : '') + linha;
+      }
+    } else if (!encontrouPrimeiraQuestao) {
+      tituloCandidato.push(linha);
     }
   }
+
   if (questaoAtual) questoes.push(questaoAtual);
-  questoes.forEach(q => { if (q.opcoes.length === 0) { q.tipo = 'dissertativa'; q.resposta_correta = ''; } });
+
+  // Questoes sem opcoes sao dissertativas
+  questoes.forEach(q => {
+    if (q.opcoes.length === 0) {
+      q.tipo = 'dissertativa';
+      q.resposta_correta = '';
+    }
+  });
+
   return { questoes, titulo };
 }
 
@@ -174,7 +245,6 @@ export function ProvasOnline() {
   const [resultados, setResultados] = useState<Resposta[]>([]);
   const [questoesProva, setQuestoesProva] = useState<QuestaoCompleta[]>([]);
 
-  // Modal de correção manual
   const [respostaCorrigir, setRespostaCorrigir] = useState<Resposta | null>(null);
   const [notasManual, setNotasManual] = useState<Record<string, string>>({});
   const [salvandoCorrecao, setSalvandoCorrecao] = useState(false);
@@ -239,25 +309,25 @@ export function ProvasOnline() {
     try {
       const { questoes: novasQuestoes, titulo: tituloDetectado } = await parsearDocx(file);
       if (novasQuestoes.length === 0) {
-        setErroImport('Nenhuma questão encontrada.');
+        setErroImport('Nenhuma quest\u00e3o encontrada. Verifique se o arquivo usa o formato "Quest\u00e3o 1 \u2013" ou "A) alternativa".');
         setImportando(false); return;
       }
       if (!titulo && tituloDetectado) setTitulo(tituloDetectado);
       setQuestoes(prev => [...prev, ...novasQuestoes]);
     } catch (err: any) {
-      setErroImport('Erro ao ler o arquivo: ' + (err.message || 'formato inválido'));
+      setErroImport('Erro ao ler o arquivo: ' + (err.message || 'formato inv\u00e1lido'));
     }
     setImportando(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const salvarProva = async () => {
-    if (!titulo.trim()) { alert('Preencha o título da prova.'); return; }
+    if (!titulo.trim()) { alert('Preencha o t\u00edtulo da prova.'); return; }
     if (!grupo) { alert('Selecione o grupo de turmas.'); return; }
-    if (questoes.length === 0) { alert('Adicione pelo menos uma questão.'); return; }
+    if (questoes.length === 0) { alert('Adicione pelo menos uma quest\u00e3o.'); return; }
     const semGabarito = questoes.filter(q => q.tipo === 'multipla_escolha' && q.resposta_correta === '');
     if (semGabarito.length > 0) {
-      if (!confirm(`${semGabarito.length} questão(ões) sem gabarito. Deseja publicar mesmo assim?`)) return;
+      if (!confirm(`${semGabarito.length} quest\u00e3o(\u00f5es) sem gabarito. Deseja publicar mesmo assim?`)) return;
     }
     setSalvando(true);
     try {
@@ -296,9 +366,9 @@ export function ProvasOnline() {
     const baseUrl = window.location.origin;
     const labelGrupo = getLabelGrupo(prova.turma_id);
     const texto =
-      `📝 *${prova.titulo}*\n🏫 ${labelGrupo}\n\n` +
+      `\ud83d\udcdd *${prova.titulo}*\n\ud83c\udfeb ${labelGrupo}\n\n` +
       `Acesse:\n${baseUrl}/responder\n\n` +
-      `🔑 Código: *${prova.codigo}*\n\n_Instituto Odilon Pratagi_`;
+      `\ud83d\udd11 C\u00f3digo: *${prova.codigo}*\n\n_Instituto Odilon Pratagi_`;
     navigator.clipboard.writeText(texto);
     setCompartilhado(prova.id);
     setTimeout(() => setCompartilhado(null), 3000);
@@ -321,7 +391,6 @@ export function ProvasOnline() {
     carregarProvas();
   };
 
-  // Abre modal de correção manual
   const abrirCorrecaoManual = (resposta: Resposta) => {
     const dissertativas = questoesProva.filter(q => q.tipo === 'dissertativa');
     const notasIniciais: Record<string, string> = {};
@@ -333,64 +402,35 @@ export function ProvasOnline() {
     setRespostaCorrigir(resposta);
   };
 
-  // Salva correção manual
   const salvarCorrecaoManual = async () => {
     if (!respostaCorrigir || !provaResultados) return;
     setSalvandoCorrecao(true);
     try {
       const dissertativas = questoesProva.filter(q => q.tipo === 'dissertativa');
       const objetivas = questoesProva.filter(q => q.tipo === 'multipla_escolha');
-
-      // Recalcula pontos das objetivas
-      let pontosObj = 0;
-      let totalObj = 0;
+      let pontosObj = 0, totalObj = 0;
       objetivas.forEach(q => {
         totalObj += q.pontos;
         if (respostaCorrigir.respostas?.[q.id] === q.resposta_correta) pontosObj += q.pontos;
       });
-
-      // Pontos das dissertativas com as notas manuais
-      let pontosDisser = 0;
-      let totalDisser = 0;
+      let pontosDisser = 0, totalDisser = 0;
       const novasCorrecoes: CorrecaoItem[] = dissertativas.map(q => {
         const pts = Math.min(Math.max(parseFloat(notasManual[q.id] || '0'), 0), q.pontos);
-        pontosDisser += pts;
-        totalDisser += q.pontos;
-        return {
-          questao_id: q.id,
-          pontos_obtidos: pts,
-          pontos_total: q.pontos,
-          percentual: q.pontos > 0 ? (pts / q.pontos) * 100 : 0,
-          justificativa: 'Corrigido manualmente pelo professor.',
-        };
+        pontosDisser += pts; totalDisser += q.pontos;
+        return { questao_id: q.id, pontos_obtidos: pts, pontos_total: q.pontos,
+          percentual: q.pontos > 0 ? (pts / q.pontos) * 100 : 0, justificativa: 'Corrigido manualmente pelo professor.' };
       });
-
       const totalPontos = totalObj + totalDisser;
       const pontosTotal = pontosObj + pontosDisser;
       const novaNota = totalPontos > 0 ? parseFloat(((pontosTotal / totalPontos) * 10).toFixed(1)) : 0;
       const notaFinal = novaNota >= 10 ? 9.5 : novaNota;
-
-      const { error } = await supabase.from('respostas').update({
-        nota: notaFinal,
-        correcoes_dissertativas: novasCorrecoes,
-      }).eq('id', respostaCorrigir.id);
-
+      const { error } = await supabase.from('respostas').update({ nota: notaFinal, correcoes_dissertativas: novasCorrecoes }).eq('id', respostaCorrigir.id);
       if (error) throw error;
-
-      // Atualiza localmente
-      setResultados(prev => prev.map(r =>
-        r.id === respostaCorrigir.id
-          ? { ...r, nota: notaFinal, correcoes_dissertativas: novasCorrecoes }
-          : r
-      ));
-
-      alert(`Correção salva! Nova nota: ${notaFinal.toFixed(1)}`);
+      setResultados(prev => prev.map(r => r.id === respostaCorrigir.id ? { ...r, nota: notaFinal, correcoes_dissertativas: novasCorrecoes } : r));
+      alert(`Corre\u00e7\u00e3o salva! Nova nota: ${notaFinal.toFixed(1)}`);
       setRespostaCorrigir(null);
-    } catch (e: any) {
-      alert('Erro ao salvar correção: ' + e.message);
-    } finally {
-      setSalvandoCorrecao(false);
-    }
+    } catch (e: any) { alert('Erro ao salvar corre\u00e7\u00e3o: ' + e.message); }
+    finally { setSalvandoCorrecao(false); }
   };
 
   const totalPontos = questoes.reduce((s, q) => s + q.pontos, 0);
@@ -402,8 +442,8 @@ export function ProvasOnline() {
     <div className="p-4 flex flex-col gap-4 pb-36">
       <div className="bg-primary rounded-[2rem] p-5 text-white shadow-lg shadow-primary/30 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10" />
-        <h2 className="text-xl font-bold relative z-10">📝 Provas Online</h2>
-        <p className="text-primary-light text-sm relative z-10 mt-0.5">Crie e gerencie avaliações para os alunos</p>
+        <h2 className="text-xl font-bold relative z-10">\ud83d\udcdd Provas Online</h2>
+        <p className="text-primary-light text-sm relative z-10 mt-0.5">Crie e gerencie avalia\u00e7\u00f5es para os alunos</p>
       </div>
 
       <div className="flex gap-2 bg-gray-100 rounded-2xl p-1">
@@ -415,7 +455,6 @@ export function ProvasOnline() {
         ))}
       </div>
 
-      {/* LISTA */}
       {tab === 'lista' && (
         <div className="flex flex-col gap-3">
           {loading && <p className="text-center text-gray-400 text-sm py-4">Carregando...</p>}
@@ -430,7 +469,7 @@ export function ProvasOnline() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="font-bold text-gray-800">{prova.titulo}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{getLabelGrupo(prova.turma_id)} · {new Date(prova.criado_em).toLocaleDateString('pt-BR')}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{getLabelGrupo(prova.turma_id)} \u00b7 {new Date(prova.criado_em).toLocaleDateString('pt-BR')}</p>
                 </div>
                 <button onClick={() => deletarProva(prova.id)} className="text-gray-300 hover:text-red-400 transition-colors">
                   <Trash2 className="w-4 h-4" />
@@ -438,7 +477,7 @@ export function ProvasOnline() {
               </div>
               <div className="bg-primary/5 rounded-xl px-3 py-2 flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-gray-400">Código de acesso</p>
+                  <p className="text-xs text-gray-400">C\u00f3digo de acesso</p>
                   <p className="font-mono font-black text-primary text-lg tracking-widest">{prova.codigo}</p>
                 </div>
                 <button onClick={() => copiarCodigo(prova.codigo)} className="text-primary hover:text-primary-light transition-colors">
@@ -447,7 +486,7 @@ export function ProvasOnline() {
               </div>
               <button onClick={() => compartilharProva(prova)}
                 className={`w-full py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${compartilhado === prova.id ? 'bg-green-500 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'}`}>
-                {compartilhado === prova.id ? <><CheckCircle className="w-4 h-4" /> Link copiado!</> : <><Share2 className="w-4 h-4" /> Compartilhar link + código</>}
+                {compartilhado === prova.id ? <><CheckCircle className="w-4 h-4" /> Link copiado!</> : <><Share2 className="w-4 h-4" /> Compartilhar link + c\u00f3digo</>}
               </button>
               <button onClick={() => verResultados(prova)}
                 className="w-full py-2 rounded-xl bg-primary/10 text-primary font-bold text-sm flex items-center justify-center gap-2 hover:bg-primary/20 transition-colors">
@@ -458,20 +497,19 @@ export function ProvasOnline() {
         </div>
       )}
 
-      {/* CRIAR */}
       {tab === 'criar' && (
         <div className="flex flex-col gap-4">
           {sucesso && (
             <div className="bg-green-50 border border-green-200 rounded-2xl p-4 flex items-center gap-3">
               <CheckCircle className="w-5 h-5 text-green-500 shrink-0" />
-              <p className="text-green-700 font-bold text-sm">Prova criada e publicada com sucesso! 🎉</p>
+              <p className="text-green-700 font-bold text-sm">Prova criada e publicada com sucesso! \ud83c\udf89</p>
             </div>
           )}
           <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-col gap-3 shadow-sm">
-            <p className="font-bold text-gray-700 text-sm">Informações da Prova</p>
-            <input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Título da prova"
+            <p className="font-bold text-gray-700 text-sm">Informa\u00e7\u00f5es da Prova</p>
+            <input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="T\u00edtulo da prova"
               className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
-            <textarea value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Instruções (opcional)" rows={2}
+            <textarea value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Instru\u00e7\u00f5es (opcional)" rows={2}
               className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 resize-none" />
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -513,14 +551,14 @@ export function ProvasOnline() {
             <div key={q.id} className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-col gap-3 shadow-sm">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-1 rounded-lg">
-                  {idx + 1}. {q.tipo === 'multipla_escolha' ? 'Múltipla Escolha' : 'Dissertativa'}
+                  {idx + 1}. {q.tipo === 'multipla_escolha' ? 'M\u00faltipla Escolha' : 'Dissertativa'}
                 </span>
                 <button onClick={() => removerQuestao(q.id)} className="text-gray-300 hover:text-red-400 p-1">
                   <X className="w-4 h-4" />
                 </button>
               </div>
               <textarea value={q.enunciado} onChange={e => atualizarQuestao(q.id, 'enunciado', e.target.value)}
-                placeholder="Enunciado da questão..." rows={3}
+                placeholder="Enunciado da quest\u00e3o..." rows={3}
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 resize-none" />
               {q.imagem ? (
                 <div className="relative rounded-xl overflow-hidden border border-gray-200">
@@ -542,13 +580,13 @@ export function ProvasOnline() {
               {q.tipo === 'multipla_escolha' && (
                 <div className="flex flex-col gap-2">
                   <p className="text-xs font-semibold text-gray-500">
-                    Alternativas {q.resposta_correta !== '' ? <span className="ml-1.5 text-green-600">✓ Gabarito: {LETRAS[parseInt(q.resposta_correta)]}</span> : <span className="ml-1.5 text-amber-500">⚠ Marque o gabarito</span>}
+                    Alternativas {q.resposta_correta !== '' ? <span className="ml-1.5 text-green-600">\u2713 Gabarito: {LETRAS[parseInt(q.resposta_correta)]}</span> : <span className="ml-1.5 text-amber-500">\u26a0 Marque o gabarito</span>}
                   </p>
                   {q.opcoes.map((op, i) => (
                     <div key={i} className={`flex items-center gap-2 rounded-xl border px-2 py-1.5 ${q.resposta_correta === String(i) ? 'border-green-300 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
                       <button onClick={() => atualizarQuestao(q.id, 'resposta_correta', q.resposta_correta === String(i) ? '' : String(i))}
                         className={`w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 font-bold text-xs ${q.resposta_correta === String(i) ? 'border-green-500 bg-green-500 text-white' : 'border-gray-300 text-gray-400'}`}>
-                        {q.resposta_correta === String(i) ? '✓' : LETRAS[i]}
+                        {q.resposta_correta === String(i) ? '\u2713' : LETRAS[i]}
                       </button>
                       <input value={op} onChange={e => atualizarOpcao(q.id, i, e.target.value)} placeholder={`Alternativa ${LETRAS[i]}`}
                         className="flex-1 bg-transparent text-sm outline-none placeholder:text-gray-300" />
@@ -573,7 +611,7 @@ export function ProvasOnline() {
           <div className="grid grid-cols-2 gap-2">
             <button onClick={() => adicionarQuestao('multipla_escolha')}
               className="py-3 rounded-2xl border-2 border-dashed border-primary/30 text-primary font-bold text-sm hover:bg-primary/5 flex items-center justify-center gap-2">
-              <Plus className="w-4 h-4" /> Múltipla Escolha
+              <Plus className="w-4 h-4" /> M\u00faltipla Escolha
             </button>
             <button onClick={() => adicionarQuestao('dissertativa')}
               className="py-3 rounded-2xl border-2 border-dashed border-gray-300 text-gray-500 font-bold text-sm hover:bg-gray-50 flex items-center justify-center gap-2">
@@ -583,12 +621,11 @@ export function ProvasOnline() {
         </div>
       )}
 
-      {/* RESULTADOS */}
       {tab === 'resultados' && provaResultados && (
         <div className="flex flex-col gap-3">
           <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
             <p className="font-bold text-gray-800">{provaResultados.titulo}</p>
-            <p className="text-xs text-gray-400 mt-0.5">{getLabelGrupo(provaResultados.turma_id)} · {resultados.length} respostas</p>
+            <p className="text-xs text-gray-400 mt-0.5">{getLabelGrupo(provaResultados.turma_id)} \u00b7 {resultados.length} respostas</p>
           </div>
           {resultados.length === 0 && (
             <div className="text-center py-8 text-gray-400">
@@ -604,14 +641,14 @@ export function ProvasOnline() {
                   <div>
                     <p className="font-bold text-gray-800 text-sm">{r.aluno_nome}</p>
                     <p className="text-xs text-gray-400">
-                      {r.aluno_numero ? `Nº ${r.aluno_numero} · ` : ''}
-                      {r.turma_id ? `Turma ${r.turma_id} · ` : ''}
+                      {r.aluno_numero ? `N\u00ba ${r.aluno_numero} \u00b7 ` : ''}
+                      {r.turma_id ? `Turma ${r.turma_id} \u00b7 ` : ''}
                       {new Date(r.enviado_em).toLocaleDateString('pt-BR')}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`text-xl font-black ${r.nota !== null && r.nota >= 6 ? 'text-green-500' : 'text-red-500'}`}>
-                      {r.nota?.toFixed(1) ?? '—'}
+                      {r.nota?.toFixed(1) ?? '\u2014'}
                     </span>
                     {questoesProva.some(q => q.tipo === 'dissertativa') && (
                       <button onClick={() => abrirCorrecaoManual(r)}
@@ -625,7 +662,7 @@ export function ProvasOnline() {
                 {temErroIA && (
                   <div className="mt-2 flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5">
                     <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                    <p className="text-xs text-amber-700 font-medium">IA não corrigiu — correção manual necessária</p>
+                    <p className="text-xs text-amber-700 font-medium">IA n\u00e3o corrigiu \u2014 corre\u00e7\u00e3o manual necess\u00e1ria</p>
                   </div>
                 )}
               </div>
@@ -633,31 +670,29 @@ export function ProvasOnline() {
           })}
           <button onClick={() => { setTab('lista'); setProvaResultados(null); setResultados([]); setQuestoesProva([]); }}
             className="w-full py-3 rounded-2xl bg-gray-100 text-gray-600 font-bold text-sm">
-            ← Voltar
+            \u2190 Voltar
           </button>
         </div>
       )}
 
-      {/* Botão Publicar */}
       {tab === 'criar' && (
         <div className="fixed bottom-20 left-0 right-0 px-4 z-50">
           <button onClick={salvarProva} disabled={salvando || sucesso}
             className="w-full py-4 rounded-2xl font-bold text-white shadow-xl hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
             style={{ background: 'linear-gradient(135deg, #1a3a7c, #3b6fd4)' }}>
-            {salvando ? <><span className="animate-spin">⟳</span> Salvando...</>
+            {salvando ? <><span className="animate-spin">\u27f3</span> Salvando...</>
               : sucesso ? <><CheckCircle className="w-5 h-5" /> Publicada!</>
-              : <>✓ Publicar Prova</>}
+              : <>\u2713 Publicar Prova</>}
           </button>
         </div>
       )}
 
-      {/* Modal de Correção Manual */}
       {respostaCorrigir && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center p-0 md:p-4">
           <div className="bg-white w-full max-w-lg md:rounded-3xl rounded-t-3xl max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-gray-100 sticky top-0 bg-white rounded-t-3xl">
               <div>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Correção Manual</p>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Corre\u00e7\u00e3o Manual</p>
                 <p className="font-bold text-gray-900">{respostaCorrigir.aluno_nome}</p>
                 <p className="text-xs text-gray-400">Turma {respostaCorrigir.turma_id}</p>
               </div>
@@ -665,13 +700,11 @@ export function ProvasOnline() {
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
-
             <div className="overflow-y-auto px-4 py-4 flex flex-col gap-4">
               {questoesProva.filter(q => q.tipo === 'dissertativa').map((q, idx) => {
                 const respostaAluno = respostaCorrigir.respostas?.[q.id] || '';
                 const correcaoAtual = respostaCorrigir.correcoes_dissertativas?.find(c => c.questao_id === q.id);
                 const temErro = correcaoAtual?.justificativa?.includes('Erro');
-
                 return (
                   <div key={q.id} className="bg-gray-50 rounded-2xl p-4 flex flex-col gap-3">
                     <div className="flex items-start justify-between gap-2">
@@ -687,34 +720,28 @@ export function ProvasOnline() {
                       <div className="bg-purple-50 rounded-xl p-3 border border-purple-100">
                         <div className="flex items-center gap-1.5 mb-1">
                           <Brain className="w-3.5 h-3.5 text-purple-600" />
-                          <p className="text-xs font-bold text-purple-600">Correção da IA: {correcaoAtual.pontos_obtidos}/{correcaoAtual.pontos_total} pts</p>
+                          <p className="text-xs font-bold text-purple-600">Corre\u00e7\u00e3o da IA: {correcaoAtual.pontos_obtidos}/{correcaoAtual.pontos_total} pts</p>
                         </div>
                         <p className="text-xs text-gray-600 italic">{correcaoAtual.justificativa}</p>
                       </div>
                     )}
                     <div className="flex items-center gap-3">
                       <label className="text-sm font-bold text-gray-700">Nota manual:</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max={q.pontos}
-                        step="0.5"
+                      <input type="number" min="0" max={q.pontos} step="0.5"
                         value={notasManual[q.id] ?? '0'}
                         onChange={e => setNotasManual(prev => ({ ...prev, [q.id]: e.target.value }))}
-                        className="w-24 bg-white border-2 border-primary/30 rounded-xl px-3 py-2 text-center font-bold text-primary outline-none focus:border-primary"
-                      />
+                        className="w-24 bg-white border-2 border-primary/30 rounded-xl px-3 py-2 text-center font-bold text-primary outline-none focus:border-primary" />
                       <span className="text-sm text-gray-400">/ {q.pontos} pts</span>
                     </div>
                   </div>
                 );
               })}
             </div>
-
             <div className="p-4 border-t border-gray-100 sticky bottom-0 bg-white rounded-b-3xl">
               <button onClick={salvarCorrecaoManual} disabled={salvandoCorrecao}
                 className="w-full py-3.5 rounded-2xl font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
                 style={{ background: 'linear-gradient(135deg, #1a3a7c, #3b6fd4)' }}>
-                {salvandoCorrecao ? <><span className="animate-spin">⟳</span> Salvando...</> : <><Save className="w-5 h-5" /> Salvar Correção</>}
+                {salvandoCorrecao ? <><span className="animate-spin">\u27f3</span> Salvando...</> : <><Save className="w-5 h-5" /> Salvar Corre\u00e7\u00e3o</>}
               </button>
             </div>
           </div>
