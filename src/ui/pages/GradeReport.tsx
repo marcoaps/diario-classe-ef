@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { cn } from "../AppLayout";
-import { X, FileDown, FileSpreadsheet, Save, Trash2, Upload, Table2, CheckCircle, AlertCircle, Loader2, BookOpen } from "lucide-react";
+import { X, FileDown, FileSpreadsheet, Save, Trash2, Upload, Table2, CheckCircle, AlertCircle, Loader2, BookOpen, Pencil } from "lucide-react";
 import { salvarNotas, buscarNotas, supabase } from "../../data/supabase";
 
 const TURMAS = ["6F", "7B", "7C", "7D", "7E", "7F", "8A", "8B", "8C", "8D", "8E", "8F", "9A", "9B", "9C", "9D", "9E", "9F"];
@@ -61,7 +61,6 @@ function parsearPlanilhaExcel(file: File): Promise<{
   });
 }
 
-// Monta aba do diário oficial para uma turma num workbook
 async function gerarAbaDiario(wb: any, t: string, b1: any[], b2: any[], b3: any[], b4: any[]) {
   const todosNomes = new Set([...b1, ...b2, ...b3, ...b4].map((a: any) => a.nome));
   const lista: { num: number; n1: any; n2: any; n3: any; n4: any }[] = [];
@@ -80,12 +79,10 @@ async function gerarAbaDiario(wb: any, t: string, b1: any[], b2: any[], b3: any[
     });
   });
   lista.sort((a, b) => (a.num || 999) - (b.num || 999));
-
   const ws = wb.addWorksheet(t, {
     pageSetup: { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 1,
       margins: { left: 0.5, right: 0.5, top: 0.5, bottom: 0.5, header: 0, footer: 0 } }
   });
-
   const th = { style: 'thin' as const };
   const bd = { top: th, bottom: th, left: th, right: th };
   const AZ = 'FF1A2E6E', BR = 'FFFFFFFF';
@@ -94,22 +91,18 @@ async function gerarAbaDiario(wb: any, t: string, b1: any[], b2: any[], b3: any[
   const ca: any = { horizontal: 'center', vertical: 'middle', wrapText: true };
   const sFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFD0D8EE' } };
   const sFont = { bold: true, size: 8, color: { argb: AZ } };
-
   ws.mergeCells('A1:N1');
   ws.getCell('A1').value = 'ESCOLA ESTADUAL INSTITUTO ODILON PRAGAGI';
   ws.getCell('A1').font = { bold: true, size: 12 };
   ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
   ws.getRow(1).height = 20;
-
   ws.mergeCells('A2:C2'); ws.getCell('A2').value = 'DISCIPLINA: Educa\u00e7\u00e3o F\u00edsica'; ws.getCell('A2').font = { bold: true, size: 10 }; ws.getCell('A2').border = bd;
   ws.mergeCells('D2:F2'); ws.getCell('D2').value = 'ETAPA/S\u00c9RIE: ' + t.replace(/([0-9]+)([A-Z]+)/, '$1\u00ba'); ws.getCell('D2').font = { bold: true, size: 10 }; ws.getCell('D2').border = bd;
   ws.mergeCells('G2:I2'); ws.getCell('G2').value = 'TURMA: ' + t; ws.getCell('G2').font = { bold: true, size: 10 }; ws.getCell('G2').border = bd;
   ws.mergeCells('J2:N2'); ws.getCell('J2').value = 'TURNO: Manh\u00e3'; ws.getCell('J2').font = { bold: true, size: 10 }; ws.getCell('J2').border = bd;
   ws.getRow(2).height = 18;
-
   ws.mergeCells(3, 1, 4, 1);
   ws.getCell('A3').value = 'N\u00ba'; ws.getCell('A3').font = hFont; ws.getCell('A3').fill = hFill; ws.getCell('A3').alignment = ca; ws.getCell('A3').border = bd;
-
   [
     { label: '1\u00ba Bimestre', s: 2, e: 3 }, { label: '2\u00ba Bimestre', s: 4, e: 5 },
     { label: 'Recupera\u00e7\u00e3o\n1\u00ba Semestre', s: 6, e: 6 }, { label: '3\u00ba Bimestre', s: 7, e: 8 },
@@ -121,7 +114,6 @@ async function gerarAbaDiario(wb: any, t: string, b1: any[], b2: any[], b3: any[
     c.value = g.label; c.font = hFont; c.fill = hFill; c.alignment = ca; c.border = bd;
   });
   ws.getRow(3).height = 28;
-
   [{ c: 2, l: 'Faltas' }, { c: 3, l: 'Notas' }, { c: 4, l: 'Faltas' }, { c: 5, l: 'Notas' },
     { c: 6, l: 'Notas' }, { c: 7, l: 'Faltas' }, { c: 8, l: 'Notas' }, { c: 9, l: 'Faltas' },
     { c: 10, l: 'Notas' }, { c: 11, l: 'Notas' }, { c: 12, l: 'Notas' }, { c: 13, l: 'Notas' }
@@ -130,22 +122,18 @@ async function gerarAbaDiario(wb: any, t: string, b1: any[], b2: any[], b3: any[
     cell.value = s.l; cell.font = sFont; cell.fill = sFill; cell.alignment = ca; cell.border = bd;
   });
   ws.getRow(4).height = 16;
-
   for (let i = 0; i < 48; i++) {
     const rn = 5 + i;
     const al = lista[i];
     const bg = i % 2 === 0 ? BR : 'FFF5F7FC';
     const rf = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: bg } };
-
     ws.getCell(rn, 1).value = al ? String(al.num).padStart(2, '0') : '';
     ws.getCell(rn, 1).font = { bold: true, size: 9, color: { argb: AZ } };
     ws.getCell(rn, 1).fill = rf; ws.getCell(rn, 1).alignment = { horizontal: 'center', vertical: 'middle' }; ws.getCell(rn, 1).border = bd;
-
     for (let c = 2; c <= 13; c++) {
       ws.getCell(rn, c).fill = rf; ws.getCell(rn, c).border = bd;
       ws.getCell(rn, c).alignment = { horizontal: 'center', vertical: 'middle' }; ws.getCell(rn, c).font = { size: 9 };
     }
-
     if (al) {
       const p = (col: number, val: any) => {
         if (val == null) return;
@@ -157,12 +145,10 @@ async function gerarAbaDiario(wb: any, t: string, b1: any[], b2: any[], b3: any[
     }
     ws.getRow(rn).height = 14;
   }
-
   ws.mergeCells('A53:N53');
   ws.getCell('A53').value = 'Assinatura do professor: Marco Antonio Pedro da Silva';
   ws.getCell('A53').font = { size: 10 }; ws.getCell('A53').alignment = { horizontal: 'left', vertical: 'middle' };
   ws.getRow(53).height = 20;
-
   [5, 7, 7, 7, 7, 9, 7, 7, 7, 7, 9, 9, 9].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
 }
 
@@ -186,6 +172,11 @@ export function GradeReport() {
     turma: string; bimestre: number; total: number; status: 'ok' | 'erro'; msg?: string;
   }[]>([]);
   const [importConcluido, setImportConcluido] = useState(false);
+
+  // Estado do modal de edicao
+  const [editando, setEditando] = useState<any | null>(null);
+  const [editNota, setEditNota] = useState('');
+  const [editSalvando, setEditSalvando] = useState(false);
 
   useEffect(() => {
     if (view === "notas") carregarNotas();
@@ -225,6 +216,41 @@ export function GradeReport() {
       setDesempenho(resultado);
     } catch (e) { setDesempenho([]); }
     finally { setIsLoading(false); }
+  };
+
+  const abrirEdicao = (aluno: any) => {
+    setEditando(aluno);
+    setEditNota(aluno.nota_texto ?? (aluno.nota != null ? String(Number(aluno.nota).toFixed(1)).replace('.', ',') : ''));
+  };
+
+  const salvarEdicao = async () => {
+    if (!editando) return;
+    setEditSalvando(true);
+    try {
+      const val = editNota.trim().replace(',', '.');
+      const notaNum = parseFloat(val);
+      const isTexto = isNaN(notaNum) && val !== '';
+      const nota = isTexto ? null : (isNaN(notaNum) ? null : notaNum);
+      const nota_texto = isTexto ? editNota.trim() : null;
+
+      const { error } = await supabase
+        .from('notas')
+        .update({ nota, nota_texto })
+        .eq('turma', turma)
+        .eq('bimestre', bimestre)
+        .ilike('nome', editando.nome);
+
+      if (error) throw error;
+
+      setAlunos(prev => prev.map(a =>
+        a.nome === editando.nome ? { ...a, nota, nota_texto } : a
+      ));
+      setEditando(null);
+    } catch (e: any) {
+      alert('Erro ao salvar: ' + e.message);
+    } finally {
+      setEditSalvando(false);
+    }
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -473,7 +499,7 @@ export function GradeReport() {
         ) : view === "notas" ? (
           alunos.length > 0 ? (
             <>
-              {saved && <div className="print:hidden mb-2 text-xs text-center text-green-600 font-semibold">Dados salvos</div>}
+              {saved && <div className="print:hidden mb-2 text-xs text-center text-green-600 font-semibold">Dados salvos — toque na nota para editar</div>}
               <div className="bg-surface rounded-3xl border border-gray-200 overflow-hidden shadow-sm">
                 <div className="flex flex-col divide-y divide-gray-100">
                   {alunos.map((aluno, idx) => (
@@ -482,10 +508,16 @@ export function GradeReport() {
                         <span className="font-mono text-gray-400 text-xs w-5 shrink-0">{aluno.num}</span>
                         <span className="font-semibold text-textPrimary text-xs truncate">{aluno.nome.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())}</span>
                       </div>
-                      {aluno.nota_texto
-                        ? <span className="font-black text-red-600 text-sm shrink-0">{aluno.nota_texto}</span>
-                        : <span className="font-black text-primary text-base shrink-0">{fmtNota(aluno.nota)}</span>
-                      }
+                      <button
+                        onClick={() => abrirEdicao(aluno)}
+                        className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-gray-100 transition-colors group shrink-0"
+                      >
+                        {aluno.nota_texto
+                          ? <span className="font-black text-red-600 text-sm">{aluno.nota_texto}</span>
+                          : <span className="font-black text-primary text-base">{fmtNota(aluno.nota)}</span>
+                        }
+                        <Pencil className="w-3 h-3 text-gray-300 group-hover:text-gray-500 transition-colors" />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -536,6 +568,56 @@ export function GradeReport() {
         )}
       </div>
 
+      {/* Modal Edicao de Nota */}
+      {editando && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-4 sm:items-center">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 flex flex-col gap-4">
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-base font-bold text-gray-800">Editar Nota</h3>
+                <p className="text-xs text-gray-500 mt-0.5 max-w-[220px] truncate">
+                  {editando.nome.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                </p>
+                <p className="text-xs text-primary font-semibold mt-0.5">Turma {turma} \u2014 {bimestre}\u00ba Bimestre</p>
+              </div>
+              <button onClick={() => setEditando(null)} className="text-gray-400 hover:text-gray-600 p-1"><X className="w-5 h-5" /></button>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-gray-500 block mb-1">NOVA NOTA</label>
+              <input
+                type="text"
+                value={editNota}
+                onChange={e => setEditNota(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') salvarEdicao(); if (e.key === 'Escape') setEditando(null); }}
+                placeholder="Ex: 8,5 ou Remaj."
+                autoFocus
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-lg font-bold text-center focus:outline-none focus:border-primary transition-colors"
+              />
+              <p className="text-xs text-gray-400 mt-1.5 text-center">Use v\u00edrgula para decimais. Para notas especiais, digite o texto (ex: Remaj.)</p>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setEditando(null)}
+                className="flex-1 py-3 rounded-xl font-bold bg-gray-100 text-gray-600 hover:bg-gray-200 transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={salvarEdicao}
+                disabled={editSalvando}
+                className="flex-1 py-3 rounded-xl font-bold bg-primary text-white hover:bg-primary-dark transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+              >
+                {editSalvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {editSalvando ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal PDF */}
       {showImport && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white p-6 rounded-2xl w-full max-w-lg">
@@ -552,6 +634,7 @@ export function GradeReport() {
         </div>
       )}
 
+      {/* Modal Excel */}
       {showImportExcel && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white p-6 rounded-2xl w-full max-w-lg flex flex-col gap-4">
