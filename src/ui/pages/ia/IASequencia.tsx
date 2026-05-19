@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Sparkles, Copy, CheckCircle, Loader2, RefreshCw, FileDown } from 'lucide-react';
 import {
   Document, Packer, Paragraph, Table, TableRow, TableCell,
-  TextRun, HeadingLevel, AlignmentType, WidthType, BorderStyle,
-  ShadingType, TableLayoutType, VerticalAlign,
+  TextRun, AlignmentType, WidthType, BorderStyle,
+  ShadingType, VerticalAlign,
 } from 'docx';
 import { saveAs } from 'file-saver';
 
@@ -17,6 +17,122 @@ const CAMPOS = [
   { id: 'situacoes', label: 'Número de Situações de Aprendizagem', tipo: 'select' as const, opcoes: ['2 situações', '3 situações', '4 situações'] },
   { id: 'contexto', label: 'Contexto / Observações (opcional)', tipo: 'textarea' as const, placeholder: 'Ex: Turma inclusiva, sem quadra coberta...', required: false },
 ];
+
+const ETAPAS = [
+  { texto: 'Analisando o tema e a turma...', icone: '🔍', duracao: 4000 },
+  { texto: 'Elaborando objetivos e capacidades...', icone: '🎯', duracao: 5000 },
+  { texto: 'Selecionando habilidades da BNCC...', icone: '📚', duracao: 5000 },
+  { texto: 'Criando as situações de aprendizagem...', icone: '✏️', duracao: 7000 },
+  { texto: 'Detalhando atividades práticas...', icone: '⚽', duracao: 6000 },
+  { texto: 'Definindo instrumentos de avaliação...', icone: '📋', duracao: 4000 },
+  { texto: 'Organizando recursos e referências...', icone: '📖', duracao: 3000 },
+  { texto: 'Finalizando a sequência didática...', icone: '✨', duracao: 99999 },
+];
+
+function ProgressoGerando() {
+  const [etapaIdx, setEtapaIdx] = useState(0);
+  const [progresso, setProgresso] = useState(0);
+  const timerRef = useRef<any>(null);
+
+  useEffect(() => {
+    let idx = 0;
+    let prog = 0;
+
+    const avancar = () => {
+      if (idx < ETAPAS.length - 1) {
+        idx++;
+        setEtapaIdx(idx);
+      }
+      prog = Math.min(95, Math.round((idx / (ETAPAS.length - 1)) * 95));
+      setProgresso(prog);
+
+      if (idx < ETAPAS.length - 1) {
+        timerRef.current = setTimeout(avancar, ETAPAS[idx].duracao);
+      }
+    };
+
+    // Incremento suave de progresso
+    const incremento = setInterval(() => {
+      setProgresso(prev => {
+        const max = Math.round((etapaIdx / (ETAPAS.length - 1)) * 95);
+        return prev < max ? prev + 1 : prev;
+      });
+    }, 300);
+
+    timerRef.current = setTimeout(avancar, ETAPAS[0].duracao);
+
+    return () => {
+      clearTimeout(timerRef.current);
+      clearInterval(incremento);
+    };
+  }, []);
+
+  const etapa = ETAPAS[etapaIdx];
+
+  return (
+    <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-6 flex flex-col gap-5">
+      {/* Ícone animado */}
+      <div className="flex justify-center">
+        <div className="w-20 h-20 rounded-full bg-emerald-50 border-4 border-emerald-200 flex items-center justify-center relative">
+          <span className="text-3xl animate-bounce">{etapa.icone}</span>
+          <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 80 80">
+            <circle cx="40" cy="40" r="36" fill="none" stroke="#d1fae5" strokeWidth="4" />
+            <circle
+              cx="40" cy="40" r="36" fill="none"
+              stroke="#10b981" strokeWidth="4"
+              strokeDasharray={`${2 * Math.PI * 36}`}
+              strokeDashoffset={`${2 * Math.PI * 36 * (1 - progresso / 100)}`}
+              strokeLinecap="round"
+              style={{ transition: 'stroke-dashoffset 0.5s ease' }}
+            />
+          </svg>
+        </div>
+      </div>
+
+      {/* Texto da etapa */}
+      <div className="text-center">
+        <p className="font-black text-gray-800 text-base">{etapa.texto}</p>
+        <p className="text-xs text-gray-400 mt-1">A IA está elaborando sua sequência didática completa</p>
+      </div>
+
+      {/* Barra de progresso */}
+      <div className="flex flex-col gap-1.5">
+        <div className="flex justify-between text-xs font-semibold text-gray-400">
+          <span>Processando...</span>
+          <span>{progresso}%</span>
+        </div>
+        <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all duration-500"
+            style={{ width: `${progresso}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Etapas como checklist */}
+      <div className="flex flex-col gap-1.5">
+        {ETAPAS.slice(0, -1).map((e, i) => (
+          <div key={i} className={`flex items-center gap-2 text-xs transition-all ${
+            i < etapaIdx ? 'text-emerald-600' : i === etapaIdx ? 'text-gray-700 font-semibold' : 'text-gray-300'
+          }`}>
+            <span className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 text-[10px] ${
+              i < etapaIdx ? 'bg-emerald-100 text-emerald-600' :
+              i === etapaIdx ? 'bg-emerald-500 text-white animate-pulse' :
+              'bg-gray-100 text-gray-300'
+            }`}>
+              {i < etapaIdx ? '✓' : i + 1}
+            </span>
+            <span>{e.texto}</span>
+          </div>
+        ))}
+      </div>
+
+      <p className="text-center text-xs text-gray-300 font-medium">
+        Isso pode levar 20 a 40 segundos — aguarde 😊
+      </p>
+    </div>
+  );
+}
 
 function gerarPrompt(v: Record<string, string>) {
   return `Você é um professor especialista em Educação Física do Ensino Fundamental, com domínio da BNCC e do modelo de Sequência Didática da Secretaria de Educação do Acre.
@@ -80,79 +196,25 @@ BRASIL. Ministério da Educação. Base Nacional Comum Curricular. Brasília: ME
 Seja detalhado, prático e use linguagem direta de professor para professor.`;
 }
 
-// Cores do modelo oficial
 const AZUL_ESCURO = '1F3864';
 const AZUL_MEDIO = '2E5FA3';
 const CINZA_CLARO = 'D9E2F3';
 const BRANCO = 'FFFFFF';
 
-function cellComCor(texto: string, cor: string, fonteCor: string = BRANCO, negrito = true, tamanho = 22): TableCell {
-  return new TableCell({
-    shading: { type: ShadingType.SOLID, color: cor },
-    verticalAlign: VerticalAlign.CENTER,
-    children: [new Paragraph({
-      alignment: AlignmentType.CENTER,
-      children: [new TextRun({ text: texto, bold: negrito, color: fonteCor, size: tamanho, font: 'Arial' })],
-      spacing: { before: 80, after: 80 },
-    })],
-  });
-}
-
-function cellTexto(texto: string, negrito = false, cor = '000000'): TableCell {
-  return new TableCell({
-    children: [new Paragraph({
-      children: [new TextRun({ text: texto, bold: negrito, color: cor, size: 20, font: 'Arial' })],
-      spacing: { before: 60, after: 60 },
-    })],
-  });
-}
-
-function secaoTitulo(texto: string): Paragraph {
-  return new Paragraph({
-    children: [new TextRun({ text: texto, bold: true, color: BRANCO, size: 22, font: 'Arial' })],
-    alignment: AlignmentType.CENTER,
-    shading: { type: ShadingType.SOLID, color: AZUL_ESCURO, fill: AZUL_ESCURO },
-    spacing: { before: 200, after: 0 },
-    border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: BRANCO } },
-  });
-}
-
-function paragrafoNormal(texto: string, negrito = false): Paragraph {
-  return new Paragraph({
-    children: [new TextRun({ text: texto, bold: negrito, size: 20, font: 'Arial' })],
-    spacing: { before: 60, after: 60 },
-  });
-}
-
-function parsearTexto(resultado: string): {
-  objetivos: string;
-  habilidades: string[];
-  objetos: string[];
-  situacoes: { titulo: string; tempo: string; antes: string; desenvolvimento: string; apos: string }[];
-  valores: string[];
-  avaliacao: string[];
-  recursos: string[];
-  referencias: string[];
-} {
-  const linhas = resultado.split('\n');
-
+function parsearTexto(resultado: string) {
   const entre = (inicio: string, fim: string): string => {
     const s = resultado.indexOf(inicio);
     const e = fim ? resultado.indexOf(fim) : resultado.length;
     if (s < 0) return '';
     return resultado.slice(s + inicio.length, e > s ? e : resultado.length).trim();
   };
-
   const listar = (secao: string, proxima: string): string[] => {
     const bloco = entre(secao, proxima);
     return bloco.split('\n').map(l => l.replace(/^[•\-*]\s*/, '').trim()).filter(Boolean);
   };
-
   const objetivos = entre('OBJETIVOS / CAPACIDADES', 'HABILIDADES').replace(/\[.*?\]/gs, '').trim();
   const habilidades = listar('HABILIDADES\n', 'OBJETOS DE CONHECIMENTO');
   const objetos = listar('OBJETOS DE CONHECIMENTO\n', 'DESENVOLVIMENTO');
-
-  // Parsear situações
   const situacoes: any[] = [];
   const matchSits = resultado.matchAll(/Situação de Aprendizagem (\d+)[–\-—]\s*(.+?)\nTempo:\s*(.+?)\n([\s\S]*?)(?=Situação de Aprendizagem \d+|VALORES ATITUDINAIS|$)/g);
   for (const m of matchSits) {
@@ -162,266 +224,135 @@ function parsearTexto(resultado: string): {
     const apos = (corpo.match(/(?:APÓS|APOS) A ATIVIDADE:\n([\s\S]*?)$/) || [])[1]?.trim() || '';
     situacoes.push({ titulo: `Situação de Aprendizagem ${m[1]} – ${m[2].trim()}`, tempo: m[3].trim(), antes, desenvolvimento: dev, apos });
   }
-
   const valores = listar('VALORES ATITUDINAIS\n', 'INSTRUMENTOS DE AVALIAÇÃO');
   const avaliacao = listar('INSTRUMENTOS DE AVALIAÇÃO\n', 'RECURSOS');
   const recursos = listar('RECURSOS\n', 'REFERÊNCIAS');
   const refs = listar('REFERÊNCIAS\n', '---FIM---');
-
   return { objetivos, habilidades, objetos, situacoes, valores, avaliacao, recursos, referencias: refs };
 }
 
 async function exportarWord(resultado: string, valores: Record<string, string>) {
   const d = parsearTexto(resultado);
-
   const bordaTabela = { style: BorderStyle.SINGLE, size: 8, color: AZUL_MEDIO };
   const bordas = { top: bordaTabela, bottom: bordaTabela, left: bordaTabela, right: bordaTabela, insideH: bordaTabela, insideV: bordaTabela };
 
-  const secoes: any[] = [];
+  const mk = (texto: string, opts: any = {}): TextRun =>
+    new TextRun({ text: texto, font: 'Arial', size: opts.size || 20, bold: opts.bold, color: opts.color || '000000', italics: opts.italics });
 
-  // Título principal
-  secoes.push(new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: bordas,
-    rows: [
-      new TableRow({ children: [new TableCell({
-        columnSpan: 4,
-        shading: { type: ShadingType.SOLID, color: AZUL_ESCURO },
-        children: [new Paragraph({
-          alignment: AlignmentType.CENTER,
-          children: [new TextRun({ text: 'SEQUÊNCIA DIDÁTICA', bold: true, color: BRANCO, size: 28, font: 'Arial' })],
-          spacing: { before: 100, after: 100 },
-        })],
-      })] }),
-      new TableRow({ children: [
-        cellComCor('PROFESSOR(A):', AZUL_MEDIO),
-        cellTexto(valores.professor || '', false),
-        cellComCor('COMPONENTE CURRICULAR:', AZUL_MEDIO),
-        cellTexto('Educação Física', false),
-      ]}),
-      new TableRow({ children: [
-        cellComCor('ANO:', AZUL_MEDIO),
-        cellTexto(valores.turma || '', false),
-        cellComCor('AULAS PREVISTAS:', AZUL_MEDIO),
-        cellTexto(valores.aulas || '', false),
-      ]}),
-    ],
-  }));
+  const cell = (children: Paragraph[], cor?: string, cols?: number): TableCell =>
+    new TableCell({
+      ...(cols ? { columnSpan: cols } : {}),
+      ...(cor ? { shading: { type: ShadingType.SOLID, color: cor } } : {}),
+      verticalAlign: VerticalAlign.CENTER,
+      children,
+    });
 
-  // Objetivos
-  secoes.push(new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: bordas,
-    rows: [
-      new TableRow({ children: [new TableCell({
-        columnSpan: 1,
-        shading: { type: ShadingType.SOLID, color: AZUL_ESCURO },
-        children: [new Paragraph({
-          alignment: AlignmentType.CENTER,
-          children: [
-            new TextRun({ text: 'OBJETIVOS / CAPACIDADES', bold: true, color: BRANCO, size: 22, font: 'Arial' }),
-            new TextRun({ text: ' (Competências amplas do componente)', color: BRANCO, size: 18, font: 'Arial' }),
-          ],
-          spacing: { before: 80, after: 80 },
-        })],
-      })] }),
-      new TableRow({ children: [new TableCell({
-        children: [new Paragraph({
-          children: [new TextRun({ text: d.objetivos || '', size: 20, font: 'Arial' })],
-          spacing: { before: 80, after: 80 },
-        })],
-      })] }),
-    ],
-  }));
+  const p = (runs: TextRun[], align = AlignmentType.LEFT, spacing = { before: 60, after: 60 }): Paragraph =>
+    new Paragraph({ children: runs, alignment: align, spacing });
 
-  // Conteúdos — Habilidades x Objetos
-  secoes.push(new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: bordas,
-    rows: [
-      new TableRow({ children: [new TableCell({
-        columnSpan: 2,
-        shading: { type: ShadingType.SOLID, color: AZUL_ESCURO },
-        children: [new Paragraph({
-          alignment: AlignmentType.CENTER,
-          children: [new TextRun({ text: 'CONTEÚDOS', bold: true, color: BRANCO, size: 22, font: 'Arial' })],
-          spacing: { before: 80, after: 80 },
-        })],
-      })] }),
-      new TableRow({ children: [
-        new TableCell({
-          width: { size: 60, type: WidthType.PERCENTAGE },
-          shading: { type: ShadingType.SOLID, color: CINZA_CLARO },
-          children: [new Paragraph({
-            alignment: AlignmentType.CENTER,
-            children: [new TextRun({ text: 'HABILIDADES', bold: true, color: AZUL_ESCURO, size: 20, font: 'Arial' })],
-            spacing: { before: 60, after: 60 },
-          })],
-        }),
-        new TableCell({
-          width: { size: 40, type: WidthType.PERCENTAGE },
-          shading: { type: ShadingType.SOLID, color: CINZA_CLARO },
-          children: [new Paragraph({
-            alignment: AlignmentType.CENTER,
-            children: [new TextRun({ text: 'OBJETOS DE CONHECIMENTO', bold: true, color: AZUL_ESCURO, size: 20, font: 'Arial' })],
-            spacing: { before: 60, after: 60 },
-          })],
-        }),
-      ]}),
-      new TableRow({ children: [
-        new TableCell({
-          children: d.habilidades.length > 0
-            ? d.habilidades.map(h => new Paragraph({ children: [new TextRun({ text: '• ' + h, size: 20, font: 'Arial' })], spacing: { before: 40, after: 40 } }))
-            : [new Paragraph({ children: [new TextRun({ text: '', size: 20 })] })],
-        }),
-        new TableCell({
-          children: d.objetos.length > 0
-            ? d.objetos.map(o => new Paragraph({ children: [new TextRun({ text: '• ' + o, size: 20, font: 'Arial' })], spacing: { before: 40, after: 40 } }))
-            : [new Paragraph({ children: [new TextRun({ text: valores.unidade || '', size: 20 })] })],
-        }),
-      ]}),
-    ],
-  }));
+  const headerCell = (texto: string, cols?: number) => cell([
+    p([mk(texto, { bold: true, color: BRANCO, size: 22 })], AlignmentType.CENTER, { before: 80, after: 80 })
+  ], AZUL_ESCURO, cols);
 
-  // Desenvolvimento
-  secoes.push(new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: bordas,
-    rows: [
-      new TableRow({ children: [new TableCell({
-        shading: { type: ShadingType.SOLID, color: AZUL_ESCURO },
-        children: [
-          new Paragraph({
-            alignment: AlignmentType.CENTER,
-            children: [new TextRun({ text: 'DESENVOLVIMENTO DAS ATIVIDADES', bold: true, color: BRANCO, size: 22, font: 'Arial' })],
-            spacing: { before: 80, after: 0 },
-          }),
-          new Paragraph({
-            alignment: AlignmentType.CENTER,
-            children: [new TextRun({ text: '(Descrição de situações de ensino e aprendizagem para desenvolver as habilidades)', color: BRANCO, size: 18, font: 'Arial' })],
-            spacing: { before: 0, after: 80 },
-          }),
-        ],
-      })] }),
-      ...d.situacoes.length > 0
-        ? d.situacoes.flatMap((s, idx) => [
-          new TableRow({ children: [new TableCell({
-            shading: { type: ShadingType.SOLID, color: CINZA_CLARO },
-            children: [
-              new Paragraph({
-                children: [new TextRun({ text: s.titulo, bold: true, color: AZUL_ESCURO, size: 20, font: 'Arial' })],
-                spacing: { before: 60, after: 20 },
-              }),
-              new Paragraph({
-                children: [new TextRun({ text: 'Tempo: ' + s.tempo, color: AZUL_ESCURO, size: 18, font: 'Arial', italics: true })],
-                spacing: { before: 0, after: 60 },
-              }),
-            ],
-          })] }),
-          new TableRow({ children: [new TableCell({
-            children: [
-              ...(s.antes ? [
-                new Paragraph({ children: [new TextRun({ text: 'ANTES DA ATIVIDADE:', bold: true, size: 20, font: 'Arial', color: AZUL_MEDIO })], spacing: { before: 80, after: 40 } }),
-                ...s.antes.split('\n').filter(Boolean).map(l => new Paragraph({ children: [new TextRun({ text: l, size: 20, font: 'Arial' })], spacing: { before: 20, after: 20 } })),
-              ] : []),
-              ...(s.desenvolvimento ? [
-                new Paragraph({ children: [new TextRun({ text: 'DESENVOLVIMENTO:', bold: true, size: 20, font: 'Arial', color: AZUL_MEDIO })], spacing: { before: 100, after: 40 } }),
-                ...s.desenvolvimento.split('\n').filter(Boolean).map(l => new Paragraph({ children: [new TextRun({ text: l, size: 20, font: 'Arial' })], spacing: { before: 20, after: 20 } })),
-              ] : []),
-              ...(s.apos ? [
-                new Paragraph({ children: [new TextRun({ text: 'APÓS A ATIVIDADE:', bold: true, size: 20, font: 'Arial', color: AZUL_MEDIO })], spacing: { before: 100, after: 40 } }),
-                ...s.apos.split('\n').filter(Boolean).map(l => new Paragraph({ children: [new TextRun({ text: l, size: 20, font: 'Arial' })], spacing: { before: 20, after: 20 } })),
-              ] : []),
-              new Paragraph({ children: [new TextRun({ text: '' })], spacing: { before: 60, after: 0 } }),
-            ],
-          })] }),
-        ])
-        : [new TableRow({ children: [new TableCell({
-          children: resultado.split('\n').filter(l => l.trim()).map(l =>
-            new Paragraph({ children: [new TextRun({ text: l, size: 20, font: 'Arial' })], spacing: { before: 40, after: 40 } })
-          ),
-        })] })],
-    ],
-  }));
+  const labelCell = (texto: string) => cell([
+    p([mk(texto, { bold: true, color: BRANCO, size: 20 })], AlignmentType.CENTER, { before: 60, after: 60 })
+  ], AZUL_MEDIO);
 
-  // Rodapé — Valores, Avaliação, Recursos
-  secoes.push(new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: bordas,
-    rows: [
-      new TableRow({ children: [
-        new TableCell({
-          shading: { type: ShadingType.SOLID, color: AZUL_ESCURO },
-          children: [
-            new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'VALORES ATITUDINAIS', bold: true, color: BRANCO, size: 18, font: 'Arial' })], spacing: { before: 60, after: 0 } }),
-            new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'ENVOLVIDOS NAS ATIVIDADES', bold: true, color: BRANCO, size: 18, font: 'Arial' })], spacing: { before: 0, after: 60 } }),
-          ],
-        }),
-        new TableCell({
-          shading: { type: ShadingType.SOLID, color: AZUL_ESCURO },
-          children: [
-            new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'INSTRUMENTOS DE AVALIAÇÃO', bold: true, color: BRANCO, size: 18, font: 'Arial' })], spacing: { before: 60, after: 60 } }),
-          ],
-        }),
-        new TableCell({
-          shading: { type: ShadingType.SOLID, color: AZUL_ESCURO },
-          children: [
-            new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'RECURSOS', bold: true, color: BRANCO, size: 18, font: 'Arial' })], spacing: { before: 60, after: 60 } }),
-          ],
-        }),
-      ]}),
-      new TableRow({ children: [
-        new TableCell({
-          children: d.valores.length > 0
-            ? d.valores.map(v => new Paragraph({ children: [new TextRun({ text: '• ' + v, size: 18, font: 'Arial' })], spacing: { before: 30, after: 30 } }))
-            : [new Paragraph({ children: [new TextRun({ text: '', size: 18 })] })],
-        }),
-        new TableCell({
-          children: d.avaliacao.length > 0
-            ? d.avaliacao.map(a => new Paragraph({ children: [new TextRun({ text: '• ' + a, size: 18, font: 'Arial' })], spacing: { before: 30, after: 30 } }))
-            : [new Paragraph({ children: [new TextRun({ text: '', size: 18 })] })],
-        }),
-        new TableCell({
-          children: d.recursos.length > 0
-            ? d.recursos.map(r => new Paragraph({ children: [new TextRun({ text: '• ' + r, size: 18, font: 'Arial' })], spacing: { before: 30, after: 30 } }))
-            : [new Paragraph({ children: [new TextRun({ text: '', size: 18 })] })],
-        }),
-      ]}),
-    ],
-  }));
+  const textCell = (texto: string) => cell([
+    p([mk(texto, { size: 20 })], AlignmentType.LEFT, { before: 60, after: 60 })
+  ]);
 
-  // Referências
-  secoes.push(new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: bordas,
-    rows: [
-      new TableRow({ children: [new TableCell({
-        shading: { type: ShadingType.SOLID, color: AZUL_ESCURO },
-        children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'REFERÊNCIAS', bold: true, color: BRANCO, size: 22, font: 'Arial' })], spacing: { before: 80, after: 80 } })],
-      })] }),
-      new TableRow({ children: [new TableCell({
-        children: d.referencias.length > 0
-          ? d.referencias.map(r => new Paragraph({ children: [new TextRun({ text: r, size: 18, font: 'Arial' })], spacing: { before: 40, after: 40 } }))
-          : [new Paragraph({ children: [new TextRun({ text: 'ACRE. Secretaria de Estado de Educação, Cultura e Esporte. Proposta de Plano de Curso do Ensino Fundamental Anos Finais, 2023.', size: 18, font: 'Arial' })] })],
-      })] }),
-    ],
-  }));
+  const listaCell = (itens: string[]) => cell(
+    itens.length > 0
+      ? itens.map(i => p([mk('• ' + i, { size: 20 })], AlignmentType.LEFT, { before: 30, after: 30 }))
+      : [p([mk('')])]
+  );
+
+  const subHeaderCell = (texto: string, cols?: number) => cell([
+    p([mk(texto, { bold: true, color: AZUL_ESCURO, size: 20 })], AlignmentType.CENTER, { before: 60, after: 60 })
+  ], CINZA_CLARO, cols);
+
+  const secoes: any[] = [
+    // Título
+    new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bordas, rows: [
+      new TableRow({ children: [headerCell('SEQUÊNCIA DIDÁTICA', 4)] }),
+      new TableRow({ children: [labelCell('PROFESSOR(A):'), textCell(valores.professor || ''), labelCell('COMPONENTE CURRICULAR:'), textCell('Educação Física')] }),
+      new TableRow({ children: [labelCell('ANO:'), textCell(valores.turma || ''), labelCell('AULAS PREVISTAS:'), textCell(valores.aulas || '')] }),
+    ]}),
+
+    // Objetivos
+    new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bordas, rows: [
+      new TableRow({ children: [cell([
+        p([mk('OBJETIVOS / CAPACIDADES', { bold: true, color: BRANCO, size: 22 }), mk(' (Competências amplas do componente)', { color: BRANCO, size: 18 })], AlignmentType.CENTER, { before: 80, after: 80 })
+      ], AZUL_ESCURO, 1)] }),
+      new TableRow({ children: [cell([p([mk(d.objetivos || '', { size: 20 })], AlignmentType.LEFT, { before: 80, after: 80 })])] }),
+    ]}),
+
+    // Conteúdos
+    new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bordas, rows: [
+      new TableRow({ children: [headerCell('CONTEÚDOS', 2)] }),
+      new TableRow({ children: [subHeaderCell('HABILIDADES'), subHeaderCell('OBJETOS DE CONHECIMENTO')] }),
+      new TableRow({ children: [listaCell(d.habilidades), listaCell(d.objetos.length > 0 ? d.objetos : [valores.unidade || ''])] }),
+    ]}),
+
+    // Desenvolvimento
+    new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bordas, rows: [
+      new TableRow({ children: [cell([
+        p([mk('DESENVOLVIMENTO DAS ATIVIDADES', { bold: true, color: BRANCO, size: 22 })], AlignmentType.CENTER, { before: 80, after: 0 }),
+        p([mk('(Descrição de situações de ensino e aprendizagem para desenvolver as habilidades)', { color: BRANCO, size: 18 })], AlignmentType.CENTER, { before: 0, after: 80 }),
+      ], AZUL_ESCURO, 1)] }),
+      ...(d.situacoes.length > 0 ? d.situacoes.flatMap(s => [
+        new TableRow({ children: [cell([
+          p([mk(s.titulo, { bold: true, color: AZUL_ESCURO, size: 20 })], AlignmentType.LEFT, { before: 60, after: 20 }),
+          p([mk('Tempo: ' + s.tempo, { italics: true, color: AZUL_ESCURO, size: 18 })], AlignmentType.LEFT, { before: 0, after: 60 }),
+        ], CINZA_CLARO)] }),
+        new TableRow({ children: [cell([
+          ...(s.antes ? [p([mk('ANTES DA ATIVIDADE:', { bold: true, color: AZUL_MEDIO, size: 20 })], AlignmentType.LEFT, { before: 80, after: 40 }),
+            ...s.antes.split('\n').filter(Boolean).map((l: string) => p([mk(l, { size: 20 })], AlignmentType.LEFT, { before: 20, after: 20 }))] : []),
+          ...(s.desenvolvimento ? [p([mk('DESENVOLVIMENTO:', { bold: true, color: AZUL_MEDIO, size: 20 })], AlignmentType.LEFT, { before: 100, after: 40 }),
+            ...s.desenvolvimento.split('\n').filter(Boolean).map((l: string) => p([mk(l, { size: 20 })], AlignmentType.LEFT, { before: 20, after: 20 }))] : []),
+          ...(s.apos ? [p([mk('APÓS A ATIVIDADE:', { bold: true, color: AZUL_MEDIO, size: 20 })], AlignmentType.LEFT, { before: 100, after: 40 }),
+            ...s.apos.split('\n').filter(Boolean).map((l: string) => p([mk(l, { size: 20 })], AlignmentType.LEFT, { before: 20, after: 20 }))] : []),
+          p([mk('')], AlignmentType.LEFT, { before: 60, after: 0 }),
+        ])] }),
+      ]) : [new TableRow({ children: [cell([p([mk(resultado, { size: 20 })])])] })]),
+    ]}),
+
+    // Rodapé 3 colunas
+    new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bordas, rows: [
+      new TableRow({ children: [
+        cell([p([mk('VALORES ATITUDINAIS', { bold: true, color: BRANCO, size: 18 })], AlignmentType.CENTER, { before: 60, after: 0 }),
+              p([mk('ENVOLVIDOS NAS ATIVIDADES', { bold: true, color: BRANCO, size: 18 })], AlignmentType.CENTER, { before: 0, after: 60 })], AZUL_ESCURO),
+        cell([p([mk('INSTRUMENTOS DE AVALIAÇÃO', { bold: true, color: BRANCO, size: 18 })], AlignmentType.CENTER, { before: 60, after: 60 })], AZUL_ESCURO),
+        cell([p([mk('RECURSOS', { bold: true, color: BRANCO, size: 18 })], AlignmentType.CENTER, { before: 60, after: 60 })], AZUL_ESCURO),
+      ]}),
+      new TableRow({ children: [listaCell(d.valores), listaCell(d.avaliacao), listaCell(d.recursos)] }),
+    ]}),
+
+    // Referências
+    new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bordas, rows: [
+      new TableRow({ children: [headerCell('REFERÊNCIAS', 1)] }),
+      new TableRow({ children: [cell(
+        d.referencias.length > 0
+          ? d.referencias.map(r => p([mk(r, { size: 18 })], AlignmentType.LEFT, { before: 40, after: 40 }))
+          : [p([mk('ACRE. Secretaria de Estado de Educação, Cultura e Esporte. Proposta de Plano de Curso do Ensino Fundamental Anos Finais, 2023.', { size: 18 })])]
+      )] }),
+    ]}),
+  ];
 
   const doc = new Document({
     sections: [{
-      properties: {
-        page: {
-          margin: { top: 720, bottom: 720, left: 900, right: 900 },
-        },
-      },
-      children: [
-        ...secoes.flatMap((s, i) => i < secoes.length - 1 ? [s, new Paragraph({ children: [], spacing: { before: 120, after: 0 } })] : [s]),
-      ],
+      properties: { page: { margin: { top: 720, bottom: 720, left: 900, right: 900 } } },
+      children: secoes.flatMap((s, i) =>
+        i < secoes.length - 1
+          ? [s, new Paragraph({ children: [], spacing: { before: 120, after: 0 } })]
+          : [s]
+      ),
     }],
   });
 
   const blob = await Packer.toBlob(doc);
-  const turma = valores.turma?.replace(/[^a-z0-9]/gi, '_') || 'turma';
+  const turma = (valores.turma || 'turma').replace(/[^a-z0-9]/gi, '_');
   saveAs(blob, `sequencia_didatica_ef_${turma}.docx`);
 }
 
@@ -453,8 +384,11 @@ export function IASequencia() {
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error?.message || 'Erro na API');
       setResultado(data.content?.[0]?.text || '');
-    } catch (e: any) { setErro('Erro ao gerar: ' + e.message); }
-    finally { setGerando(false); }
+    } catch (e: any) {
+      setErro('Erro ao gerar: ' + e.message);
+    } finally {
+      setGerando(false);
+    }
   };
 
   const copiar = () => {
@@ -478,10 +412,11 @@ export function IASequencia() {
           <ArrowLeft className="w-4 h-4" /> Ferramentas IA
         </button>
         <h1 className="text-lg font-black relative z-10 leading-tight">Gerador de Sequências Didáticas</h1>
-        <p className="text-sm text-white/70 mt-1 relative z-10">Modelo oficial — estrutura completa com exportação Word</p>
+        <p className="text-sm text-white/70 mt-1 relative z-10">Modelo oficial · Exportação Word</p>
       </div>
 
       <div className="p-4 flex flex-col gap-4">
+        {/* Formulário */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col gap-3">
           {CAMPOS.map(campo => (
             <div key={campo.id}>
@@ -508,18 +443,24 @@ export function IASequencia() {
 
           <button onClick={gerar} disabled={gerando}
             className="w-full py-4 rounded-2xl font-black text-white flex items-center justify-center gap-2 disabled:opacity-60 transition-all active:scale-95 shadow-lg bg-gradient-to-r from-emerald-600 to-emerald-500">
-            {gerando ? <><Loader2 className="w-5 h-5 animate-spin" /> Gerando com IA...</> : <><Sparkles className="w-5 h-5" /> Gerar Sequência Didática</>}
+            {gerando
+              ? <><Loader2 className="w-5 h-5 animate-spin" /> Gerando...</>
+              : <><Sparkles className="w-5 h-5" /> Gerar Sequência Didática</>}
           </button>
         </div>
 
-        {resultado && (
+        {/* Animação de progresso */}
+        {gerando && <ProgressoGerando />}
+
+        {/* Resultado */}
+        {resultado && !gerando && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-emerald-50">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-emerald-50 flex-wrap gap-2">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-emerald-600" />
-                <span className="text-sm font-black text-emerald-700">Sequência gerada!</span>
+                <CheckCircle className="w-4 h-4 text-emerald-600" />
+                <span className="text-sm font-black text-emerald-700">Sequência gerada com sucesso!</span>
               </div>
-              <div className="flex gap-2 flex-wrap justify-end">
+              <div className="flex gap-2 flex-wrap">
                 <button onClick={gerar}
                   className="flex items-center gap-1 text-xs text-gray-500 hover:text-emerald-600 font-semibold transition-colors">
                   <RefreshCw className="w-3.5 h-3.5" /> Gerar novo
@@ -530,7 +471,9 @@ export function IASequencia() {
                 </button>
                 <button onClick={baixarWord} disabled={exportando}
                   className="flex items-center gap-1 text-xs font-black px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60 transition-all">
-                  {exportando ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Gerando...</> : <><FileDown className="w-3.5 h-3.5" /> Baixar Word</>}
+                  {exportando
+                    ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Gerando...</>
+                    : <><FileDown className="w-3.5 h-3.5" /> Baixar Word</>}
                 </button>
               </div>
             </div>
