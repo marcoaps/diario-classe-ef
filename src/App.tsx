@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { StoreProvider } from './store';
 import { AppLayout } from './ui/AppLayout';
@@ -16,6 +16,16 @@ import { ProvasOnline } from './ui/pages/ProvasOnline';
 import { ResponderProva } from './ui/pages/ResponderProva';
 import { TestePublico } from './ui/pages/TestePublico';
 import { CentralAluno } from './ui/pages/CentralAluno';
+import { IAHub } from './ui/pages/ia/IAHub';
+import { IAPlanoAula } from './ui/pages/ia/IAPlanoAula';
+import { IASequencia } from './ui/pages/ia/IASequencia';
+import { IAPlanejamentoAnual } from './ui/pages/ia/IAPlanejamentoAnual';
+import { IARoteiro } from './ui/pages/ia/IARoteiro';
+import { IAPlanoMensal } from './ui/pages/ia/IAPlanoMensal';
+import { IAProvasIA } from './ui/pages/ia/IAProvasIA';
+import { IAAtividadesLudicas } from './ui/pages/ia/IAAtividadesLudicas';
+import { IAAtividadesAdaptadas } from './ui/pages/ia/IAAtividadesAdaptadas';
+import { IAIdeiasAvaliacoes } from './ui/pages/ia/IAIdeiasAvaliacoes';
 import { supabase } from './data/supabase';
 
 export function useAuth() {
@@ -59,12 +69,14 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Rotas públicas */}
         <Route path="/teste" element={<TestePublico />} />
         <Route path="/aluno" element={<PortalAluno />} />
         <Route path="/aluno/:token" element={<PortalAluno />} />
         <Route path="/responder" element={<ResponderProva />} />
         <Route path="/login" element={<Login />} />
 
+        {/* Rotas protegidas */}
         <Route element={<LayoutProtegido />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/attendance" element={<Attendance />} />
@@ -76,6 +88,18 @@ export default function App() {
           <Route path="/provas" element={<ProvasOnline />} />
           <Route path="/qrcodes" element={<GerarQRCodes />} />
           <Route path="/alunos" element={<CentralAluno />} />
+
+          {/* Rotas IA */}
+          <Route path="/ia" element={<IAHub />} />
+          <Route path="/ia/plano-aula" element={<IAPlanoAula />} />
+          <Route path="/ia/sequencia" element={<IASequencia />} />
+          <Route path="/ia/planejamento-anual" element={<IAPlanejamentoAnual />} />
+          <Route path="/ia/roteiro" element={<IARoteiro />} />
+          <Route path="/ia/plano-mensal" element={<IAPlanoMensal />} />
+          <Route path="/ia/provas" element={<IAProvasIA />} />
+          <Route path="/ia/atividades-ludicas" element={<IAAtividadesLudicas />} />
+          <Route path="/ia/atividades-adaptadas" element={<IAAtividadesAdaptadas />} />
+          <Route path="/ia/ideias-avaliacoes" element={<IAIdeiasAvaliacoes />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />
