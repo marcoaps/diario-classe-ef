@@ -2,7 +2,8 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   BookOpen, Calendar, ClipboardList, Route,
-  CalendarDays, FileQuestion, Gamepad2, Accessibility, Lightbulb, ChevronRight
+  CalendarDays, FileQuestion, Gamepad2, Accessibility,
+  Lightbulb, ChevronRight, ClipboardCheck,
 } from 'lucide-react';
 
 const FERRAMENTAS = [
@@ -48,11 +49,20 @@ const FERRAMENTAS = [
     tag: 'PLANEJAMENTO',
   },
   {
+    rota: '/ia/prova-oficial',
+    titulo: 'Gerador de Avaliações',
+    descricao: 'Gere provas no modelo oficial IOP com 8 questões objetivas, 2 dissertativas e gabarito. Exporta em Word.',
+    icon: ClipboardCheck,
+    cor: 'from-red-600 to-red-500',
+    tag: 'AVALIAÇÕES',
+    novo: true,
+  },
+  {
     rota: '/ia/provas',
-    titulo: 'Gerador de Provas e Avaliações',
+    titulo: 'Gerador de Provas com IA',
     descricao: 'Crie provas e avaliações personalizadas com questões objetivas e dissertativas.',
     icon: FileQuestion,
-    cor: 'from-red-600 to-red-500',
+    cor: 'from-rose-500 to-pink-500',
     tag: 'AVALIAÇÕES',
   },
   {
@@ -86,7 +96,6 @@ export function IAHub() {
   const navigate = useNavigate();
   return (
     <div className="p-4 flex flex-col gap-4 pb-36">
-      {/* Header */}
       <div className="rounded-[2rem] p-5 text-white shadow-lg relative overflow-hidden"
         style={{ background: 'linear-gradient(135deg, #4c1d95, #7c3aed)' }}>
         <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10" />
@@ -98,25 +107,19 @@ export function IAHub() {
         </div>
       </div>
 
-      {/* Cards */}
       <div className="flex flex-col gap-3">
         {FERRAMENTAS.map((f) => {
           const Icon = f.icon;
           return (
-            <button
-              key={f.rota}
-              onClick={() => navigate(f.rota)}
-              className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex items-center gap-4 text-left hover:shadow-md active:scale-[0.98] transition-all"
-            >
+            <button key={f.rota} onClick={() => navigate(f.rota)}
+              className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex items-center gap-4 text-left hover:shadow-md active:scale-[0.98] transition-all">
               <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${f.cor} flex items-center justify-center shrink-0 shadow-md`}>
                 <Icon className="w-6 h-6 text-white" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5">
                   <span className="text-xs font-black text-gray-400 uppercase tracking-widest">{f.tag}</span>
-                  {f.novo && (
-                    <span className="text-[10px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded-full">NOVO</span>
-                  )}
+                  {f.novo && <span className="text-[10px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded-full">NOVO</span>}
                 </div>
                 <p className="font-black text-gray-800 text-sm leading-tight">{f.titulo}</p>
                 <p className="text-xs text-gray-400 mt-0.5 leading-snug line-clamp-2">{f.descricao}</p>
@@ -126,7 +129,6 @@ export function IAHub() {
           );
         })}
       </div>
-
       <p className="text-center text-xs text-gray-300 pb-2">Powered by Claude AI · Instituto Odilon Pratagi</p>
     </div>
   );

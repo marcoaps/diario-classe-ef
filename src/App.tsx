@@ -26,17 +26,14 @@ import { IAProvasIA } from './ui/pages/ia/IAProvasIA';
 import { IAAtividadesLudicas } from './ui/pages/ia/IAAtividadesLudicas';
 import { IAAtividadesAdaptadas } from './ui/pages/ia/IAAtividadesAdaptadas';
 import { IAIdeiasAvaliacoes } from './ui/pages/ia/IAIdeiasAvaliacoes';
+import { IAProvaOficial } from './ui/pages/ia/IAProvaOficial';
 import { supabase } from './data/supabase';
 
 export function useAuth() {
   const [session, setSession] = useState<boolean | null>(null);
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(!!data.session);
-    });
-    const { data: listener } = supabase.auth.onAuthStateChange((_e, s) => {
-      setSession(!!s);
-    });
+    supabase.auth.getSession().then(({ data }) => setSession(!!data.session));
+    const { data: listener } = supabase.auth.onAuthStateChange((_e, s) => setSession(!!s));
     return () => listener.subscription.unsubscribe();
   }, []);
   return session;
@@ -44,13 +41,11 @@ export function useAuth() {
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const session = useAuth();
-  if (session === null) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0a1628]">
-        <div className="w-8 h-8 border-4 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
-      </div>
-    );
-  }
+  if (session === null) return (
+    <div className="min-h-screen flex items-center justify-center bg-[#0a1628]">
+      <div className="w-8 h-8 border-4 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
+    </div>
+  );
   if (!session) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
@@ -69,14 +64,12 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Rotas públicas */}
         <Route path="/teste" element={<TestePublico />} />
         <Route path="/aluno" element={<PortalAluno />} />
         <Route path="/aluno/:token" element={<PortalAluno />} />
         <Route path="/responder" element={<ResponderProva />} />
         <Route path="/login" element={<Login />} />
 
-        {/* Rotas protegidas */}
         <Route element={<LayoutProtegido />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/attendance" element={<Attendance />} />
@@ -97,6 +90,7 @@ export default function App() {
           <Route path="/ia/roteiro" element={<IARoteiro />} />
           <Route path="/ia/plano-mensal" element={<IAPlanoMensal />} />
           <Route path="/ia/provas" element={<IAProvasIA />} />
+          <Route path="/ia/prova-oficial" element={<IAProvaOficial />} />
           <Route path="/ia/atividades-ludicas" element={<IAAtividadesLudicas />} />
           <Route path="/ia/atividades-adaptadas" element={<IAAtividadesAdaptadas />} />
           <Route path="/ia/ideias-avaliacoes" element={<IAIdeiasAvaliacoes />} />
