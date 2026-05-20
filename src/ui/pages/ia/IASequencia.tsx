@@ -10,7 +10,7 @@ import { saveAs } from 'file-saver';
 
 const CAMPOS = [
   { id: 'professor', label: 'Nome do Professor', tipo: 'text' as const, placeholder: 'Ex: Marco Antonio Pedro da Silva' },
-  { id: 'turma', label: 'Ano / Turma', tipo: 'select' as const, opcoes: ['6º Ano', '7º Ano', '8º Ano', '9º Ano'] },
+  { id: 'turma', label: 'Ano / Turma', tipo: 'select' as const, opcoes: ['6º e 7º Ano', '8º e 9º Ano'] },
   { id: 'aulas', label: 'Aulas Previstas', tipo: 'select' as const, opcoes: ['2h/aulas', '4h/aulas', '6h/aulas', '8h/aulas'] },
   { id: 'unidade', label: 'Unidade Temática (BNCC)', tipo: 'select' as const, opcoes: ['Brincadeiras e Jogos', 'Esportes', 'Ginásticas', 'Danças', 'Lutas', 'Práticas Corporais de Aventura'] },
   { id: 'tema', label: 'Tema / Objeto de Conhecimento', tipo: 'text' as const, placeholder: 'Ex: Futsal — regras, fundamentos e cooperação' },
@@ -332,74 +332,98 @@ async function exportarWord(textoOriginal: string, valores: Record<string, strin
   const bd = mkBd();
   const esp = new Paragraph({ children: [], spacing: { before: 120, after: 0 } });
 
-  const tTitulo = new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bd, rows: [
-    new TableRow({ children: [hCell('SEQUÊNCIA DIDÁTICA', 4)] }),
-    new TableRow({ children: [lCell('PROFESSOR(A):'), tCell(valores.professor || ''), lCell('COMPONENTE CURRICULAR:'), tCell('Educação Física')] }),
-    new TableRow({ children: [lCell('ANO:'), tCell(valores.turma || ''), lCell('AULAS PREVISTAS:'), tCell(valores.aulas || '')] }),
-  ]});
+  const tTitulo = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE }, borders: bd, rows: [
+      new TableRow({ children: [hCell('SEQUÊNCIA DIDÁTICA', 4)] }),
+      new TableRow({ children: [lCell('PROFESSOR(A):'), tCell(valores.professor || ''), lCell('COMPONENTE CURRICULAR:'), tCell('Educação Física')] }),
+      new TableRow({ children: [lCell('ANO:'), tCell(valores.turma || ''), lCell('AULAS PREVISTAS:'), tCell(valores.aulas || '')] }),
+    ]
+  });
 
-  const tObj = new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bd, rows: [
-    new TableRow({ children: [mkCell([
-      mkPar([mkRun('OBJETIVOS / CAPACIDADES', { bold: true, cor: BR, sz: 22 }), mkRun(' (Competências amplas do componente)', { cor: BR, sz: 18 })], AlignmentType.CENTER, 80, 80)
-    ], AZ, 1)] }),
-    new TableRow({ children: [mkCell(
-      d.objetivos.length > 0
-        ? d.objetivos.map(o => mkPar([mkRun('• ' + o, { sz: 20 })], AlignmentType.LEFT, 40, 40))
-        : [mkPar([mkRun('')])]
-    )] }),
-  ]});
+  const tObj = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE }, borders: bd, rows: [
+      new TableRow({
+        children: [mkCell([
+          mkPar([mkRun('OBJETIVOS / CAPACIDADES', { bold: true, cor: BR, sz: 22 }), mkRun(' (Competências amplas do componente)', { cor: BR, sz: 18 })], AlignmentType.CENTER, 80, 80)
+        ], AZ, 1)]
+      }),
+      new TableRow({
+        children: [mkCell(
+          d.objetivos.length > 0
+            ? d.objetivos.map(o => mkPar([mkRun('• ' + o, { sz: 20 })], AlignmentType.LEFT, 40, 40))
+            : [mkPar([mkRun('')])]
+        )]
+      }),
+    ]
+  });
 
-  const tCont = new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bd, rows: [
-    new TableRow({ children: [hCell('CONTEÚDOS', 2)] }),
-    new TableRow({ children: [sCell('HABILIDADES'), sCell('OBJETOS DE CONHECIMENTO')] }),
-    new TableRow({ children: [listaCell(d.habilidades), listaCell(d.objetos.length > 0 ? d.objetos : [valores.unidade || ''])] }),
-  ]});
+  const tCont = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE }, borders: bd, rows: [
+      new TableRow({ children: [hCell('CONTEÚDOS', 2)] }),
+      new TableRow({ children: [sCell('HABILIDADES'), sCell('OBJETOS DE CONHECIMENTO')] }),
+      new TableRow({ children: [listaCell(d.habilidades), listaCell(d.objetos.length > 0 ? d.objetos : [valores.unidade || ''])] }),
+    ]
+  });
 
   // Desenvolvimento
   const devRows: TableRow[] = [
-    new TableRow({ children: [mkCell([
-      mkPar([mkRun('DESENVOLVIMENTO DAS ATIVIDADES', { bold: true, cor: BR, sz: 22 })], AlignmentType.CENTER, 80, 0),
-      mkPar([mkRun('(Descrição de situações de ensino e aprendizagem para desenvolver as habilidades)', { cor: BR, sz: 18 })], AlignmentType.CENTER, 0, 80),
-    ], AZ, 1)] }),
+    new TableRow({
+      children: [mkCell([
+        mkPar([mkRun('DESENVOLVIMENTO DAS ATIVIDADES', { bold: true, cor: BR, sz: 22 })], AlignmentType.CENTER, 80, 0),
+        mkPar([mkRun('(Descrição de situações de ensino e aprendizagem para desenvolver as habilidades)', { cor: BR, sz: 18 })], AlignmentType.CENTER, 0, 80),
+      ], AZ, 1)]
+    }),
   ];
 
   if (d.situacoes.length > 0) {
     for (const s of d.situacoes) {
-      devRows.push(new TableRow({ children: [mkCell([
-        mkPar([mkRun(s.titulo, { bold: true, cor: AZ, sz: 20 })], AlignmentType.LEFT, 60, 20),
-        mkPar([mkRun('Tempo: ' + s.tempo, { it: true, cor: AZM, sz: 18 })], AlignmentType.LEFT, 0, 60),
-      ], CZ)] }));
+      devRows.push(new TableRow({
+        children: [mkCell([
+          mkPar([mkRun(s.titulo, { bold: true, cor: AZ, sz: 20 })], AlignmentType.LEFT, 60, 20),
+          mkPar([mkRun('Tempo: ' + s.tempo, { it: true, cor: AZM, sz: 18 })], AlignmentType.LEFT, 0, 60),
+        ], CZ)]
+      }));
       devRows.push(new TableRow({ children: [sitCell(s)] }));
     }
   } else {
     // Fallback: exibe o bloco de desenvolvimento limpo
     const fb = extrairBloco(d.texto, 'DESENVOLVIMENTO DAS ATIVIDADES', 'VALORES ATITUDINAIS');
-    devRows.push(new TableRow({ children: [mkCell(
-      fb.split('\n').filter(l => l.trim()).map(l => mkPar([mkRun(l.trim(), { sz: 20 })], AlignmentType.LEFT, 20, 20))
-    )] }));
+    devRows.push(new TableRow({
+      children: [mkCell(
+        fb.split('\n').filter(l => l.trim()).map(l => mkPar([mkRun(l.trim(), { sz: 20 })], AlignmentType.LEFT, 20, 20))
+      )]
+    }));
   }
 
   const tDev = new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bd, rows: devRows });
 
-  const tRodape = new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bd, rows: [
-    new TableRow({ children: [
-      mkCell([mkPar([mkRun('VALORES ATITUDINAIS', { bold: true, cor: BR, sz: 18 })], AlignmentType.CENTER, 40, 0),
-              mkPar([mkRun('ENVOLVIDOS NAS ATIVIDADES', { bold: true, cor: BR, sz: 18 })], AlignmentType.CENTER, 0, 40)], AZ),
-      mkCell([mkPar([mkRun('INSTRUMENTOS DE AVALIAÇÃO', { bold: true, cor: BR, sz: 18 })], AlignmentType.CENTER, 60, 60)], AZ),
-      mkCell([mkPar([mkRun('RECURSOS', { bold: true, cor: BR, sz: 18 })], AlignmentType.CENTER, 60, 60)], AZ),
-    ]}),
-    new TableRow({ children: [listaCell(d.valores), listaCell(d.avaliacao), listaCell(d.recursos)] }),
-  ]});
+  const tRodape = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE }, borders: bd, rows: [
+      new TableRow({
+        children: [
+          mkCell([mkPar([mkRun('VALORES ATITUDINAIS', { bold: true, cor: BR, sz: 18 })], AlignmentType.CENTER, 40, 0),
+          mkPar([mkRun('ENVOLVIDOS NAS ATIVIDADES', { bold: true, cor: BR, sz: 18 })], AlignmentType.CENTER, 0, 40)], AZ),
+          mkCell([mkPar([mkRun('INSTRUMENTOS DE AVALIAÇÃO', { bold: true, cor: BR, sz: 18 })], AlignmentType.CENTER, 60, 60)], AZ),
+          mkCell([mkPar([mkRun('RECURSOS', { bold: true, cor: BR, sz: 18 })], AlignmentType.CENTER, 60, 60)], AZ),
+        ]
+      }),
+      new TableRow({ children: [listaCell(d.valores), listaCell(d.avaliacao), listaCell(d.recursos)] }),
+    ]
+  });
 
-  const tRefs = new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bd, rows: [
-    new TableRow({ children: [hCell('REFERÊNCIAS', 1)] }),
-    new TableRow({ children: [mkCell(
-      (d.referencias.length > 0 ? d.referencias : [
-        'ACRE. Secretaria de Estado de Educação, Cultura e Esporte. Proposta de Plano de Curso do Ensino Fundamental Anos Finais, 2023.',
-        'BRASIL. Ministério da Educação. Base Nacional Comum Curricular. Brasília: MEC, 2018.',
-      ]).map(r => mkPar([mkRun(r, { sz: 18 })], AlignmentType.LEFT, 40, 40))
-    )] }),
-  ]});
+  const tRefs = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE }, borders: bd, rows: [
+      new TableRow({ children: [hCell('REFERÊNCIAS', 1)] }),
+      new TableRow({
+        children: [mkCell(
+          (d.referencias.length > 0 ? d.referencias : [
+            'ACRE. Secretaria de Estado de Educação, Cultura e Esporte. Proposta de Plano de Curso do Ensino Fundamental Anos Finais, 2023.',
+            'BRASIL. Ministério da Educação. Base Nacional Comum Curricular. Brasília: MEC, 2018.',
+          ]).map(r => mkPar([mkRun(r, { sz: 18 })], AlignmentType.LEFT, 40, 40))
+        )]
+      }),
+    ]
+  });
 
   const doc = new Document({
     sections: [{
