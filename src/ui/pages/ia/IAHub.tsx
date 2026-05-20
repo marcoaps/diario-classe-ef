@@ -75,8 +75,8 @@ const FERRAMENTAS = [
   },
   {
     rota: '/ia/atividades-adaptadas',
-    titulo: 'Gerador de Atividades Adaptadas',
-    descricao: 'Crie atividades adaptadas para alunos com necessidades educacionais especiais.',
+    titulo: 'Gerador de Atividades de Fixação',
+    descricao: 'Gere atividades escritas com 8 questões, 2 alternativas e espaço para imagens. Exporta em Word.',
     icon: Accessibility,
     cor: 'from-teal-600 to-teal-500',
     tag: 'INCLUSÃO',
