@@ -198,7 +198,6 @@ function limpar(t: string): string {
     .replace(/\r\n/g, '\n').replace(/\r/g, '\n') // normalizar line endings Windows
     .replace(/\*\*/g, '').replace(/\*/g, '')      // remover negrito/itálico markdown
     .replace(/^#{1,6}\s*/gm, '')                  // remover títulos markdown
-    .replace(/_+/g, '')                           // remover underscore
     .replace(/\n{3,}/g, '\n\n')                   // max 2 linhas em branco seguidas
     .trim();
 }
