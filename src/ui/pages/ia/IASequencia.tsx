@@ -40,8 +40,7 @@ function ProgressoGerando() {
       if (idx < ETAPAS.length - 1) {
         idx++;
         setEtapaIdx(idx);
-        const prog = Math.min(95, Math.round((idx / (ETAPAS.length - 1)) * 95));
-        setProgresso(prog);
+        setProgresso(Math.min(95, Math.round((idx / (ETAPAS.length - 1)) * 95)));
         timerRef.current = setTimeout(avancar, ETAPAS[idx].duracao);
       }
     };
@@ -56,7 +55,6 @@ function ProgressoGerando() {
   }, []);
 
   const etapa = ETAPAS[etapaIdx];
-
   return (
     <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-6 flex flex-col gap-5">
       <div className="flex justify-center">
@@ -67,8 +65,7 @@ function ProgressoGerando() {
             <circle cx="40" cy="40" r="36" fill="none" stroke="#10b981" strokeWidth="4"
               strokeDasharray={`${2 * Math.PI * 36}`}
               strokeDashoffset={`${2 * Math.PI * 36 * (1 - progresso / 100)}`}
-              strokeLinecap="round"
-              style={{ transition: 'stroke-dashoffset 0.5s ease' }} />
+              strokeLinecap="round" style={{ transition: 'stroke-dashoffset 0.5s ease' }} />
           </svg>
         </div>
       </div>
@@ -104,321 +101,335 @@ function ProgressoGerando() {
 }
 
 function gerarPrompt(v: Record<string, string>) {
-  return `Você é um professor especialista em Educação Física do Ensino Fundamental.
-
-IMPORTANTE: NÃO use markdown. NÃO use **, ##, *, _ ou qualquer formatação especial. Escreva texto puro.
+  return `Você é professor especialista em Educação Física do Ensino Fundamental.
+NÃO use markdown (sem **, ##, *, _). Escreva texto puro.
 
 Crie uma SEQUÊNCIA DIDÁTICA para:
 Professor(a): ${v.professor}
-Componente Curricular: Educação Física
+Componente: Educação Física
 Ano: ${v.turma}
-Aulas Previstas: ${v.aulas}
-Unidade Temática BNCC: ${v.unidade}
+Aulas: ${v.aulas}
+Unidade BNCC: ${v.unidade}
 Tema: ${v.tema}
-Número de Situações de Aprendizagem: ${v.situacoes}
+Situações de Aprendizagem: ${v.situacoes}
 ${v.contexto ? `Contexto: ${v.contexto}` : ''}
 
-Use EXATAMENTE estas marcações (são usadas para estruturar o documento Word):
+SIGA EXATAMENTE este formato (as palavras em MAIÚSCULO são separadores obrigatórios):
 
-===OBJETIVOS===
-[Escreva os objetivos gerais, um por linha começando com bullet •]
+OBJETIVOS / CAPACIDADES
+• [objetivo 1]
+• [objetivo 2]
+• [objetivo 3]
 
-===HABILIDADES===
-[Liste as habilidades BNCC com códigos EF, uma por linha começando com •]
+HABILIDADES
+• [código EF] - [descrição]
+• [código EF] - [descrição]
+• [código EF] - [descrição]
 
-===OBJETOS===
-[Liste os objetos de conhecimento, um por linha começando com •]
+OBJETOS DE CONHECIMENTO
+• [objeto 1]
+• [objeto 2]
+• [objeto 3]
 
-===SITUACAO_1===
-Titulo: [Nome da situação]
-Tempo: [ex: 50 min ou 2 aulas de 50 min]
+DESENVOLVIMENTO DAS ATIVIDADES
 
-ANTES DA ATIVIDADE:
-[Texto corrido descrevendo preparação e introdução]
-
-DESENVOLVIMENTO:
-[Texto corrido descrevendo as atividades passo a passo]
-
-APOS A ATIVIDADE:
-[Texto corrido descrevendo reflexão e sistematização]
-
-===SITUACAO_2===
-Titulo: [Nome]
-Tempo: [tempo]
+Situação de Aprendizagem 1 – [Nome]
+Tempo: [X min]
 
 ANTES DA ATIVIDADE:
+[texto corrido]
+
+DESENVOLVIMENTO:
+[texto corrido numerado]
+
+APÓS A ATIVIDADE:
+[texto corrido]
+
+Situação de Aprendizagem 2 – [Nome]
+Tempo: [X min]
+
+ANTES DA ATIVIDADE:
 [texto]
 
 DESENVOLVIMENTO:
 [texto]
 
-APOS A ATIVIDADE:
+APÓS A ATIVIDADE:
 [texto]
 
-[Continue para cada situação]
+[repita para todas as situações]
 
-===VALORES===
-[Liste os valores atitudinais, um por linha começando com •]
+VALORES ATITUDINAIS
+• [valor 1]
+• [valor 2]
+• [valor 3]
+• [valor 4]
+• [valor 5]
 
-===AVALIACAO===
-[Liste os instrumentos de avaliação, um por linha começando com •]
+INSTRUMENTOS DE AVALIAÇÃO
+• [instrumento 1]
+• [instrumento 2]
+• [instrumento 3]
+• [instrumento 4]
 
-===RECURSOS===
-[Liste os recursos, um por linha começando com •]
+RECURSOS
+• [recurso 1]
+• [recurso 2]
+• [recurso 3]
+• [recurso 4]
 
-===REFERENCIAS===
-[Liste as referências, uma por linha]
-
-Seja detalhado e prático. Cada situação deve ter atividades concretas e executáveis.`;
+REFERÊNCIAS
+[referência 1]
+[referência 2]
+[referência 3]
+[referência 4]`;
 }
 
 // ── PARSER ROBUSTO ──────────────────────────────────────────────────────────
-function limparMarkdown(texto: string): string {
-  return texto
-    .replace(/\*\*/g, '')
-    .replace(/\*/g, '')
-    .replace(/##/g, '')
-    .replace(/^#+\s*/gm, '')
-    .replace(/_+/g, '')
-    .trim();
+function limpar(t: string): string {
+  return t.replace(/\*\*/g, '').replace(/\*/g, '').replace(/##/g, '').replace(/^#+\s*/gm, '').trim();
 }
 
-function extrairSecao(texto: string, inicio: string, fim: string): string {
-  const s = texto.indexOf(inicio);
-  if (s < 0) return '';
-  const depois = texto.slice(s + inicio.length);
-  const f = fim ? depois.indexOf(fim) : depois.length;
-  return limparMarkdown(f >= 0 ? depois.slice(0, f) : depois).trim();
-}
-
-function extrairLista(texto: string, inicio: string, fim: string): string[] {
-  const bloco = extrairSecao(texto, inicio, fim);
-  return bloco.split('\n')
-    .map(l => limparMarkdown(l).replace(/^[•\-*]\s*/, '').trim())
-    .filter(l => l.length > 0 && l !== '##');
-}
-
-function extrairSubSecao(bloco: string, rotulo: string): string {
-  const padroes = [
-    rotulo + ':',
-    rotulo.toUpperCase() + ':',
-    rotulo.toLowerCase() + ':',
-  ];
-  let idx = -1;
-  for (const p of padroes) {
-    idx = bloco.indexOf(p);
-    if (idx >= 0) break;
-  }
+function extrairBloco(texto: string, cabecalho: string, proximoCabecalho: string): string {
+  const idx = texto.indexOf(cabecalho);
   if (idx < 0) return '';
-  const depois = bloco.slice(idx + rotulo.length + 1);
-  const proximos = ['ANTES DA ATIVIDADE', 'DESENVOLVIMENTO', 'APOS A ATIVIDADE', 'APÓS A ATIVIDADE'];
-  let fim = depois.length;
-  for (const p of proximos) {
-    const i = depois.indexOf(p);
-    if (i > 0 && i < fim) fim = i;
-  }
-  return limparMarkdown(depois.slice(0, fim)).trim();
+  const depois = texto.slice(idx + cabecalho.length);
+  const fim = proximoCabecalho ? depois.indexOf(proximoCabecalho) : depois.length;
+  return limpar(fim >= 0 ? depois.slice(0, fim) : depois).trim();
+}
+
+function extrairLista(texto: string, cabecalho: string, proximo: string): string[] {
+  const bloco = extrairBloco(texto, cabecalho, proximo);
+  return bloco.split('\n')
+    .map(l => limpar(l).replace(/^[•\-*]\s*/, '').trim())
+    .filter(l => l.length > 2);
+}
+
+interface Situacao {
+  titulo: string;
+  tempo: string;
+  antes: string;
+  desenvolvimento: string;
+  apos: string;
+}
+
+function extrairSituacoes(texto: string): Situacao[] {
+  const situacoes: Situacao[] = [];
+
+  // Encontra o bloco de desenvolvimento
+  const idxDev = texto.indexOf('DESENVOLVIMENTO DAS ATIVIDADES');
+  const idxValores = texto.indexOf('VALORES ATITUDINAIS');
+  if (idxDev < 0) return situacoes;
+
+  const blocoTotal = texto.slice(idxDev, idxValores >= 0 ? idxValores : texto.length);
+
+  // Regex que captura "Situação de Aprendizagem N – Titulo"
+  const regexSit = /Situa[cç][aã]o de Aprendizagem\s+(\d+)\s*[–\-—]\s*([^\n]+)/gi;
+  const matches = [...blocoTotal.matchAll(regexSit)];
+
+  matches.forEach((match, i) => {
+    const num = match[1];
+    const titulo = limpar(match[2].trim());
+    const inicioSit = match.index!;
+    const fimSit = i + 1 < matches.length ? matches[i + 1].index! : blocoTotal.length;
+    const bloco = blocoTotal.slice(inicioSit, fimSit);
+
+    // Tempo
+    const tempoMatch = bloco.match(/Tempo:\s*([^\n]+)/i);
+    const tempo = tempoMatch ? limpar(tempoMatch[1].trim()) : '';
+
+    // Sub-seções — tenta várias grafias
+    const extrairSub = (rotulos: string[]): string => {
+      for (const rot of rotulos) {
+        const idx = bloco.indexOf(rot);
+        if (idx < 0) continue;
+        const depois = bloco.slice(idx + rot.length);
+        // Fim da sub-seção = próxima sub-seção conhecida
+        const prox = [
+          'ANTES DA ATIVIDADE:', 'DESENVOLVIMENTO:', 'APÓS A ATIVIDADE:', 'APOS A ATIVIDADE:',
+          'Situação de Aprendizagem', 'VALORES ATITUDINAIS',
+        ];
+        let fim = depois.length;
+        for (const p of prox) {
+          if (p === rot) continue;
+          const i2 = depois.indexOf(p);
+          if (i2 > 0 && i2 < fim) fim = i2;
+        }
+        return limpar(depois.slice(0, fim)).trim();
+      }
+      return '';
+    };
+
+    const antes = extrairSub(['ANTES DA ATIVIDADE:']);
+    const desenvolvimento = extrairSub(['DESENVOLVIMENTO:']);
+    const apos = extrairSub(['APÓS A ATIVIDADE:', 'APOS A ATIVIDADE:']);
+
+    situacoes.push({
+      titulo: `Situação de Aprendizagem ${num} – ${titulo}`,
+      tempo,
+      antes,
+      desenvolvimento,
+      apos,
+    });
+  });
+
+  return situacoes;
 }
 
 function parsearTexto(texto: string) {
-  const objetivos = extrairLista(texto, '===OBJETIVOS===', '===HABILIDADES===');
-  const habilidades = extrairLista(texto, '===HABILIDADES===', '===OBJETOS===');
-  const objetos = extrairLista(texto, '===OBJETOS===', '===SITUACAO_1===');
+  const t = limpar(texto);
 
-  // Extrai situações dinamicamente
-  const situacoes: { titulo: string; tempo: string; antes: string; desenvolvimento: string; apos: string }[] = [];
-  let sitIdx = 1;
-  while (true) {
-    const marcaAtual = `===SITUACAO_${sitIdx}===`;
-    const marcaProxima = `===SITUACAO_${sitIdx + 1}===`;
-    const marcaFim = '===VALORES===';
-    const inicio = texto.indexOf(marcaAtual);
-    if (inicio < 0) break;
-
-    const depois = texto.slice(inicio + marcaAtual.length);
-    const fimIdx = depois.indexOf(marcaProxima) >= 0
-      ? depois.indexOf(marcaProxima)
-      : depois.indexOf(marcaFim) >= 0
-        ? depois.indexOf(marcaFim)
-        : depois.length;
-
-    const bloco = limparMarkdown(depois.slice(0, fimIdx));
-
-    // Extrair título
-    const tituloMatch = bloco.match(/Titulo:\s*(.+)/i) || bloco.match(/Título:\s*(.+)/i);
-    const titulo = tituloMatch ? tituloMatch[1].trim() : `Situação de Aprendizagem ${sitIdx}`;
-
-    // Extrair tempo
-    const tempoMatch = bloco.match(/Tempo:\s*(.+)/i);
-    const tempo = tempoMatch ? tempoMatch[1].trim() : '';
-
-    const antes = extrairSubSecao(bloco, 'ANTES DA ATIVIDADE');
-    const desenvolvimento = extrairSubSecao(bloco, 'DESENVOLVIMENTO');
-    const apos = extrairSubSecao(bloco, 'APOS A ATIVIDADE') || extrairSubSecao(bloco, 'APÓS A ATIVIDADE');
-
-    situacoes.push({ titulo: `Situação de Aprendizagem ${sitIdx} – ${titulo}`, tempo, antes, desenvolvimento, apos });
-    sitIdx++;
-  }
-
-  const valores = extrairLista(texto, '===VALORES===', '===AVALIACAO===');
-  const avaliacao = extrairLista(texto, '===AVALIACAO===', '===RECURSOS===');
-  const recursos = extrairLista(texto, '===RECURSOS===', '===REFERENCIAS===');
-  const referencias = extrairLista(texto, '===REFERENCIAS===', '');
+  const objetivos = extrairLista(t, 'OBJETIVOS / CAPACIDADES', 'HABILIDADES');
+  const habilidades = extrairLista(t, 'HABILIDADES', 'OBJETOS DE CONHECIMENTO');
+  const objetos = extrairLista(t, 'OBJETOS DE CONHECIMENTO', 'DESENVOLVIMENTO DAS ATIVIDADES');
+  const situacoes = extrairSituacoes(t);
+  const valores = extrairLista(t, 'VALORES ATITUDINAIS', 'INSTRUMENTOS DE AVALIAÇÃO');
+  const avaliacao = extrairLista(t, 'INSTRUMENTOS DE AVALIAÇÃO', 'RECURSOS');
+  const recursos = extrairLista(t, 'RECURSOS', 'REFERÊNCIAS');
+  const referencias = extrairLista(t, 'REFERÊNCIAS', '');
 
   return { objetivos, habilidades, objetos, situacoes, valores, avaliacao, recursos, referencias };
 }
 
-// ── EXPORTAÇÃO WORD ─────────────────────────────────────────────────────────
-const COR_AZUL = '1F3864';
-const COR_AZUL_MED = '2E5FA3';
-const COR_CINZA = 'D9E2F3';
-const COR_BRANCO = 'FFFFFF';
+// ── WORD ─────────────────────────────────────────────────────────────────────
+const AZ = '1F3864', AZM = '2E5FA3', CZ = 'D9E2F3', BR = 'FFFFFF';
 
-function mkRun(texto: string, opts: { bold?: boolean; color?: string; size?: number; italics?: boolean } = {}): TextRun {
-  return new TextRun({ text: texto, font: 'Arial', size: opts.size ?? 20, bold: opts.bold, color: opts.color ?? '000000', italics: opts.italics });
+function run(t: string, o: any = {}): TextRun {
+  return new TextRun({ text: t, font: 'Arial', size: o.size ?? 20, bold: o.bold, color: o.color ?? '000000', italics: o.italics });
 }
-
-function mkPar(runs: TextRun[], align = AlignmentType.LEFT, antes = 60, depois = 60): Paragraph {
-  return new Paragraph({ children: runs, alignment: align, spacing: { before: antes, after: depois } });
+function par(runs: TextRun[], align = AlignmentType.LEFT, a = 60, d = 60): Paragraph {
+  return new Paragraph({ children: runs, alignment: align, spacing: { before: a, after: d } });
 }
-
-function mkCell(children: Paragraph[], corFundo?: string, cols?: number): TableCell {
+function cel(children: Paragraph[], cor?: string, cols?: number): TableCell {
   return new TableCell({
     ...(cols ? { columnSpan: cols } : {}),
-    ...(corFundo ? { shading: { type: ShadingType.SOLID, color: corFundo } } : {}),
+    ...(cor ? { shading: { type: ShadingType.SOLID, color: cor } } : {}),
     verticalAlign: VerticalAlign.CENTER,
     children,
   });
 }
-
-function mkBordas() {
-  const b = { style: BorderStyle.SINGLE, size: 8, color: COR_AZUL_MED };
+function bordas() {
+  const b = { style: BorderStyle.SINGLE, size: 8, color: AZM };
   return { top: b, bottom: b, left: b, right: b, insideH: b, insideV: b };
 }
-
-function cellHeader(texto: string, cols?: number): TableCell {
-  return mkCell([mkPar([mkRun(texto, { bold: true, color: COR_BRANCO, size: 22 })], AlignmentType.CENTER, 80, 80)], COR_AZUL, cols);
+function hCell(texto: string, cols?: number) {
+  return cel([par([run(texto, { bold: true, color: BR, size: 22 })], AlignmentType.CENTER, 80, 80)], AZ, cols);
 }
-
-function cellLabel(texto: string): TableCell {
-  return mkCell([mkPar([mkRun(texto, { bold: true, color: COR_BRANCO, size: 20 })], AlignmentType.CENTER, 60, 60)], COR_AZUL_MED);
+function lCell(texto: string) {
+  return cel([par([run(texto, { bold: true, color: BR, size: 20 })], AlignmentType.CENTER, 60, 60)], AZM);
 }
-
-function cellTexto(texto: string): TableCell {
-  return mkCell([mkPar([mkRun(texto, { size: 20 })], AlignmentType.LEFT, 60, 60)]);
+function tCell(texto: string) {
+  return cel([par([run(texto, { size: 20 })], AlignmentType.LEFT, 60, 60)]);
 }
-
-function cellSubHeader(texto: string, cols?: number): TableCell {
-  return mkCell([mkPar([mkRun(texto, { bold: true, color: COR_AZUL, size: 20 })], AlignmentType.CENTER, 60, 60)], COR_CINZA, cols);
+function sCell(texto: string, cols?: number) {
+  return cel([par([run(texto, { bold: true, color: AZ, size: 20 })], AlignmentType.CENTER, 60, 60)], CZ, cols);
 }
-
-function cellLista(itens: string[]): TableCell {
+function listaCell(itens: string[]) {
   const pars = itens.length > 0
-    ? itens.map(i => mkPar([mkRun('• ' + i, { size: 20 })], AlignmentType.LEFT, 30, 30))
-    : [mkPar([mkRun('')])];
-  return mkCell(pars);
+    ? itens.map(i => par([run('• ' + i, { size: 19 })], AlignmentType.LEFT, 30, 30))
+    : [par([run('')])];
+  return cel(pars);
 }
-
-function parsToCell(blocos: { rotulo?: string; texto: string }[]): TableCell {
+function sitCell(s: Situacao): TableCell {
   const children: Paragraph[] = [];
-  for (const b of blocos) {
-    if (b.rotulo) {
-      children.push(mkPar([mkRun(b.rotulo, { bold: true, color: COR_AZUL_MED, size: 20 })], AlignmentType.LEFT, 100, 40));
-    }
-    const linhas = b.texto.split('\n').filter(l => l.trim());
-    for (const l of linhas) {
-      children.push(mkPar([mkRun(l.trim(), { size: 20 })], AlignmentType.LEFT, 20, 20));
-    }
-  }
-  if (children.length === 0) children.push(mkPar([mkRun('')]));
-  return mkCell(children);
+  const addSec = (rotulo: string, texto: string) => {
+    if (!texto) return;
+    children.push(par([run(rotulo, { bold: true, color: AZM, size: 20 })], AlignmentType.LEFT, 100, 40));
+    texto.split('\n').filter(l => l.trim()).forEach(l => {
+      children.push(par([run(l.trim(), { size: 20 })], AlignmentType.LEFT, 20, 20));
+    });
+  };
+  addSec('ANTES DA ATIVIDADE:', s.antes);
+  addSec('DESENVOLVIMENTO:', s.desenvolvimento);
+  addSec('APÓS A ATIVIDADE:', s.apos);
+  if (children.length === 0) children.push(par([run('')]));
+  return cel(children);
 }
 
 async function exportarWord(resultado: string, valores: Record<string, string>) {
   const d = parsearTexto(resultado);
-  const bordas = mkBordas();
+  const bd = bordas();
 
-  const tabelaTitulo = new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bordas, rows: [
-    new TableRow({ children: [cellHeader('SEQUÊNCIA DIDÁTICA', 4)] }),
-    new TableRow({ children: [cellLabel('PROFESSOR(A):'), cellTexto(valores.professor || ''), cellLabel('COMPONENTE CURRICULAR:'), cellTexto('Educação Física')] }),
-    new TableRow({ children: [cellLabel('ANO:'), cellTexto(valores.turma || ''), cellLabel('AULAS PREVISTAS:'), cellTexto(valores.aulas || '')] }),
+  const tTitulo = new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bd, rows: [
+    new TableRow({ children: [hCell('SEQUÊNCIA DIDÁTICA', 4)] }),
+    new TableRow({ children: [lCell('PROFESSOR(A):'), tCell(valores.professor || ''), lCell('COMPONENTE CURRICULAR:'), tCell('Educação Física')] }),
+    new TableRow({ children: [lCell('ANO:'), tCell(valores.turma || ''), lCell('AULAS PREVISTAS:'), tCell(valores.aulas || '')] }),
   ]});
 
-  const tabelaObjetivos = new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bordas, rows: [
-    new TableRow({ children: [mkCell([
-      mkPar([mkRun('OBJETIVOS / CAPACIDADES', { bold: true, color: COR_BRANCO, size: 22 }),
-             mkRun(' (Competências amplas do componente)', { color: COR_BRANCO, size: 18 })], AlignmentType.CENTER, 80, 80)
-    ], COR_AZUL, 1)] }),
-    new TableRow({ children: [mkCell(
+  const tObj = new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bd, rows: [
+    new TableRow({ children: [cel([
+      par([run('OBJETIVOS / CAPACIDADES', { bold: true, color: BR, size: 22 }),
+           run(' (Competências amplas do componente)', { color: BR, size: 18 })],
+          AlignmentType.CENTER, 80, 80)
+    ], AZ, 1)] }),
+    new TableRow({ children: [cel(
       d.objetivos.length > 0
-        ? d.objetivos.map(o => mkPar([mkRun('• ' + o, { size: 20 })], AlignmentType.LEFT, 40, 40))
-        : [mkPar([mkRun('')])]
+        ? d.objetivos.map(o => par([run('• ' + o, { size: 20 })], AlignmentType.LEFT, 40, 40))
+        : [par([run('')])]
     )] }),
   ]});
 
-  const tabelaConteudos = new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bordas, rows: [
-    new TableRow({ children: [cellHeader('CONTEÚDOS', 2)] }),
-    new TableRow({ children: [cellSubHeader('HABILIDADES'), cellSubHeader('OBJETOS DE CONHECIMENTO')] }),
-    new TableRow({ children: [cellLista(d.habilidades), cellLista(d.objetos.length > 0 ? d.objetos : [valores.unidade || ''])] }),
+  const tCont = new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bd, rows: [
+    new TableRow({ children: [hCell('CONTEÚDOS', 2)] }),
+    new TableRow({ children: [sCell('HABILIDADES'), sCell('OBJETOS DE CONHECIMENTO')] }),
+    new TableRow({ children: [listaCell(d.habilidades), listaCell(d.objetos.length > 0 ? d.objetos : [valores.unidade || ''])] }),
   ]});
 
-  const rowsDesenvolvimento: TableRow[] = [
-    new TableRow({ children: [mkCell([
-      mkPar([mkRun('DESENVOLVIMENTO DAS ATIVIDADES', { bold: true, color: COR_BRANCO, size: 22 })], AlignmentType.CENTER, 80, 0),
-      mkPar([mkRun('(Descrição de situações de ensino e aprendizagem para desenvolver as habilidades)', { color: COR_BRANCO, size: 18 })], AlignmentType.CENTER, 0, 80),
-    ], COR_AZUL, 1)] }),
+  // Desenvolvimento
+  const devRows: TableRow[] = [
+    new TableRow({ children: [cel([
+      par([run('DESENVOLVIMENTO DAS ATIVIDADES', { bold: true, color: BR, size: 22 })], AlignmentType.CENTER, 80, 0),
+      par([run('(Descrição de situações de ensino e aprendizagem para desenvolver as habilidades)', { color: BR, size: 18 })], AlignmentType.CENTER, 0, 80),
+    ], AZ, 1)] }),
   ];
 
   if (d.situacoes.length > 0) {
     for (const s of d.situacoes) {
-      rowsDesenvolvimento.push(new TableRow({ children: [mkCell([
-        mkPar([mkRun(s.titulo, { bold: true, color: COR_AZUL, size: 20 })], AlignmentType.LEFT, 60, 20),
-        mkPar([mkRun('Tempo: ' + s.tempo, { italics: true, color: COR_AZUL, size: 18 })], AlignmentType.LEFT, 0, 60),
-      ], COR_CINZA)] }));
-
-      rowsDesenvolvimento.push(new TableRow({ children: [parsToCell([
-        ...(s.antes ? [{ rotulo: 'ANTES DA ATIVIDADE:', texto: s.antes }] : []),
-        ...(s.desenvolvimento ? [{ rotulo: 'DESENVOLVIMENTO:', texto: s.desenvolvimento }] : []),
-        ...(s.apos ? [{ rotulo: 'APÓS A ATIVIDADE:', texto: s.apos }] : []),
-      ])] }));
+      devRows.push(new TableRow({ children: [cel([
+        par([run(s.titulo, { bold: true, color: AZ, size: 20 })], AlignmentType.LEFT, 60, 20),
+        par([run('Tempo: ' + s.tempo, { italics: true, color: AZM, size: 18 })], AlignmentType.LEFT, 0, 60),
+      ], CZ)] }));
+      devRows.push(new TableRow({ children: [sitCell(s)] }));
     }
   } else {
-    // Fallback: cai o texto bruto limpo
-    const textoLimpo = limparMarkdown(resultado);
-    rowsDesenvolvimento.push(new TableRow({ children: [mkCell(
-      textoLimpo.split('\n').filter(l => l.trim()).map(l => mkPar([mkRun(l, { size: 20 })], AlignmentType.LEFT, 30, 30))
+    // Fallback: extrai o bloco de desenvolvimento e exibe limpo
+    const blocoFallback = extrairBloco(resultado, 'DESENVOLVIMENTO DAS ATIVIDADES', 'VALORES ATITUDINAIS');
+    devRows.push(new TableRow({ children: [cel(
+      blocoFallback.split('\n').filter(l => l.trim()).map(l =>
+        par([run(limpar(l), { size: 20 })], AlignmentType.LEFT, 20, 20)
+      )
     )] }));
   }
 
-  const tabelaDesenvolvimento = new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bordas, rows: rowsDesenvolvimento });
+  const tDev = new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bd, rows: devRows });
 
-  const tabelaRodape = new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bordas, rows: [
+  const tRodape = new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bd, rows: [
     new TableRow({ children: [
-      mkCell([mkPar([mkRun('VALORES ATITUDINAIS', { bold: true, color: COR_BRANCO, size: 18 })], AlignmentType.CENTER, 40, 0),
-              mkPar([mkRun('ENVOLVIDOS NAS ATIVIDADES', { bold: true, color: COR_BRANCO, size: 18 })], AlignmentType.CENTER, 0, 40)], COR_AZUL),
-      mkCell([mkPar([mkRun('INSTRUMENTOS DE AVALIAÇÃO', { bold: true, color: COR_BRANCO, size: 18 })], AlignmentType.CENTER, 60, 60)], COR_AZUL),
-      mkCell([mkPar([mkRun('RECURSOS', { bold: true, color: COR_BRANCO, size: 18 })], AlignmentType.CENTER, 60, 60)], COR_AZUL),
+      cel([par([run('VALORES ATITUDINAIS', { bold: true, color: BR, size: 18 })], AlignmentType.CENTER, 40, 0),
+           par([run('ENVOLVIDOS NAS ATIVIDADES', { bold: true, color: BR, size: 18 })], AlignmentType.CENTER, 0, 40)], AZ),
+      cel([par([run('INSTRUMENTOS DE AVALIAÇÃO', { bold: true, color: BR, size: 18 })], AlignmentType.CENTER, 60, 60)], AZ),
+      cel([par([run('RECURSOS', { bold: true, color: BR, size: 18 })], AlignmentType.CENTER, 60, 60)], AZ),
     ]}),
-    new TableRow({ children: [cellLista(d.valores), cellLista(d.avaliacao), cellLista(d.recursos)] }),
+    new TableRow({ children: [listaCell(d.valores), listaCell(d.avaliacao), listaCell(d.recursos)] }),
   ]});
 
-  const tabelaRefs = new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bordas, rows: [
-    new TableRow({ children: [cellHeader('REFERÊNCIAS', 1)] }),
-    new TableRow({ children: [mkCell(
+  const tRefs = new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bd, rows: [
+    new TableRow({ children: [hCell('REFERÊNCIAS', 1)] }),
+    new TableRow({ children: [cel(
       (d.referencias.length > 0 ? d.referencias : [
         'ACRE. Secretaria de Estado de Educação, Cultura e Esporte. Proposta de Plano de Curso do Ensino Fundamental Anos Finais, 2023.',
         'BRASIL. Ministério da Educação. Base Nacional Comum Curricular. Brasília: MEC, 2018.',
-      ]).map(r => mkPar([mkRun(r, { size: 18 })], AlignmentType.LEFT, 40, 40))
+      ]).map(r => par([run(r, { size: 18 })], AlignmentType.LEFT, 40, 40))
     )] }),
   ]});
 
-  const espacamento = new Paragraph({ children: [], spacing: { before: 120, after: 0 } });
-  const secoes = [tabelaTitulo, tabelaObjetivos, tabelaConteudos, tabelaDesenvolvimento, tabelaRodape, tabelaRefs];
+  const esp = new Paragraph({ children: [], spacing: { before: 120, after: 0 } });
+  const secoes = [tTitulo, tObj, tCont, tDev, tRodape, tRefs];
 
   const doc = new Document({
     sections: [{
       properties: { page: { margin: { top: 720, bottom: 720, left: 900, right: 900 } } },
-      children: secoes.flatMap((s, i) => i < secoes.length - 1 ? [s, espacamento] : [s]),
+      children: secoes.flatMap((s, i) => i < secoes.length - 1 ? [s, esp] : [s]),
     }],
   });
 
@@ -427,7 +438,7 @@ async function exportarWord(resultado: string, valores: Record<string, string>) 
   saveAs(blob, `sequencia_didatica_ef_${turma}.docx`);
 }
 
-// ── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────────
+// ── COMPONENTE ────────────────────────────────────────────────────────────────
 export function IASequencia() {
   const navigate = useNavigate();
   const [valores, setValores] = useState<Record<string, string>>({});
@@ -476,10 +487,6 @@ export function IASequencia() {
     finally { setExportando(false); }
   };
 
-  // Preview limpo para exibição
-  const resultadoLimpo = limparMarkdown(resultado)
-    .replace(/===\w+===/g, '\n');
-
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 pb-36">
       <div className="bg-gradient-to-br from-emerald-600 to-emerald-500 p-5 text-white relative overflow-hidden">
@@ -519,9 +526,7 @@ export function IASequencia() {
 
           <button onClick={gerar} disabled={gerando}
             className="w-full py-4 rounded-2xl font-black text-white flex items-center justify-center gap-2 disabled:opacity-60 transition-all active:scale-95 shadow-lg bg-gradient-to-r from-emerald-600 to-emerald-500">
-            {gerando
-              ? <><Loader2 className="w-5 h-5 animate-spin" /> Gerando...</>
-              : <><Sparkles className="w-5 h-5" /> Gerar Sequência Didática</>}
+            {gerando ? <><Loader2 className="w-5 h-5 animate-spin" /> Gerando...</> : <><Sparkles className="w-5 h-5" /> Gerar Sequência Didática</>}
           </button>
         </div>
 
@@ -535,8 +540,7 @@ export function IASequencia() {
                 <span className="text-sm font-black text-emerald-700">Sequência gerada!</span>
               </div>
               <div className="flex gap-2 flex-wrap">
-                <button onClick={gerar}
-                  className="flex items-center gap-1 text-xs text-gray-500 hover:text-emerald-600 font-semibold">
+                <button onClick={gerar} className="flex items-center gap-1 text-xs text-gray-500 hover:text-emerald-600 font-semibold">
                   <RefreshCw className="w-3.5 h-3.5" /> Gerar novo
                 </button>
                 <button onClick={copiar}
@@ -545,14 +549,12 @@ export function IASequencia() {
                 </button>
                 <button onClick={baixarWord} disabled={exportando}
                   className="flex items-center gap-1 text-xs font-black px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60 transition-all">
-                  {exportando
-                    ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Gerando...</>
-                    : <><FileDown className="w-3.5 h-3.5" /> Baixar Word</>}
+                  {exportando ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Gerando...</> : <><FileDown className="w-3.5 h-3.5" /> Baixar Word</>}
                 </button>
               </div>
             </div>
             <div className="p-4">
-              <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">{resultadoLimpo}</pre>
+              <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">{resultado}</pre>
             </div>
           </div>
         )}
