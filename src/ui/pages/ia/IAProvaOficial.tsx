@@ -195,9 +195,12 @@ Questão 10 - Criterios:
 // ── LIMPEZA ───────────────────────────────────────────────────────────────────
 function limpar(t: string): string {
   return t
-    .replace(/\*\*/g, '').replace(/\*/g, '')
-    .replace(/^#{1,6}\s*/gm, '').replace(/_+/g, '')
-    .replace(/\n{3,}/g, '\n\n').trim();
+    .replace(/\r\n/g, '\n').replace(/\r/g, '\n') // normalizar line endings Windows
+    .replace(/\*\*/g, '').replace(/\*/g, '')      // remover negrito/itálico markdown
+    .replace(/^#{1,6}\s*/gm, '')                  // remover títulos markdown
+    .replace(/_+/g, '')                           // remover underscore
+    .replace(/\n{3,}/g, '\n\n')                   // max 2 linhas em branco seguidas
+    .trim();
 }
 
 function extrairBloco(texto: string, inicio: string, fim: string): string {
@@ -220,12 +223,13 @@ function parsearProva(textoOriginal: string) {
 
   // Parser questões objetivas
   const questoesObj: QuestaoObj[] = [];
+  // Remove linhas em branco duplas dentro do bloco para o regex funcionar
+  const blocoObjNorm = blocoObj.replace(/\n{2,}/g, '\n');
   const regex = /Questão\s+(\d+)\s*\n([\s\S]*?)(?=Questão\s+\d+\s*\n|$)/gi;
-  for (const m of blocoObj.matchAll(regex)) {
+  for (const m of blocoObjNorm.matchAll(regex)) {
     const num = parseInt(m[1]);
     const corpo = m[2].trim();
     const linhas = corpo.split('\n').map(l => l.trim()).filter(Boolean);
-    // Alternativas: linhas que começam com (A), (B), (C), (D)
     const isAlt = (l: string) => /^\([A-Da-d]\)/.test(l);
     const enunciado = linhas.filter(l => !isAlt(l)).join(' ');
     const alternativas = linhas.filter(isAlt).map(l => ({
@@ -237,8 +241,9 @@ function parsearProva(textoOriginal: string) {
 
   // Parser questões dissertativas
   const questoesDis: QuestaoDis[] = [];
+  const blocoDisNorm = blocoDis.replace(/\n{2,}/g, '\n');
   const regexDis = /Questão\s+(\d+)\s*\n([\s\S]*?)(?=Questão\s+\d+\s*\n|$)/gi;
-  for (const m of blocoDis.matchAll(regexDis)) {
+  for (const m of blocoDisNorm.matchAll(regexDis)) {
     questoesDis.push({ numero: parseInt(m[1]), enunciado: m[2].trim() });
   }
 
@@ -251,8 +256,9 @@ function parsearProva(textoOriginal: string) {
 
   // Gabarito dissertativas
   const gabDis: { numero: number; criterios: string[] }[] = [];
+  const blocoGabDisNorm = blocoGabDis.replace(/\n{2,}/g, '\n');
   const regexGD = /Questão\s+(\d+)[^\n]*\n([\s\S]*?)(?=Questão\s+\d+|$)/gi;
-  for (const m of blocoGabDis.matchAll(regexGD)) {
+  for (const m of blocoGabDisNorm.matchAll(regexGD)) {
     gabDis.push({
       numero: parseInt(m[1]),
       criterios: m[2].trim().split('\n').map(l => l.trim()).filter(Boolean),
