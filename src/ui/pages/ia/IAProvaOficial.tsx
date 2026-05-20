@@ -4,7 +4,7 @@ import { ArrowLeft, Sparkles, Copy, CheckCircle, Loader2, RefreshCw, FileDown } 
 import {
   Document, Packer, Paragraph, Table, TableRow, TableCell,
   TextRun, AlignmentType, WidthType, BorderStyle, ShadingType,
-  VerticalAlign, PageBreak,
+  VerticalAlign, PageBreak, ImageRun, ColumnBreak,
 } from 'docx';
 import { saveAs } from 'file-saver';
 
@@ -14,7 +14,7 @@ const CAMPOS = [
   { id: 'bimestre', label: 'Bimestre', tipo: 'select' as const, opcoes: ['1º Bimestre', '2º Bimestre', '3º Bimestre', '4º Bimestre'] },
   { id: 'tema', label: 'Tema / Conteúdo Avaliado', tipo: 'text' as const, placeholder: 'Ex: Futsal — história, regras e fundamentos' },
   { id: 'nivel', label: 'Nível de Dificuldade', tipo: 'select' as const, opcoes: ['Fácil', 'Médio', 'Difícil', 'Misto'] },
-  { id: 'contexto', label: 'Observações (opcional)', tipo: 'textarea' as const, placeholder: 'Ex: Turma com foco em inclusão, alunos iniciantes...', required: false },
+  { id: 'contexto', label: 'Observações (opcional)', tipo: 'textarea' as const, placeholder: 'Ex: Foco em inclusão, alunos iniciantes...', required: false },
 ];
 
 const ETAPAS = [
@@ -49,13 +49,13 @@ function ProgressoGerando() {
   }, []);
   const etapa = ETAPAS[etapaIdx];
   return (
-    <div className="bg-white rounded-2xl border border-blue-100 shadow-sm p-6 flex flex-col gap-5">
+    <div className="bg-white rounded-2xl border border-red-100 shadow-sm p-6 flex flex-col gap-5">
       <div className="flex justify-center">
-        <div className="w-20 h-20 rounded-full bg-blue-50 border-4 border-blue-200 flex items-center justify-center relative">
+        <div className="w-20 h-20 rounded-full bg-red-50 border-4 border-red-200 flex items-center justify-center relative">
           <span className="text-3xl animate-bounce">{etapa.icone}</span>
           <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 80 80">
-            <circle cx="40" cy="40" r="36" fill="none" stroke="#dbeafe" strokeWidth="4" />
-            <circle cx="40" cy="40" r="36" fill="none" stroke="#3b82f6" strokeWidth="4"
+            <circle cx="40" cy="40" r="36" fill="none" stroke="#fee2e2" strokeWidth="4" />
+            <circle cx="40" cy="40" r="36" fill="none" stroke="#ef4444" strokeWidth="4"
               strokeDasharray={`${2 * Math.PI * 36}`}
               strokeDashoffset={`${2 * Math.PI * 36 * (1 - progresso / 100)}`}
               strokeLinecap="round" style={{ transition: 'stroke-dashoffset 0.5s ease' }} />
@@ -69,13 +69,13 @@ function ProgressoGerando() {
       <div className="flex flex-col gap-1.5">
         <div className="flex justify-between text-xs font-semibold text-gray-400"><span>Processando...</span><span>{progresso}%</span></div>
         <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
-          <div className="h-full bg-gradient-to-r from-blue-600 to-blue-400 rounded-full transition-all duration-500" style={{ width: `${progresso}%` }} />
+          <div className="h-full bg-gradient-to-r from-red-600 to-red-400 rounded-full transition-all duration-500" style={{ width: `${progresso}%` }} />
         </div>
       </div>
       <div className="flex flex-col gap-1.5">
         {ETAPAS.slice(0, -1).map((e, i) => (
-          <div key={i} className={`flex items-center gap-2 text-xs transition-all ${i < etapaIdx ? 'text-blue-600' : i === etapaIdx ? 'text-gray-700 font-semibold' : 'text-gray-300'}`}>
-            <span className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 text-[10px] ${i < etapaIdx ? 'bg-blue-100 text-blue-600' : i === etapaIdx ? 'bg-blue-500 text-white animate-pulse' : 'bg-gray-100 text-gray-300'}`}>
+          <div key={i} className={`flex items-center gap-2 text-xs transition-all ${i < etapaIdx ? 'text-red-600' : i === etapaIdx ? 'text-gray-700 font-semibold' : 'text-gray-300'}`}>
+            <span className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 text-[10px] ${i < etapaIdx ? 'bg-red-100 text-red-600' : i === etapaIdx ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-100 text-gray-300'}`}>
               {i < etapaIdx ? '✓' : i + 1}
             </span>
             <span>{e.texto}</span>
@@ -99,121 +99,107 @@ Tema/Conteúdo: ${v.tema}
 Nível: ${v.nivel}
 ${v.contexto ? `Observações: ${v.contexto}` : ''}
 
-Use EXATAMENTE este formato com estes separadores:
-
-TITULO_AVALIACAO
-Avaliação ${v.bimestre} - Ensino Fundamental - 2026
-
-INSTRUCOES
-Leia atentamente cada questão antes de responder. Use caneta azul ou preta. Não é permitido o uso de corretor.
+SIGA EXATAMENTE este formato. Não adicione texto fora dos blocos.
 
 QUESTOES_OBJETIVAS
 
 Questão 1
-[Enunciado contextualizado com situação do cotidiano escolar ou esportivo, nível ${v.nivel}]
-a) [alternativa]
-b) [alternativa]
-c) [alternativa]
-d) [alternativa]
+[Enunciado contextualizado - situação real do cotidiano escolar ou esportivo]
+(A) [alternativa]
+(B) [alternativa]
+(C) [alternativa]
+(D) [alternativa]
 
 Questão 2
 [Enunciado]
-a) [alternativa]
-b) [alternativa]
-c) [alternativa]
-d) [alternativa]
+(A) [alternativa]
+(B) [alternativa]
+(C) [alternativa]
+(D) [alternativa]
 
 Questão 3
 [Enunciado]
-a) [alternativa]
-b) [alternativa]
-c) [alternativa]
-d) [alternativa]
+(A) [alternativa]
+(B) [alternativa]
+(C) [alternativa]
+(D) [alternativa]
 
 Questão 4
 [Enunciado]
-a) [alternativa]
-b) [alternativa]
-c) [alternativa]
-d) [alternativa]
+(A) [alternativa]
+(B) [alternativa]
+(C) [alternativa]
+(D) [alternativa]
 
 Questão 5
 [Enunciado]
-a) [alternativa]
-b) [alternativa]
-c) [alternativa]
-d) [alternativa]
+(A) [alternativa]
+(B) [alternativa]
+(C) [alternativa]
+(D) [alternativa]
 
 Questão 6
 [Enunciado]
-a) [alternativa]
-b) [alternativa]
-c) [alternativa]
-d) [alternativa]
+(A) [alternativa]
+(B) [alternativa]
+(C) [alternativa]
+(D) [alternativa]
 
 Questão 7
 [Enunciado]
-a) [alternativa]
-b) [alternativa]
-c) [alternativa]
-d) [alternativa]
+(A) [alternativa]
+(B) [alternativa]
+(C) [alternativa]
+(D) [alternativa]
 
 Questão 8
 [Enunciado]
-a) [alternativa]
-b) [alternativa]
-c) [alternativa]
-d) [alternativa]
+(A) [alternativa]
+(B) [alternativa]
+(C) [alternativa]
+(D) [alternativa]
 
 QUESTOES_DISSERTATIVAS
 
 Questão 9
-[Enunciado dissertativo contextualizado, que exija reflexão e elaboração de resposta. 1,0 ponto]
+[Enunciado dissertativo que exija reflexão. Vale 1,0 ponto]
 
 Questão 10
-[Enunciado dissertativo contextualizado, diferente do anterior. 1,0 ponto]
+[Enunciado dissertativo diferente do anterior. Vale 1,0 ponto]
 
 GABARITO_OBJETIVAS
-1: [letra correta]
-2: [letra correta]
-3: [letra correta]
-4: [letra correta]
-5: [letra correta]
-6: [letra correta]
-7: [letra correta]
-8: [letra correta]
+1: [A, B, C ou D]
+2: [A, B, C ou D]
+3: [A, B, C ou D]
+4: [A, B, C ou D]
+5: [A, B, C ou D]
+6: [A, B, C ou D]
+7: [A, B, C ou D]
+8: [A, B, C ou D]
 
 GABARITO_DISSERTATIVAS
 
-Questão 9 - Critérios de correção:
-[critério 1 - 0,25 pontos]
-[critério 2 - 0,25 pontos]
-[critério 3 - 0,25 pontos]
-[critério 4 - 0,25 pontos]
+Questão 9 - Criterios:
+[criterio 1 - 0,25 pontos]
+[criterio 2 - 0,25 pontos]
+[criterio 3 - 0,25 pontos]
+[criterio 4 - 0,25 pontos]
 
-Questão 10 - Critérios de correção:
-[critério 1 - 0,25 pontos]
-[critério 2 - 0,25 pontos]
-[critério 3 - 0,25 pontos]
-[critério 4 - 0,25 pontos]
-
-REGRAS IMPORTANTES:
-- Questões objetivas valem 1,0 ponto cada (total 8,0)
-- Questões dissertativas valem 1,0 ponto cada (total 2,0)
-- Contextualize as questões com situações reais do cotidiano escolar e esportivo
-- As alternativas erradas devem ser plausíveis mas claramente incorretas
-- Adeque ao ${v.serie} do Ensino Fundamental`;
+Questão 10 - Criterios:
+[criterio 1 - 0,25 pontos]
+[criterio 2 - 0,25 pontos]
+[criterio 3 - 0,25 pontos]
+[criterio 4 - 0,25 pontos]`;
 }
 
 // ── LIMPEZA ───────────────────────────────────────────────────────────────────
-function limpar(texto: string): string {
-  return texto
+function limpar(t: string): string {
+  return t
     .replace(/\*\*/g, '').replace(/\*/g, '')
     .replace(/^#{1,6}\s*/gm, '').replace(/_+/g, '')
     .replace(/\n{3,}/g, '\n\n').trim();
 }
 
-// ── PARSER ────────────────────────────────────────────────────────────────────
 function extrairBloco(texto: string, inicio: string, fim: string): string {
   const s = texto.indexOf(inicio);
   if (s < 0) return '';
@@ -222,27 +208,11 @@ function extrairBloco(texto: string, inicio: string, fim: string): string {
   return (f >= 0 ? depois.slice(0, f) : depois).trim();
 }
 
-interface QuestaoObj {
-  numero: number;
-  enunciado: string;
-  alternativas: { letra: string; texto: string }[];
-}
-
-interface QuestaoDis {
-  numero: number;
-  enunciado: string;
-}
-
-interface Gabarito {
-  objetivas: { numero: number; resposta: string }[];
-  dissertativas: { numero: number; criterios: string[] }[];
-}
+interface QuestaoObj { numero: number; enunciado: string; alternativas: { letra: string; texto: string }[] }
+interface QuestaoDis { numero: number; enunciado: string }
 
 function parsearProva(textoOriginal: string) {
   const t = limpar(textoOriginal);
-
-  const titulo = extrairBloco(t, 'TITULO_AVALIACAO', 'INSTRUCOES').trim();
-  const instrucoes = extrairBloco(t, 'INSTRUCOES', 'QUESTOES_OBJETIVAS').trim();
   const blocoObj = extrairBloco(t, 'QUESTOES_OBJETIVAS', 'QUESTOES_DISSERTATIVAS');
   const blocoDis = extrairBloco(t, 'QUESTOES_DISSERTATIVAS', 'GABARITO_OBJETIVAS');
   const blocoGabObj = extrairBloco(t, 'GABARITO_OBJETIVAS', 'GABARITO_DISSERTATIVAS');
@@ -250,99 +220,132 @@ function parsearProva(textoOriginal: string) {
 
   // Parser questões objetivas
   const questoesObj: QuestaoObj[] = [];
-  const regexQ = /Questão\s+(\d+)\s*\n([\s\S]*?)(?=Questão\s+\d+|$)/gi;
-  const matchesObj = [...blocoObj.matchAll(regexQ)];
-  matchesObj.forEach(m => {
+  const regex = /Questão\s+(\d+)\s*\n([\s\S]*?)(?=Questão\s+\d+\s*\n|$)/gi;
+  for (const m of blocoObj.matchAll(regex)) {
     const num = parseInt(m[1]);
     const corpo = m[2].trim();
     const linhas = corpo.split('\n').map(l => l.trim()).filter(Boolean);
-    const enunciado = linhas.filter(l => !l.match(/^[a-d]\)/i)).join(' ');
-    const alternativas = linhas
-      .filter(l => l.match(/^[a-d]\)/i))
-      .map(l => ({ letra: l[0].toLowerCase(), texto: l.slice(2).trim() }));
+    // Alternativas: linhas que começam com (A), (B), (C), (D)
+    const isAlt = (l: string) => /^\([A-Da-d]\)/.test(l);
+    const enunciado = linhas.filter(l => !isAlt(l)).join(' ');
+    const alternativas = linhas.filter(isAlt).map(l => ({
+      letra: l[1].toUpperCase(),
+      texto: l.slice(3).trim(),
+    }));
     if (enunciado) questoesObj.push({ numero: num, enunciado, alternativas });
-  });
+  }
 
   // Parser questões dissertativas
   const questoesDis: QuestaoDis[] = [];
-  const regexDis = /Questão\s+(\d+)\s*\n([\s\S]*?)(?=Questão\s+\d+|$)/gi;
-  const matchesDis = [...blocoDis.matchAll(regexDis)];
-  matchesDis.forEach(m => {
-    const num = parseInt(m[1]);
-    const enunciado = m[2].trim();
-    if (enunciado) questoesDis.push({ numero: num, enunciado });
-  });
+  const regexDis = /Questão\s+(\d+)\s*\n([\s\S]*?)(?=Questão\s+\d+\s*\n|$)/gi;
+  for (const m of blocoDis.matchAll(regexDis)) {
+    questoesDis.push({ numero: parseInt(m[1]), enunciado: m[2].trim() });
+  }
 
-  // Parser gabarito objetivas
+  // Gabarito objetivas
   const gabObj: { numero: number; resposta: string }[] = [];
-  blocoGabObj.split('\n').forEach(l => {
-    const m = l.match(/(\d+):\s*([a-d])/i);
-    if (m) gabObj.push({ numero: parseInt(m[1]), resposta: m[2].toLowerCase() });
-  });
+  for (const l of blocoGabObj.split('\n')) {
+    const m = l.match(/(\d+)\s*:\s*([A-Da-d])/);
+    if (m) gabObj.push({ numero: parseInt(m[1]), resposta: m[2].toUpperCase() });
+  }
 
-  // Parser gabarito dissertativas
+  // Gabarito dissertativas
   const gabDis: { numero: number; criterios: string[] }[] = [];
-  const regexGDis = /Questão\s+(\d+)[^\n]*\n([\s\S]*?)(?=Questão\s+\d+|$)/gi;
-  const matchesGDis = [...blocoGabDis.matchAll(regexGDis)];
-  matchesGDis.forEach(m => {
-    const num = parseInt(m[1]);
-    const criterios = m[2].trim().split('\n').map(l => l.trim()).filter(Boolean);
-    gabDis.push({ numero: num, criterios });
-  });
+  const regexGD = /Questão\s+(\d+)[^\n]*\n([\s\S]*?)(?=Questão\s+\d+|$)/gi;
+  for (const m of blocoGabDis.matchAll(regexGD)) {
+    gabDis.push({
+      numero: parseInt(m[1]),
+      criterios: m[2].trim().split('\n').map(l => l.trim()).filter(Boolean),
+    });
+  }
 
-  return { titulo, instrucoes, questoesObj, questoesDis, gabarito: { objetivas: gabObj, dissertativas: gabDis } };
+  return { questoesObj, questoesDis, gabObj, gabDis, textoLimpo: t };
 }
 
 // ── WORD ──────────────────────────────────────────────────────────────────────
-const AZ = '1F3864', VM = 'C0392B', BR = 'FFFFFF', CZ = 'F2F2F2';
+const AZ = '1F3864', VM = 'C0392B', BR = 'FFFFFF', CZ_CLARO = 'F4F6FC';
 
-const mkRun = (t: string, o: any = {}): TextRun =>
-  new TextRun({ text: t, font: 'Arial', size: o.sz ?? 20, bold: o.bold, color: o.cor ?? '000000', italics: o.it, underline: o.ul ? {} : undefined });
+const run = (t: string, o: any = {}): TextRun =>
+  new TextRun({ text: t, font: 'Arial', size: o.sz ?? 20, bold: o.bold, color: o.cor ?? '000000', italics: o.it });
 
-const mkPar = (runs: TextRun[], align = AlignmentType.LEFT, a = 60, d = 60): Paragraph =>
+const par = (runs: TextRun[], align = AlignmentType.LEFT, a = 60, d = 60): Paragraph =>
   new Paragraph({ children: runs, alignment: align, spacing: { before: a, after: d } });
 
-const mkBd = (cor = AZ) => {
-  const b = { style: BorderStyle.SINGLE, size: 8, color: cor };
+const bd = (cor = AZ) => {
+  const b = { style: BorderStyle.SINGLE, size: 6, color: cor };
   return { top: b, bottom: b, left: b, right: b, insideH: b, insideV: b };
 };
 
-const mkCell = (children: Paragraph[], cor?: string, cols?: number, rows?: number): TableCell =>
+const cel = (children: Paragraph[], cor?: string, cols?: number): TableCell =>
   new TableCell({
     ...(cols ? { columnSpan: cols } : {}),
-    ...(rows ? { rowSpan: rows } : {}),
     ...(cor ? { shading: { type: ShadingType.SOLID, color: cor } } : {}),
     verticalAlign: VerticalAlign.CENTER,
     children,
   });
 
+const hCel = (txt: string, cols?: number, corFundo = AZ) =>
+  cel([par([run(txt, { bold: true, cor: BR, sz: 22 })], AlignmentType.CENTER, 80, 80)], corFundo, cols);
+
+const linhasResposta = (n = 8) =>
+  Array.from({ length: n }, () =>
+    par([run('_'.repeat(95), { sz: 18, cor: 'BBBBBB' })], AlignmentType.LEFT, 25, 8)
+  );
+
+async function carregarLogoBase64(): Promise<string | null> {
+  try {
+    const resp = await fetch('/Logo_IOP.png');
+    if (!resp.ok) return null;
+    const blob = await resp.blob();
+    return new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        resolve(result.split(',')[1]);
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch { return null; }
+}
+
 async function exportarWord(textoOriginal: string, valores: Record<string, string>) {
   const d = parsearProva(textoOriginal);
+  const logoB64 = await carregarLogoBase64();
+
   const esp = (n = 80) => new Paragraph({ children: [], spacing: { before: n, after: 0 } });
+  const quebraSecao = new Paragraph({ children: [new PageBreak()], spacing: { before: 0, after: 0 } });
 
   // ── CABEÇALHO ────────────────────────────────────────────────────────────
+  // Linha 1: Logo + Info escola + Logo
+  const celulaInfo = cel([
+    par([run(`Avaliação ${valores.bimestre} - Ensino Fundamental - 2026`, { bold: true, sz: 24, cor: AZ })], AlignmentType.LEFT, 40, 10),
+    par([run('Disciplina: Educação Física', { bold: true, sz: 21 })], AlignmentType.LEFT, 8, 8),
+    par([run(`Professor(a): ${valores.professores}`, { bold: true, sz: 21 })], AlignmentType.LEFT, 8, 8),
+    par([run(`Série: ${valores.serie}`, { bold: true, sz: 21 })], AlignmentType.LEFT, 8, 40),
+  ]);
+
+  const celulaLogo = logoB64
+    ? new TableCell({
+        verticalAlign: VerticalAlign.CENTER,
+        width: { size: 15, type: WidthType.PERCENTAGE },
+        children: [new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [new ImageRun({ data: logoB64, transformation: { width: 70, height: 70 }, type: 'png' })],
+          spacing: { before: 40, after: 40 },
+        })],
+      })
+    : cel([par([run('I.O.P.', { bold: true, cor: AZ, sz: 22 })], AlignmentType.CENTER)], CZ_CLARO);
+
   const cabecalho = new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: mkBd(),
+    borders: bd(AZ),
     rows: [
+      new TableRow({ children: [celulaLogo, celulaInfo] }),
       new TableRow({ children: [
-        // Célula logo (simulada com texto IOP)
-        mkCell([
-          mkPar([mkRun('I.O.P.', { bold: true, cor: AZ, sz: 28 })], AlignmentType.CENTER, 40, 10),
-          mkPar([mkRun('Instituto Odilon Pratagi', { sz: 14, cor: AZ })], AlignmentType.CENTER, 0, 40),
-        ], CZ, undefined, 3),
-        // Célula título principal
-        mkCell([
-          mkPar([mkRun(d.titulo || `Avaliação ${valores.bimestre} - Ensino Fundamental - 2026`, { bold: true, sz: 26, cor: AZ })], AlignmentType.LEFT, 60, 10),
-          mkPar([mkRun('Disciplina: Educação Física', { bold: true, sz: 22 })], AlignmentType.LEFT, 10, 10),
-          mkPar([mkRun(`Professor(a): ${valores.professores}`, { bold: true, sz: 22 })], AlignmentType.LEFT, 10, 10),
-          mkPar([mkRun(`Série: ${valores.serie}`, { bold: true, sz: 22 })], AlignmentType.LEFT, 10, 50),
-        ], undefined, 1),
-      ]}),
-      new TableRow({ children: [
-        mkCell([
-          mkPar([mkRun('Nome: _____________________________________________  Nº: ______', { sz: 20 })], AlignmentType.LEFT, 80, 40),
-          mkPar([mkRun('Turma: _________  Data: ____/____/______  Nota: ________', { sz: 20 })], AlignmentType.LEFT, 0, 80),
+        cel([
+          par([run('Nome: ____________________________________________  Nº: ______', { sz: 20 })], AlignmentType.LEFT, 70, 30),
+          par([run('Turma: _________    Data: ____/____/______    Nota: ________', { sz: 20 })], AlignmentType.LEFT, 10, 70),
         ], undefined, 2),
       ]}),
     ],
@@ -351,203 +354,149 @@ async function exportarWord(textoOriginal: string, valores: Record<string, strin
   // ── INSTRUÇÕES ───────────────────────────────────────────────────────────
   const instrucoes = new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: mkBd(VM),
+    borders: bd(VM),
     rows: [
-      new TableRow({ children: [
-        mkCell([
-          mkPar([mkRun('Instruções: ', { bold: true, sz: 20, cor: VM }), mkRun(d.instrucoes || 'Leia atentamente cada questão antes de responder. Use caneta azul ou preta. Não é permitido o uso de corretor.', { sz: 20 })], AlignmentType.LEFT, 60, 60),
-        ]),
-      ]}),
+      new TableRow({ children: [cel([
+        par([
+          run('Instruções: ', { bold: true, sz: 20, cor: VM }),
+          run('Leia atentamente cada questão antes de responder. Use caneta azul ou preta. Não é permitido o uso de corretor. Questões objetivas valem 1,0 ponto cada. Questões dissertativas valem 1,0 ponto cada.', { sz: 20 }),
+        ], AlignmentType.LEFT, 60, 60),
+      ])] }),
     ],
   });
 
-  // ── PARTE 1 TÍTULO ───────────────────────────────────────────────────────
-  const parte1Titulo = new Table({
+  // ── PARTE 1: QUESTÕES OBJETIVAS EM 2 COLUNAS ─────────────────────────────
+  const parte1Header = new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: mkBd(),
-    rows: [
-      new TableRow({ children: [
-        mkCell([
-          mkPar([mkRun('PARTE 1 — QUESTÕES OBJETIVAS', { bold: true, sz: 22, cor: BR }),
-                 mkRun('  (8,0 pontos)', { sz: 20, cor: BR })], AlignmentType.CENTER, 80, 80),
-        ], AZ),
-      ]}),
-    ],
+    borders: bd(),
+    rows: [new TableRow({ children: [hCel('PARTE 1 — QUESTÕES OBJETIVAS  (8,0 pontos)', 1)] })],
   });
 
-  // ── QUESTÕES OBJETIVAS ───────────────────────────────────────────────────
-  const questoesObjRows: TableRow[] = [];
-  d.questoesObj.forEach((q, idx) => {
-    const bg = idx % 2 === 0 ? BR : 'F8F9FF';
-    questoesObjRows.push(new TableRow({ children: [
-      mkCell([
-        mkPar([mkRun(`Questão ${q.numero} – `, { bold: true, sz: 20 }), mkRun(q.enunciado, { sz: 20 })], AlignmentType.LEFT, 80, 40),
-        ...q.alternativas.map(alt =>
-          mkPar([mkRun(`(${alt.letra.toUpperCase()}) `, { bold: true, sz: 20 }), mkRun(alt.texto, { sz: 20 })], AlignmentType.LEFT, 20, 20)
-        ),
-        mkPar([mkRun('')], AlignmentType.LEFT, 20, 40),
-      ], bg),
-    ]}));
-  });
+  // Divide as 8 questões em 2 grupos de 4 para colunas lado a lado
+  const questoesObj = d.questoesObj;
+  const col1 = questoesObj.slice(0, 4);
+  const col2 = questoesObj.slice(4, 8);
 
-  // Fallback se parser não encontrou questões
-  if (questoesObjRows.length === 0) {
-    const blocoObj = extrairBloco(limpar(textoOriginal), 'QUESTOES_OBJETIVAS', 'QUESTOES_DISSERTATIVAS');
-    questoesObjRows.push(new TableRow({ children: [
-      mkCell(blocoObj.split('\n').filter(l => l.trim()).map(l =>
-        mkPar([mkRun(l, { sz: 20 })], AlignmentType.LEFT, 20, 20)
-      )),
-    ]}));
-  }
+  const renderQObj = (q: QuestaoObj): Paragraph[] => [
+    par([run(`Questão ${q.numero} – `, { bold: true, sz: 20 }), run(q.enunciado, { sz: 20 })], AlignmentType.LEFT, 80, 30),
+    ...q.alternativas.map(alt =>
+      par([run(`(${alt.letra}) `, { bold: true, sz: 20 }), run(alt.texto, { sz: 20 })], AlignmentType.LEFT, 15, 15)
+    ),
+    par([run('')], AlignmentType.LEFT, 10, 40),
+  ];
+
+  const renderQObjFallback = (): Paragraph[] => {
+    const blocoObj = extrairBloco(d.textoLimpo, 'QUESTOES_OBJETIVAS', 'QUESTOES_DISSERTATIVAS');
+    return blocoObj.split('\n').filter(l => l.trim()).map(l =>
+      par([run(l, { sz: 20 })], AlignmentType.LEFT, 15, 15)
+    );
+  };
+
+  const col1Pars = col1.length > 0 ? col1.flatMap(renderQObj) : renderQObjFallback();
+  const col2Pars = col2.length > 0 ? col2.flatMap(renderQObj) : [par([run('')])];
 
   const tabelaObj = new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: mkBd(),
-    rows: questoesObjRows,
-  });
-
-  // ── PARTE 2 TÍTULO ───────────────────────────────────────────────────────
-  const parte2Titulo = new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: mkBd(),
+    borders: bd(),
     rows: [
       new TableRow({ children: [
-        mkCell([
-          mkPar([mkRun('PARTE 2 — QUESTÕES DISSERTATIVAS', { bold: true, sz: 22, cor: BR }),
-                 mkRun('  (2,0 pontos)', { sz: 20, cor: BR })], AlignmentType.CENTER, 80, 80),
-        ], AZ),
+        new TableCell({ width: { size: 50, type: WidthType.PERCENTAGE }, children: col1Pars }),
+        new TableCell({ width: { size: 50, type: WidthType.PERCENTAGE }, children: col2Pars }),
       ]}),
     ],
   });
 
-  // ── QUESTÕES DISSERTATIVAS ───────────────────────────────────────────────
-  const linhasResposta = () => [1, 2, 3, 4, 5, 6, 7, 8].map(() =>
-    mkPar([mkRun('___________________________________________________________________________', { sz: 20, cor: 'AAAAAA' })], AlignmentType.LEFT, 30, 10)
-  );
-
-  const questoesDis = d.questoesDis.length > 0
-    ? d.questoesDis.flatMap((q, idx) => [
-      new TableRow({ children: [
-        mkCell([
-          mkPar([mkRun(`Questão ${q.numero} – `, { bold: true, sz: 20 }), mkRun(`(1,0 ponto)`, { sz: 18, cor: '666666', it: true })], AlignmentType.LEFT, 80, 20),
-          mkPar([mkRun(q.enunciado, { sz: 20 })], AlignmentType.LEFT, 10, 40),
-          mkPar([mkRun('Resposta:', { bold: true, sz: 20 })], AlignmentType.LEFT, 20, 20),
-          ...linhasResposta(),
-          mkPar([mkRun('')], AlignmentType.LEFT, 20, 60),
-        ], idx % 2 === 0 ? BR : 'F8F9FF'),
-      ]}),
-    ])
-    : [new TableRow({ children: [
-      mkCell([mkPar([mkRun(extrairBloco(limpar(textoOriginal), 'QUESTOES_DISSERTATIVAS', 'GABARITO_OBJETIVAS'), { sz: 20 })])]),
-    ]})]
-  ;
-
-  const tabelaDis = new Table({
+  // ── PARTE 2: DISSERTATIVAS ────────────────────────────────────────────────
+  const parte2Header = new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: mkBd(),
-    rows: questoesDis,
+    borders: bd(),
+    rows: [new TableRow({ children: [hCel('PARTE 2 — QUESTÕES DISSERTATIVAS  (2,0 pontos)', 1)] })],
   });
 
-  // ── GABARITO (nova página) ────────────────────────────────────────────────
-  const quebra = new Paragraph({ children: [new PageBreak()], spacing: { before: 0, after: 0 } });
+  const disRows = d.questoesDis.length > 0
+    ? d.questoesDis.map((q, idx) =>
+      new TableRow({ children: [cel([
+        par([run(`Questão ${q.numero} `, { bold: true, sz: 20 }), run('(1,0 ponto)', { sz: 18, cor: '666666', it: true })], AlignmentType.LEFT, 80, 20),
+        par([run(q.enunciado, { sz: 20 })], AlignmentType.LEFT, 10, 30),
+        par([run('Resposta:', { bold: true, sz: 20 })], AlignmentType.LEFT, 20, 15),
+        ...linhasResposta(8),
+        par([run('')], AlignmentType.LEFT, 10, 60),
+      ], idx % 2 === 0 ? BR : CZ_CLARO)] })
+    )
+    : [new TableRow({ children: [cel([par([run(extrairBloco(d.textoLimpo, 'QUESTOES_DISSERTATIVAS', 'GABARITO_OBJETIVAS'), { sz: 20 })])])] })];
 
-  const gabCabecalho = new Table({
+  const tabelaDis = new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bd(), rows: disRows });
+
+  // ── GABARITO (nova página) ─────────────────────────────────────────────────
+  const gabHeader = new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: mkBd(VM),
+    borders: bd(VM),
     rows: [
-      new TableRow({ children: [
-        mkCell([mkPar([mkRun('GABARITO', { bold: true, sz: 26, cor: BR })], AlignmentType.CENTER, 80, 80)], VM),
-      ]}),
-      new TableRow({ children: [
-        mkCell([mkPar([mkRun(`${valores.serie}  |  Educação Física  |  ${valores.bimestre}  |  ${valores.tema || ''}`, { sz: 20, cor: AZ })], AlignmentType.CENTER, 60, 60)]),
-      ]}),
+      new TableRow({ children: [hCel('GABARITO', 1, VM)] }),
+      new TableRow({ children: [cel([
+        par([run(`${valores.serie}  |  Educação Física  |  ${valores.bimestre}  |  ${valores.tema || ''}`, { sz: 20, cor: AZ })], AlignmentType.CENTER, 60, 60)
+      ])] }),
     ],
   });
 
-  // Gabarito objetivas em grid 2x4
-  const gabObjTitulo = new Table({
+  // Grid gabarito objetivas 2x4
+  const gabObjHeader = new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: mkBd(),
-    rows: [
-      new TableRow({ children: [
-        mkCell([mkPar([mkRun('QUESTÕES OBJETIVAS', { bold: true, sz: 20, cor: BR })], AlignmentType.CENTER, 60, 60)], AZ),
-      ]}),
-    ],
+    borders: bd(),
+    rows: [new TableRow({ children: [hCel('QUESTÕES OBJETIVAS')] })],
   });
+
+  const makeGabCell = (n: number) => {
+    const gab = d.gabObj.find(g => g.numero === n);
+    return cel([par([
+      run(`${n}.  `, { bold: true, sz: 22 }),
+      run(gab?.resposta ?? '?', { bold: true, sz: 22, cor: VM }),
+    ], AlignmentType.CENTER, 80, 80)]);
+  };
 
   const gabObjGrid = new Table({
-    width: { size: 60, type: WidthType.PERCENTAGE },
-    borders: mkBd(),
+    width: { size: 80, type: WidthType.PERCENTAGE },
+    borders: bd(),
     rows: [
-      new TableRow({ children: [1, 2, 3, 4].map(n => {
-        const gab = d.gabarito.objetivas.find(g => g.numero === n);
-        return mkCell([
-          mkPar([mkRun(`${n}.`, { bold: true, sz: 20 }), mkRun(`  ${(gab?.resposta || '?').toUpperCase()}`, { bold: true, sz: 20, cor: VM })], AlignmentType.CENTER, 60, 60)
-        ]);
-      })}),
-      new TableRow({ children: [5, 6, 7, 8].map(n => {
-        const gab = d.gabarito.objetivas.find(g => g.numero === n);
-        return mkCell([
-          mkPar([mkRun(`${n}.`, { bold: true, sz: 20 }), mkRun(`  ${(gab?.resposta || '?').toUpperCase()}`, { bold: true, sz: 20, cor: VM })], AlignmentType.CENTER, 60, 60)
-        ]);
-      })}),
+      new TableRow({ children: [1, 2, 3, 4].map(makeGabCell) }),
+      new TableRow({ children: [5, 6, 7, 8].map(makeGabCell) }),
     ],
   });
 
-  // Gabarito dissertativas
-  const gabDisTitulo = new Table({
+  const gabDisHeader = new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: mkBd(),
-    rows: [
-      new TableRow({ children: [
-        mkCell([mkPar([mkRun('CRITÉRIOS DE CORREÇÃO — QUESTÕES DISSERTATIVAS', { bold: true, sz: 20, cor: BR })], AlignmentType.CENTER, 60, 60)], AZ),
-      ]}),
-    ],
+    borders: bd(),
+    rows: [new TableRow({ children: [hCel('CRITÉRIOS DE CORREÇÃO — QUESTÕES DISSERTATIVAS')] })],
   });
 
-  const gabDisRows: TableRow[] = [];
-  d.gabarito.dissertativas.forEach((gab, idx) => {
-    gabDisRows.push(new TableRow({ children: [
-      mkCell([
-        mkPar([mkRun(`Questão ${gab.numero}`, { bold: true, sz: 20, cor: AZ }), mkRun(' (1,0 ponto)', { sz: 18, cor: '666666', it: true })], AlignmentType.LEFT, 80, 40),
-        ...gab.criterios.map((c, ci) =>
-          mkPar([mkRun(`• ${c}`, { sz: 20 })], AlignmentType.LEFT, 20, 20)
-        ),
-        mkPar([mkRun('')], AlignmentType.LEFT, 20, 60),
-      ], idx % 2 === 0 ? BR : CZ),
-    ]}));
-  });
+  const gabDisRows = d.gabDis.length > 0
+    ? d.gabDis.map((gab, idx) =>
+      new TableRow({ children: [cel([
+        par([run(`Questão ${gab.numero}`, { bold: true, sz: 20, cor: AZ }), run('  (1,0 ponto)', { sz: 18, cor: '888888', it: true })], AlignmentType.LEFT, 80, 30),
+        ...gab.criterios.map(c => par([run('• ' + c, { sz: 20 })], AlignmentType.LEFT, 15, 15)),
+        par([run('')], AlignmentType.LEFT, 10, 50),
+      ], idx % 2 === 0 ? BR : CZ_CLARO)] })
+    )
+    : [new TableRow({ children: [cel([par([run(extrairBloco(d.textoLimpo, 'GABARITO_DISSERTATIVAS', ''), { sz: 20 })])])] })];
 
-  if (gabDisRows.length === 0) {
-    const blocoGabDis = extrairBloco(limpar(textoOriginal), 'GABARITO_DISSERTATIVAS', '');
-    gabDisRows.push(new TableRow({ children: [
-      mkCell(blocoGabDis.split('\n').filter(l => l.trim()).map(l =>
-        mkPar([mkRun(l, { sz: 20 })], AlignmentType.LEFT, 20, 20)
-      )),
-    ]}));
-  }
+  const tabelaGabDis = new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bd(), rows: gabDisRows });
 
-  const tabelaGabDis = new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: mkBd(),
-    rows: gabDisRows,
-  });
-
+  // ── DOCUMENTO ─────────────────────────────────────────────────────────────
   const doc = new Document({
     sections: [{
-      properties: { page: { margin: { top: 720, bottom: 720, left: 900, right: 900 } } },
+      properties: { page: { margin: { top: 600, bottom: 600, left: 800, right: 800 } } },
       children: [
-        cabecalho, esp(100),
-        instrucoes, esp(100),
-        parte1Titulo,
-        tabelaObj, esp(100),
-        parte2Titulo,
+        cabecalho, esp(80),
+        instrucoes, esp(80),
+        parte1Header,
+        tabelaObj, esp(80),
+        parte2Header,
         tabelaDis,
-        quebra,
-        gabCabecalho, esp(100),
-        gabObjTitulo,
+        quebraSecao,
+        gabHeader, esp(80),
+        gabObjHeader,
         gabObjGrid, esp(100),
-        gabDisTitulo,
+        gabDisHeader,
         tabelaGabDis,
       ],
     }],
@@ -609,11 +558,11 @@ export function IAProvaOficial() {
     <div className="flex flex-col min-h-screen bg-gray-50 pb-36">
       <div className="p-5 text-white relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #C0392B, #922B21)' }}>
         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10" />
-        <button onClick={() => navigate('/ia')} className="flex items-center gap-1.5 text-white/70 text-sm font-semibold mb-3 relative z-10 hover:text-white transition-colors">
+        <button onClick={() => navigate('/ia')} className="flex items-center gap-1.5 text-white/70 text-sm font-semibold mb-3 relative z-10 hover:text-white">
           <ArrowLeft className="w-4 h-4" /> Ferramentas IA
         </button>
-        <h1 className="text-lg font-black relative z-10 leading-tight">Gerador de Avaliações</h1>
-        <p className="text-sm text-white/70 mt-1 relative z-10">Modelo oficial IOP · 8 objetivas + 2 dissertativas · Exportação Word</p>
+        <h1 className="text-lg font-black relative z-10">Gerador de Avaliações</h1>
+        <p className="text-sm text-white/70 mt-1 relative z-10">Modelo oficial IOP · 8 objetivas + 2 dissertativas · 2 colunas · Word</p>
       </div>
 
       <div className="p-4 flex flex-col gap-4">
@@ -623,18 +572,18 @@ export function IAProvaOficial() {
               <label className="text-xs font-black text-gray-500 uppercase tracking-widest block mb-1.5">{campo.label}</label>
               {campo.tipo === 'select' ? (
                 <select value={valores[campo.id] || ''} onChange={e => atualizar(campo.id, e.target.value)}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-red-200 focus:border-red-400">
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-red-200">
                   <option value="">Selecione...</option>
                   {campo.opcoes?.map(op => <option key={op} value={op}>{op}</option>)}
                 </select>
               ) : campo.tipo === 'textarea' ? (
                 <textarea value={valores[campo.id] || ''} onChange={e => atualizar(campo.id, e.target.value)}
                   placeholder={campo.placeholder} rows={2}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-red-200 focus:border-red-400 resize-none" />
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-red-200 resize-none" />
               ) : (
                 <input type="text" value={valores[campo.id] || ''} onChange={e => atualizar(campo.id, e.target.value)}
                   placeholder={campo.placeholder}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-red-200 focus:border-red-400" />
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-red-200" />
               )}
             </div>
           ))}
@@ -662,11 +611,11 @@ export function IAProvaOficial() {
                   <RefreshCw className="w-3.5 h-3.5" /> Gerar nova
                 </button>
                 <button onClick={copiar}
-                  className={`flex items-center gap-1 text-xs font-black px-3 py-1.5 rounded-lg transition-all ${copiado ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
+                  className={`flex items-center gap-1 text-xs font-black px-3 py-1.5 rounded-lg transition-all ${copiado ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-700'}`}>
                   {copiado ? <><CheckCircle className="w-3.5 h-3.5" /> Copiado!</> : <><Copy className="w-3.5 h-3.5" /> Copiar</>}
                 </button>
                 <button onClick={baixarWord} disabled={exportando}
-                  className="flex items-center gap-1 text-xs font-black px-3 py-1.5 rounded-lg text-white disabled:opacity-60 transition-all"
+                  className="flex items-center gap-1 text-xs font-black px-3 py-1.5 rounded-lg text-white disabled:opacity-60"
                   style={{ background: 'linear-gradient(135deg, #C0392B, #922B21)' }}>
                   {exportando ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Gerando...</> : <><FileDown className="w-3.5 h-3.5" /> Baixar Word</>}
                 </button>
