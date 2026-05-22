@@ -11,7 +11,6 @@ function extrairBimestre(titulo: string): number | null {
   return match ? parseInt(match[1]) : null;
 }
 
-// CORRIGIDO: aceita º, °, ª (ordinal feminino usado pelo Simaed)
 function normalizarNomeAba(nomeAba: string): string {
   return nomeAba.replace(/[º°ª]/g, '').replace(/\s/g, '').toUpperCase();
 }
@@ -153,6 +152,25 @@ async function gerarAbaDiario(wb: any, t: string, b1: any[], b2: any[], b3: any[
   [5, 7, 7, 7, 7, 9, 7, 7, 7, 7, 9, 9, 9].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
 }
 
+// Componente de botão compacto para o grid
+function BtnAcao({ onClick, disabled, cor, icon: Icon, label }: {
+  onClick: () => void; disabled?: boolean; cor: string; icon: any; label: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "flex flex-col items-center justify-center gap-1 py-2.5 px-1 rounded-xl font-bold text-white text-[11px] transition-all active:scale-95 disabled:opacity-50",
+        cor
+      )}
+    >
+      <Icon className="w-4 h-4" />
+      <span className="leading-tight text-center">{label}</span>
+    </button>
+  );
+}
+
 export function GradeReport() {
   const [view, setView] = useState<"notas" | "desempenho">("notas");
   const [bimestre, setBimestre] = useState<1 | 2 | 3 | 4>(1);
@@ -173,7 +191,6 @@ export function GradeReport() {
     turma: string; bimestre: number; total: number; status: 'ok' | 'erro'; msg?: string;
   }[]>([]);
   const [importConcluido, setImportConcluido] = useState(false);
-
   const [editando, setEditando] = useState<any | null>(null);
   const [editNota, setEditNota] = useState('');
   const [editSalvando, setEditSalvando] = useState(false);
@@ -233,19 +250,13 @@ export function GradeReport() {
       const nota = isTexto ? null : (isNaN(notaNum) ? null : notaNum);
       const nota_texto = isTexto ? editNota.trim() : null;
       const { error } = await supabase
-        .from('notas')
-        .update({ nota, nota_texto })
-        .eq('turma', turma)
-        .eq('bimestre', bimestre)
-        .ilike('nome', editando.nome);
+        .from('notas').update({ nota, nota_texto })
+        .eq('turma', turma).eq('bimestre', bimestre).ilike('nome', editando.nome);
       if (error) throw error;
       setAlunos(prev => prev.map(a => a.nome === editando.nome ? { ...a, nota, nota_texto } : a));
       setEditando(null);
-    } catch (e: any) {
-      alert('Erro ao salvar: ' + e.message);
-    } finally {
-      setEditSalvando(false);
-    }
+    } catch (e: any) { alert('Erro ao salvar: ' + e.message); }
+    finally { setEditSalvando(false); }
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -316,12 +327,6 @@ export function GradeReport() {
     finally { setIsSaving(false); }
   };
 
-  const getStatus = (nota: number) => {
-    if (nota >= 5) return { text: "Aprovado", color: "text-green-600" };
-    if (nota >= 3) return { text: "Rec.", color: "text-yellow-600" };
-    return { text: "Reprov.", color: "text-red-600" };
-  };
-
   const exportarDiarioOficialNotas = async () => {
     setExportandoDiario(true);
     try {
@@ -355,7 +360,7 @@ export function GradeReport() {
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href = url; a.download = `diario_notas_todas_turmas_2026.xlsx`; a.click();
-      URL.revokeObjectProject(url);
+      URL.revokeObjectURL(url);
     } catch (e: any) { alert('Erro: ' + e.message); }
     finally { setExportandoDiarioTodas(false); }
   };
@@ -439,10 +444,14 @@ export function GradeReport() {
     <div className="flex flex-col h-full bg-background relative" id="report-content">
       <div className="p-4 border-b border-gray-200 sticky top-0 bg-background/90 backdrop-blur-md z-10 shadow-sm print:hidden">
         <h2 className="text-2xl font-bold tracking-tight mb-3 text-primary-dark">Notas</h2>
+
+        {/* Tabs Notas / Desempenho */}
         <div className="flex gap-2 w-full p-1 bg-gray-200/50 rounded-xl border border-gray-200 mb-3">
           <button onClick={() => setView("notas")} className={cn("flex-1 py-2 text-center rounded-lg text-sm font-semibold transition-all", view === "notas" ? "bg-white text-primary ring-1 ring-gray-200" : "bg-transparent text-gray-500")}>Notas</button>
           <button onClick={() => setView("desempenho")} className={cn("flex-1 py-2 text-center rounded-lg text-sm font-semibold transition-all", view === "desempenho" ? "bg-white text-primary ring-1 ring-gray-200" : "bg-transparent text-gray-500")}>Desempenho</button>
         </div>
+
+        {/* Seletor de turmas */}
         <div className="mb-3">
           <label className="text-xs font-semibold text-gray-500 mb-1 block">TURMA</label>
           <div className="grid grid-cols-9 gap-1">
@@ -451,38 +460,36 @@ export function GradeReport() {
             ))}
           </div>
         </div>
+
         {view === "notas" && (
           <>
+            {/* Seletor de bimestre */}
             <div className="flex gap-2 w-full p-1 bg-gray-200/50 rounded-xl border border-gray-200 mb-3">
               {[1, 2, 3, 4].map(b => (
                 <button key={b} onClick={() => setBimestre(b as any)} className={cn("flex-1 py-2 text-center rounded-lg text-sm font-semibold transition-all", bimestre === b ? "bg-white text-primary ring-1 ring-gray-200" : "bg-transparent text-gray-500")}>{b}o Bim</button>
               ))}
             </div>
-            <div className="flex gap-2 flex-wrap">
-              <button onClick={() => setShowImport(true)} className="flex-1 py-3 bg-primary text-white rounded-xl font-bold shadow-md hover:bg-primary-dark transition-all flex items-center justify-center gap-2"><Upload className="w-4 h-4" /> PDF</button>
-              <button onClick={() => { setShowImportExcel(true); setResultadoImport([]); setImportConcluido(false); }} className="flex-1 py-3 bg-emerald-700 text-white rounded-xl font-bold shadow-md hover:bg-emerald-800 transition-all flex items-center justify-center gap-2"><Table2 className="w-4 h-4" /> Excel</button>
+
+            {/* ── BOTÕES COMPACTOS EM GRID ── */}
+            <div className="grid grid-cols-5 gap-1.5 mb-1">
+              {/* Linha 1: importar */}
+              <BtnAcao onClick={() => setShowImport(true)} cor="bg-primary hover:bg-primary-dark" icon={Upload} label="PDF" />
+              <BtnAcao onClick={() => { setShowImportExcel(true); setResultadoImport([]); setImportConcluido(false); }} cor="bg-emerald-700 hover:bg-emerald-800" icon={Table2} label="Excel" />
+              <BtnAcao onClick={exportarExcel} cor="bg-emerald-600 hover:bg-emerald-700" icon={FileSpreadsheet} label="Exportar" />
+              <BtnAcao onClick={exportarTodasTurmas} disabled={exportandoTodas} cor="bg-blue-700 hover:bg-blue-800" icon={exportandoTodas ? Loader2 : FileSpreadsheet} label={exportandoTodas ? '...' : 'Todas'} />
+              <BtnAcao onClick={() => window.print()} cor="bg-gray-500 hover:bg-gray-600" icon={FileDown} label="Print" />
+            </div>
+
+            <div className="grid grid-cols-5 gap-1.5">
+              {/* Linha 2: diário + extras */}
+              <BtnAcao onClick={exportarDiarioOficialNotas} disabled={exportandoDiario} cor="bg-indigo-700 hover:bg-indigo-800" icon={exportandoDiario ? Loader2 : BookOpen} label={exportandoDiario ? '...' : 'Diário'} />
+              <BtnAcao onClick={exportarDiarioTodasTurmas} disabled={exportandoDiarioTodas} cor="bg-purple-700 hover:bg-purple-800" icon={exportandoDiarioTodas ? Loader2 : BookOpen} label={exportandoDiarioTodas ? '...' : 'Diár. All'} />
               {alunos.length > 0 && !saved && (
-                <button onClick={handleSalvar} disabled={isSaving} className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold shadow-md hover:bg-green-700 transition-all flex items-center justify-center gap-2"><Save className="w-4 h-4" /> {isSaving ? "Salvando..." : "Salvar"}</button>
+                <BtnAcao onClick={handleSalvar} disabled={isSaving} cor="bg-green-600 hover:bg-green-700" icon={isSaving ? Loader2 : Save} label={isSaving ? '...' : 'Salvar'} />
               )}
               {alunos.length > 0 && (
-                <button onClick={exportarExcel} className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold shadow-md hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"><FileSpreadsheet className="w-4 h-4" /> Exportar</button>
+                <BtnAcao onClick={limparLista} cor="bg-red-600 hover:bg-red-700" icon={Trash2} label="Limpar" />
               )}
-              <button onClick={exportarTodasTurmas} disabled={exportandoTodas} className="flex-1 py-3 bg-blue-700 text-white rounded-xl font-bold shadow-md hover:bg-blue-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
-                {exportandoTodas ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
-                {exportandoTodas ? 'Gerando...' : 'Todas'}
-              </button>
-              <button onClick={exportarDiarioOficialNotas} disabled={exportandoDiario} className="flex-1 py-3 bg-indigo-700 text-white rounded-xl font-bold shadow-md hover:bg-indigo-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
-                {exportandoDiario ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
-                {exportandoDiario ? 'Gerando...' : 'Diário'}
-              </button>
-              <button onClick={exportarDiarioTodasTurmas} disabled={exportandoDiarioTodas} className="flex-1 py-3 bg-purple-700 text-white rounded-xl font-bold shadow-md hover:bg-purple-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
-                {exportandoDiarioTodas ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
-                {exportandoDiarioTodas ? 'Gerando...' : 'Diário Todas'}
-              </button>
-              {alunos.length > 0 && (
-                <button onClick={limparLista} className="py-3 px-4 bg-red-600 text-white rounded-xl font-bold shadow-md hover:bg-red-700 transition-all flex items-center justify-center gap-2"><Trash2 className="w-5 h-5" /></button>
-              )}
-              <button onClick={() => window.print()} className="py-3 px-4 bg-gray-200 text-gray-800 rounded-xl font-bold hover:bg-gray-300 transition-all"><FileDown className="w-5 h-5" /></button>
             </div>
           </>
         )}
@@ -503,14 +510,10 @@ export function GradeReport() {
                         <span className="font-mono text-gray-400 text-xs w-5 shrink-0">{aluno.num}</span>
                         <span className="font-semibold text-textPrimary text-xs truncate">{aluno.nome.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())}</span>
                       </div>
-                      <button
-                        onClick={() => abrirEdicao(aluno)}
-                        className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-gray-100 transition-colors group shrink-0"
-                      >
+                      <button onClick={() => abrirEdicao(aluno)} className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-gray-100 transition-colors group shrink-0">
                         {aluno.nota_texto
                           ? <span className="font-black text-red-600 text-sm">{aluno.nota_texto}</span>
-                          : <span className="font-black text-primary text-base">{fmtNota(aluno.nota)}</span>
-                        }
+                          : <span className="font-black text-primary text-base">{fmtNota(aluno.nota)}</span>}
                         <Pencil className="w-3 h-3 text-gray-300 group-hover:text-gray-500 transition-colors" />
                       </button>
                     </div>
@@ -563,30 +566,24 @@ export function GradeReport() {
         )}
       </div>
 
+      {/* Modal Editar Nota */}
       {editando && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-4 sm:items-center">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 flex flex-col gap-4">
             <div className="flex justify-between items-start">
               <div>
                 <h3 className="text-base font-bold text-gray-800">Editar Nota</h3>
-                <p className="text-xs text-gray-500 mt-0.5 max-w-[220px] truncate">
-                  {editando.nome.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())}
-                </p>
+                <p className="text-xs text-gray-500 mt-0.5 max-w-[220px] truncate">{editando.nome.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())}</p>
                 <p className="text-xs text-primary font-semibold mt-0.5">Turma {turma} — {bimestre}º Bimestre</p>
               </div>
               <button onClick={() => setEditando(null)} className="text-gray-400 hover:text-gray-600 p-1"><X className="w-5 h-5" /></button>
             </div>
             <div>
               <label className="text-xs font-semibold text-gray-500 block mb-1">NOVA NOTA</label>
-              <input
-                type="text"
-                value={editNota}
-                onChange={e => setEditNota(e.target.value)}
+              <input type="text" value={editNota} onChange={e => setEditNota(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') salvarEdicao(); if (e.key === 'Escape') setEditando(null); }}
-                placeholder="Ex: 8,5 ou Remaj."
-                autoFocus
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-lg font-bold text-center focus:outline-none focus:border-primary transition-colors"
-              />
+                placeholder="Ex: 8,5 ou Remaj." autoFocus
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-lg font-bold text-center focus:outline-none focus:border-primary transition-colors" />
               <p className="text-xs text-gray-400 mt-1.5 text-center">Use vírgula para decimais. Para notas especiais, digite o texto (ex: Remaj.)</p>
             </div>
             <div className="flex gap-2">
@@ -601,6 +598,7 @@ export function GradeReport() {
         </div>
       )}
 
+      {/* Modal PDF */}
       {showImport && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white p-6 rounded-2xl w-full max-w-lg">
@@ -617,6 +615,7 @@ export function GradeReport() {
         </div>
       )}
 
+      {/* Modal Excel */}
       {showImportExcel && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white p-6 rounded-2xl w-full max-w-lg flex flex-col gap-4">
