@@ -1,6 +1,6 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 
-// â”€â”€â”€ Tipos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Tipos ───────────────────────────────────────────────────────────────────
 
 interface SituacaoAprendizagem {
   numero: number;
@@ -30,7 +30,7 @@ interface Sequencia {
   referencias: string[];
 }
 
-// â”€â”€â”€ Config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Config ───────────────────────────────────────────────────────────────────
 
 const PEXELS_API_KEY = import.meta.env.VITE_PEXELS_API_KEY ?? "";
 
@@ -54,7 +54,7 @@ async function chamarClaudeProxy(prompt: string): Promise<string> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 8000,
+      max_tokens: 4000,
       messages: [{ role: "user", content: prompt }],
     }),
   });
@@ -63,7 +63,7 @@ async function chamarClaudeProxy(prompt: string): Promise<string> {
   return data.content.map((i: { text?: string }) => i.text ?? "").join("");
 }
 
-// â”€â”€â”€ GeraÃ§Ã£o Word (docx) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Geração Word (docx) ─────────────────────────────────────────────────────
 
 async function baixarWord(
   seq: Sequencia,
@@ -81,7 +81,7 @@ async function baixarWord(
     HeadingLevel, LevelFormat,
   } = await import("docx");
 
-  const W = 9360; // largura Ãºtil em DXA (A4 com margens de 1440)
+  const W = 9360; // largura útil em DXA (A4 com margens de 1440)
   const borda = { style: BorderStyle.SINGLE, size: 4, color: "2E74B5" };
   const bordas = { top: borda, bottom: borda, left: borda, right: borda };
   const bordaFina = { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" };
@@ -124,7 +124,7 @@ async function baixarWord(
       margins: margCell,
       children: [
         new Paragraph({ children: [new TextRun({ text: label, bold: true, size: 18, font: "Arial" })] }),
-        new Paragraph({ children: [new TextRun({ text: value || "â€”", size: 20, font: "Arial" })] }),
+        new Paragraph({ children: [new TextRun({ text: value || "—", size: 20, font: "Arial" })] }),
       ],
     });
 
@@ -140,13 +140,13 @@ async function baixarWord(
       children: [new TextRun({ text, size: 20, font: "Arial" })],
     });
 
-  // quebra linhas em parÃ¡grafos
+  // quebra linhas em parágrafos
   const textoParagrafos = (text: string) =>
     text.split("\n").filter(l => l.trim()).map(l => paragrafo(l));
 
   const children: (Paragraph | Table)[] = [
 
-    // â”€â”€ TÃ­tulo principal â”€â”€
+    // ── Título principal ──
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { before: 0, after: 200 },
@@ -155,28 +155,28 @@ async function baixarWord(
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { before: 0, after: 200 },
-      children: [new TextRun({ text: "SEQUÃŠNCIA DIDÃTICA â€” EDUCAÃ‡ÃƒO FÃSICA", bold: true, size: 28, color: "1F4E79", font: "Arial" })],
+      children: [new TextRun({ text: "SEQUÊNCIA DIDÁTICA — EDUCAÇÃO FÍSICA", bold: true, size: 28, color: "1F4E79", font: "Arial" })],
     }),
 
-    // â”€â”€ Tabela de identificaÃ§Ã£o â”€â”€
+    // ── Tabela de identificação ──
     new Table({
       width: { size: W, type: WidthType.DXA },
       columnWidths: [Math.round(W / 4), Math.round(W / 4), Math.round(W / 4), W - Math.round(W / 4) * 3],
       rows: [
-        new TableRow({ children: [headerCell("IDENTIFICAÃ‡ÃƒO", W, "1F4E79")] }),
+        new TableRow({ children: [headerCell("IDENTIFICAÇÃO", W, "1F4E79")] }),
         new TableRow({
           children: [
             labelDataCell("PROFESSOR(A)", professor, Math.round(W / 4)),
-            labelDataCell("COMPONENTE", "EducaÃ§Ã£o FÃ­sica", Math.round(W / 4)),
-            labelDataCell("ANO/SÃ‰RIE", serie, Math.round(W / 4)),
-            labelDataCell("TURMAS", turmas || "â€”", W - Math.round(W / 4) * 3),
+            labelDataCell("COMPONENTE", "Educação Física", Math.round(W / 4)),
+            labelDataCell("ANO/SÉRIE", serie, Math.round(W / 4)),
+            labelDataCell("TURMAS", turmas || "—", W - Math.round(W / 4) * 3),
           ],
         }),
         new TableRow({
           children: [
             labelDataCell("COORDENADOR(A)", coordenador, Math.round(W / 2)),
             labelDataCell("AULAS PREVISTAS", aulasPrevistas, Math.round(W / 4)),
-            labelDataCell("PERÃODO", periodo || "â€”", W - Math.round(W / 2) - Math.round(W / 4)),
+            labelDataCell("PERÍODO", periodo || "—", W - Math.round(W / 2) - Math.round(W / 4)),
           ],
         }),
         new TableRow({
@@ -198,7 +198,7 @@ async function baixarWord(
 
     new Paragraph({ spacing: { before: 200, after: 0 }, children: [] }),
 
-    // â”€â”€ Objetivos â”€â”€
+    // ── Objetivos ──
     new Table({
       width: { size: W, type: WidthType.DXA },
       columnWidths: [W],
@@ -218,7 +218,7 @@ async function baixarWord(
 
     new Paragraph({ spacing: { before: 160, after: 0 }, children: [] }),
 
-    // â”€â”€ ConteÃºdos: Habilidades + Objetos â”€â”€
+    // ── Conteúdos: Habilidades + Objetos ──
     new Table({
       width: { size: W, type: WidthType.DXA },
       columnWidths: [Math.round(W * 0.55), W - Math.round(W * 0.55)],
@@ -264,7 +264,7 @@ async function baixarWord(
 
     new Paragraph({ spacing: { before: 160, after: 0 }, children: [] }),
 
-    // â”€â”€ Desenvolvimento das Atividades â”€â”€
+    // ── Desenvolvimento das Atividades ──
     new Table({
       width: { size: W, type: WidthType.DXA },
       columnWidths: [W],
@@ -286,7 +286,7 @@ async function baixarWord(
           ],
         }),
 
-        // SituaÃ§Ãµes de Aprendizagem
+        // Situações de Aprendizagem
         ...seq.situacoes.flatMap(sit => [
           new TableRow({
             children: [
@@ -298,7 +298,7 @@ async function baixarWord(
                 children: [
                   new Paragraph({
                     children: [
-                      new TextRun({ text: `SituaÃ§Ã£o de Aprendizagem ${sit.numero} â€” `, bold: true, size: 20, color: "1A3C8F", font: "Arial" }),
+                      new TextRun({ text: `Situação de Aprendizagem ${sit.numero} — `, bold: true, size: 20, color: "1A3C8F", font: "Arial" }),
                       new TextRun({ text: sit.titulo, bold: true, size: 20, color: "1A3C8F", font: "Arial" }),
                     ],
                   }),
@@ -315,7 +315,7 @@ async function baixarWord(
                   new Paragraph({
                     spacing: { before: 0, after: 60 },
                     children: [
-                      new TextRun({ text: "Objetivo EspecÃ­fico: ", bold: true, size: 20, font: "Arial" }),
+                      new TextRun({ text: "Objetivo Específico: ", bold: true, size: 20, font: "Arial" }),
                       new TextRun({ text: sit.objetivo, size: 20, font: "Arial" }),
                     ],
                   }),
@@ -333,7 +333,7 @@ async function baixarWord(
                   ...(sit.imageUrl ? [
                     new Paragraph({
                       spacing: { before: 40, after: 0 },
-                      children: [new TextRun({ text: `[Imagem ilustrativa: ${sit.imageQuery} â€” Foto: ${sit.imageAuthor || ""} / Pexels]`, size: 16, italics: true, color: "888888", font: "Arial" })],
+                      children: [new TextRun({ text: `[Imagem ilustrativa: ${sit.imageQuery} — Foto: ${sit.imageAuthor || ""} / Pexels]`, size: 16, italics: true, color: "888888", font: "Arial" })],
                     }),
                   ] : []),
                 ],
@@ -346,7 +346,7 @@ async function baixarWord(
 
     new Paragraph({ spacing: { before: 160, after: 0 }, children: [] }),
 
-    // â”€â”€ AvaliaÃ§Ã£o, Valores, Recursos â”€â”€
+    // ── Avaliação, Valores, Recursos ──
     new Table({
       width: { size: W, type: WidthType.DXA },
       columnWidths: [Math.round(W / 3), Math.round(W / 3), W - Math.round(W / 3) * 2],
@@ -354,7 +354,7 @@ async function baixarWord(
         new TableRow({
           children: [
             headerCell("VALORES ATITUDINAIS", Math.round(W / 3)),
-            headerCell("INSTRUMENTOS DE AVALIAÃ‡ÃƒO", Math.round(W / 3)),
+            headerCell("INSTRUMENTOS DE AVALIAÇÃO", Math.round(W / 3)),
             headerCell("RECURSOS", W - Math.round(W / 3) * 2),
           ],
         }),
@@ -370,12 +370,12 @@ async function baixarWord(
 
     new Paragraph({ spacing: { before: 160, after: 0 }, children: [] }),
 
-    // â”€â”€ ReferÃªncias â”€â”€
+    // ── Referências ──
     new Table({
       width: { size: W, type: WidthType.DXA },
       columnWidths: [W],
       rows: [
-        new TableRow({ children: [headerCell("REFERÃŠNCIAS", W)] }),
+        new TableRow({ children: [headerCell("REFERÊNCIAS", W)] }),
         new TableRow({
           children: [
             new TableCell({
@@ -396,12 +396,12 @@ async function baixarWord(
 
     new Paragraph({ spacing: { before: 240, after: 0 }, children: [] }),
 
-    // â”€â”€ Assinaturas â”€â”€
+    // ── Assinaturas ──
     new Table({
       width: { size: W, type: WidthType.DXA },
       columnWidths: [Math.round(W / 2), W - Math.round(W / 2)],
       rows: [
-        new TableRow({ children: [headerCell("DEVOLUTIVA DO COORDENADOR PEDAGÃ“GICO", W, "1F4E79")] }),
+        new TableRow({ children: [headerCell("DEVOLUTIVA DO COORDENADOR PEDAGÓGICO", W, "1F4E79")] }),
         new TableRow({
           children: [
             new TableCell({
@@ -465,12 +465,12 @@ async function baixarWord(
   URL.revokeObjectURL(url);
 }
 
-// â”€â”€â”€ Componente â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Componente ───────────────────────────────────────────────────────────────
 
 export function IASequencia() {
   const [professor, setProfessor] = useState("Marco Pedro");
   const [coordenador, setCoordenador] = useState("Jair Fiesca e Amarildo Saady");
-  const [serie, setSerie] = useState("6Âº e 7Âº");
+  const [serie, setSerie] = useState("6º e 7º");
   const [turmas, setTurmas] = useState("");
   const [aulasPrevistas, setAulasPrevistas] = useState("5");
   const [periodo, setPeriodo] = useState("");
@@ -484,43 +484,43 @@ export function IASequencia() {
   const [sequencia, setSequencia] = useState<Sequencia | null>(null);
 
   const gerar = async () => {
-    if (!tema.trim()) { alert("Informe o tema/conteÃºdo da aula!"); return; }
+    if (!tema.trim()) { alert("Informe o tema/conteúdo da aula!"); return; }
     setStatus("gerando"); setErroMsg(""); setSequencia(null);
 
-    const prompt = `VocÃª Ã© um professor de EducaÃ§Ã£o FÃ­sica experiente do estado do Acre, Brasil. Crie uma sequÃªncia didÃ¡tica completa e detalhada no padrÃ£o oficial da SEEDUC/AC para:
+    const prompt = `Você é um professor de Educação Física experiente do estado do Acre, Brasil. Crie uma sequência didática completa e detalhada no padrão oficial da SEEDUC/AC para:
 
-Tema/ConteÃºdo: ${tema}
-SÃ©rie: ${serie}
+Tema/Conteúdo: ${tema}
+Série: ${serie}
 Turmas: ${turmas || "a definir"}
 Aulas previstas: ${aulasPrevistas}
-Recursos disponÃ­veis: ${recursos || "materiais bÃ¡sicos de EducaÃ§Ã£o FÃ­sica"}
-NÃºmero de situaÃ§Ãµes de aprendizagem: ${numSituacoes}
+Recursos disponíveis: ${recursos || "materiais básicos de Educação Física"}
+Número de situações de aprendizagem: ${numSituacoes}
 
-Responda SOMENTE com JSON puro, sem markdown, sem blocos de cÃ³digo, sem texto antes ou depois.
+Responda SOMENTE com JSON puro, sem markdown, sem blocos de código, sem texto antes ou depois.
 Formato exato:
 {
-  "objetivos": "parÃ¡grafo descrevendo objetivos/capacidades gerais",
+  "objetivos": "parágrafo descrevendo objetivos/capacidades gerais",
   "habilidades": [
-    {"codigo": "EF__EF__", "descricao": "descriÃ§Ã£o completa da habilidade BNCC"},
-    {"codigo": "EF__EF__", "descricao": "descriÃ§Ã£o completa"},
-    {"codigo": "EF__EF__", "descricao": "descriÃ§Ã£o completa"}
+    {"codigo": "EF__EF__", "descricao": "descrição completa da habilidade BNCC"},
+    {"codigo": "EF__EF__", "descricao": "descrição completa"},
+    {"codigo": "EF__EF__", "descricao": "descrição completa"}
   ],
   "objetos_conhecimento": ["objeto 1", "objeto 2", "objeto 3"],
-  "aquecimento": "descriÃ§Ã£o detalhada da atividade de acolhida e aquecimento inicial (mÃ­nimo 3 parÃ¡grafos)",
+  "aquecimento": "descrição detalhada da atividade de acolhida e aquecimento inicial (mínimo 3 parágrafos)",
   "situacoes": [
     {
       "numero": 1,
-      "titulo": "TÃ­tulo da SituaÃ§Ã£o de Aprendizagem 1",
-      "objetivo": "Objetivo especÃ­fico desta situaÃ§Ã£o",
-      "desenvolvimento": "DescriÃ§Ã£o muito detalhada do desenvolvimento com numeraÃ§Ã£o de etapas (mÃ­nimo 4 parÃ¡grafos)",
+      "titulo": "Título da Situação de Aprendizagem 1",
+      "objetivo": "Objetivo específico desta situação",
+      "desenvolvimento": "Descrição muito detalhada do desenvolvimento com numeração de etapas (mínimo 4 parágrafos)",
       "adaptacao": "Como adaptar para alunos com necessidades especiais",
-      "imageQuery": "3 palavras em inglÃªs para buscar imagem no Pexels"
+      "imageQuery": "3 palavras em inglês para buscar imagem no Pexels"
     }
   ],
-  "valores_atitudinais": "descriÃ§Ã£o dos valores atitudinais trabalhados",
-  "instrumentos_avaliacao": "descriÃ§Ã£o dos instrumentos de avaliaÃ§Ã£o utilizados",
-  "recursos": "lista completa de recursos materiais necessÃ¡rios",
-  "referencias": ["ACRE. ReferÃªncia 1.", "ReferÃªncia 2.", "ReferÃªncia 3."]
+  "valores_atitudinais": "descrição dos valores atitudinais trabalhados",
+  "instrumentos_avaliacao": "descrição dos instrumentos de avaliação utilizados",
+  "recursos": "lista completa de recursos materiais necessários",
+  "referencias": ["ACRE. Referência 1.", "Referência 2.", "Referência 3."]
 }`;
 
     let seq: Sequencia;
@@ -561,13 +561,13 @@ Formato exato:
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
 
-      {/* FormulÃ¡rio */}
+      {/* Formulário */}
       <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
-        <h2 className="text-lg font-semibold text-gray-800">ðŸ¤– Gerador de SequÃªncia DidÃ¡tica Oficial â€” IA</h2>
+        <h2 className="text-lg font-semibold text-gray-800">🤖 Gerador de Sequência Didática Oficial — IA</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="sm:col-span-2 flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-500">Tema / ConteÃºdo *</label>
-            <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" placeholder="Ex: Futsal â€” Fundamentos tÃ©cnico-tÃ¡ticos e regras" value={tema} onChange={(e) => setTema(e.target.value)} />
+            <label className="text-xs font-medium text-gray-500">Tema / Conteúdo *</label>
+            <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" placeholder="Ex: Futsal — Fundamentos técnico-táticos e regras" value={tema} onChange={(e) => setTema(e.target.value)} />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-gray-500">Professor(a)</label>
@@ -578,14 +578,14 @@ Formato exato:
             <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" value={coordenador} onChange={(e) => setCoordenador(e.target.value)} />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-500">Ano / SÃ©rie</label>
+            <label className="text-xs font-medium text-gray-500">Ano / Série</label>
             <select className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" value={serie} onChange={(e) => setSerie(e.target.value)}>
-              {["6Âº ano","7Âº ano","8Âº ano","9Âº ano","6Âº e 7Âº","8Âº e 9Âº","1Âº EM","2Âº EM","3Âº EM","1Âº e 2Âº EM"].map((s) => <option key={s}>{s}</option>)}
+              {["6º ano","7º ano","8º ano","9º ano","6º e 7º","8º e 9º","1º EM","2º EM","3º EM","1º e 2º EM"].map((s) => <option key={s}>{s}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-gray-500">Turmas</label>
-            <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" placeholder="Ex: 6ÂºF / 7ÂºD, E, F" value={turmas} onChange={(e) => setTurmas(e.target.value)} />
+            <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" placeholder="Ex: 6ºF / 7ºD, E, F" value={turmas} onChange={(e) => setTurmas(e.target.value)} />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-gray-500">Aulas previstas</label>
@@ -594,42 +594,42 @@ Formato exato:
             </select>
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-500">PerÃ­odo de execuÃ§Ã£o</label>
-            <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" placeholder="Ex: MarÃ§o/Abril 2026" value={periodo} onChange={(e) => setPeriodo(e.target.value)} />
+            <label className="text-xs font-medium text-gray-500">Período de execução</label>
+            <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" placeholder="Ex: Março/Abril 2026" value={periodo} onChange={(e) => setPeriodo(e.target.value)} />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-500">NÂº de SituaÃ§Ãµes de Aprendizagem</label>
+            <label className="text-xs font-medium text-gray-500">Nº de Situações de Aprendizagem</label>
             <select className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" value={numSituacoes} onChange={(e) => setNumSituacoes(e.target.value)}>
               {["2","3","4","5"].map((n) => <option key={n}>{n}</option>)}
             </select>
           </div>
           <div className="sm:col-span-2 flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-500">Recursos disponÃ­veis</label>
+            <label className="text-xs font-medium text-gray-500">Recursos disponíveis</label>
             <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" placeholder="Ex: quadra coberta, bolas de futsal, cones, coletes..." value={recursos} onChange={(e) => setRecursos(e.target.value)} />
           </div>
         </div>
         <button onClick={gerar} disabled={status === "gerando" || status === "imagens"} className="w-full py-3 rounded-xl bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white font-medium text-sm transition-colors">
-          {status === "gerando" ? "â³ Gerando sequÃªncia didÃ¡tica..." : status === "imagens" ? "ðŸ–¼ï¸ Buscando imagens..." : "âœ¨ Gerar SequÃªncia DidÃ¡tica Oficial"}
+          {status === "gerando" ? "⏳ Gerando sequência didática..." : status === "imagens" ? "🖼️ Buscando imagens..." : "✨ Gerar Sequência Didática Oficial"}
         </button>
         {status === "erro" && (
-          <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">âš ï¸ {erroMsg}</div>
+          <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">⚠️ {erroMsg}</div>
         )}
       </div>
 
       {/* Documento Oficial */}
       {status === "pronto" && sequencia && (
         <div>
-          {/* BotÃµes de aÃ§Ã£o */}
+          {/* Botões de ação */}
           <div className="flex gap-3 mb-4">
             <button onClick={handleBaixarWord} disabled={baixando} className="flex-1 py-3 rounded-xl bg-green-700 hover:bg-green-800 disabled:opacity-50 text-white font-medium text-sm transition-colors">
-              {baixando ? "â³ Gerando Word..." : "ðŸ“„ Baixar Word (.docx)"}
+              {baixando ? "⏳ Gerando Word..." : "📄 Baixar Word (.docx)"}
             </button>
             <button onClick={resetar} className="py-3 px-5 rounded-xl border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 transition-colors">
-              â†© Nova sequÃªncia
+              ↩ Nova sequência
             </button>
           </div>
 
-          {/* VisualizaÃ§Ã£o */}
+          {/* Visualização */}
           <div className="bg-white border border-gray-300 shadow-lg rounded-lg overflow-hidden" style={{ fontFamily: "Arial, sans-serif" }}>
             <div className="flex items-stretch border-b-2 border-gray-800">
               <div className="flex items-center justify-center p-3 border-r border-gray-300" style={{ minWidth: 100 }}>
@@ -642,9 +642,9 @@ Formato exato:
               <div className="flex-1 flex items-center justify-center p-3 text-center">
                 <div>
                   <div className="text-xs font-bold text-gray-700">SECRETARIA DE ESTADO DE</div>
-                  <div className="text-sm font-bold text-blue-900">EDUCAÃ‡ÃƒO, CULTURA E ESPORTES</div>
+                  <div className="text-sm font-bold text-blue-900">EDUCAÇÃO, CULTURA E ESPORTES</div>
                   <div className="text-sm font-bold text-blue-900">DIRETORIA DE ENSINO</div>
-                  <div className="text-xs font-bold text-gray-700">DIVISÃƒO DE ENSINO FUNDAMENTAL I E II</div>
+                  <div className="text-xs font-bold text-gray-700">DIVISÃO DE ENSINO FUNDAMENTAL I E II</div>
                 </div>
               </div>
             </div>
@@ -654,17 +654,17 @@ Formato exato:
             <div className="px-4 pb-2">
               <table className="w-full border-collapse text-xs">
                 <tbody>
-                  <tr><td colSpan={4} className="border border-gray-400 bg-blue-800 text-white font-bold px-2 py-1">SEQUÃŠNCIA DIDÃTICA</td></tr>
+                  <tr><td colSpan={4} className="border border-gray-400 bg-blue-800 text-white font-bold px-2 py-1">SEQUÊNCIA DIDÁTICA</td></tr>
                   <tr>
                     <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50 w-1/4">PROFESSOR(A):<br /><span className="font-normal">{professor}</span></td>
-                    <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50 w-1/4">COMPONENTE CURRICULAR:<br /><span className="font-normal">EducaÃ§Ã£o FÃ­sica</span></td>
-                    <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50 w-1/4">ANO/SÃ‰RIE:<br /><span className="font-normal">{serie}</span></td>
-                    <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50 w-1/4">TURMAS:<br /><span className="font-normal">{turmas || "â€”"}</span></td>
+                    <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50 w-1/4">COMPONENTE CURRICULAR:<br /><span className="font-normal">Educação Física</span></td>
+                    <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50 w-1/4">ANO/SÉRIE:<br /><span className="font-normal">{serie}</span></td>
+                    <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50 w-1/4">TURMAS:<br /><span className="font-normal">{turmas || "—"}</span></td>
                   </tr>
                   <tr>
                     <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50" colSpan={2}>COORDENADOR(A):<br /><span className="font-normal">{coordenador}</span></td>
                     <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50">AULAS PREVISTAS:<br /><span className="font-normal">{aulasPrevistas}</span></td>
-                    <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50">PERÃODO:<br /><span className="font-normal">{periodo || "â€”"}</span></td>
+                    <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50">PERÍODO:<br /><span className="font-normal">{periodo || "—"}</span></td>
                   </tr>
                 </tbody>
               </table>
@@ -680,7 +680,7 @@ Formato exato:
             <div className="px-4 pb-2">
               <table className="w-full border-collapse text-xs">
                 <thead>
-                  <tr><td colSpan={2} className="border border-gray-400 bg-blue-100 font-bold px-2 py-1 text-center text-sm">CONTEÃšDOS</td></tr>
+                  <tr><td colSpan={2} className="border border-gray-400 bg-blue-100 font-bold px-2 py-1 text-center text-sm">CONTEÚDOS</td></tr>
                   <tr>
                     <td className="border border-gray-400 bg-gray-100 font-bold px-2 py-1 text-center w-1/2">HABILIDADES</td>
                     <td className="border border-gray-400 bg-gray-100 font-bold px-2 py-1 text-center w-1/2">OBJETOS DE CONHECIMENTO</td>
@@ -716,11 +716,11 @@ Formato exato:
                     <tr key={sit.numero}>
                       <td colSpan={2} className="border border-gray-400 p-0">
                         <div className="bg-blue-700 text-white font-bold px-2 py-1 text-xs">
-                          SituaÃ§Ã£o de Aprendizagem {sit.numero} â€” {sit.titulo}
+                          Situação de Aprendizagem {sit.numero} — {sit.titulo}
                         </div>
                         <div className="flex">
                           <div className="flex-1 px-3 py-2">
-                            <p className="font-semibold text-gray-700 mb-1 text-xs">Objetivo EspecÃ­fico: <span className="font-normal">{sit.objetivo}</span></p>
+                            <p className="font-semibold text-gray-700 mb-1 text-xs">Objetivo Específico: <span className="font-normal">{sit.objetivo}</span></p>
                             <div className="text-gray-800 leading-relaxed whitespace-pre-line text-xs">{sit.desenvolvimento}</div>
                             {sit.adaptacao && (
                               <div className="mt-2 bg-purple-50 border-l-2 border-purple-400 px-2 py-1">
@@ -734,7 +734,7 @@ Formato exato:
                               <img src={sit.imageUrl} alt={sit.imageQuery} className="w-full h-full object-cover" style={{ minHeight: 140 }} />
                               {sit.imageAuthor && (
                                 <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white px-1 py-0.5 text-center" style={{ fontSize: 9 }}>
-                                  ðŸ“· {sit.imageAuthor} / Pexels
+                                  📷 {sit.imageAuthor} / Pexels
                                 </div>
                               )}
                             </div>
@@ -753,7 +753,7 @@ Formato exato:
                 <thead>
                   <tr>
                     <td className="border border-gray-400 bg-blue-100 font-bold px-2 py-1 text-center w-1/3">VALORES ATITUDINAIS</td>
-                    <td className="border border-gray-400 bg-blue-100 font-bold px-2 py-1 text-center w-1/3">INSTRUMENTOS DE AVALIAÃ‡ÃƒO</td>
+                    <td className="border border-gray-400 bg-blue-100 font-bold px-2 py-1 text-center w-1/3">INSTRUMENTOS DE AVALIAÇÃO</td>
                     <td className="border border-gray-400 bg-blue-100 font-bold px-2 py-1 text-center w-1/3">RECURSOS</td>
                   </tr>
                 </thead>
@@ -769,7 +769,7 @@ Formato exato:
             <div className="px-4 pb-2">
               <table className="w-full border-collapse text-xs">
                 <tbody>
-                  <tr><td className="border border-gray-400 bg-blue-100 font-bold px-2 py-1 text-center text-sm">REFERÃŠNCIAS</td></tr>
+                  <tr><td className="border border-gray-400 bg-blue-100 font-bold px-2 py-1 text-center text-sm">REFERÊNCIAS</td></tr>
                   <tr><td className="border border-gray-400 px-3 py-2"><ul className="list-disc list-inside space-y-1 text-gray-800">{sequencia.referencias.map((r, i) => <li key={i} className="leading-relaxed">{r}</li>)}</ul></td></tr>
                 </tbody>
               </table>
@@ -777,7 +777,7 @@ Formato exato:
             <div className="px-4 pb-4">
               <table className="w-full border-collapse text-xs">
                 <tbody>
-                  <tr><td colSpan={2} className="border border-gray-400 bg-blue-800 text-white font-bold px-2 py-1 text-center">DEVOLUTIVA DO COORDENADOR PEDAGÃ“GICO</td></tr>
+                  <tr><td colSpan={2} className="border border-gray-400 bg-blue-800 text-white font-bold px-2 py-1 text-center">DEVOLUTIVA DO COORDENADOR PEDAGÓGICO</td></tr>
                   <tr>
                     <td className="border border-gray-400 px-4 py-8 text-center w-1/2"><div className="border-t border-gray-500 mt-6 pt-1">Assinatura do (a) Coordenador (a)</div></td>
                     <td className="border border-gray-400 px-4 py-8 text-center w-1/2"><div className="border-t border-gray-500 mt-6 pt-1">Assinatura do (a) Professor (a)</div></td>
@@ -791,4 +791,3 @@ Formato exato:
     </div>
   );
 }
-
