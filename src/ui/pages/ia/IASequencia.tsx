@@ -1,7 +1,5 @@
 import { useState } from "react";
 
-// ─── Tipos ───────────────────────────────────────────────────────────────────
-
 interface SituacaoAprendizagem {
   numero: number;
   titulo: string;
@@ -11,6 +9,8 @@ interface SituacaoAprendizagem {
   imageQuery: string;
   imageUrl?: string;
   imageAuthor?: string;
+  imageBase64?: string;
+  imageType?: string;
 }
 
 interface Habilidade {
@@ -30,20 +30,24 @@ interface Sequencia {
   referencias: string[];
 }
 
-// ─── Config ───────────────────────────────────────────────────────────────────
-
-const PEXELS_API_KEY = import.meta.env.VITE_PEXELS_API_KEY ?? "";
-
+// Busca imagem via proxy (sem CORS)
 async function buscarImagemPexels(query: string): Promise<{ url: string; author: string } | null> {
   try {
-    const res = await fetch(
-      `https://api.pexels.com/v1/search?query=${encodeURIComponent(query + " physical education students")}&per_page=1&orientation=landscape`,
-      { headers: { Authorization: PEXELS_API_KEY } }
-    );
+    const res = await fetch(`/api/pexels?query=${encodeURIComponent(query + " physical education students")}`);
     const data = await res.json();
     if (data.photos?.length > 0) {
       return { url: data.photos[0].src.medium, author: data.photos[0].photographer };
     }
+  } catch (_) {}
+  return null;
+}
+
+// Baixa imagem e retorna base64 via proxy (para embutir no Word)
+async function baixarImagemBase64(url: string): Promise<{ base64: string; contentType: string } | null> {
+  try {
+    const res = await fetch(`/api/pexels?imageUrl=${encodeURIComponent(url)}`);
+    const data = await res.json();
+    if (data.base64) return { base64: data.base64, contentType: data.contentType };
   } catch (_) {}
   return null;
 }
@@ -54,7 +58,7 @@ async function chamarClaudeProxy(prompt: string): Promise<string> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 4000,
+      max_tokens: 8000,
       messages: [{ role: "user", content: prompt }],
     }),
   });
@@ -63,7 +67,13 @@ async function chamarClaudeProxy(prompt: string): Promise<string> {
   return data.content.map((i: { text?: string }) => i.text ?? "").join("");
 }
 
-// ─── Geração Word (docx) ─────────────────────────────────────────────────────
+// Converte base64 para Uint8Array para o docx
+function base64ToUint8Array(base64: string): Uint8Array {
+  const bin = atob(base64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
 
 async function baixarWord(
   seq: Sequencia,
@@ -77,11 +87,11 @@ async function baixarWord(
 ) {
   const {
     Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
-    AlignmentType, BorderStyle, WidthType, ShadingType, VerticalAlign,
-    HeadingLevel, LevelFormat,
+    ImageRun, AlignmentType, BorderStyle, WidthType, ShadingType,
+    VerticalAlign, LevelFormat,
   } = await import("docx");
 
-  const W = 9360; // largura útil em DXA (A4 com margens de 1440)
+  const W = 9360;
   const borda = { style: BorderStyle.SINGLE, size: 4, color: "2E74B5" };
   const bordas = { top: borda, bottom: borda, left: borda, right: borda };
   const bordaFina = { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" };
@@ -95,25 +105,19 @@ async function baixarWord(
       shading: { fill: cor, type: ShadingType.CLEAR },
       margins: margCell,
       verticalAlign: VerticalAlign.CENTER,
-      children: [
-        new Paragraph({
-          alignment: AlignmentType.CENTER,
-          children: [new TextRun({ text, bold: true, color: "FFFFFF", size: 22, font: "Arial" })],
-        }),
-      ],
+      children: [new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text, bold: true, color: "FFFFFF", size: 22, font: "Arial" })],
+      })],
     });
 
-  const dataCell = (text: string, width: number, bold = false, cor = "FFFFFF") =>
+  const dataCell = (text: string, width: number) =>
     new TableCell({
       borders: bordasFinas,
       width: { size: width, type: WidthType.DXA },
-      shading: { fill: cor, type: ShadingType.CLEAR },
+      shading: { fill: "FFFFFF", type: ShadingType.CLEAR },
       margins: margCell,
-      children: [
-        new Paragraph({
-          children: [new TextRun({ text, bold, size: 20, font: "Arial" })],
-        }),
-      ],
+      children: [new Paragraph({ children: [new TextRun({ text, size: 20, font: "Arial" })] })],
     });
 
   const labelDataCell = (label: string, value: string, width: number) =>
@@ -128,25 +132,60 @@ async function baixarWord(
       ],
     });
 
-  const titulo = (text: string, cor = "1F4E79") =>
-    new Paragraph({
-      spacing: { before: 120, after: 60 },
-      children: [new TextRun({ text, bold: true, size: 24, color: cor, font: "Arial" })],
-    });
+  const paragrafo = (text: string) =>
+    new Paragraph({ spacing: { before: 60, after: 60 }, children: [new TextRun({ text, size: 20, font: "Arial" })] });
 
-  const paragrafo = (text: string, espacoAntes = 60) =>
-    new Paragraph({
-      spacing: { before: espacoAntes, after: 60 },
-      children: [new TextRun({ text, size: 20, font: "Arial" })],
-    });
-
-  // quebra linhas em parágrafos
   const textoParagrafos = (text: string) =>
     text.split("\n").filter(l => l.trim()).map(l => paragrafo(l));
 
-  const children: (Paragraph | Table)[] = [
+  // Monta célula de situação com imagem embutida ou sem
+  const celulaSituacao = (sit: SituacaoAprendizagem) => {
+    const conteudo: (Paragraph | Table)[] = [
+      new Paragraph({
+        spacing: { before: 0, after: 60 },
+        children: [
+          new TextRun({ text: "Objetivo Específico: ", bold: true, size: 20, font: "Arial" }),
+          new TextRun({ text: sit.objetivo, size: 20, font: "Arial" }),
+        ],
+      }),
+      new Paragraph({ children: [new TextRun({ text: "Desenvolvimento:", bold: true, size: 20, font: "Arial" })] }),
+      ...textoParagrafos(sit.desenvolvimento),
+      ...(sit.adaptacao ? [
+        new Paragraph({ spacing: { before: 100, after: 40 }, children: [new TextRun({ text: "Atividades Adaptadas:", bold: true, size: 18, color: "5B2D8E", font: "Arial" })] }),
+        paragrafo(sit.adaptacao),
+      ] : []),
+    ];
 
-    // ── Título principal ──
+    // Imagem embutida se disponível
+    if (sit.imageBase64 && sit.imageType) {
+      const imgType = sit.imageType.includes("png") ? "png" : "jpg";
+      conteudo.push(
+        new Paragraph({ spacing: { before: 100, after: 40 }, children: [new TextRun({ text: "Ilustração:", bold: true, size: 18, color: "1F4E79", font: "Arial" })] }),
+        new Paragraph({
+          spacing: { before: 0, after: 60 },
+          children: [
+            new ImageRun({
+              data: base64ToUint8Array(sit.imageBase64),
+              transformation: { width: 300, height: 180 },
+              type: imgType,
+            }),
+          ],
+        }),
+        new Paragraph({
+          children: [new TextRun({ text: `Foto: ${sit.imageAuthor || ""} / Pexels`, size: 14, italics: true, color: "888888", font: "Arial" })],
+        }),
+      );
+    }
+
+    return new TableCell({
+      borders: bordasFinas,
+      width: { size: W, type: WidthType.DXA },
+      margins: margCell,
+      children: conteudo,
+    });
+  };
+
+  const children: (Paragraph | Table)[] = [
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { before: 0, after: 200 },
@@ -158,302 +197,188 @@ async function baixarWord(
       children: [new TextRun({ text: "SEQUÊNCIA DIDÁTICA — EDUCAÇÃO FÍSICA", bold: true, size: 28, color: "1F4E79", font: "Arial" })],
     }),
 
-    // ── Tabela de identificação ──
     new Table({
       width: { size: W, type: WidthType.DXA },
       columnWidths: [Math.round(W / 4), Math.round(W / 4), Math.round(W / 4), W - Math.round(W / 4) * 3],
       rows: [
-        new TableRow({ children: [headerCell("IDENTIFICAÇÃO", W, "1F4E79")] }),
-        new TableRow({
-          children: [
-            labelDataCell("PROFESSOR(A)", professor, Math.round(W / 4)),
-            labelDataCell("COMPONENTE", "Educação Física", Math.round(W / 4)),
-            labelDataCell("ANO/SÉRIE", serie, Math.round(W / 4)),
-            labelDataCell("TURMAS", turmas || "—", W - Math.round(W / 4) * 3),
-          ],
-        }),
-        new TableRow({
-          children: [
-            labelDataCell("COORDENADOR(A)", coordenador, Math.round(W / 2)),
-            labelDataCell("AULAS PREVISTAS", aulasPrevistas, Math.round(W / 4)),
-            labelDataCell("PERÍODO", periodo || "—", W - Math.round(W / 2) - Math.round(W / 4)),
-          ],
-        }),
-        new TableRow({
-          children: [
-            new TableCell({
-              columnSpan: 4,
-              borders: bordasFinas,
-              width: { size: W, type: WidthType.DXA },
-              shading: { fill: "F2F2F2", type: ShadingType.CLEAR },
-              margins: margCell,
-              children: [
-                new Paragraph({ children: [new TextRun({ text: `TEMA: ${tema}`, bold: true, size: 20, font: "Arial" })] }),
-              ],
-            }),
-          ],
-        }),
+        new TableRow({ children: [headerCell("IDENTIFICAÇÃO", W)] }),
+        new TableRow({ children: [
+          labelDataCell("PROFESSOR(A)", professor, Math.round(W / 4)),
+          labelDataCell("COMPONENTE", "Educação Física", Math.round(W / 4)),
+          labelDataCell("ANO/SÉRIE", serie, Math.round(W / 4)),
+          labelDataCell("TURMAS", turmas || "—", W - Math.round(W / 4) * 3),
+        ]}),
+        new TableRow({ children: [
+          labelDataCell("COORDENADOR(A)", coordenador, Math.round(W / 2)),
+          labelDataCell("AULAS PREVISTAS", aulasPrevistas, Math.round(W / 4)),
+          labelDataCell("PERÍODO", periodo || "—", W - Math.round(W / 2) - Math.round(W / 4)),
+        ]}),
+        new TableRow({ children: [
+          new TableCell({
+            columnSpan: 4, borders: bordasFinas,
+            width: { size: W, type: WidthType.DXA },
+            shading: { fill: "F2F2F2", type: ShadingType.CLEAR }, margins: margCell,
+            children: [new Paragraph({ children: [new TextRun({ text: `TEMA: ${tema}`, bold: true, size: 20, font: "Arial" })] })],
+          }),
+        ]}),
       ],
     }),
 
     new Paragraph({ spacing: { before: 200, after: 0 }, children: [] }),
 
-    // ── Objetivos ──
     new Table({
-      width: { size: W, type: WidthType.DXA },
-      columnWidths: [W],
+      width: { size: W, type: WidthType.DXA }, columnWidths: [W],
       rows: [
         new TableRow({ children: [headerCell("OBJETIVOS / CAPACIDADES", W)] }),
-        new TableRow({
-          children: [
-            new TableCell({
-              borders: bordasFinas, width: { size: W, type: WidthType.DXA },
-              margins: margCell,
-              children: [paragrafo(seq.objetivos)],
-            }),
-          ],
-        }),
+        new TableRow({ children: [
+          new TableCell({ borders: bordasFinas, width: { size: W, type: WidthType.DXA }, margins: margCell, children: [paragrafo(seq.objetivos)] }),
+        ]}),
       ],
     }),
 
     new Paragraph({ spacing: { before: 160, after: 0 }, children: [] }),
 
-    // ── Conteúdos: Habilidades + Objetos ──
     new Table({
       width: { size: W, type: WidthType.DXA },
       columnWidths: [Math.round(W * 0.55), W - Math.round(W * 0.55)],
       rows: [
-        new TableRow({
-          children: [
-            headerCell("HABILIDADES (BNCC)", Math.round(W * 0.55)),
-            headerCell("OBJETOS DE CONHECIMENTO", W - Math.round(W * 0.55)),
-          ],
-        }),
-        new TableRow({
-          children: [
-            new TableCell({
-              borders: bordasFinas,
-              width: { size: Math.round(W * 0.55), type: WidthType.DXA },
-              margins: margCell,
-              children: seq.habilidades.map(h =>
-                new Paragraph({
-                  spacing: { before: 40, after: 60 },
-                  children: [
-                    new TextRun({ text: `${h.codigo}: `, bold: true, size: 18, font: "Arial" }),
-                    new TextRun({ text: h.descricao, size: 18, font: "Arial" }),
-                  ],
-                })
-              ),
-            }),
-            new TableCell({
-              borders: bordasFinas,
-              width: { size: W - Math.round(W * 0.55), type: WidthType.DXA },
-              margins: margCell,
-              children: seq.objetos_conhecimento.map(o =>
-                new Paragraph({
-                  spacing: { before: 40, after: 40 },
-                  numbering: { reference: "bullets", level: 0 },
-                  children: [new TextRun({ text: o, size: 18, font: "Arial" })],
-                })
-              ),
-            }),
-          ],
-        }),
+        new TableRow({ children: [
+          headerCell("HABILIDADES (BNCC)", Math.round(W * 0.55)),
+          headerCell("OBJETOS DE CONHECIMENTO", W - Math.round(W * 0.55)),
+        ]}),
+        new TableRow({ children: [
+          new TableCell({
+            borders: bordasFinas, width: { size: Math.round(W * 0.55), type: WidthType.DXA }, margins: margCell,
+            children: seq.habilidades.map(h => new Paragraph({
+              spacing: { before: 40, after: 60 },
+              children: [
+                new TextRun({ text: `${h.codigo}: `, bold: true, size: 18, font: "Arial" }),
+                new TextRun({ text: h.descricao, size: 18, font: "Arial" }),
+              ],
+            })),
+          }),
+          new TableCell({
+            borders: bordasFinas, width: { size: W - Math.round(W * 0.55), type: WidthType.DXA }, margins: margCell,
+            children: seq.objetos_conhecimento.map(o => new Paragraph({
+              spacing: { before: 40, after: 40 },
+              numbering: { reference: "bullets", level: 0 },
+              children: [new TextRun({ text: o, size: 18, font: "Arial" })],
+            })),
+          }),
+        ]}),
       ],
     }),
 
     new Paragraph({ spacing: { before: 160, after: 0 }, children: [] }),
 
-    // ── Desenvolvimento das Atividades ──
     new Table({
-      width: { size: W, type: WidthType.DXA },
-      columnWidths: [W],
+      width: { size: W, type: WidthType.DXA }, columnWidths: [W],
       rows: [
         new TableRow({ children: [headerCell("DESENVOLVIMENTO DAS ATIVIDADES", W)] }),
-        new TableRow({
-          children: [
+        new TableRow({ children: [
+          new TableCell({
+            borders: bordasFinas, width: { size: W, type: WidthType.DXA },
+            shading: { fill: "FFF8E1", type: ShadingType.CLEAR }, margins: margCell,
+            children: [
+              new Paragraph({ children: [new TextRun({ text: "Atividade de Acolhida e Aquecimento", bold: true, size: 20, color: "7B5E00", font: "Arial" })] }),
+              ...textoParagrafos(seq.aquecimento),
+            ],
+          }),
+        ]}),
+        ...seq.situacoes.flatMap(sit => [
+          new TableRow({ children: [
             new TableCell({
               borders: bordasFinas, width: { size: W, type: WidthType.DXA },
-              shading: { fill: "FFF8E1", type: ShadingType.CLEAR },
-              margins: margCell,
-              children: [
-                new Paragraph({
-                  children: [new TextRun({ text: "Atividade de Acolhida e Aquecimento", bold: true, size: 20, color: "7B5E00", font: "Arial" })],
-                }),
-                ...textoParagrafos(seq.aquecimento),
-              ],
+              shading: { fill: "E8F0FE", type: ShadingType.CLEAR }, margins: margCell,
+              children: [new Paragraph({ children: [
+                new TextRun({ text: `Situação de Aprendizagem ${sit.numero} — `, bold: true, size: 20, color: "1A3C8F", font: "Arial" }),
+                new TextRun({ text: sit.titulo, bold: true, size: 20, color: "1A3C8F", font: "Arial" }),
+              ]})],
             }),
-          ],
-        }),
-
-        // Situações de Aprendizagem
-        ...seq.situacoes.flatMap(sit => [
-          new TableRow({
-            children: [
-              new TableCell({
-                borders: bordasFinas,
-                width: { size: W, type: WidthType.DXA },
-                shading: { fill: "E8F0FE", type: ShadingType.CLEAR },
-                margins: margCell,
-                children: [
-                  new Paragraph({
-                    children: [
-                      new TextRun({ text: `Situação de Aprendizagem ${sit.numero} — `, bold: true, size: 20, color: "1A3C8F", font: "Arial" }),
-                      new TextRun({ text: sit.titulo, bold: true, size: 20, color: "1A3C8F", font: "Arial" }),
-                    ],
-                  }),
-                ],
-              }),
-            ],
-          }),
-          new TableRow({
-            children: [
-              new TableCell({
-                borders: bordasFinas, width: { size: W, type: WidthType.DXA },
-                margins: margCell,
-                children: [
-                  new Paragraph({
-                    spacing: { before: 0, after: 60 },
-                    children: [
-                      new TextRun({ text: "Objetivo Específico: ", bold: true, size: 20, font: "Arial" }),
-                      new TextRun({ text: sit.objetivo, size: 20, font: "Arial" }),
-                    ],
-                  }),
-                  new Paragraph({
-                    children: [new TextRun({ text: "Desenvolvimento:", bold: true, size: 20, font: "Arial" })],
-                  }),
-                  ...textoParagrafos(sit.desenvolvimento),
-                  ...(sit.adaptacao ? [
-                    new Paragraph({
-                      spacing: { before: 100, after: 40 },
-                      children: [new TextRun({ text: "Atividades Adaptadas:", bold: true, size: 18, color: "5B2D8E", font: "Arial" })],
-                    }),
-                    paragrafo(sit.adaptacao),
-                  ] : []),
-                  ...(sit.imageUrl ? [
-                    new Paragraph({
-                      spacing: { before: 40, after: 0 },
-                      children: [new TextRun({ text: `[Imagem ilustrativa: ${sit.imageQuery} — Foto: ${sit.imageAuthor || ""} / Pexels]`, size: 16, italics: true, color: "888888", font: "Arial" })],
-                    }),
-                  ] : []),
-                ],
-              }),
-            ],
-          }),
+          ]}),
+          new TableRow({ children: [celulaSituacao(sit)] }),
         ]),
       ],
     }),
 
     new Paragraph({ spacing: { before: 160, after: 0 }, children: [] }),
 
-    // ── Avaliação, Valores, Recursos ──
     new Table({
       width: { size: W, type: WidthType.DXA },
       columnWidths: [Math.round(W / 3), Math.round(W / 3), W - Math.round(W / 3) * 2],
       rows: [
-        new TableRow({
-          children: [
-            headerCell("VALORES ATITUDINAIS", Math.round(W / 3)),
-            headerCell("INSTRUMENTOS DE AVALIAÇÃO", Math.round(W / 3)),
-            headerCell("RECURSOS", W - Math.round(W / 3) * 2),
-          ],
-        }),
-        new TableRow({
-          children: [
-            dataCell(seq.valores_atitudinais, Math.round(W / 3)),
-            dataCell(seq.instrumentos_avaliacao, Math.round(W / 3)),
-            dataCell(seq.recursos, W - Math.round(W / 3) * 2),
-          ],
-        }),
+        new TableRow({ children: [
+          headerCell("VALORES ATITUDINAIS", Math.round(W / 3)),
+          headerCell("INSTRUMENTOS DE AVALIAÇÃO", Math.round(W / 3)),
+          headerCell("RECURSOS", W - Math.round(W / 3) * 2),
+        ]}),
+        new TableRow({ children: [
+          dataCell(seq.valores_atitudinais, Math.round(W / 3)),
+          dataCell(seq.instrumentos_avaliacao, Math.round(W / 3)),
+          dataCell(seq.recursos, W - Math.round(W / 3) * 2),
+        ]}),
       ],
     }),
 
     new Paragraph({ spacing: { before: 160, after: 0 }, children: [] }),
 
-    // ── Referências ──
     new Table({
-      width: { size: W, type: WidthType.DXA },
-      columnWidths: [W],
+      width: { size: W, type: WidthType.DXA }, columnWidths: [W],
       rows: [
         new TableRow({ children: [headerCell("REFERÊNCIAS", W)] }),
-        new TableRow({
-          children: [
-            new TableCell({
-              borders: bordasFinas, width: { size: W, type: WidthType.DXA },
-              margins: margCell,
-              children: seq.referencias.map(r =>
-                new Paragraph({
-                  spacing: { before: 40, after: 40 },
-                  numbering: { reference: "bullets", level: 0 },
-                  children: [new TextRun({ text: r, size: 18, font: "Arial" })],
-                })
-              ),
-            }),
-          ],
-        }),
+        new TableRow({ children: [
+          new TableCell({
+            borders: bordasFinas, width: { size: W, type: WidthType.DXA }, margins: margCell,
+            children: seq.referencias.map(r => new Paragraph({
+              spacing: { before: 40, after: 40 },
+              numbering: { reference: "bullets", level: 0 },
+              children: [new TextRun({ text: r, size: 18, font: "Arial" })],
+            })),
+          }),
+        ]}),
       ],
     }),
 
     new Paragraph({ spacing: { before: 240, after: 0 }, children: [] }),
 
-    // ── Assinaturas ──
     new Table({
       width: { size: W, type: WidthType.DXA },
       columnWidths: [Math.round(W / 2), W - Math.round(W / 2)],
       rows: [
-        new TableRow({ children: [headerCell("DEVOLUTIVA DO COORDENADOR PEDAGÓGICO", W, "1F4E79")] }),
-        new TableRow({
-          children: [
-            new TableCell({
-              borders: bordasFinas, width: { size: Math.round(W / 2), type: WidthType.DXA },
-              margins: { top: 800, bottom: 80, left: 120, right: 120 },
-              children: [
-                new Paragraph({
-                  alignment: AlignmentType.CENTER,
-                  border: { top: { style: BorderStyle.SINGLE, size: 4, color: "555555", space: 1 } },
-                  children: [new TextRun({ text: "Assinatura do (a) Coordenador (a)", size: 18, font: "Arial" })],
-                }),
-              ],
-            }),
-            new TableCell({
-              borders: bordasFinas, width: { size: W - Math.round(W / 2), type: WidthType.DXA },
-              margins: { top: 800, bottom: 80, left: 120, right: 120 },
-              children: [
-                new Paragraph({
-                  alignment: AlignmentType.CENTER,
-                  border: { top: { style: BorderStyle.SINGLE, size: 4, color: "555555", space: 1 } },
-                  children: [new TextRun({ text: "Assinatura do (a) Professor (a)", size: 18, font: "Arial" })],
-                }),
-              ],
-            }),
-          ],
-        }),
+        new TableRow({ children: [headerCell("DEVOLUTIVA DO COORDENADOR PEDAGÓGICO", W)] }),
+        new TableRow({ children: [
+          new TableCell({
+            borders: bordasFinas, width: { size: Math.round(W / 2), type: WidthType.DXA },
+            margins: { top: 800, bottom: 80, left: 120, right: 120 },
+            children: [new Paragraph({
+              alignment: AlignmentType.CENTER,
+              border: { top: { style: BorderStyle.SINGLE, size: 4, color: "555555", space: 1 } },
+              children: [new TextRun({ text: "Assinatura do (a) Coordenador (a)", size: 18, font: "Arial" })],
+            })],
+          }),
+          new TableCell({
+            borders: bordasFinas, width: { size: W - Math.round(W / 2), type: WidthType.DXA },
+            margins: { top: 800, bottom: 80, left: 120, right: 120 },
+            children: [new Paragraph({
+              alignment: AlignmentType.CENTER,
+              border: { top: { style: BorderStyle.SINGLE, size: 4, color: "555555", space: 1 } },
+              children: [new TextRun({ text: "Assinatura do (a) Professor (a)", size: 18, font: "Arial" })],
+            })],
+          }),
+        ]}),
       ],
     }),
   ];
 
   const doc = new Document({
     numbering: {
-      config: [
-        {
-          reference: "bullets",
-          levels: [{
-            level: 0, format: LevelFormat.BULLET, text: "\u2022",
-            alignment: AlignmentType.LEFT,
-            style: { paragraph: { indent: { left: 540, hanging: 360 } } },
-          }],
-        },
-      ],
+      config: [{
+        reference: "bullets",
+        levels: [{ level: 0, format: LevelFormat.BULLET, text: "\u2022", alignment: AlignmentType.LEFT,
+          style: { paragraph: { indent: { left: 540, hanging: 360 } } } }],
+      }],
     },
-    sections: [{
-      properties: {
-        page: {
-          size: { width: 11906, height: 16838 },
-          margin: { top: 1134, right: 1134, bottom: 1134, left: 1134 },
-        },
-      },
-      children,
-    }],
+    sections: [{ properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 1134, right: 1134, bottom: 1134, left: 1134 } } }, children }],
   });
 
   const buffer = await Packer.toBlob(doc);
@@ -464,8 +389,6 @@ async function baixarWord(
   a.click();
   URL.revokeObjectURL(url);
 }
-
-// ─── Componente ───────────────────────────────────────────────────────────────
 
 export function IASequencia() {
   const [professor, setProfessor] = useState("Marco Pedro");
@@ -487,41 +410,12 @@ export function IASequencia() {
     if (!tema.trim()) { alert("Informe o tema/conteúdo da aula!"); return; }
     setStatus("gerando"); setErroMsg(""); setSequencia(null);
 
-    const prompt = `Você é um professor de Educação Física experiente do estado do Acre, Brasil. Crie uma sequência didática completa e detalhada no padrão oficial da SEEDUC/AC para:
+    const prompt = `Você é um professor de Educação Física experiente do estado do Acre, Brasil. Crie uma sequência didática completa no padrão oficial da SEEDUC/AC para:
 
-Tema/Conteúdo: ${tema}
-Série: ${serie}
-Turmas: ${turmas || "a definir"}
-Aulas previstas: ${aulasPrevistas}
-Recursos disponíveis: ${recursos || "materiais básicos de Educação Física"}
-Número de situações de aprendizagem: ${numSituacoes}
+Tema: ${tema} | Série: ${serie} | Turmas: ${turmas || "a definir"} | Aulas: ${aulasPrevistas} | Recursos: ${recursos || "materiais básicos"} | Situações de aprendizagem: ${numSituacoes}
 
-Responda SOMENTE com JSON puro, sem markdown, sem blocos de código, sem texto antes ou depois.
-Formato exato:
-{
-  "objetivos": "parágrafo descrevendo objetivos/capacidades gerais",
-  "habilidades": [
-    {"codigo": "EF__EF__", "descricao": "descrição completa da habilidade BNCC"},
-    {"codigo": "EF__EF__", "descricao": "descrição completa"},
-    {"codigo": "EF__EF__", "descricao": "descrição completa"}
-  ],
-  "objetos_conhecimento": ["objeto 1", "objeto 2", "objeto 3"],
-  "aquecimento": "descrição detalhada da atividade de acolhida e aquecimento inicial (mínimo 3 parágrafos)",
-  "situacoes": [
-    {
-      "numero": 1,
-      "titulo": "Título da Situação de Aprendizagem 1",
-      "objetivo": "Objetivo específico desta situação",
-      "desenvolvimento": "Descrição muito detalhada do desenvolvimento com numeração de etapas (mínimo 4 parágrafos)",
-      "adaptacao": "Como adaptar para alunos com necessidades especiais",
-      "imageQuery": "3 palavras em inglês para buscar imagem no Pexels"
-    }
-  ],
-  "valores_atitudinais": "descrição dos valores atitudinais trabalhados",
-  "instrumentos_avaliacao": "descrição dos instrumentos de avaliação utilizados",
-  "recursos": "lista completa de recursos materiais necessários",
-  "referencias": ["ACRE. Referência 1.", "Referência 2.", "Referência 3."]
-}`;
+Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
+{"objetivos":"...","habilidades":[{"codigo":"EF__EF__","descricao":"..."},{"codigo":"EF__EF__","descricao":"..."},{"codigo":"EF__EF__","descricao":"..."}],"objetos_conhecimento":["...","...","..."],"aquecimento":"descrição detalhada em 2 parágrafos separados por \\n","situacoes":[{"numero":1,"titulo":"...","objetivo":"...","desenvolvimento":"etapas detalhadas em parágrafos separados por \\n","adaptacao":"...","imageQuery":"3 palavras em inglês"}],"valores_atitudinais":"...","instrumentos_avaliacao":"...","recursos":"...","referencias":["ACRE. Ref 1.","Ref 2.","Ref 3."]}`;
 
     let seq: Sequencia;
     try {
@@ -535,12 +429,23 @@ Formato exato:
     }
 
     setStatus("imagens");
+
+    // Busca URL + base64 de cada imagem em paralelo
     const situacoesComImg = await Promise.all(
       seq.situacoes.map(async (s) => {
         const img = await buscarImagemPexels(s.imageQuery);
-        return { ...s, imageUrl: img?.url ?? "", imageAuthor: img?.author ?? "" };
+        if (!img) return s;
+        const b64 = await baixarImagemBase64(img.url);
+        return {
+          ...s,
+          imageUrl: img.url,
+          imageAuthor: img.author,
+          imageBase64: b64?.base64 ?? "",
+          imageType: b64?.contentType ?? "image/jpeg",
+        };
       })
     );
+
     setSequencia({ ...seq, situacoes: situacoesComImg });
     setStatus("pronto");
   };
@@ -548,11 +453,8 @@ Formato exato:
   const handleBaixarWord = async () => {
     if (!sequencia) return;
     setBaixando(true);
-    try {
-      await baixarWord(sequencia, professor, coordenador, serie, turmas, aulasPrevistas, periodo, tema);
-    } catch (e) {
-      alert("Erro ao gerar Word: " + (e instanceof Error ? e.message : String(e)));
-    }
+    try { await baixarWord(sequencia, professor, coordenador, serie, turmas, aulasPrevistas, periodo, tema); }
+    catch (e) { alert("Erro ao gerar Word: " + (e instanceof Error ? e.message : String(e))); }
     setBaixando(false);
   };
 
@@ -560,8 +462,6 @@ Formato exato:
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-
-      {/* Formulário */}
       <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
         <h2 className="text-lg font-semibold text-gray-800">🤖 Gerador de Sequência Didática Oficial — IA</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -609,27 +509,20 @@ Formato exato:
           </div>
         </div>
         <button onClick={gerar} disabled={status === "gerando" || status === "imagens"} className="w-full py-3 rounded-xl bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white font-medium text-sm transition-colors">
-          {status === "gerando" ? "⏳ Gerando sequência didática..." : status === "imagens" ? "🖼️ Buscando imagens..." : "✨ Gerar Sequência Didática Oficial"}
+          {status === "gerando" ? "⏳ Gerando sequência..." : status === "imagens" ? "🖼️ Buscando imagens..." : "✨ Gerar Sequência Didática Oficial"}
         </button>
-        {status === "erro" && (
-          <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">⚠️ {erroMsg}</div>
-        )}
+        {status === "erro" && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">⚠️ {erroMsg}</div>}
       </div>
 
-      {/* Documento Oficial */}
       {status === "pronto" && sequencia && (
         <div>
-          {/* Botões de ação */}
           <div className="flex gap-3 mb-4">
             <button onClick={handleBaixarWord} disabled={baixando} className="flex-1 py-3 rounded-xl bg-green-700 hover:bg-green-800 disabled:opacity-50 text-white font-medium text-sm transition-colors">
               {baixando ? "⏳ Gerando Word..." : "📄 Baixar Word (.docx)"}
             </button>
-            <button onClick={resetar} className="py-3 px-5 rounded-xl border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 transition-colors">
-              ↩ Nova sequência
-            </button>
+            <button onClick={resetar} className="py-3 px-5 rounded-xl border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 transition-colors">↩ Nova sequência</button>
           </div>
 
-          {/* Visualização */}
           <div className="bg-white border border-gray-300 shadow-lg rounded-lg overflow-hidden" style={{ fontFamily: "Arial, sans-serif" }}>
             <div className="flex items-stretch border-b-2 border-gray-800">
               <div className="flex items-center justify-center p-3 border-r border-gray-300" style={{ minWidth: 100 }}>
@@ -707,7 +600,7 @@ Formato exato:
                 </thead>
                 <tbody>
                   <tr>
-                    <td colSpan={2} className="border border-gray-400 px-2 py-1 bg-amber-50">
+                    <td colSpan={2} className="border border-gray-400 px-2 py-2 bg-amber-50">
                       <p className="font-bold text-amber-900 mb-1">Atividade de Acolhida e Aquecimento</p>
                       <p className="text-gray-800 leading-relaxed whitespace-pre-line">{sequencia.aquecimento}</p>
                     </td>
@@ -770,7 +663,11 @@ Formato exato:
               <table className="w-full border-collapse text-xs">
                 <tbody>
                   <tr><td className="border border-gray-400 bg-blue-100 font-bold px-2 py-1 text-center text-sm">REFERÊNCIAS</td></tr>
-                  <tr><td className="border border-gray-400 px-3 py-2"><ul className="list-disc list-inside space-y-1 text-gray-800">{sequencia.referencias.map((r, i) => <li key={i} className="leading-relaxed">{r}</li>)}</ul></td></tr>
+                  <tr><td className="border border-gray-400 px-3 py-2">
+                    <ul className="list-disc list-inside space-y-1 text-gray-800">
+                      {sequencia.referencias.map((r, i) => <li key={i} className="leading-relaxed">{r}</li>)}
+                    </ul>
+                  </td></tr>
                 </tbody>
               </table>
             </div>
