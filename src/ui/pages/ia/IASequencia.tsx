@@ -537,7 +537,19 @@ Número de situações de aprendizagem: ${numSituacoes}
 IMPORTANTE — Use SOMENTE habilidades BNCC para ${serie}: ${habilidadesBncc}
 Selecione as que se relacionam com o tema "${tema}". Use os códigos exatos.
 
-Para imageQuery de cada situação: gere queries em inglês DIFERENTES e ESPECÍFICAS para cada atividade (não o tema geral). Ex: situação de aquecimento → "children warm up exercise gym", situação de fundamentos → "students volleyball spike practice". NUNCA repita a mesma query.
+Para imageQuery de cada situação, siga ESTAS REGRAS:
+1. Queries em inglês DIFERENTES e ESPECÍFICAS para cada atividade (nunca o tema geral)
+2. FAIXA ETÁRIA obrigatória nas queries conforme a série:
+   - 6º e 7º ano (11-13 anos): use "middle school kids", "young students age 12", "children"
+   - 8º e 9º ano (13-15 anos): use "high school students", "teenagers age 14", "teen athletes"
+   - Ensino Médio: use "high school athletes", "young adults sports"
+   A série atual é: ${serie}
+3. Descreva a ATIVIDADE ESPECÍFICA de cada situação. Ex:
+   - 6º/7º aquecimento → "middle school kids warm up gym"
+   - 6º/7º fundamentos → "young students volleyball practice"
+   - 8º/9º aquecimento → "teenagers warm up physical education"
+   - 8º/9º fundamentos → "teen athletes volleyball training"
+4. NUNCA repita a mesma query em situações diferentes
 
 Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
 {"objetivos":"...","habilidades":[{"codigo":"EF__EF__","descricao":"descrição completa"},{"codigo":"EF__EF__","descricao":"..."},{"codigo":"EF__EF__","descricao":"..."}],"objetos_conhecimento":["...","...","..."],"aquecimento":"descrição detalhada em 2 parágrafos separados por \\n","situacoes":[{"numero":1,"titulo":"...","objetivo":"...","desenvolvimento":"etapas detalhadas separadas por \\n","adaptacao":"...","imageQuery":"query única e específica desta situação em inglês"}],"valores_atitudinais":"...","instrumentos_avaliacao":"...","recursos":"...","referencias":["ACRE. Ref 1.","Ref 2.","Ref 3."]}`;
