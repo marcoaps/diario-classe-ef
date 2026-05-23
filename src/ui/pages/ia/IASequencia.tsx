@@ -79,11 +79,12 @@ function base64ToUint8Array(base64: string): Uint8Array {
 
 async function fetchBrasaoBase64(): Promise<{ base64: string; type: "png" } | null> {
   try {
-    const res = await fetch("/brasao-acre.png");
-    const buf = await res.arrayBuffer();
-    const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
-    return { base64: b64, type: "png" };
-  } catch (_) { return null; }
+    const url = window.location.origin + "/brasao-acre.png";
+    const res = await fetch(`/api/pexels?imageUrl=${encodeURIComponent(url)}`);
+    const data = await res.json();
+    if (data.base64) return { base64: data.base64, type: "png" };
+  } catch (_) {}
+  return null;
 }
 
 async function baixarWord(
