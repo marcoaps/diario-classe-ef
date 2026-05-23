@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 
 interface SituacaoAprendizagem {
   numero: number;
@@ -31,20 +31,20 @@ interface Sequencia {
 }
 
 const TURMAS_POR_SERIE: Record<string, string> = {
-  "6º e 7º": "6ºF, 7ºB, 7ºC, 7ºD, 7ºE, 7ºF",
-  "8º e 9º": "8ºA, 8ºB, 8ºC, 8ºD, 8ºE, 8ºF, 9ºA, 9ºB, 9ºC, 9ºD, 9ºE, 9ºF",
-  "6º ano": "", "7º ano": "", "8º ano": "", "9º ano": "",
-  "1º EM": "", "2º EM": "", "3º EM": "", "1º e 2º EM": "",
+  "6Âº e 7Âº": "6ÂºF, 7ÂºB, 7ÂºC, 7ÂºD, 7ÂºE, 7ÂºF",
+  "8Âº e 9Âº": "8ÂºA, 8ÂºB, 8ÂºC, 8ÂºD, 8ÂºE, 8ÂºF, 9ÂºA, 9ÂºB, 9ÂºC, 9ÂºD, 9ÂºE, 9ÂºF",
+  "6Âº ano": "", "7Âº ano": "", "8Âº ano": "", "9Âº ano": "",
+  "1Âº EM": "", "2Âº EM": "", "3Âº EM": "", "1Âº e 2Âº EM": "",
 };
 
 function ordinal(n: number): string {
-  return n === 1 ? "1ª" : n === 2 ? "2ª" : n === 3 ? "3ª" :
-    n === 4 ? "4ª" : n === 5 ? "5ª" : `${n}ª`;
+  return n === 1 ? "1Âª" : n === 2 ? "2Âª" : n === 3 ? "3Âª" :
+    n === 4 ? "4Âª" : n === 5 ? "5Âª" : `${n}Âª`;
 }
 
 async function buscarImagemPexels(query: string, index = 0): Promise<{ url: string; author: string } | null> {
   try {
-    // Usa página diferente para cada situação, garantindo imagens únicas
+    // Usa pÃ¡gina diferente para cada situaÃ§Ã£o, garantindo imagens Ãºnicas
     const page = (index % 5) + 1;
     const res = await fetch(`/api/pexels?query=${encodeURIComponent(query)}&page=${page}`);
     const data = await res.json();
@@ -143,7 +143,7 @@ async function baixarWord(
       shading: { fill: "F2F2F2", type: ShadingType.CLEAR }, margins: margCell,
       children: [
         new Paragraph({ children: [new TextRun({ text: label, bold: true, size: 18, font: "Arial" })] }),
-        new Paragraph({ children: [new TextRun({ text: value || "—", size: 20, font: "Arial" })] }),
+        new Paragraph({ children: [new TextRun({ text: value || "â€”", size: 20, font: "Arial" })] }),
       ],
     });
 
@@ -156,7 +156,7 @@ async function baixarWord(
   const celulaSituacao = (sit: SituacaoAprendizagem) => {
     const conteudo: (Paragraph | Table)[] = [
       new Paragraph({ spacing: { before: 0, after: 60 }, children: [
-        new TextRun({ text: "Objetivo Específico: ", bold: true, size: 20, font: "Arial" }),
+        new TextRun({ text: "Objetivo EspecÃ­fico: ", bold: true, size: 20, font: "Arial" }),
         new TextRun({ text: sit.objetivo, size: 20, font: "Arial" }),
       ]}),
       new Paragraph({ children: [new TextRun({ text: "Desenvolvimento:", bold: true, size: 20, font: "Arial" })] }),
@@ -169,7 +169,7 @@ async function baixarWord(
     if (sit.imageBase64 && sit.imageType) {
       const imgType = sit.imageType.includes("png") ? "png" : "jpg";
       conteudo.push(
-        new Paragraph({ spacing: { before: 100, after: 40 }, children: [new TextRun({ text: "Ilustração:", bold: true, size: 18, color: "1F4E79", font: "Arial" })] }),
+        new Paragraph({ spacing: { before: 100, after: 40 }, children: [new TextRun({ text: "IlustraÃ§Ã£o:", bold: true, size: 18, color: "1F4E79", font: "Arial" })] }),
         new Paragraph({ spacing: { before: 0, after: 60 }, children: [new ImageRun({ data: base64ToUint8Array(sit.imageBase64), transformation: { width: 300, height: 180 }, type: imgType })] }),
         new Paragraph({ children: [new TextRun({ text: `Foto: ${sit.imageAuthor || ""} / Pexels`, size: 14, italics: true, color: "888888", font: "Arial" })] }),
       );
@@ -177,12 +177,12 @@ async function baixarWord(
     return new TableCell({ borders: bordasFinas, width: { size: W, type: WidthType.DXA }, margins: margCell, children: conteudo });
   };
 
-  // Busca brasão
+  // Busca brasÃ£o
   const brasao = await fetchBrasaoBase64();
 
-  // Cabeçalho oficial
+  // CabeÃ§alho oficial
   const cabecalhoRows: TableRow[] = [];
-  const colW1 = Math.round(W * 0.18); // brasão
+  const colW1 = Math.round(W * 0.18); // brasÃ£o
   const colW2 = Math.round(W * 0.28); // governo do acre
   const colW3 = W - colW1 - colW2;    // secretaria
 
@@ -218,10 +218,10 @@ async function baixarWord(
     margins: margCell,
     children: [
       new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: "SECRETARIA DE ESTADO DE", size: 16, color: "1A6B1A", font: "Arial" })] }),
-      new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: "EDUCAÇÃO, CULTURA E ESPORTES", bold: true, size: 20, color: "1A6B1A", font: "Arial" })] }),
+      new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: "EDUCAÃ‡ÃƒO, CULTURA E ESPORTES", bold: true, size: 20, color: "1A6B1A", font: "Arial" })] }),
       new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: "DIRETORIA DE ENSINO", bold: true, size: 24, color: "1A6B1A", font: "Arial" })] }),
-      new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: "DIVISÃO DE ENSINO FUNDAMENTAL I E II", bold: true, size: 16, color: "1A6B1A", font: "Arial" })] }),
-      new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: "DIVISÃO DE ENSINO ANOS FINAIS", bold: true, size: 16, color: "1A6B1A", font: "Arial" })] }),
+      new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: "DIVISÃƒO DE ENSINO FUNDAMENTAL I E II", bold: true, size: 16, color: "1A6B1A", font: "Arial" })] }),
+      new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: "DIVISÃƒO DE ENSINO ANOS FINAIS", bold: true, size: 16, color: "1A6B1A", font: "Arial" })] }),
     ],
   });
 
@@ -248,19 +248,19 @@ async function baixarWord(
     tabelaCabecalho,
     linhaDourada,
 
-    // Número da sequência
+    // NÃºmero da sequÃªncia
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { before: 100, after: 60 },
-      children: [new TextRun({ text: `${ordinal(numeroSeq)} SEQUÊNCIA DIDÁTICA`, bold: true, size: 28, color: "1F4E79", font: "Arial" })],
+      children: [new TextRun({ text: `${ordinal(numeroSeq)} SEQUÃŠNCIA DIDÃTICA`, bold: true, size: 28, color: "1F4E79", font: "Arial" })],
     }),
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { before: 0, after: 160 },
-      children: [new TextRun({ text: "EDUCAÇÃO FÍSICA — INSTITUTO ODILON PRATAGI", bold: true, size: 22, font: "Arial" })],
+      children: [new TextRun({ text: "EDUCAÃ‡ÃƒO FÃSICA â€” INSTITUTO ODILON PRATAGI", bold: true, size: 22, font: "Arial" })],
     }),
 
-    // Tabela identificação — linha 1
+    // Tabela identificaÃ§Ã£o â€” linha 1
     new Table({
       width: { size: W, type: WidthType.DXA },
       columnWidths: [Q1, Q1, Q1, W - Q1*3],
@@ -271,16 +271,16 @@ async function baixarWord(
             width: { size: W, type: WidthType.DXA },
             shading: { fill: "1F4E79", type: ShadingType.CLEAR },
             margins: margCell, verticalAlign: VerticalAlign.CENTER,
-            children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "IDENTIFICAÇÃO", bold: true, color: "FFFFFF", size: 22, font: "Arial" })] })],
+            children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "IDENTIFICAÃ‡ÃƒO", bold: true, color: "FFFFFF", size: 22, font: "Arial" })] })],
           }),
         ]}),
         new TableRow({ children: [
           labelDataCell("PROFESSOR(A)", professor, Q1),
-          labelDataCell("COMPONENTE", "Educação Física", Q1),
-          labelDataCell("ANO/SÉRIE", serie, Q1),
-          labelDataCell("TURMAS", turmas || "—", W - Q1*3),
+          labelDataCell("COMPONENTE", "EducaÃ§Ã£o FÃ­sica", Q1),
+          labelDataCell("ANO/SÃ‰RIE", serie, Q1),
+          labelDataCell("TURMAS", turmas || "â€”", W - Q1*3),
         ]}),
-        // Linha 2: coordenador (2 cols) + aulas (1 col) + período (1 col) — sem mesclagem para período ter espaço
+        // Linha 2: coordenador (2 cols) + aulas (1 col) + perÃ­odo (1 col) â€” sem mesclagem para perÃ­odo ter espaÃ§o
         new TableRow({ children: [
           new TableCell({
             borders: bordasFinas, width: { size: Q2, type: WidthType.DXA },
@@ -288,7 +288,7 @@ async function baixarWord(
             shading: { fill: "F2F2F2", type: ShadingType.CLEAR }, margins: margCell,
             children: [
               new Paragraph({ children: [new TextRun({ text: "COORDENADOR(A)", bold: true, size: 18, font: "Arial" })] }),
-              new Paragraph({ children: [new TextRun({ text: coordenador || "—", size: 20, font: "Arial" })] }),
+              new Paragraph({ children: [new TextRun({ text: coordenador || "â€”", size: 20, font: "Arial" })] }),
             ],
           }),
           new TableCell({
@@ -303,8 +303,8 @@ async function baixarWord(
             borders: bordasFinas, width: { size: W - Q2 - Q1, type: WidthType.DXA },
             shading: { fill: "F2F2F2", type: ShadingType.CLEAR }, margins: margCell,
             children: [
-              new Paragraph({ children: [new TextRun({ text: "PERÍODO DE EXECUÇÃO", bold: true, size: 18, font: "Arial" })] }),
-              new Paragraph({ children: [new TextRun({ text: periodo || "—", size: 20, font: "Arial" })] }),
+              new Paragraph({ children: [new TextRun({ text: "PERÃODO DE EXECUÃ‡ÃƒO", bold: true, size: 18, font: "Arial" })] }),
+              new Paragraph({ children: [new TextRun({ text: periodo || "â€”", size: 20, font: "Arial" })] }),
             ],
           }),
         ]}),
@@ -354,7 +354,7 @@ async function baixarWord(
       })] }),
       ...seq.situacoes.flatMap(sit => [
         new TableRow({ children: [new TableCell({ borders: bordasFinas, width: { size: W, type: WidthType.DXA }, shading: { fill: "E8F0FE", type: ShadingType.CLEAR }, margins: margCell,
-          children: [new Paragraph({ children: [new TextRun({ text: `Situação de Aprendizagem ${sit.numero} — `, bold: true, size: 20, color: "1A3C8F", font: "Arial" }), new TextRun({ text: sit.titulo, bold: true, size: 20, color: "1A3C8F", font: "Arial" })] })] })] }),
+          children: [new Paragraph({ children: [new TextRun({ text: `SituaÃ§Ã£o de Aprendizagem ${sit.numero} â€” `, bold: true, size: 20, color: "1A3C8F", font: "Arial" }), new TextRun({ text: sit.titulo, bold: true, size: 20, color: "1A3C8F", font: "Arial" })] })] })] }),
         new TableRow({ children: [celulaSituacao(sit)] }),
       ]),
     ]}),
@@ -365,7 +365,7 @@ async function baixarWord(
       width: { size: W, type: WidthType.DXA },
       columnWidths: [Math.round(W/3), Math.round(W/3), W - Math.round(W/3)*2],
       rows: [
-        new TableRow({ children: [headerCell("VALORES ATITUDINAIS", Math.round(W/3)), headerCell("INSTRUMENTOS DE AVALIAÇÃO", Math.round(W/3)), headerCell("RECURSOS", W - Math.round(W/3)*2)] }),
+        new TableRow({ children: [headerCell("VALORES ATITUDINAIS", Math.round(W/3)), headerCell("INSTRUMENTOS DE AVALIAÃ‡ÃƒO", Math.round(W/3)), headerCell("RECURSOS", W - Math.round(W/3)*2)] }),
         new TableRow({ children: [dataCell(seq.valores_atitudinais, Math.round(W/3)), dataCell(seq.instrumentos_avaliacao, Math.round(W/3)), dataCell(seq.recursos, W - Math.round(W/3)*2)] }),
       ],
     }),
@@ -373,7 +373,7 @@ async function baixarWord(
     new Paragraph({ spacing: { before: 160, after: 0 }, children: [] }),
 
     new Table({ width: { size: W, type: WidthType.DXA }, columnWidths: [W], rows: [
-      new TableRow({ children: [headerCell("REFERÊNCIAS", W)] }),
+      new TableRow({ children: [headerCell("REFERÃŠNCIAS", W)] }),
       new TableRow({ children: [new TableCell({ borders: bordasFinas, width: { size: W, type: WidthType.DXA }, margins: margCell,
         children: seq.referencias.map(r => new Paragraph({ spacing: { before: 40, after: 40 }, numbering: { reference: "bullets", level: 0 }, children: [new TextRun({ text: r, size: 18, font: "Arial" })] })) })] }),
     ]}),
@@ -390,7 +390,7 @@ async function baixarWord(
             width: { size: W, type: WidthType.DXA },
             shading: { fill: "1F4E79", type: ShadingType.CLEAR },
             margins: margCell, verticalAlign: VerticalAlign.CENTER,
-            children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "DEVOLUTIVA DO COORDENADOR PEDAGÓGICO", bold: true, color: "FFFFFF", size: 22, font: "Arial" })] })],
+            children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "DEVOLUTIVA DO COORDENADOR PEDAGÃ“GICO", bold: true, color: "FFFFFF", size: 22, font: "Arial" })] })],
           }),
         ]}),
         new TableRow({ children: [
@@ -417,15 +417,15 @@ async function baixarWord(
   URL.revokeObjectURL(url);
 }
 
-// ── Animações ─────────────────────────────────────────────────────────────────
+// â”€â”€ AnimaÃ§Ãµes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const ETAPAS_ANIMACAO = [
-  { icone: "🧠", texto: "Analisando tema e série..." },
-  { icone: "📚", texto: "Selecionando habilidades BNCC..." },
-  { icone: "✏️", texto: "Redigindo objetivos e conteúdos..." },
-  { icone: "🏃", texto: "Criando situações de aprendizagem..." },
-  { icone: "🖼️", texto: "Buscando imagens ilustrativas..." },
-  { icone: "📄", texto: "Finalizando documento..." },
+  { icone: "ðŸ§ ", texto: "Analisando tema e sÃ©rie..." },
+  { icone: "ðŸ“š", texto: "Selecionando habilidades BNCC..." },
+  { icone: "âœï¸", texto: "Redigindo objetivos e conteÃºdos..." },
+  { icone: "ðŸƒ", texto: "Criando situaÃ§Ãµes de aprendizagem..." },
+  { icone: "ðŸ–¼ï¸", texto: "Buscando imagens ilustrativas..." },
+  { icone: "ðŸ“„", texto: "Finalizando documento..." },
 ];
 
 function AnimacaoGerando({ etapa }: { etapa: number }) {
@@ -440,7 +440,7 @@ function AnimacaoGerando({ etapa }: { etapa: number }) {
           </svg>
           <div className="absolute inset-0 flex items-center justify-center text-3xl">{e.icone}</div>
         </div>
-        <h3 className="text-lg font-semibold text-gray-800 mb-2">Gerando Sequência Didática</h3>
+        <h3 className="text-lg font-semibold text-gray-800 mb-2">Gerando SequÃªncia DidÃ¡tica</h3>
         <p className="text-sm text-blue-600 font-medium mb-4">{e.texto}</p>
         <div className="flex justify-center gap-1.5">
           {ETAPAS_ANIMACAO.map((_, i) => (
@@ -462,23 +462,23 @@ function AnimacaoBaixando() {
             <circle cx="40" cy="40" r="34" fill="none" stroke="#E5E7EB" strokeWidth="6" />
             <circle cx="40" cy="40" r="34" fill="none" stroke="#15803D" strokeWidth="6" strokeDasharray="100 114" strokeLinecap="round" />
           </svg>
-          <div className="absolute inset-0 flex items-center justify-center text-3xl">📄</div>
+          <div className="absolute inset-0 flex items-center justify-center text-3xl">ðŸ“„</div>
         </div>
         <h3 className="text-lg font-semibold text-gray-800 mb-2">Gerando arquivo Word</h3>
         <p className="text-sm text-green-600 font-medium">Incorporando imagens e formatando...</p>
-        <p className="text-xs text-gray-400 mt-4">O download iniciará automaticamente</p>
+        <p className="text-xs text-gray-400 mt-4">O download iniciarÃ¡ automaticamente</p>
       </div>
     </div>
   );
 }
 
-// ── Componente principal ──────────────────────────────────────────────────────
+// â”€â”€ Componente principal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function IASequencia() {
   const [professor, setProfessor] = useState("Marco Pedro");
   const [coordenador, setCoordenador] = useState("Jair Fiesca e Amarildo Saady");
-  const [serie, setSerie] = useState("6º e 7º");
-  const [turmas, setTurmas] = useState(TURMAS_POR_SERIE["6º e 7º"]);
+  const [serie, setSerie] = useState("6Âº e 7Âº");
+  const [turmas, setTurmas] = useState(TURMAS_POR_SERIE["6Âº e 7Âº"]);
   const [aulasPrevistas, setAulasPrevistas] = useState("5");
   const [periodo, setPeriodo] = useState("");
   const [tema, setTema] = useState("");
@@ -507,52 +507,52 @@ export function IASequencia() {
   };
 
   const gerar = async () => {
-    if (!tema.trim()) { alert("Informe o tema/conteúdo da aula!"); return; }
+    if (!tema.trim()) { alert("Informe o tema/conteÃºdo da aula!"); return; }
     setStatus("gerando"); setErroMsg(""); setSequencia(null); setEtapaAnim(0);
 
-    // Referência BNCC por grupo de série
+    // ReferÃªncia BNCC por grupo de sÃ©rie
     const bnccPorSerie: Record<string, string> = {
-      "6º ano": "EF67EF01, EF67EF02, EF67EF03, EF67EF04, EF67EF05, EF67EF06, EF67EF07, EF67EF08, EF67EF09, EF67EF10, EF67EF11, EF67EF12, EF67EF13, EF67EF14",
-      "7º ano": "EF67EF01, EF67EF02, EF67EF03, EF67EF04, EF67EF05, EF67EF06, EF67EF07, EF67EF08, EF67EF09, EF67EF10, EF67EF11, EF67EF12, EF67EF13, EF67EF14",
-      "6º e 7º": "EF67EF01, EF67EF02, EF67EF03, EF67EF04, EF67EF05, EF67EF06, EF67EF07, EF67EF08, EF67EF09, EF67EF10, EF67EF11, EF67EF12, EF67EF13, EF67EF14",
-      "8º ano": "EF89EF01, EF89EF02, EF89EF03, EF89EF04, EF89EF05, EF89EF06, EF89EF07, EF89EF08, EF89EF09, EF89EF10, EF89EF11, EF89EF12, EF89EF13, EF89EF14",
-      "9º ano": "EF89EF01, EF89EF02, EF89EF03, EF89EF04, EF89EF05, EF89EF06, EF89EF07, EF89EF08, EF89EF09, EF89EF10, EF89EF11, EF89EF12, EF89EF13, EF89EF14",
-      "8º e 9º": "EF89EF01, EF89EF02, EF89EF03, EF89EF04, EF89EF05, EF89EF06, EF89EF07, EF89EF08, EF89EF09, EF89EF10, EF89EF11, EF89EF12, EF89EF13, EF89EF14",
-      "1º EM": "EM13LGG001, EM13LGG002, EM13LGG003, EM13LGG401, EM13LGG402, EM13LGG403, EM13LGG404",
-      "2º EM": "EM13LGG001, EM13LGG002, EM13LGG003, EM13LGG401, EM13LGG402, EM13LGG403, EM13LGG404",
-      "3º EM": "EM13LGG001, EM13LGG002, EM13LGG003, EM13LGG401, EM13LGG402, EM13LGG403, EM13LGG404",
-      "1º e 2º EM": "EM13LGG001, EM13LGG002, EM13LGG003, EM13LGG401, EM13LGG402, EM13LGG403, EM13LGG404",
+      "6Âº ano": "EF67EF01, EF67EF02, EF67EF03, EF67EF04, EF67EF05, EF67EF06, EF67EF07, EF67EF08, EF67EF09, EF67EF10, EF67EF11, EF67EF12, EF67EF13, EF67EF14",
+      "7Âº ano": "EF67EF01, EF67EF02, EF67EF03, EF67EF04, EF67EF05, EF67EF06, EF67EF07, EF67EF08, EF67EF09, EF67EF10, EF67EF11, EF67EF12, EF67EF13, EF67EF14",
+      "6Âº e 7Âº": "EF67EF01, EF67EF02, EF67EF03, EF67EF04, EF67EF05, EF67EF06, EF67EF07, EF67EF08, EF67EF09, EF67EF10, EF67EF11, EF67EF12, EF67EF13, EF67EF14",
+      "8Âº ano": "EF89EF01, EF89EF02, EF89EF03, EF89EF04, EF89EF05, EF89EF06, EF89EF07, EF89EF08, EF89EF09, EF89EF10, EF89EF11, EF89EF12, EF89EF13, EF89EF14",
+      "9Âº ano": "EF89EF01, EF89EF02, EF89EF03, EF89EF04, EF89EF05, EF89EF06, EF89EF07, EF89EF08, EF89EF09, EF89EF10, EF89EF11, EF89EF12, EF89EF13, EF89EF14",
+      "8Âº e 9Âº": "EF89EF01, EF89EF02, EF89EF03, EF89EF04, EF89EF05, EF89EF06, EF89EF07, EF89EF08, EF89EF09, EF89EF10, EF89EF11, EF89EF12, EF89EF13, EF89EF14",
+      "1Âº EM": "EM13LGG001, EM13LGG002, EM13LGG003, EM13LGG401, EM13LGG402, EM13LGG403, EM13LGG404",
+      "2Âº EM": "EM13LGG001, EM13LGG002, EM13LGG003, EM13LGG401, EM13LGG402, EM13LGG403, EM13LGG404",
+      "3Âº EM": "EM13LGG001, EM13LGG002, EM13LGG003, EM13LGG401, EM13LGG402, EM13LGG403, EM13LGG404",
+      "1Âº e 2Âº EM": "EM13LGG001, EM13LGG002, EM13LGG003, EM13LGG401, EM13LGG402, EM13LGG403, EM13LGG404",
     };
-    const habilidadesBncc = bnccPorSerie[serie] || bnccPorSerie["6º e 7º"];
+    const habilidadesBncc = bnccPorSerie[serie] || bnccPorSerie["6Âº e 7Âº"];
 
-    const prompt = `Você é um professor de Educação Física experiente do estado do Acre, Brasil. Crie uma sequência didática completa no padrão oficial da SEEDUC/AC para:
+    const prompt = `VocÃª Ã© um professor de EducaÃ§Ã£o FÃ­sica experiente do estado do Acre, Brasil. Crie uma sequÃªncia didÃ¡tica completa no padrÃ£o oficial da SEEDUC/AC para:
 
 Tema: ${tema}
-Série: ${serie}
+SÃ©rie: ${serie}
 Turmas: ${turmas || "a definir"}
 Aulas previstas: ${aulasPrevistas}
-Recursos: ${recursos || "materiais básicos"}
-Número de situações de aprendizagem: ${numSituacoes}
+Recursos: ${recursos || "materiais bÃ¡sicos"}
+NÃºmero de situaÃ§Ãµes de aprendizagem: ${numSituacoes}
 
-IMPORTANTE — Use SOMENTE habilidades BNCC para ${serie}: ${habilidadesBncc}
-Selecione as que se relacionam com o tema "${tema}". Use os códigos exatos.
+IMPORTANTE â€” Use SOMENTE habilidades BNCC para ${serie}: ${habilidadesBncc}
+Selecione as que se relacionam com o tema "${tema}". Use os cÃ³digos exatos.
 
-Para imageQuery de cada situação, siga ESTAS REGRAS:
-1. Queries em inglês DIFERENTES e ESPECÍFICAS para cada atividade (nunca o tema geral)
-2. FAIXA ETÁRIA obrigatória nas queries conforme a série:
-   - 6º e 7º ano (11-13 anos): use "middle school kids", "young students age 12", "children"
-   - 8º e 9º ano (13-15 anos): use "high school students", "teenagers age 14", "teen athletes"
-   - Ensino Médio: use "high school athletes", "young adults sports"
-   A série atual é: ${serie}
-3. Descreva a ATIVIDADE ESPECÍFICA de cada situação. Ex:
-   - 6º/7º aquecimento → "middle school kids warm up gym"
-   - 6º/7º fundamentos → "young students volleyball practice"
-   - 8º/9º aquecimento → "teenagers warm up physical education"
-   - 8º/9º fundamentos → "teen athletes volleyball training"
-4. NUNCA repita a mesma query em situações diferentes
+Para imageQuery de cada situaÃ§Ã£o, siga ESTAS REGRAS:
+1. Queries em inglÃªs DIFERENTES e ESPECÃFICAS para cada atividade (nunca o tema geral)
+2. FAIXA ETÃRIA obrigatÃ³ria nas queries conforme a sÃ©rie:
+   - 6Âº e 7Âº ano (11-13 anos): use "middle school kids", "young students age 12", "children"
+   - 8Âº e 9Âº ano (13-15 anos): use "high school students", "teenagers age 14", "teen athletes"
+   - Ensino MÃ©dio: use "high school athletes", "young adults sports"
+   A sÃ©rie atual Ã©: ${serie}
+3. Descreva a ATIVIDADE ESPECÃFICA de cada situaÃ§Ã£o. Ex:
+   - 6Âº/7Âº aquecimento â†’ "middle school kids warm up gym"
+   - 6Âº/7Âº fundamentos â†’ "young students volleyball practice"
+   - 8Âº/9Âº aquecimento â†’ "teenagers warm up physical education"
+   - 8Âº/9Âº fundamentos â†’ "teen athletes volleyball training"
+4. NUNCA repita a mesma query em situaÃ§Ãµes diferentes
 
 Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
-{"objetivos":"...","habilidades":[{"codigo":"EF__EF__","descricao":"descrição completa"},{"codigo":"EF__EF__","descricao":"..."},{"codigo":"EF__EF__","descricao":"..."}],"objetos_conhecimento":["...","...","..."],"aquecimento":"descrição detalhada em 2 parágrafos separados por \\n","situacoes":[{"numero":1,"titulo":"...","objetivo":"...","desenvolvimento":"etapas detalhadas separadas por \\n","adaptacao":"...","imageQuery":"query única e específica desta situação em inglês"}],"valores_atitudinais":"...","instrumentos_avaliacao":"...","recursos":"...","referencias":["ACRE. Ref 1.","Ref 2.","Ref 3."]}`;
+{"objetivos":"...","habilidades":[{"codigo":"EF__EF__","descricao":"descriÃ§Ã£o completa"},{"codigo":"EF__EF__","descricao":"..."},{"codigo":"EF__EF__","descricao":"..."}],"objetos_conhecimento":["...","...","..."],"aquecimento":"descriÃ§Ã£o detalhada em 2 parÃ¡grafos separados por \\n","situacoes":[{"numero":1,"titulo":"...","objetivo":"...","desenvolvimento":"etapas detalhadas separadas por \\n","adaptacao":"...","imageQuery":"query Ãºnica e especÃ­fica desta situaÃ§Ã£o em inglÃªs"}],"valores_atitudinais":"...","instrumentos_avaliacao":"...","recursos":"...","referencias":["ACRE. Ref 1.","Ref 2.","Ref 3."]}`;
 
     let seq: Sequencia;
     try {
@@ -604,18 +604,18 @@ Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
 
       <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-800">🤖 Gerador de Sequência Didática Oficial — IA</h2>
+          <h2 className="text-lg font-semibold text-gray-800">ðŸ¤– Gerador de SequÃªncia DidÃ¡tica Oficial â€” IA</h2>
           {contadorSeq > 0 && (
             <span className="text-xs bg-blue-100 text-blue-700 font-semibold px-3 py-1 rounded-full">
-              {contadorSeq} sequência{contadorSeq > 1 ? "s" : ""} gerada{contadorSeq > 1 ? "s" : ""}
+              {contadorSeq} sequÃªncia{contadorSeq > 1 ? "s" : ""} gerada{contadorSeq > 1 ? "s" : ""}
             </span>
           )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="sm:col-span-2 flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-500">Tema / Conteúdo *</label>
-            <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" placeholder="Ex: Futsal — Fundamentos técnico-táticos e regras" value={tema} onChange={(e) => setTema(e.target.value)} />
+            <label className="text-xs font-medium text-gray-500">Tema / ConteÃºdo *</label>
+            <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" placeholder="Ex: Futsal â€” Fundamentos tÃ©cnico-tÃ¡ticos e regras" value={tema} onChange={(e) => setTema(e.target.value)} />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-gray-500">Professor(a)</label>
@@ -626,14 +626,14 @@ Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
             <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" value={coordenador} onChange={(e) => setCoordenador(e.target.value)} />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-500">Ano / Série</label>
+            <label className="text-xs font-medium text-gray-500">Ano / SÃ©rie</label>
             <select className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" value={serie} onChange={(e) => handleSerie(e.target.value)}>
               {Object.keys(TURMAS_POR_SERIE).map((s) => <option key={s}>{s}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-gray-500">Turmas</label>
-            <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" placeholder="Ex: 6ºF, 7ºB, 7ºC..." value={turmas} onChange={(e) => setTurmas(e.target.value)} />
+            <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" placeholder="Ex: 6ÂºF, 7ÂºB, 7ÂºC..." value={turmas} onChange={(e) => setTurmas(e.target.value)} />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-gray-500">Aulas previstas</label>
@@ -642,74 +642,74 @@ Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
             </select>
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-500">Período de execução</label>
-            <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" placeholder="Ex: Março/Abril 2026" value={periodo} onChange={(e) => setPeriodo(e.target.value)} />
+            <label className="text-xs font-medium text-gray-500">PerÃ­odo de execuÃ§Ã£o</label>
+            <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" placeholder="Ex: MarÃ§o/Abril 2026" value={periodo} onChange={(e) => setPeriodo(e.target.value)} />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-500">Nº de Situações de Aprendizagem</label>
+            <label className="text-xs font-medium text-gray-500">NÂº de SituaÃ§Ãµes de Aprendizagem</label>
             <select className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" value={numSituacoes} onChange={(e) => setNumSituacoes(e.target.value)}>
               {["2","3","4","5"].map((n) => <option key={n}>{n}</option>)}
             </select>
           </div>
           <div className="sm:col-span-2 flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-500">Recursos disponíveis</label>
+            <label className="text-xs font-medium text-gray-500">Recursos disponÃ­veis</label>
             <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" placeholder="Ex: quadra coberta, bolas de futsal, cones, coletes..." value={recursos} onChange={(e) => setRecursos(e.target.value)} />
           </div>
         </div>
 
         <button onClick={gerar} disabled={carregando} className="w-full py-3 rounded-xl bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white font-medium text-sm transition-colors">
-          ✨ Gerar Sequência Didática Oficial
+          âœ¨ Gerar SequÃªncia DidÃ¡tica Oficial
         </button>
-        {status === "erro" && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">⚠️ {erroMsg}</div>}
+        {status === "erro" && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">âš ï¸ {erroMsg}</div>}
       </div>
 
       {status === "pronto" && sequencia && (
         <div>
           <div className="flex gap-3 mb-4">
             <button onClick={handleBaixarWord} disabled={baixando} className="flex-1 py-3 rounded-xl bg-green-700 hover:bg-green-800 disabled:opacity-50 text-white font-medium text-sm transition-colors">
-              📄 Baixar Word (.docx) — {ordinal(numeroAtual)} Sequência
+              ðŸ“„ Baixar Word (.docx) â€” {ordinal(numeroAtual)} SequÃªncia
             </button>
-            <button onClick={resetar} className="py-3 px-5 rounded-xl border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 transition-colors">↩ Nova sequência</button>
+            <button onClick={resetar} className="py-3 px-5 rounded-xl border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 transition-colors">â†© Nova sequÃªncia</button>
           </div>
 
-          {/* Visualização */}
+          {/* VisualizaÃ§Ã£o */}
           <div className="bg-white border border-gray-300 shadow-lg rounded-lg overflow-hidden" style={{ fontFamily: "Arial, sans-serif" }}>
-            {/* Cabeçalho oficial */}
+            {/* CabeÃ§alho oficial */}
             <div className="flex items-center border-b-4 border-yellow-500 pb-2 px-4 pt-3 gap-3">
-              <img src="/brasao-acre.png" alt="Brasão do Acre" className="h-16 w-16 object-contain shrink-0" />
+              <img src="/brasao-acre.png" alt="BrasÃ£o do Acre" className="h-16 w-16 object-contain shrink-0" />
               <div>
                 <div className="text-xs font-bold text-green-800">GOVERNO DO ESTADO DO ACRE</div>
                 <div className="text-xs text-green-700">www.acre.gov.br</div>
               </div>
               <div className="flex-1 text-right">
                 <div className="text-xs text-green-800">SECRETARIA DE ESTADO DE</div>
-                <div className="text-sm font-bold text-green-800">EDUCAÇÃO, CULTURA E ESPORTES</div>
+                <div className="text-sm font-bold text-green-800">EDUCAÃ‡ÃƒO, CULTURA E ESPORTES</div>
                 <div className="text-base font-bold text-green-800">DIRETORIA DE ENSINO</div>
-                <div className="text-xs font-bold text-green-800">DIVISÃO DE ENSINO FUNDAMENTAL I E II</div>
-                <div className="text-xs font-bold text-green-800">DIVISÃO DE ENSINO ANOS FINAIS</div>
+                <div className="text-xs font-bold text-green-800">DIVISÃƒO DE ENSINO FUNDAMENTAL I E II</div>
+                <div className="text-xs font-bold text-green-800">DIVISÃƒO DE ENSINO ANOS FINAIS</div>
               </div>
             </div>
 
-            {/* Número da sequência */}
+            {/* NÃºmero da sequÃªncia */}
             <div className="px-4 py-2 text-center border-b border-gray-200">
-              <span className="text-base font-bold text-blue-900">{ordinal(numeroAtual)} SEQUÊNCIA DIDÁTICA — EDUCAÇÃO FÍSICA</span>
+              <span className="text-base font-bold text-blue-900">{ordinal(numeroAtual)} SEQUÃŠNCIA DIDÃTICA â€” EDUCAÃ‡ÃƒO FÃSICA</span>
             </div>
 
             <div className="px-4 pb-1 pt-2"><p className="text-sm font-bold text-gray-900">ESCOLA: INSTITUTO ODILON PRATAGI</p></div>
             <div className="px-4 pb-2">
               <table className="w-full border-collapse text-xs">
                 <tbody>
-                  <tr><td colSpan={4} className="border border-gray-400 bg-blue-800 text-white font-bold px-2 py-1">IDENTIFICAÇÃO</td></tr>
+                  <tr><td colSpan={4} className="border border-gray-400 bg-blue-800 text-white font-bold px-2 py-1">IDENTIFICAÃ‡ÃƒO</td></tr>
                   <tr>
                     <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50 w-1/4">PROFESSOR(A):<br /><span className="font-normal">{professor}</span></td>
-                    <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50 w-1/4">COMPONENTE:<br /><span className="font-normal">Educação Física</span></td>
-                    <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50 w-1/4">ANO/SÉRIE:<br /><span className="font-normal">{serie}</span></td>
-                    <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50 w-1/4">TURMAS:<br /><span className="font-normal">{turmas || "—"}</span></td>
+                    <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50 w-1/4">COMPONENTE:<br /><span className="font-normal">EducaÃ§Ã£o FÃ­sica</span></td>
+                    <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50 w-1/4">ANO/SÃ‰RIE:<br /><span className="font-normal">{serie}</span></td>
+                    <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50 w-1/4">TURMAS:<br /><span className="font-normal">{turmas || "â€”"}</span></td>
                   </tr>
                   <tr>
                     <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50" colSpan={2}>COORDENADOR(A):<br /><span className="font-normal">{coordenador}</span></td>
                     <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50">AULAS PREVISTAS:<br /><span className="font-normal">{aulasPrevistas}</span></td>
-                    <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50">PERÍODO DE EXECUÇÃO:<br /><span className="font-normal">{periodo || "—"}</span></td>
+                    <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50">PERÃODO DE EXECUÃ‡ÃƒO:<br /><span className="font-normal">{periodo || "â€”"}</span></td>
                   </tr>
                   <tr><td colSpan={4} className="border border-gray-400 px-2 py-1 bg-gray-50 font-semibold">TEMA: <span className="font-normal">{tema}</span></td></tr>
                 </tbody>
@@ -726,7 +726,7 @@ Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
             <div className="px-4 pb-2">
               <table className="w-full border-collapse text-xs">
                 <thead>
-                  <tr><td colSpan={2} className="border border-gray-400 bg-blue-100 font-bold px-2 py-1 text-center text-sm">CONTEÚDOS</td></tr>
+                  <tr><td colSpan={2} className="border border-gray-400 bg-blue-100 font-bold px-2 py-1 text-center text-sm">CONTEÃšDOS</td></tr>
                   <tr>
                     <td className="border border-gray-400 bg-gray-100 font-bold px-2 py-1 text-center w-1/2">HABILIDADES</td>
                     <td className="border border-gray-400 bg-gray-100 font-bold px-2 py-1 text-center w-1/2">OBJETOS DE CONHECIMENTO</td>
@@ -750,17 +750,17 @@ Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
                   </td></tr>
                   {sequencia.situacoes.map((sit) => (
                     <tr key={sit.numero}><td colSpan={2} className="border border-gray-400 p-0">
-                      <div className="bg-blue-700 text-white font-bold px-2 py-1 text-xs">Situação de Aprendizagem {sit.numero} — {sit.titulo}</div>
+                      <div className="bg-blue-700 text-white font-bold px-2 py-1 text-xs">SituaÃ§Ã£o de Aprendizagem {sit.numero} â€” {sit.titulo}</div>
                       <div className="flex">
                         <div className="flex-1 px-3 py-2">
-                          <p className="font-semibold text-gray-700 mb-1 text-xs">Objetivo Específico: <span className="font-normal">{sit.objetivo}</span></p>
+                          <p className="font-semibold text-gray-700 mb-1 text-xs">Objetivo EspecÃ­fico: <span className="font-normal">{sit.objetivo}</span></p>
                           <div className="text-gray-800 leading-relaxed whitespace-pre-line text-xs">{sit.desenvolvimento}</div>
                           {sit.adaptacao && <div className="mt-2 bg-purple-50 border-l-2 border-purple-400 px-2 py-1"><p className="font-semibold text-purple-800 text-xs">Atividades Adaptadas:</p><p className="text-gray-700 text-xs">{sit.adaptacao}</p></div>}
                         </div>
                         {sit.imageUrl ? (
                           <div className="relative shrink-0" style={{ width: 180 }}>
                             <img src={sit.imageUrl} alt={sit.imageQuery} className="w-full h-full object-cover" style={{ minHeight: 140 }} />
-                            {sit.imageAuthor && <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white px-1 py-0.5 text-center" style={{ fontSize: 9 }}>📷 {sit.imageAuthor} / Pexels</div>}
+                            {sit.imageAuthor && <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white px-1 py-0.5 text-center" style={{ fontSize: 9 }}>ðŸ“· {sit.imageAuthor} / Pexels</div>}
                           </div>
                         ) : (
                           <div className="shrink-0 bg-gray-100 flex items-center justify-center text-gray-400 text-xs" style={{ width: 180, minHeight: 140 }}>Sem imagem</div>
@@ -775,7 +775,7 @@ Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
               <table className="w-full border-collapse text-xs">
                 <thead><tr>
                   <td className="border border-gray-400 bg-blue-100 font-bold px-2 py-1 text-center w-1/3">VALORES ATITUDINAIS</td>
-                  <td className="border border-gray-400 bg-blue-100 font-bold px-2 py-1 text-center w-1/3">INSTRUMENTOS DE AVALIAÇÃO</td>
+                  <td className="border border-gray-400 bg-blue-100 font-bold px-2 py-1 text-center w-1/3">INSTRUMENTOS DE AVALIAÃ‡ÃƒO</td>
                   <td className="border border-gray-400 bg-blue-100 font-bold px-2 py-1 text-center w-1/3">RECURSOS</td>
                 </tr></thead>
                 <tbody><tr>
@@ -788,7 +788,7 @@ Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
             <div className="px-4 pb-2">
               <table className="w-full border-collapse text-xs">
                 <tbody>
-                  <tr><td className="border border-gray-400 bg-blue-100 font-bold px-2 py-1 text-center text-sm">REFERÊNCIAS</td></tr>
+                  <tr><td className="border border-gray-400 bg-blue-100 font-bold px-2 py-1 text-center text-sm">REFERÃŠNCIAS</td></tr>
                   <tr><td className="border border-gray-400 px-3 py-2"><ul className="list-disc list-inside space-y-1 text-gray-800">{sequencia.referencias.map((r, i) => <li key={i} className="leading-relaxed">{r}</li>)}</ul></td></tr>
                 </tbody>
               </table>
@@ -796,7 +796,7 @@ Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
             <div className="px-4 pb-4">
               <table className="w-full border-collapse text-xs">
                 <tbody>
-                  <tr><td colSpan={2} className="border border-gray-400 bg-blue-800 text-white font-bold px-2 py-1 text-center">DEVOLUTIVA DO COORDENADOR PEDAGÓGICO</td></tr>
+                  <tr><td colSpan={2} className="border border-gray-400 bg-blue-800 text-white font-bold px-2 py-1 text-center">DEVOLUTIVA DO COORDENADOR PEDAGÃ“GICO</td></tr>
                   <tr>
                     <td className="border border-gray-400 px-4 py-8 text-center w-1/2"><div className="border-t border-gray-500 mt-6 pt-1">Assinatura do (a) Coordenador (a)</div></td>
                     <td className="border border-gray-400 px-4 py-8 text-center w-1/2"><div className="border-t border-gray-500 mt-6 pt-1">Assinatura do (a) Professor (a)</div></td>
@@ -810,3 +810,4 @@ Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
     </div>
   );
 }
+
