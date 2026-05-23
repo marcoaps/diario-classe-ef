@@ -81,9 +81,24 @@ function base64ToUint8Array(base64: string): Uint8Array {
 
 async function fetchBrasaoBase64(): Promise<{ base64: string; type: "png" } | null> {
   try {
+    // Tenta primeiro via fetch direto
+    const res = await fetch("/brasao-acre.png");
+    if (res.ok) {
+      const buf = await res.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let b64 = "";
+      const chunk = 8192;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        b64 += String.fromCharCode(...bytes.subarray(i, i + chunk));
+      }
+      return { base64: btoa(b64), type: "png" };
+    }
+  } catch (_) {}
+  try {
+    // Fallback: via proxy
     const url = window.location.origin + "/brasao-acre.png";
-    const res = await fetch(`/api/pexels?imageUrl=${encodeURIComponent(url)}`);
-    const data = await res.json();
+    const res2 = await fetch(`/api/pexels?imageUrl=${encodeURIComponent(url)}`);
+    const data = await res2.json();
     if (data.base64) return { base64: data.base64, type: "png" };
   } catch (_) {}
   return null;
@@ -250,7 +265,15 @@ async function baixarWord(
       width: { size: W, type: WidthType.DXA },
       columnWidths: [Q1, Q1, Q1, W - Q1*3],
       rows: [
-        new TableRow({ children: [headerCell("IDENTIFICAÇÃO", W)] }),
+        new TableRow({ children: [
+          new TableCell({
+            columnSpan: 4, borders: bordas,
+            width: { size: W, type: WidthType.DXA },
+            shading: { fill: "1F4E79", type: ShadingType.CLEAR },
+            margins: margCell, verticalAlign: VerticalAlign.CENTER,
+            children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "IDENTIFICAÇÃO", bold: true, color: "FFFFFF", size: 22, font: "Arial" })] })],
+          }),
+        ]}),
         new TableRow({ children: [
           labelDataCell("PROFESSOR(A)", professor, Q1),
           labelDataCell("COMPONENTE", "Educação Física", Q1),
