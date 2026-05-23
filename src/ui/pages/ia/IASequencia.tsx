@@ -30,27 +30,23 @@ interface Sequencia {
   referencias: string[];
 }
 
-// Turmas pré-definidas por série
 const TURMAS_POR_SERIE: Record<string, string> = {
   "6º e 7º": "6ºF, 7ºB, 7ºC, 7ºD, 7ºE, 7ºF",
   "8º e 9º": "8ºA, 8ºB, 8ºC, 8ºD, 8ºE, 8ºF, 9ºA, 9ºB, 9ºC, 9ºD, 9ºE, 9ºF",
-  "6º ano": "",
-  "7º ano": "",
-  "8º ano": "",
-  "9º ano": "",
-  "1º EM": "",
-  "2º EM": "",
-  "3º EM": "",
-  "1º e 2º EM": "",
+  "6º ano": "", "7º ano": "", "8º ano": "", "9º ano": "",
+  "1º EM": "", "2º EM": "", "3º EM": "", "1º e 2º EM": "",
 };
+
+function ordinal(n: number): string {
+  return n === 1 ? "1ª" : n === 2 ? "2ª" : n === 3 ? "3ª" :
+    n === 4 ? "4ª" : n === 5 ? "5ª" : `${n}ª`;
+}
 
 async function buscarImagemPexels(query: string): Promise<{ url: string; author: string } | null> {
   try {
     const res = await fetch(`/api/pexels?query=${encodeURIComponent(query + " physical education students")}`);
     const data = await res.json();
-    if (data.photos?.length > 0) {
-      return { url: data.photos[0].src.medium, author: data.photos[0].photographer };
-    }
+    if (data.photos?.length > 0) return { url: data.photos[0].src.medium, author: data.photos[0].photographer };
   } catch (_) {}
   return null;
 }
@@ -68,11 +64,7 @@ async function chamarClaudeProxy(prompt: string): Promise<string> {
   const res = await fetch("/api/claude", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 8000,
-      messages: [{ role: "user", content: prompt }],
-    }),
+    body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 8000, messages: [{ role: "user", content: prompt }] }),
   });
   if (!res.ok) throw new Error(`Erro HTTP ${res.status}`);
   const data = await res.json();
@@ -80,26 +72,27 @@ async function chamarClaudeProxy(prompt: string): Promise<string> {
 }
 
 function base64ToUint8Array(base64: string): Uint8Array {
-  const bin = atob(base64);
-  const arr = new Uint8Array(bin.length);
+  const bin = atob(base64); const arr = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
   return arr;
 }
 
+async function fetchBrasaoBase64(): Promise<{ base64: string; type: "png" } | null> {
+  try {
+    const res = await fetch("/brasao-acre.png");
+    const buf = await res.arrayBuffer();
+    const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+    return { base64: b64, type: "png" };
+  } catch (_) { return null; }
+}
+
 async function baixarWord(
-  seq: Sequencia,
-  professor: string,
-  coordenador: string,
-  serie: string,
-  turmas: string,
-  aulasPrevistas: string,
-  periodo: string,
-  tema: string
+  seq: Sequencia, professor: string, coordenador: string, serie: string,
+  turmas: string, aulasPrevistas: string, periodo: string, tema: string, numeroSeq: number
 ) {
   const {
     Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
-    ImageRun, AlignmentType, BorderStyle, WidthType, ShadingType,
-    VerticalAlign, LevelFormat,
+    ImageRun, AlignmentType, BorderStyle, WidthType, ShadingType, VerticalAlign, LevelFormat,
   } = await import("docx");
 
   const W = 9360;
@@ -107,6 +100,8 @@ async function baixarWord(
   const bordas = { top: borda, bottom: borda, left: borda, right: borda };
   const bordaFina = { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" };
   const bordasFinas = { top: bordaFina, bottom: bordaFina, left: bordaFina, right: bordaFina };
+  const semBorda = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" };
+  const semBordas = { top: semBorda, bottom: semBorda, left: semBorda, right: semBorda };
   const margCell = { top: 80, bottom: 80, left: 120, right: 120 };
 
   const headerCell = (text: string, width: number, cor = "1F4E79") =>
@@ -153,83 +148,222 @@ async function baixarWord(
         paragrafo(sit.adaptacao),
       ] : []),
     ];
-
     if (sit.imageBase64 && sit.imageType) {
       const imgType = sit.imageType.includes("png") ? "png" : "jpg";
       conteudo.push(
         new Paragraph({ spacing: { before: 100, after: 40 }, children: [new TextRun({ text: "Ilustração:", bold: true, size: 18, color: "1F4E79", font: "Arial" })] }),
-        new Paragraph({ spacing: { before: 0, after: 60 }, children: [
-          new ImageRun({ data: base64ToUint8Array(sit.imageBase64), transformation: { width: 300, height: 180 }, type: imgType }),
-        ]}),
+        new Paragraph({ spacing: { before: 0, after: 60 }, children: [new ImageRun({ data: base64ToUint8Array(sit.imageBase64), transformation: { width: 300, height: 180 }, type: imgType })] }),
         new Paragraph({ children: [new TextRun({ text: `Foto: ${sit.imageAuthor || ""} / Pexels`, size: 14, italics: true, color: "888888", font: "Arial" })] }),
       );
     }
-
     return new TableCell({ borders: bordasFinas, width: { size: W, type: WidthType.DXA }, margins: margCell, children: conteudo });
   };
 
+  // Busca brasão
+  const brasao = await fetchBrasaoBase64();
+
+  // Cabeçalho oficial
+  const cabecalhoRows: TableRow[] = [];
+  const colW1 = Math.round(W * 0.18); // brasão
+  const colW2 = Math.round(W * 0.28); // governo do acre
+  const colW3 = W - colW1 - colW2;    // secretaria
+
+  const cellBrasao = new TableCell({
+    borders: semBordas,
+    width: { size: colW1, type: WidthType.DXA },
+    verticalAlign: VerticalAlign.CENTER,
+    margins: { top: 40, bottom: 40, left: 40, right: 40 },
+    children: brasao ? [
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [new ImageRun({ data: base64ToUint8Array(brasao.base64), transformation: { width: 70, height: 70 }, type: "png" })],
+      }),
+    ] : [new Paragraph({ children: [] })],
+  });
+
+  const cellGoverno = new TableCell({
+    borders: semBordas,
+    width: { size: colW2, type: WidthType.DXA },
+    verticalAlign: VerticalAlign.CENTER,
+    margins: margCell,
+    children: [
+      new Paragraph({ children: [new TextRun({ text: "GOVERNO DO", bold: true, size: 22, color: "1A6B1A", font: "Arial" })] }),
+      new Paragraph({ children: [new TextRun({ text: "ESTADO DO ACRE", bold: true, size: 22, color: "1A6B1A", font: "Arial" })] }),
+      new Paragraph({ children: [new TextRun({ text: "www.acre.gov.br", size: 18, color: "1A6B1A", font: "Arial" })] }),
+    ],
+  });
+
+  const cellSecretaria = new TableCell({
+    borders: semBordas,
+    width: { size: colW3, type: WidthType.DXA },
+    verticalAlign: VerticalAlign.CENTER,
+    margins: margCell,
+    children: [
+      new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: "SECRETARIA DE ESTADO DE", size: 16, color: "1A6B1A", font: "Arial" })] }),
+      new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: "EDUCAÇÃO, CULTURA E ESPORTES", bold: true, size: 20, color: "1A6B1A", font: "Arial" })] }),
+      new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: "DIRETORIA DE ENSINO", bold: true, size: 24, color: "1A6B1A", font: "Arial" })] }),
+      new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: "DIVISÃO DE ENSINO FUNDAMENTAL I E II", bold: true, size: 16, color: "1A6B1A", font: "Arial" })] }),
+      new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: "DIVISÃO DE ENSINO ANOS FINAIS", bold: true, size: 16, color: "1A6B1A", font: "Arial" })] }),
+    ],
+  });
+
+  cabecalhoRows.push(new TableRow({ children: [cellBrasao, cellGoverno, cellSecretaria] }));
+
+  const tabelaCabecalho = new Table({
+    width: { size: W, type: WidthType.DXA },
+    columnWidths: [colW1, colW2, colW3],
+    rows: cabecalhoRows,
+    borders: { top: semBorda, bottom: { style: BorderStyle.SINGLE, size: 8, color: "D4A017" }, left: semBorda, right: semBorda, insideH: semBorda, insideV: semBorda },
+  });
+
+  // Linha dourada separadora
+  const linhaDourada = new Paragraph({
+    spacing: { before: 0, after: 120 },
+    border: { bottom: { style: BorderStyle.SINGLE, size: 8, color: "D4A017", space: 1 } },
+    children: [],
+  });
+
+  const Q1 = Math.round(W / 4);
+  const Q2 = Math.round(W / 2);
+
   const children: (Paragraph | Table)[] = [
-    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 200 }, children: [new TextRun({ text: "ESCOLA: INSTITUTO ODILON PRATAGI", bold: true, size: 24, font: "Arial" })] }),
-    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 200 }, children: [new TextRun({ text: "SEQUÊNCIA DIDÁTICA — EDUCAÇÃO FÍSICA", bold: true, size: 28, color: "1F4E79", font: "Arial" })] }),
+    tabelaCabecalho,
+    linhaDourada,
+
+    // Número da sequência
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 100, after: 60 },
+      children: [new TextRun({ text: `${ordinal(numeroSeq)} SEQUÊNCIA DIDÁTICA`, bold: true, size: 28, color: "1F4E79", font: "Arial" })],
+    }),
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 0, after: 160 },
+      children: [new TextRun({ text: "EDUCAÇÃO FÍSICA — INSTITUTO ODILON PRATAGI", bold: true, size: 22, font: "Arial" })],
+    }),
+
+    // Tabela identificação — linha 1
     new Table({
       width: { size: W, type: WidthType.DXA },
-      columnWidths: [Math.round(W/4), Math.round(W/4), Math.round(W/4), W - Math.round(W/4)*3],
+      columnWidths: [Q1, Q1, Q1, W - Q1*3],
       rows: [
         new TableRow({ children: [headerCell("IDENTIFICAÇÃO", W)] }),
-        new TableRow({ children: [labelDataCell("PROFESSOR(A)", professor, Math.round(W/4)), labelDataCell("COMPONENTE", "Educação Física", Math.round(W/4)), labelDataCell("ANO/SÉRIE", serie, Math.round(W/4)), labelDataCell("TURMAS", turmas || "—", W - Math.round(W/4)*3)] }),
-        new TableRow({ children: [labelDataCell("COORDENADOR(A)", coordenador, Math.round(W/2)), labelDataCell("AULAS PREVISTAS", aulasPrevistas, Math.round(W/4)), labelDataCell("PERÍODO", periodo || "—", W - Math.round(W/2) - Math.round(W/4))] }),
-        new TableRow({ children: [new TableCell({ columnSpan: 4, borders: bordasFinas, width: { size: W, type: WidthType.DXA }, shading: { fill: "F2F2F2", type: ShadingType.CLEAR }, margins: margCell, children: [new Paragraph({ children: [new TextRun({ text: `TEMA: ${tema}`, bold: true, size: 20, font: "Arial" })] })] })] }),
+        new TableRow({ children: [
+          labelDataCell("PROFESSOR(A)", professor, Q1),
+          labelDataCell("COMPONENTE", "Educação Física", Q1),
+          labelDataCell("ANO/SÉRIE", serie, Q1),
+          labelDataCell("TURMAS", turmas || "—", W - Q1*3),
+        ]}),
+        // Linha 2: coordenador (2 cols) + aulas (1 col) + período (1 col) — sem mesclagem para período ter espaço
+        new TableRow({ children: [
+          new TableCell({
+            borders: bordasFinas, width: { size: Q2, type: WidthType.DXA },
+            columnSpan: 2,
+            shading: { fill: "F2F2F2", type: ShadingType.CLEAR }, margins: margCell,
+            children: [
+              new Paragraph({ children: [new TextRun({ text: "COORDENADOR(A)", bold: true, size: 18, font: "Arial" })] }),
+              new Paragraph({ children: [new TextRun({ text: coordenador || "—", size: 20, font: "Arial" })] }),
+            ],
+          }),
+          new TableCell({
+            borders: bordasFinas, width: { size: Q1, type: WidthType.DXA },
+            shading: { fill: "F2F2F2", type: ShadingType.CLEAR }, margins: margCell,
+            children: [
+              new Paragraph({ children: [new TextRun({ text: "AULAS PREVISTAS", bold: true, size: 18, font: "Arial" })] }),
+              new Paragraph({ children: [new TextRun({ text: aulasPrevistas, size: 20, font: "Arial" })] }),
+            ],
+          }),
+          new TableCell({
+            borders: bordasFinas, width: { size: W - Q2 - Q1, type: WidthType.DXA },
+            shading: { fill: "F2F2F2", type: ShadingType.CLEAR }, margins: margCell,
+            children: [
+              new Paragraph({ children: [new TextRun({ text: "PERÍODO DE EXECUÇÃO", bold: true, size: 18, font: "Arial" })] }),
+              new Paragraph({ children: [new TextRun({ text: periodo || "—", size: 20, font: "Arial" })] }),
+            ],
+          }),
+        ]}),
+        new TableRow({ children: [
+          new TableCell({
+            columnSpan: 4, borders: bordasFinas,
+            width: { size: W, type: WidthType.DXA },
+            shading: { fill: "F2F2F2", type: ShadingType.CLEAR }, margins: margCell,
+            children: [new Paragraph({ children: [new TextRun({ text: `TEMA: ${tema}`, bold: true, size: 20, font: "Arial" })] })],
+          }),
+        ]}),
       ],
     }),
+
     new Paragraph({ spacing: { before: 200, after: 0 }, children: [] }),
+
     new Table({ width: { size: W, type: WidthType.DXA }, columnWidths: [W], rows: [
       new TableRow({ children: [headerCell("OBJETIVOS / CAPACIDADES", W)] }),
       new TableRow({ children: [new TableCell({ borders: bordasFinas, width: { size: W, type: WidthType.DXA }, margins: margCell, children: [paragrafo(seq.objetivos)] })] }),
     ]}),
+
     new Paragraph({ spacing: { before: 160, after: 0 }, children: [] }),
+
     new Table({
-      width: { size: W, type: WidthType.DXA }, columnWidths: [Math.round(W*0.55), W - Math.round(W*0.55)],
+      width: { size: W, type: WidthType.DXA },
+      columnWidths: [Math.round(W*0.55), W - Math.round(W*0.55)],
       rows: [
         new TableRow({ children: [headerCell("HABILIDADES (BNCC)", Math.round(W*0.55)), headerCell("OBJETOS DE CONHECIMENTO", W - Math.round(W*0.55))] }),
         new TableRow({ children: [
-          new TableCell({ borders: bordasFinas, width: { size: Math.round(W*0.55), type: WidthType.DXA }, margins: margCell, children: seq.habilidades.map(h => new Paragraph({ spacing: { before: 40, after: 60 }, children: [new TextRun({ text: `${h.codigo}: `, bold: true, size: 18, font: "Arial" }), new TextRun({ text: h.descricao, size: 18, font: "Arial" })] })) }),
-          new TableCell({ borders: bordasFinas, width: { size: W - Math.round(W*0.55), type: WidthType.DXA }, margins: margCell, children: seq.objetos_conhecimento.map(o => new Paragraph({ spacing: { before: 40, after: 40 }, numbering: { reference: "bullets", level: 0 }, children: [new TextRun({ text: o, size: 18, font: "Arial" })] })) }),
+          new TableCell({ borders: bordasFinas, width: { size: Math.round(W*0.55), type: WidthType.DXA }, margins: margCell,
+            children: seq.habilidades.map(h => new Paragraph({ spacing: { before: 40, after: 60 }, children: [new TextRun({ text: `${h.codigo}: `, bold: true, size: 18, font: "Arial" }), new TextRun({ text: h.descricao, size: 18, font: "Arial" })] })) }),
+          new TableCell({ borders: bordasFinas, width: { size: W - Math.round(W*0.55), type: WidthType.DXA }, margins: margCell,
+            children: seq.objetos_conhecimento.map(o => new Paragraph({ spacing: { before: 40, after: 40 }, numbering: { reference: "bullets", level: 0 }, children: [new TextRun({ text: o, size: 18, font: "Arial" })] })) }),
         ]}),
       ],
     }),
+
     new Paragraph({ spacing: { before: 160, after: 0 }, children: [] }),
+
     new Table({ width: { size: W, type: WidthType.DXA }, columnWidths: [W], rows: [
       new TableRow({ children: [headerCell("DESENVOLVIMENTO DAS ATIVIDADES", W)] }),
-      new TableRow({ children: [new TableCell({ borders: bordasFinas, width: { size: W, type: WidthType.DXA }, shading: { fill: "FFF8E1", type: ShadingType.CLEAR }, margins: margCell, children: [
-        new Paragraph({ children: [new TextRun({ text: "Atividade de Acolhida e Aquecimento", bold: true, size: 20, color: "7B5E00", font: "Arial" })] }),
-        ...textoParagrafos(seq.aquecimento),
-      ] })] }),
+      new TableRow({ children: [new TableCell({ borders: bordasFinas, width: { size: W, type: WidthType.DXA }, shading: { fill: "FFF8E1", type: ShadingType.CLEAR }, margins: margCell,
+        children: [
+          new Paragraph({ children: [new TextRun({ text: "Atividade de Acolhida e Aquecimento", bold: true, size: 20, color: "7B5E00", font: "Arial" })] }),
+          ...textoParagrafos(seq.aquecimento),
+        ],
+      })] }),
       ...seq.situacoes.flatMap(sit => [
-        new TableRow({ children: [new TableCell({ borders: bordasFinas, width: { size: W, type: WidthType.DXA }, shading: { fill: "E8F0FE", type: ShadingType.CLEAR }, margins: margCell, children: [new Paragraph({ children: [new TextRun({ text: `Situação de Aprendizagem ${sit.numero} — `, bold: true, size: 20, color: "1A3C8F", font: "Arial" }), new TextRun({ text: sit.titulo, bold: true, size: 20, color: "1A3C8F", font: "Arial" })] })] })] }),
+        new TableRow({ children: [new TableCell({ borders: bordasFinas, width: { size: W, type: WidthType.DXA }, shading: { fill: "E8F0FE", type: ShadingType.CLEAR }, margins: margCell,
+          children: [new Paragraph({ children: [new TextRun({ text: `Situação de Aprendizagem ${sit.numero} — `, bold: true, size: 20, color: "1A3C8F", font: "Arial" }), new TextRun({ text: sit.titulo, bold: true, size: 20, color: "1A3C8F", font: "Arial" })] })] })] }),
         new TableRow({ children: [celulaSituacao(sit)] }),
       ]),
     ]}),
+
     new Paragraph({ spacing: { before: 160, after: 0 }, children: [] }),
+
     new Table({
-      width: { size: W, type: WidthType.DXA }, columnWidths: [Math.round(W/3), Math.round(W/3), W - Math.round(W/3)*2],
+      width: { size: W, type: WidthType.DXA },
+      columnWidths: [Math.round(W/3), Math.round(W/3), W - Math.round(W/3)*2],
       rows: [
         new TableRow({ children: [headerCell("VALORES ATITUDINAIS", Math.round(W/3)), headerCell("INSTRUMENTOS DE AVALIAÇÃO", Math.round(W/3)), headerCell("RECURSOS", W - Math.round(W/3)*2)] }),
         new TableRow({ children: [dataCell(seq.valores_atitudinais, Math.round(W/3)), dataCell(seq.instrumentos_avaliacao, Math.round(W/3)), dataCell(seq.recursos, W - Math.round(W/3)*2)] }),
       ],
     }),
+
     new Paragraph({ spacing: { before: 160, after: 0 }, children: [] }),
+
     new Table({ width: { size: W, type: WidthType.DXA }, columnWidths: [W], rows: [
       new TableRow({ children: [headerCell("REFERÊNCIAS", W)] }),
-      new TableRow({ children: [new TableCell({ borders: bordasFinas, width: { size: W, type: WidthType.DXA }, margins: margCell, children: seq.referencias.map(r => new Paragraph({ spacing: { before: 40, after: 40 }, numbering: { reference: "bullets", level: 0 }, children: [new TextRun({ text: r, size: 18, font: "Arial" })] })) })] }),
+      new TableRow({ children: [new TableCell({ borders: bordasFinas, width: { size: W, type: WidthType.DXA }, margins: margCell,
+        children: seq.referencias.map(r => new Paragraph({ spacing: { before: 40, after: 40 }, numbering: { reference: "bullets", level: 0 }, children: [new TextRun({ text: r, size: 18, font: "Arial" })] })) })] }),
     ]}),
+
     new Paragraph({ spacing: { before: 240, after: 0 }, children: [] }),
+
     new Table({
-      width: { size: W, type: WidthType.DXA }, columnWidths: [Math.round(W/2), W - Math.round(W/2)],
+      width: { size: W, type: WidthType.DXA },
+      columnWidths: [Math.round(W/2), W - Math.round(W/2)],
       rows: [
         new TableRow({ children: [headerCell("DEVOLUTIVA DO COORDENADOR PEDAGÓGICO", W)] }),
         new TableRow({ children: [
-          new TableCell({ borders: bordasFinas, width: { size: Math.round(W/2), type: WidthType.DXA }, margins: { top: 800, bottom: 80, left: 120, right: 120 }, children: [new Paragraph({ alignment: AlignmentType.CENTER, border: { top: { style: BorderStyle.SINGLE, size: 4, color: "555555", space: 1 } }, children: [new TextRun({ text: "Assinatura do (a) Coordenador (a)", size: 18, font: "Arial" })] })] }),
-          new TableCell({ borders: bordasFinas, width: { size: W - Math.round(W/2), type: WidthType.DXA }, margins: { top: 800, bottom: 80, left: 120, right: 120 }, children: [new Paragraph({ alignment: AlignmentType.CENTER, border: { top: { style: BorderStyle.SINGLE, size: 4, color: "555555", space: 1 } }, children: [new TextRun({ text: "Assinatura do (a) Professor (a)", size: 18, font: "Arial" })] })] }),
+          new TableCell({ borders: bordasFinas, width: { size: Math.round(W/2), type: WidthType.DXA }, margins: { top: 800, bottom: 80, left: 120, right: 120 },
+            children: [new Paragraph({ alignment: AlignmentType.CENTER, border: { top: { style: BorderStyle.SINGLE, size: 4, color: "555555", space: 1 } }, children: [new TextRun({ text: "Assinatura do (a) Coordenador (a)", size: 18, font: "Arial" })] })] }),
+          new TableCell({ borders: bordasFinas, width: { size: W - Math.round(W/2), type: WidthType.DXA }, margins: { top: 800, bottom: 80, left: 120, right: 120 },
+            children: [new Paragraph({ alignment: AlignmentType.CENTER, border: { top: { style: BorderStyle.SINGLE, size: 4, color: "555555", space: 1 } }, children: [new TextRun({ text: "Assinatura do (a) Professor (a)", size: 18, font: "Arial" })] })] }),
         ]}),
       ],
     }),
@@ -244,12 +378,12 @@ async function baixarWord(
   const url = URL.createObjectURL(buffer);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `Sequencia_Didatica_${tema.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40)}.docx`;
+  a.download = `${ordinal(numeroSeq)}_Sequencia_Didatica_${tema.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 30)}.docx`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
-// ── Animação de loading ───────────────────────────────────────────────────────
+// ── Animações ─────────────────────────────────────────────────────────────────
 
 const ETAPAS_ANIMACAO = [
   { icone: "🧠", texto: "Analisando tema e série..." },
@@ -261,23 +395,19 @@ const ETAPAS_ANIMACAO = [
 ];
 
 function AnimacaoGerando({ etapa }: { etapa: number }) {
+  const e = ETAPAS_ANIMACAO[etapa % ETAPAS_ANIMACAO.length];
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full mx-4 text-center">
         <div className="relative w-20 h-20 mx-auto mb-6">
           <svg className="w-20 h-20 animate-spin" viewBox="0 0 80 80">
             <circle cx="40" cy="40" r="34" fill="none" stroke="#E5E7EB" strokeWidth="6" />
-            <circle cx="40" cy="40" r="34" fill="none" stroke="#1D4ED8" strokeWidth="6"
-              strokeDasharray="80 134" strokeLinecap="round" />
+            <circle cx="40" cy="40" r="34" fill="none" stroke="#1D4ED8" strokeWidth="6" strokeDasharray="80 134" strokeLinecap="round" />
           </svg>
-          <div className="absolute inset-0 flex items-center justify-center text-3xl">
-            {ETAPAS_ANIMACAO[etapa % ETAPAS_ANIMACAO.length].icone}
-          </div>
+          <div className="absolute inset-0 flex items-center justify-center text-3xl">{e.icone}</div>
         </div>
         <h3 className="text-lg font-semibold text-gray-800 mb-2">Gerando Sequência Didática</h3>
-        <p className="text-sm text-blue-600 font-medium mb-4">
-          {ETAPAS_ANIMACAO[etapa % ETAPAS_ANIMACAO.length].texto}
-        </p>
+        <p className="text-sm text-blue-600 font-medium mb-4">{e.texto}</p>
         <div className="flex justify-center gap-1.5">
           {ETAPAS_ANIMACAO.map((_, i) => (
             <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${i <= etapa % ETAPAS_ANIMACAO.length ? "bg-blue-600 w-6" : "bg-gray-200 w-3"}`} />
@@ -296,8 +426,7 @@ function AnimacaoBaixando() {
         <div className="relative w-20 h-20 mx-auto mb-6">
           <svg className="w-20 h-20 animate-spin" viewBox="0 0 80 80">
             <circle cx="40" cy="40" r="34" fill="none" stroke="#E5E7EB" strokeWidth="6" />
-            <circle cx="40" cy="40" r="34" fill="none" stroke="#15803D" strokeWidth="6"
-              strokeDasharray="100 114" strokeLinecap="round" />
+            <circle cx="40" cy="40" r="34" fill="none" stroke="#15803D" strokeWidth="6" strokeDasharray="100 114" strokeLinecap="round" />
           </svg>
           <div className="absolute inset-0 flex items-center justify-center text-3xl">📄</div>
         </div>
@@ -327,15 +456,17 @@ export function IASequencia() {
   const [erroMsg, setErroMsg] = useState("");
   const [sequencia, setSequencia] = useState<Sequencia | null>(null);
   const [etapaAnim, setEtapaAnim] = useState(0);
+  const [contadorSeq, setContadorSeq] = useState(() => {
+    return parseInt(localStorage.getItem("seq_contador") || "0");
+  });
+  const [numeroAtual, setNumeroAtual] = useState(1);
 
-  // Avança etapa da animação a cada 3s
   useEffect(() => {
     if (status !== "gerando" && status !== "imagens") return;
-    const intervalo = setInterval(() => setEtapaAnim(e => e + 1), 3000);
-    return () => clearInterval(intervalo);
+    const iv = setInterval(() => setEtapaAnim(e => e + 1), 3000);
+    return () => clearInterval(iv);
   }, [status]);
 
-  // Preenche turmas automaticamente ao trocar série
   const handleSerie = (s: string) => {
     setSerie(s);
     if (TURMAS_POR_SERIE[s] !== undefined) setTurmas(TURMAS_POR_SERIE[s]);
@@ -346,9 +477,7 @@ export function IASequencia() {
     setStatus("gerando"); setErroMsg(""); setSequencia(null); setEtapaAnim(0);
 
     const prompt = `Você é um professor de Educação Física experiente do estado do Acre, Brasil. Crie uma sequência didática completa no padrão oficial da SEEDUC/AC para:
-
 Tema: ${tema} | Série: ${serie} | Turmas: ${turmas || "a definir"} | Aulas: ${aulasPrevistas} | Recursos: ${recursos || "materiais básicos"} | Situações de aprendizagem: ${numSituacoes}
-
 Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
 {"objetivos":"...","habilidades":[{"codigo":"EF__EF__","descricao":"..."},{"codigo":"EF__EF__","descricao":"..."},{"codigo":"EF__EF__","descricao":"..."}],"objetos_conhecimento":["...","...","..."],"aquecimento":"descrição detalhada em 2 parágrafos separados por \\n","situacoes":[{"numero":1,"titulo":"...","objetivo":"...","desenvolvimento":"etapas detalhadas separadas por \\n","adaptacao":"...","imageQuery":"3 palavras em inglês"}],"valores_atitudinais":"...","instrumentos_avaliacao":"...","recursos":"...","referencias":["ACRE. Ref 1.","Ref 2.","Ref 3."]}`;
 
@@ -372,6 +501,13 @@ Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
         return { ...s, imageUrl: img.url, imageAuthor: img.author, imageBase64: b64?.base64 ?? "", imageType: b64?.contentType ?? "image/jpeg" };
       })
     );
+
+    // Incrementa contador
+    const novoNumero = contadorSeq + 1;
+    setContadorSeq(novoNumero);
+    setNumeroAtual(novoNumero);
+    localStorage.setItem("seq_contador", String(novoNumero));
+
     setSequencia({ ...seq, situacoes: situacoesComImg });
     setStatus("pronto");
   };
@@ -379,7 +515,7 @@ Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
   const handleBaixarWord = async () => {
     if (!sequencia) return;
     setBaixando(true);
-    try { await baixarWord(sequencia, professor, coordenador, serie, turmas, aulasPrevistas, periodo, tema); }
+    try { await baixarWord(sequencia, professor, coordenador, serie, turmas, aulasPrevistas, periodo, tema, numeroAtual); }
     catch (e) { alert("Erro ao gerar Word: " + (e instanceof Error ? e.message : String(e))); }
     setBaixando(false);
   };
@@ -390,16 +526,19 @@ Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-
-      {/* Animação de geração */}
       {carregando && <AnimacaoGerando etapa={etapaAnim} />}
-
-      {/* Animação de download Word */}
       {baixando && <AnimacaoBaixando />}
 
-      {/* Formulário */}
       <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
-        <h2 className="text-lg font-semibold text-gray-800">🤖 Gerador de Sequência Didática Oficial — IA</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-800">🤖 Gerador de Sequência Didática Oficial — IA</h2>
+          {contadorSeq > 0 && (
+            <span className="text-xs bg-blue-100 text-blue-700 font-semibold px-3 py-1 rounded-full">
+              {contadorSeq} sequência{contadorSeq > 1 ? "s" : ""} gerada{contadorSeq > 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="sm:col-span-2 flex flex-col gap-1">
             <label className="text-xs font-medium text-gray-500">Tema / Conteúdo *</label>
@@ -444,56 +583,62 @@ Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
             <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" placeholder="Ex: quadra coberta, bolas de futsal, cones, coletes..." value={recursos} onChange={(e) => setRecursos(e.target.value)} />
           </div>
         </div>
+
         <button onClick={gerar} disabled={carregando} className="w-full py-3 rounded-xl bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white font-medium text-sm transition-colors">
           ✨ Gerar Sequência Didática Oficial
         </button>
         {status === "erro" && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">⚠️ {erroMsg}</div>}
       </div>
 
-      {/* Resultado */}
       {status === "pronto" && sequencia && (
         <div>
           <div className="flex gap-3 mb-4">
             <button onClick={handleBaixarWord} disabled={baixando} className="flex-1 py-3 rounded-xl bg-green-700 hover:bg-green-800 disabled:opacity-50 text-white font-medium text-sm transition-colors">
-              📄 Baixar Word (.docx)
+              📄 Baixar Word (.docx) — {ordinal(numeroAtual)} Sequência
             </button>
             <button onClick={resetar} className="py-3 px-5 rounded-xl border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 transition-colors">↩ Nova sequência</button>
           </div>
 
+          {/* Visualização */}
           <div className="bg-white border border-gray-300 shadow-lg rounded-lg overflow-hidden" style={{ fontFamily: "Arial, sans-serif" }}>
-            <div className="flex items-stretch border-b-2 border-gray-800">
-              <div className="flex items-center justify-center p-3 border-r border-gray-300" style={{ minWidth: 100 }}>
-                <div className="text-center">
-                  <div className="text-xs font-bold text-green-800 leading-tight">GOVERNO DO</div>
-                  <div className="text-xs font-bold text-green-800 leading-tight">ESTADO DO ACRE</div>
-                  <div className="text-xs text-green-700">www.acre.gov.br</div>
-                </div>
+            {/* Cabeçalho oficial */}
+            <div className="flex items-center border-b-4 border-yellow-500 pb-2 px-4 pt-3 gap-3">
+              <img src="/brasao-acre.png" alt="Brasão do Acre" className="h-16 w-16 object-contain shrink-0" />
+              <div>
+                <div className="text-xs font-bold text-green-800">GOVERNO DO ESTADO DO ACRE</div>
+                <div className="text-xs text-green-700">www.acre.gov.br</div>
               </div>
-              <div className="flex-1 flex items-center justify-center p-3 text-center">
-                <div>
-                  <div className="text-xs font-bold text-gray-700">SECRETARIA DE ESTADO DE</div>
-                  <div className="text-sm font-bold text-blue-900">EDUCAÇÃO, CULTURA E ESPORTES</div>
-                  <div className="text-sm font-bold text-blue-900">DIRETORIA DE ENSINO</div>
-                  <div className="text-xs font-bold text-gray-700">DIVISÃO DE ENSINO FUNDAMENTAL I E II</div>
-                </div>
+              <div className="flex-1 text-right">
+                <div className="text-xs text-green-800">SECRETARIA DE ESTADO DE</div>
+                <div className="text-sm font-bold text-green-800">EDUCAÇÃO, CULTURA E ESPORTES</div>
+                <div className="text-base font-bold text-green-800">DIRETORIA DE ENSINO</div>
+                <div className="text-xs font-bold text-green-800">DIVISÃO DE ENSINO FUNDAMENTAL I E II</div>
+                <div className="text-xs font-bold text-green-800">DIVISÃO DE ENSINO ANOS FINAIS</div>
               </div>
             </div>
-            <div className="px-4 pt-3 pb-1"><p className="text-sm font-bold text-gray-900">ESCOLA: INSTITUTO ODILON PRATAGI</p></div>
+
+            {/* Número da sequência */}
+            <div className="px-4 py-2 text-center border-b border-gray-200">
+              <span className="text-base font-bold text-blue-900">{ordinal(numeroAtual)} SEQUÊNCIA DIDÁTICA — EDUCAÇÃO FÍSICA</span>
+            </div>
+
+            <div className="px-4 pb-1 pt-2"><p className="text-sm font-bold text-gray-900">ESCOLA: INSTITUTO ODILON PRATAGI</p></div>
             <div className="px-4 pb-2">
               <table className="w-full border-collapse text-xs">
                 <tbody>
-                  <tr><td colSpan={4} className="border border-gray-400 bg-blue-800 text-white font-bold px-2 py-1">SEQUÊNCIA DIDÁTICA</td></tr>
+                  <tr><td colSpan={4} className="border border-gray-400 bg-blue-800 text-white font-bold px-2 py-1">IDENTIFICAÇÃO</td></tr>
                   <tr>
                     <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50 w-1/4">PROFESSOR(A):<br /><span className="font-normal">{professor}</span></td>
-                    <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50 w-1/4">COMPONENTE CURRICULAR:<br /><span className="font-normal">Educação Física</span></td>
+                    <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50 w-1/4">COMPONENTE:<br /><span className="font-normal">Educação Física</span></td>
                     <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50 w-1/4">ANO/SÉRIE:<br /><span className="font-normal">{serie}</span></td>
                     <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50 w-1/4">TURMAS:<br /><span className="font-normal">{turmas || "—"}</span></td>
                   </tr>
                   <tr>
                     <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50" colSpan={2}>COORDENADOR(A):<br /><span className="font-normal">{coordenador}</span></td>
                     <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50">AULAS PREVISTAS:<br /><span className="font-normal">{aulasPrevistas}</span></td>
-                    <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50">PERÍODO:<br /><span className="font-normal">{periodo || "—"}</span></td>
+                    <td className="border border-gray-400 px-2 py-1 font-semibold bg-gray-50">PERÍODO DE EXECUÇÃO:<br /><span className="font-normal">{periodo || "—"}</span></td>
                   </tr>
+                  <tr><td colSpan={4} className="border border-gray-400 px-2 py-1 bg-gray-50 font-semibold">TEMA: <span className="font-normal">{tema}</span></td></tr>
                 </tbody>
               </table>
             </div>
