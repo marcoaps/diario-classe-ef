@@ -384,7 +384,15 @@ async function baixarWord(
       width: { size: W, type: WidthType.DXA },
       columnWidths: [Math.round(W/2), W - Math.round(W/2)],
       rows: [
-        new TableRow({ children: [headerCell("DEVOLUTIVA DO COORDENADOR PEDAGÓGICO", W)] }),
+        new TableRow({ children: [
+          new TableCell({
+            columnSpan: 2, borders: bordas,
+            width: { size: W, type: WidthType.DXA },
+            shading: { fill: "1F4E79", type: ShadingType.CLEAR },
+            margins: margCell, verticalAlign: VerticalAlign.CENTER,
+            children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "DEVOLUTIVA DO COORDENADOR PEDAGÓGICO", bold: true, color: "FFFFFF", size: 22, font: "Arial" })] })],
+          }),
+        ]}),
         new TableRow({ children: [
           new TableCell({ borders: bordasFinas, width: { size: Math.round(W/2), type: WidthType.DXA }, margins: { top: 800, bottom: 80, left: 120, right: 120 },
             children: [new Paragraph({ alignment: AlignmentType.CENTER, border: { top: { style: BorderStyle.SINGLE, size: 4, color: "555555", space: 1 } }, children: [new TextRun({ text: "Assinatura do (a) Coordenador (a)", size: 18, font: "Arial" })] })] }),
