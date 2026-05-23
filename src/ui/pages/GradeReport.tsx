@@ -6,13 +6,18 @@ import { salvarNotas, buscarNotas, supabase } from "../../data/supabase";
 
 const TURMAS = ["6F", "7B", "7C", "7D", "7E", "7F", "8A", "8B", "8C", "8D", "8E", "8F", "9A", "9B", "9C", "9D", "9E", "9F"];
 
+// Normaliza nome para comparação — remove espaços duplos, trim, uppercase
+function normalizarNome(nome: string): string {
+  return nome.trim().replace(/\s+/g, ' ').toUpperCase();
+}
+
 function extrairBimestre(titulo: string): number | null {
   const match = titulo.match(/(\d)[ºo°]\s*Bimestre/i);
   return match ? parseInt(match[1]) : null;
 }
 
 function normalizarNomeAba(nomeAba: string): string {
-  return nomeAba.replace(/[º°ª]/g, '').replace(/\s/g, '').toUpperCase();
+  return nomeAba.replace(/[ºo°ª]/g, '').replace(/\s/g, '').toUpperCase();
 }
 
 function parsearPlanilhaExcel(file: File): Promise<{
@@ -36,7 +41,7 @@ function parsearPlanilhaExcel(file: File): Promise<{
           if (!bimestre) return;
           const turma = normalizarNomeAba(nomeAba);
           if (!TURMAS.includes(turma)) return;
-          const alunos: any[] = [];
+          const alunosMap = new Map<string, any>(); // dedup por nome normalizado
           for (let i = 2; i < rows.length; i++) {
             const row = rows[i];
             const num = row[0];
@@ -45,12 +50,15 @@ function parsearPlanilhaExcel(file: File): Promise<{
             if (!nome || !num) continue;
             const numInt = parseInt(String(num));
             if (isNaN(numInt)) continue;
+            const nomeKey = normalizarNome(nome);
+            if (alunosMap.has(nomeKey)) continue; // ignora duplicata
             const notaStr = String(notaRaw || '').trim();
             const notaNum = parseFloat(notaStr.replace(',', '.'));
             const nota = isNaN(notaNum) ? null : notaNum;
             const nota_texto = isNaN(notaNum) && notaStr !== '' ? notaStr : null;
-            alunos.push({ numero: numInt, nome, nota, nota_texto });
+            alunosMap.set(nomeKey, { numero: numInt, nome, nota, nota_texto });
           }
+          const alunos = Array.from(alunosMap.values());
           if (alunos.length > 0) resultado.push({ turma, bimestre, alunos });
         });
         resolve(resultado);
@@ -62,23 +70,31 @@ function parsearPlanilhaExcel(file: File): Promise<{
 }
 
 async function gerarAbaDiario(wb: any, t: string, b1: any[], b2: any[], b3: any[], b4: any[]) {
-  const todosNomes = new Set([...b1, ...b2, ...b3, ...b4].map((a: any) => a.nome));
-  const lista: { num: number; n1: any; n2: any; n3: any; n4: any }[] = [];
-  todosNomes.forEach(nome => {
-    const a1 = b1.find((a: any) => a.nome === nome);
-    const a2 = b2.find((a: any) => a.nome === nome);
-    const a3 = b3.find((a: any) => a.nome === nome);
-    const a4 = b4.find((a: any) => a.nome === nome);
-    const num = a1?.numero ?? a2?.numero ?? a3?.numero ?? a4?.numero ?? 0;
-    lista.push({
-      num,
-      n1: a1?.nota_texto ?? (a1?.nota != null ? Number(a1.nota) : null),
-      n2: a2?.nota_texto ?? (a2?.nota != null ? Number(a2.nota) : null),
-      n3: a3?.nota_texto ?? (a3?.nota != null ? Number(a3.nota) : null),
-      n4: a4?.nota_texto ?? (a4?.nota != null ? Number(a4.nota) : null),
-    });
+  // Dedup por nome normalizado — usa número do primeiro bimestre encontrado
+  const mapaAlunos = new Map<string, { num: number; n1: any; n2: any; n3: any; n4: any }>();
+
+  const todos = [...b1, ...b2, ...b3, ...b4];
+  todos.forEach((a: any) => {
+    const key = normalizarNome(a.nome);
+    if (!mapaAlunos.has(key)) {
+      mapaAlunos.set(key, { num: a.numero ?? 0, n1: null, n2: null, n3: null, n4: null });
+    }
   });
-  lista.sort((a, b) => (a.num || 999) - (b.num || 999));
+
+  mapaAlunos.forEach((val, key) => {
+    const a1 = b1.find((a: any) => normalizarNome(a.nome) === key);
+    const a2 = b2.find((a: any) => normalizarNome(a.nome) === key);
+    const a3 = b3.find((a: any) => normalizarNome(a.nome) === key);
+    const a4 = b4.find((a: any) => normalizarNome(a.nome) === key);
+    val.num = a1?.numero ?? a2?.numero ?? a3?.numero ?? a4?.numero ?? 0;
+    val.n1 = a1?.nota_texto ?? (a1?.nota != null ? Number(a1.nota) : null);
+    val.n2 = a2?.nota_texto ?? (a2?.nota != null ? Number(a2.nota) : null);
+    val.n3 = a3?.nota_texto ?? (a3?.nota != null ? Number(a3.nota) : null);
+    val.n4 = a4?.nota_texto ?? (a4?.nota != null ? Number(a4.nota) : null);
+  });
+
+  const lista = Array.from(mapaAlunos.values()).sort((a, b) => (a.num || 999) - (b.num || 999));
+
   const ws = wb.addWorksheet(t, {
     pageSetup: { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 1,
       margins: { left: 0.5, right: 0.5, top: 0.5, bottom: 0.5, header: 0, footer: 0 } }
@@ -92,7 +108,7 @@ async function gerarAbaDiario(wb: any, t: string, b1: any[], b2: any[], b3: any[
   const sFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFD0D8EE' } };
   const sFont = { bold: true, size: 8, color: { argb: AZ } };
   ws.mergeCells('A1:N1');
-  ws.getCell('A1').value = 'ESCOLA ESTADUAL INSTITUTO ODILON PRAGAGI';
+  ws.getCell('A1').value = 'ESCOLA ESTADUAL INSTITUTO ODILON PRATAGI';
   ws.getCell('A1').font = { bold: true, size: 12 };
   ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
   ws.getRow(1).height = 20;
@@ -152,19 +168,12 @@ async function gerarAbaDiario(wb: any, t: string, b1: any[], b2: any[], b3: any[
   [5, 7, 7, 7, 7, 9, 7, 7, 7, 7, 9, 9, 9].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
 }
 
-// Componente de botão compacto para o grid
 function BtnAcao({ onClick, disabled, cor, icon: Icon, label }: {
   onClick: () => void; disabled?: boolean; cor: string; icon: any; label: string;
 }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        "flex flex-col items-center justify-center gap-1 py-2.5 px-1 rounded-xl font-bold text-white text-[11px] transition-all active:scale-95 disabled:opacity-50",
-        cor
-      )}
-    >
+    <button onClick={onClick} disabled={disabled}
+      className={cn("flex flex-col items-center justify-center gap-1 py-2.5 px-1 rounded-xl font-bold text-white text-[11px] transition-all active:scale-95 disabled:opacity-50", cor)}>
       <Icon className="w-4 h-4" />
       <span className="leading-tight text-center">{label}</span>
     </button>
@@ -204,7 +213,16 @@ export function GradeReport() {
     setIsLoading(true);
     try {
       const data = await buscarNotas(turma, bimestre);
-      setAlunos(data.map((d: any) => ({ num: d.numero, nome: d.nome, nota: d.nota, nota_texto: d.nota_texto })));
+      // Dedup por nome normalizado ao carregar do banco
+      const mapaDedup = new Map<string, any>();
+      data.forEach((d: any) => {
+        const key = normalizarNome(d.nome);
+        if (!mapaDedup.has(key)) {
+          mapaDedup.set(key, { num: d.numero, nome: d.nome, nota: d.nota, nota_texto: d.nota_texto });
+        }
+      });
+      const lista = Array.from(mapaDedup.values()).sort((a, b) => (a.num || 999) - (b.num || 999));
+      setAlunos(lista);
       setSaved(true);
     } catch (e) { setAlunos([]); }
     finally { setIsLoading(false); }
@@ -217,17 +235,22 @@ export function GradeReport() {
         buscarNotas(turma, 1), buscarNotas(turma, 2),
         buscarNotas(turma, 3), buscarNotas(turma, 4),
       ]);
-      const nomes = new Set([...b1, ...b2, ...b3, ...b4].map((a: any) => a.nome));
-      const resultado = Array.from(nomes).map(nome => {
-        const a1 = b1.find((a: any) => a.nome === nome);
-        const a2 = b2.find((a: any) => a.nome === nome);
-        const a3 = b3.find((a: any) => a.nome === nome);
-        const a4 = b4.find((a: any) => a.nome === nome);
+      // Dedup por nome normalizado
+      const mapa = new Map<string, any>();
+      [...b1, ...b2, ...b3, ...b4].forEach((a: any) => {
+        const key = normalizarNome(a.nome);
+        if (!mapa.has(key)) mapa.set(key, { num: a.numero, nome: a.nome });
+      });
+      const resultado = Array.from(mapa.entries()).map(([key, base]) => {
+        const a1 = b1.find((a: any) => normalizarNome(a.nome) === key);
+        const a2 = b2.find((a: any) => normalizarNome(a.nome) === key);
+        const a3 = b3.find((a: any) => normalizarNome(a.nome) === key);
+        const a4 = b4.find((a: any) => normalizarNome(a.nome) === key);
         const validas = [a1?.nota, a2?.nota, a3?.nota, a4?.nota].filter(n => n != null) as number[];
         const total = validas.reduce((s, n) => s + n, 0);
         const media = validas.length > 0 ? total / validas.length : null;
-        const num = a1?.numero || a2?.numero || a3?.numero || a4?.numero;
-        return { num, nome, b1: a1?.nota, b2: a2?.nota, b3: a3?.nota, b4: a4?.nota, total, media };
+        const num = a1?.numero || a2?.numero || a3?.numero || a4?.numero || base.num;
+        return { num, nome: base.nome, b1: a1?.nota, b2: a2?.nota, b3: a3?.nota, b4: a4?.nota, total, media };
       });
       resultado.sort((a, b) => (a.num || 999) - (b.num || 999));
       setDesempenho(resultado);
@@ -280,7 +303,7 @@ export function GradeReport() {
           max_tokens: 16000,
           messages: [{ role: "user", content: [
             { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
-            { type: "text", text: "Extraia as notas dos alunos deste PDF. Retorne SOMENTE um array JSON valido, sem markdown, sem explicacoes, sem texto extra. Formato exato: [{\"num\":1,\"nome\":\"NOME COMPLETO\",\"nota\":7.0}]. Use aspas duplas. Numeros decimais com ponto." }
+            { type: "text", text: "Extraia as notas dos alunos deste PDF. Retorne SOMENTE um array JSON valido, sem markdown, sem explicacoes, sem texto extra. Formato exato: [{\"num\":1,\"nome\":\"NOME COMPLETO\",\"nota\":7.0}]. Use aspas duplas. Numeros decimais com ponto. Nao inclua alunos duplicados." }
           ]}]
         })
       });
@@ -290,7 +313,14 @@ export function GradeReport() {
       let clean = text.replace(/```json|```/g, "").trim();
       const lastBracket = clean.lastIndexOf("}");
       if (lastBracket !== -1 && !clean.endsWith("]")) clean = clean.substring(0, lastBracket + 1) + "]";
-      setAlunos(JSON.parse(clean));
+      const parsed = JSON.parse(clean);
+      // Dedup por nome normalizado
+      const mapaDedup = new Map<string, any>();
+      parsed.forEach((a: any) => {
+        const key = normalizarNome(a.nome);
+        if (!mapaDedup.has(key)) mapaDedup.set(key, a);
+      });
+      setAlunos(Array.from(mapaDedup.values()));
       setSaved(false); setShowImport(false);
     } catch (e: any) { alert("Erro: " + (e?.message || JSON.stringify(e))); }
     finally { setIsProcessing(false); }
@@ -302,7 +332,7 @@ export function GradeReport() {
     setImportandoExcel(true); setResultadoImport([]); setImportConcluido(false);
     try {
       const turmas = await parsearPlanilhaExcel(file);
-      if (turmas.length === 0) { alert('Nenhuma aba válida encontrada. Verifique se os nomes das abas correspondem às turmas (ex: 8ª C ou 8C).'); setImportandoExcel(false); return; }
+      if (turmas.length === 0) { alert('Nenhuma aba válida encontrada. Verifique se os nomes das abas correspondem às turmas (ex: 9ª E ou 9E).'); setImportandoExcel(false); return; }
       const resultados: typeof resultadoImport = [];
       for (const t of turmas) {
         try {
@@ -411,12 +441,19 @@ export function GradeReport() {
       for (const t of TURMAS) {
         const data = await buscarNotas(t, bimestre);
         if (data.length === 0) continue;
+        // Dedup ao exportar todas as turmas
+        const mapaDedup = new Map<string, any>();
+        data.forEach((d: any) => {
+          const key = normalizarNome(d.nome);
+          if (!mapaDedup.has(key)) mapaDedup.set(key, d);
+        });
+        const deduped = Array.from(mapaDedup.values()).sort((a, b) => (a.numero || 999) - (b.numero || 999));
         const ws = wb.addWorksheet(`${t}`);
         ws.mergeCells('A1:C1'); ws.getCell('A1').value = 'Notas do Bimestre - 2026'; ws.getCell('A1').font = { bold: true, size: 14, color: { argb: BR } }; ws.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZ } }; ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' }; ws.getRow(1).height = 28;
         ws.mergeCells('A2:C2'); ws.getCell('A2').value = 'Disciplina: Educação Física'; ws.getCell('A2').font = { bold: true, size: 11, color: { argb: BR } }; ws.getCell('A2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: VM } }; ws.getCell('A2').alignment = { horizontal: 'center', vertical: 'middle' }; ws.getRow(2).height = 22;
         ws.mergeCells('A3:C3'); ws.getCell('A3').value = `Turma: ${t}   |   ${bimestre}º Bimestre`; ws.getCell('A3').font = { bold: true, size: 11, color: { argb: AZ } }; ws.getCell('A3').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AC } }; ws.getCell('A3').alignment = { horizontal: 'center', vertical: 'middle' }; ws.getRow(3).height = 20;
         ['Nº', 'Nome do Aluno', 'Nota'].forEach((h, i) => { const c = ws.getCell(4, i + 1); c.value = h; c.font = { bold: true, size: 11, color: { argb: BR } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZ } }; c.alignment = { horizontal: 'center', vertical: 'middle' }; c.border = bd; }); ws.getRow(4).height = 20;
-        data.forEach((a: any, idx: number) => {
+        deduped.forEach((a: any, idx: number) => {
           const row = 5 + idx; const bg = idx % 2 === 0 ? BR : AC;
           ws.getCell(row, 1).value = a.numero ?? ''; ws.getCell(row, 1).font = { size: 10 }; ws.getCell(row, 1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }; ws.getCell(row, 1).alignment = { horizontal: 'center', vertical: 'middle' }; ws.getCell(row, 1).border = bd;
           ws.getCell(row, 2).value = a.nome; ws.getCell(row, 2).font = { size: 10 }; ws.getCell(row, 2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }; ws.getCell(row, 2).alignment = { vertical: 'middle' }; ws.getCell(row, 2).border = bd;
@@ -444,14 +481,10 @@ export function GradeReport() {
     <div className="flex flex-col h-full bg-background relative" id="report-content">
       <div className="p-4 border-b border-gray-200 sticky top-0 bg-background/90 backdrop-blur-md z-10 shadow-sm print:hidden">
         <h2 className="text-2xl font-bold tracking-tight mb-3 text-primary-dark">Notas</h2>
-
-        {/* Tabs Notas / Desempenho */}
         <div className="flex gap-2 w-full p-1 bg-gray-200/50 rounded-xl border border-gray-200 mb-3">
           <button onClick={() => setView("notas")} className={cn("flex-1 py-2 text-center rounded-lg text-sm font-semibold transition-all", view === "notas" ? "bg-white text-primary ring-1 ring-gray-200" : "bg-transparent text-gray-500")}>Notas</button>
           <button onClick={() => setView("desempenho")} className={cn("flex-1 py-2 text-center rounded-lg text-sm font-semibold transition-all", view === "desempenho" ? "bg-white text-primary ring-1 ring-gray-200" : "bg-transparent text-gray-500")}>Desempenho</button>
         </div>
-
-        {/* Seletor de turmas */}
         <div className="mb-3">
           <label className="text-xs font-semibold text-gray-500 mb-1 block">TURMA</label>
           <div className="grid grid-cols-9 gap-1">
@@ -460,28 +493,21 @@ export function GradeReport() {
             ))}
           </div>
         </div>
-
         {view === "notas" && (
           <>
-            {/* Seletor de bimestre */}
             <div className="flex gap-2 w-full p-1 bg-gray-200/50 rounded-xl border border-gray-200 mb-3">
               {[1, 2, 3, 4].map(b => (
                 <button key={b} onClick={() => setBimestre(b as any)} className={cn("flex-1 py-2 text-center rounded-lg text-sm font-semibold transition-all", bimestre === b ? "bg-white text-primary ring-1 ring-gray-200" : "bg-transparent text-gray-500")}>{b}o Bim</button>
               ))}
             </div>
-
-            {/* ── BOTÕES COMPACTOS EM GRID ── */}
             <div className="grid grid-cols-5 gap-1.5 mb-1">
-              {/* Linha 1: importar */}
               <BtnAcao onClick={() => setShowImport(true)} cor="bg-primary hover:bg-primary-dark" icon={Upload} label="PDF" />
               <BtnAcao onClick={() => { setShowImportExcel(true); setResultadoImport([]); setImportConcluido(false); }} cor="bg-emerald-700 hover:bg-emerald-800" icon={Table2} label="Excel" />
               <BtnAcao onClick={exportarExcel} cor="bg-emerald-600 hover:bg-emerald-700" icon={FileSpreadsheet} label="Exportar" />
               <BtnAcao onClick={exportarTodasTurmas} disabled={exportandoTodas} cor="bg-blue-700 hover:bg-blue-800" icon={exportandoTodas ? Loader2 : FileSpreadsheet} label={exportandoTodas ? '...' : 'Todas'} />
               <BtnAcao onClick={() => window.print()} cor="bg-gray-500 hover:bg-gray-600" icon={FileDown} label="Print" />
             </div>
-
             <div className="grid grid-cols-5 gap-1.5">
-              {/* Linha 2: diário + extras */}
               <BtnAcao onClick={exportarDiarioOficialNotas} disabled={exportandoDiario} cor="bg-indigo-700 hover:bg-indigo-800" icon={exportandoDiario ? Loader2 : BookOpen} label={exportandoDiario ? '...' : 'Diário'} />
               <BtnAcao onClick={exportarDiarioTodasTurmas} disabled={exportandoDiarioTodas} cor="bg-purple-700 hover:bg-purple-800" icon={exportandoDiarioTodas ? Loader2 : BookOpen} label={exportandoDiarioTodas ? '...' : 'Diár. All'} />
               {alunos.length > 0 && !saved && (
@@ -505,7 +531,7 @@ export function GradeReport() {
               <div className="bg-surface rounded-3xl border border-gray-200 overflow-hidden shadow-sm">
                 <div className="flex flex-col divide-y divide-gray-100">
                   {alunos.map((aluno, idx) => (
-                    <div key={`${aluno.nome}-${idx}`} className="py-1 px-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors print:py-0">
+                    <div key={`${normalizarNome(aluno.nome)}-${idx}`} className="py-1 px-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors print:py-0">
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <span className="font-mono text-gray-400 text-xs w-5 shrink-0">{aluno.num}</span>
                         <span className="font-semibold text-textPrimary text-xs truncate">{aluno.nome.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())}</span>
@@ -541,11 +567,11 @@ export function GradeReport() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {desempenho.map(aluno => {
+                    {desempenho.map((aluno, idx) => {
                       const media = aluno.media;
                       const mediaColor = media === null ? "text-gray-400" : media >= 5 ? "text-green-600" : media >= 3 ? "text-yellow-600" : "text-red-600";
                       return (
-                        <tr key={aluno.nome} className="hover:bg-gray-50/50">
+                        <tr key={`${normalizarNome(aluno.nome)}-${idx}`} className="hover:bg-gray-50/50">
                           <td className="p-2 font-mono text-gray-400">{aluno.num}</td>
                           <td className="p-2 font-semibold text-textPrimary max-w-[100px] truncate">{aluno.nome}</td>
                           <td className="p-2 text-center text-gray-700">{fmtNota(aluno.b1)}</td>
@@ -566,7 +592,6 @@ export function GradeReport() {
         )}
       </div>
 
-      {/* Modal Editar Nota */}
       {editando && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-4 sm:items-center">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 flex flex-col gap-4">
@@ -598,7 +623,6 @@ export function GradeReport() {
         </div>
       )}
 
-      {/* Modal PDF */}
       {showImport && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white p-6 rounded-2xl w-full max-w-lg">
@@ -615,7 +639,6 @@ export function GradeReport() {
         </div>
       )}
 
-      {/* Modal Excel */}
       {showImportExcel && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white p-6 rounded-2xl w-full max-w-lg flex flex-col gap-4">
