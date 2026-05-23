@@ -42,9 +42,11 @@ function ordinal(n: number): string {
     n === 4 ? "4ª" : n === 5 ? "5ª" : `${n}ª`;
 }
 
-async function buscarImagemPexels(query: string): Promise<{ url: string; author: string } | null> {
+async function buscarImagemPexels(query: string, index = 0): Promise<{ url: string; author: string } | null> {
   try {
-    const res = await fetch(`/api/pexels?query=${encodeURIComponent(query + " physical education students")}`);
+    // Usa página diferente para cada situação, garantindo imagens únicas
+    const page = (index % 5) + 1;
+    const res = await fetch(`/api/pexels?query=${encodeURIComponent(query)}&page=${page}`);
     const data = await res.json();
     if (data.photos?.length > 0) return { url: data.photos[0].src.medium, author: data.photos[0].photographer };
   } catch (_) {}
@@ -477,10 +479,37 @@ export function IASequencia() {
     if (!tema.trim()) { alert("Informe o tema/conteúdo da aula!"); return; }
     setStatus("gerando"); setErroMsg(""); setSequencia(null); setEtapaAnim(0);
 
+    // Referência BNCC por grupo de série
+    const bnccPorSerie: Record<string, string> = {
+      "6º ano": "EF67EF01, EF67EF02, EF67EF03, EF67EF04, EF67EF05, EF67EF06, EF67EF07, EF67EF08, EF67EF09, EF67EF10, EF67EF11, EF67EF12, EF67EF13, EF67EF14",
+      "7º ano": "EF67EF01, EF67EF02, EF67EF03, EF67EF04, EF67EF05, EF67EF06, EF67EF07, EF67EF08, EF67EF09, EF67EF10, EF67EF11, EF67EF12, EF67EF13, EF67EF14",
+      "6º e 7º": "EF67EF01, EF67EF02, EF67EF03, EF67EF04, EF67EF05, EF67EF06, EF67EF07, EF67EF08, EF67EF09, EF67EF10, EF67EF11, EF67EF12, EF67EF13, EF67EF14",
+      "8º ano": "EF89EF01, EF89EF02, EF89EF03, EF89EF04, EF89EF05, EF89EF06, EF89EF07, EF89EF08, EF89EF09, EF89EF10, EF89EF11, EF89EF12, EF89EF13, EF89EF14",
+      "9º ano": "EF89EF01, EF89EF02, EF89EF03, EF89EF04, EF89EF05, EF89EF06, EF89EF07, EF89EF08, EF89EF09, EF89EF10, EF89EF11, EF89EF12, EF89EF13, EF89EF14",
+      "8º e 9º": "EF89EF01, EF89EF02, EF89EF03, EF89EF04, EF89EF05, EF89EF06, EF89EF07, EF89EF08, EF89EF09, EF89EF10, EF89EF11, EF89EF12, EF89EF13, EF89EF14",
+      "1º EM": "EM13LGG001, EM13LGG002, EM13LGG003, EM13LGG401, EM13LGG402, EM13LGG403, EM13LGG404",
+      "2º EM": "EM13LGG001, EM13LGG002, EM13LGG003, EM13LGG401, EM13LGG402, EM13LGG403, EM13LGG404",
+      "3º EM": "EM13LGG001, EM13LGG002, EM13LGG003, EM13LGG401, EM13LGG402, EM13LGG403, EM13LGG404",
+      "1º e 2º EM": "EM13LGG001, EM13LGG002, EM13LGG003, EM13LGG401, EM13LGG402, EM13LGG403, EM13LGG404",
+    };
+    const habilidadesBncc = bnccPorSerie[serie] || bnccPorSerie["6º e 7º"];
+
     const prompt = `Você é um professor de Educação Física experiente do estado do Acre, Brasil. Crie uma sequência didática completa no padrão oficial da SEEDUC/AC para:
-Tema: ${tema} | Série: ${serie} | Turmas: ${turmas || "a definir"} | Aulas: ${aulasPrevistas} | Recursos: ${recursos || "materiais básicos"} | Situações de aprendizagem: ${numSituacoes}
+
+Tema: ${tema}
+Série: ${serie}
+Turmas: ${turmas || "a definir"}
+Aulas previstas: ${aulasPrevistas}
+Recursos: ${recursos || "materiais básicos"}
+Número de situações de aprendizagem: ${numSituacoes}
+
+IMPORTANTE — Use SOMENTE habilidades BNCC para ${serie}: ${habilidadesBncc}
+Selecione as que se relacionam com o tema "${tema}". Use os códigos exatos.
+
+Para imageQuery de cada situação: gere queries em inglês DIFERENTES e ESPECÍFICAS para cada atividade (não o tema geral). Ex: situação de aquecimento → "children warm up exercise gym", situação de fundamentos → "students volleyball spike practice". NUNCA repita a mesma query.
+
 Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
-{"objetivos":"...","habilidades":[{"codigo":"EF__EF__","descricao":"..."},{"codigo":"EF__EF__","descricao":"..."},{"codigo":"EF__EF__","descricao":"..."}],"objetos_conhecimento":["...","...","..."],"aquecimento":"descrição detalhada em 2 parágrafos separados por \\n","situacoes":[{"numero":1,"titulo":"...","objetivo":"...","desenvolvimento":"etapas detalhadas separadas por \\n","adaptacao":"...","imageQuery":"3 palavras em inglês"}],"valores_atitudinais":"...","instrumentos_avaliacao":"...","recursos":"...","referencias":["ACRE. Ref 1.","Ref 2.","Ref 3."]}`;
+{"objetivos":"...","habilidades":[{"codigo":"EF__EF__","descricao":"descrição completa"},{"codigo":"EF__EF__","descricao":"..."},{"codigo":"EF__EF__","descricao":"..."}],"objetos_conhecimento":["...","...","..."],"aquecimento":"descrição detalhada em 2 parágrafos separados por \\n","situacoes":[{"numero":1,"titulo":"...","objetivo":"...","desenvolvimento":"etapas detalhadas separadas por \\n","adaptacao":"...","imageQuery":"query única e específica desta situação em inglês"}],"valores_atitudinais":"...","instrumentos_avaliacao":"...","recursos":"...","referencias":["ACRE. Ref 1.","Ref 2.","Ref 3."]}`;
 
     let seq: Sequencia;
     try {
@@ -495,8 +524,8 @@ Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
 
     setStatus("imagens");
     const situacoesComImg = await Promise.all(
-      seq.situacoes.map(async (s) => {
-        const img = await buscarImagemPexels(s.imageQuery);
+      seq.situacoes.map(async (s, idx) => {
+        const img = await buscarImagemPexels(s.imageQuery, idx);
         if (!img) return s;
         const b64 = await baixarImagemBase64(img.url);
         return { ...s, imageUrl: img.url, imageAuthor: img.author, imageBase64: b64?.base64 ?? "", imageType: b64?.contentType ?? "image/jpeg" };

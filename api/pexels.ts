@@ -7,12 +7,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const { query, imageUrl } = req.query;
+  const { query, imageUrl, page } = req.query;
 
   // Modo 1: buscar imagem por query no Pexels
   if (query) {
     try {
-      const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(String(query))}&per_page=1&orientation=landscape`;
+      const pageNum = page ? parseInt(String(page)) : 1;
+      const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(String(query))}&per_page=1&orientation=landscape&page=${pageNum}`;
       const response = await fetch(url, {
         headers: { Authorization: process.env.PEXELS_API_KEY || '' },
       });
