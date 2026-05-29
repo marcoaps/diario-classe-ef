@@ -5,7 +5,7 @@ import { cn } from "../AppLayout";
 
 const TURMAS = ["6F","7B","7C","7D","7E","7F","8A","8B","8C","8D","8E","8F","9A","9B","9C","9D","9E","9F"];
 
-async function gerarCaderneta(turma: string) {
+async function gerarCadernetaExcel(turma: string) {
   const [b1, b2, b3, b4] = await Promise.all([
     buscarNotas(turma, 1), buscarNotas(turma, 2),
     buscarNotas(turma, 3), buscarNotas(turma, 4),
@@ -23,109 +23,197 @@ async function gerarCaderneta(turma: string) {
   const fmt = (n: any) =>
     n == null ? "" : typeof n === "string" ? n : Number(n).toFixed(1).replace(".", ",");
 
-  const serie = turma.replace(/([0-9]+)([A-Z]+)/, "$1º");
+  const serie = turma.replace(/([0-9]+)([A-Z]+)/, "$1°");
   const letra = turma.replace(/[0-9]+/, "");
 
-  // Gera linhas dos 4 blocos (01-12, 13-24, 25-36, 37-48)
-  const blocos = [0,1,2,3].map(b =>
-    Array.from({length:12}, (_,i) => {
-      const num = b*12 + i + 1;
-      const a = mapa.get(num);
-      return { num, n1: fmt(a?.n1), n2: fmt(a?.n2), n3: fmt(a?.n3), n4: fmt(a?.n4) };
-    })
-  );
+  const ExcelJS = (await import("exceljs")).default;
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Caderneta", {
+    pageSetup: {
+      orientation: "landscape",
+      paperSize: 9, // A4
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 1,
+      margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0, footer: 0 },
+    },
+  });
 
-  const th = `border:1px solid #1a2e6e;padding:2px;font-size:7.5px;text-align:center;background:#1a2e6e;color:#fff;font-weight:bold;vertical-align:middle;`;
-  const th2 = `border:1px solid #1a2e6e;padding:1px;font-size:6.5px;text-align:center;background:#d0d8ee;color:#1a2e6e;font-weight:bold;`;
-  const tdN = `border:1px solid #aaa;padding:1px 2px;font-size:7px;text-align:center;font-weight:bold;background:#eef0f8;width:16px;`;
-  const tdF = `border:1px solid #aaa;padding:1px;font-size:7px;text-align:center;width:18px;`;
-  const tdV = `border:1px solid #aaa;padding:1px;font-size:7.5px;text-align:center;font-weight:bold;color:#1a2e6e;width:20px;`;
-  const tdR = `border:1px solid #aaa;padding:1px;font-size:7px;text-align:center;width:18px;background:#fff8f0;`;
+  // ── Cores ──
+  const AZ  = "FF1A2E6E";
+  const AZC = "FFD0D8EE";
+  const BR  = "FFFFFFFF";
+  const CZ  = "FFF0F3FA";
+  const AM  = "FFFFF8F0";
 
-  const cabecalhoBloco = () => `
-    <tr>
-      <th rowspan="2" style="${th};width:16px;">Nº</th>
-      <th colspan="2" style="${th}">1º Bimestre</th>
-      <th colspan="2" style="${th}">2º Bimestre</th>
-      <th rowspan="2" style="${th};font-size:6px;width:18px;">Rec.<br>1ºSem.</th>
-      <th colspan="2" style="${th}">3º Bimestre</th>
-      <th colspan="2" style="${th}">4º Bimestre</th>
-      <th rowspan="2" style="${th};font-size:6px;width:18px;">Rec.<br>2ºSem.</th>
-      <th rowspan="2" style="${th};font-size:6px;width:18px;">Rec.<br>Final</th>
-      <th rowspan="2" style="${th};font-size:6px;width:18px;">Rec.<br>Esp.</th>
-    </tr>
-    <tr>
-      <th style="${th2}">Faltas</th><th style="${th2}">Notas</th>
-      <th style="${th2}">Faltas</th><th style="${th2}">Notas</th>
-      <th style="${th2}">Faltas</th><th style="${th2}">Notas</th>
-      <th style="${th2}">Faltas</th><th style="${th2}">Notas</th>
-    </tr>`;
+  const bd = (c = "FF1A2E6E") => ({ style: "thin" as const, color: { argb: c } });
+  const borda = (c = "FF1A2E6E") => ({ top: bd(c), bottom: bd(c), left: bd(c), right: bd(c) });
+  const bordaFina = () => ({ top: bd("FFAAAAAa"), bottom: bd("FFAAAAAa"), left: bd("FFAAAAAa"), right: bd("FFAAAAAa") });
 
-  const linhasBloco = (bloco: typeof blocos[0]) =>
-    bloco.map((l, i) => {
-      const bg = i % 2 === 0 ? "#fff" : "#f0f3fa";
-      return `<tr style="background:${bg};height:13px;">
-        <td style="${tdN}">${String(l.num).padStart(2,"0")}</td>
-        <td style="${tdF}"></td><td style="${tdV}">${l.n1}</td>
-        <td style="${tdF}"></td><td style="${tdV}">${l.n2}</td>
-        <td style="${tdR}"></td>
-        <td style="${tdF}"></td><td style="${tdV}">${l.n3}</td>
-        <td style="${tdF}"></td><td style="${tdV}">${l.n4}</td>
-        <td style="${tdR}"></td>
-        <td style="${tdR}"></td>
-        <td style="${tdR}"></td>
-      </tr>`;
-    }).join("");
+  const hdrFont  = { bold: true, size: 8, color: { argb: BR }, name: "Arial" };
+  const subFont  = { bold: true, size: 7, color: { argb: AZ }, name: "Arial" };
+  const numFont  = { bold: true, size: 8, color: { argb: AZ }, name: "Arial" };
+  const notaFont = { bold: true, size: 8, color: { argb: AZ }, name: "Arial" };
+  const centro   = { horizontal: "center" as const, vertical: "middle" as const };
 
-  const html = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>Caderneta ${turma} 2026</title>
-<style>
-  @page { size: A4 landscape; margin: 8mm 6mm; }
-  * { box-sizing: border-box; }
-  body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
-  .wrap { display: flex; gap: 4mm; width: 100%; }
-  .bloco { flex: 1; }
-  table { border-collapse: collapse; width: 100%; }
-  .titulo { font-size: 9px; font-weight: bold; margin-bottom: 2px; }
-  .info { font-size: 8px; margin-bottom: 4px; }
-  .info span { text-decoration: underline; font-style: italic; }
-  .assinaturas { display: flex; gap: 6mm; margin-top: 5mm; }
-  .ass { flex: 1; border-top: 1px solid #333; padding-top: 2px; font-size: 7px; text-align: center; }
-  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
-</style>
-</head>
-<body>
-<div class="titulo">Disciplina:Educação Física — Ano Letivo de 2026</div>
-<div class="info">
-  DISCIPLINA: <span>Educação Física</span> &nbsp;
-  ETAPA/SÉRIE: <span>${serie}</span> &nbsp;
-  TURMA: <span>${letra}</span> &nbsp;
-  TURNO: <span>Manhã</span>
-</div>
+  // ── Estrutura de colunas ──
+  // Cada bloco: Nº(1) | Falt(1) Nota(1) | Falt(1) Nota(1) | Rec(1) | Falt(1) Nota(1) | Falt(1) Nota(1) | Rec(1) | Rec(1) | Rec(1)
+  // = 13 colunas por bloco, 4 blocos + 3 separadores = 55 colunas
+  const COLS_BLOCO = 13;
+  const SEP_COLS   = 1;
+  const NUM_BLOCOS = 4;
+  const TOTAL_COLS = NUM_BLOCOS * COLS_BLOCO + (NUM_BLOCOS - 1) * SEP_COLS; // 55
 
-<div class="wrap">
-  ${blocos.map(bloco => `
-  <div class="bloco">
-    <table>
-      <thead>${cabecalhoBloco()}</thead>
-      <tbody>${linhasBloco(bloco)}</tbody>
-    </table>
-  </div>`).join("")}
-</div>
+  // Define larguras
+  const W = {
+    num:  3.5,
+    falt: 3.8,
+    nota: 4.2,
+    rec:  3.8,
+    sep:  1.0,
+  };
 
-<div class="assinaturas">
-  ${[1,2,3,4,5,6].map(() => '<div class="ass">Assinatura do(a) Professor(a)</div>').join("")}
-</div>
+  // Monta array de larguras
+  const colWidths: number[] = [];
+  for (let b = 0; b < NUM_BLOCOS; b++) {
+    if (b > 0) colWidths.push(W.sep);
+    colWidths.push(W.num);   // Nº
+    colWidths.push(W.falt);  // Falt 1B
+    colWidths.push(W.nota);  // Nota 1B
+    colWidths.push(W.falt);  // Falt 2B
+    colWidths.push(W.nota);  // Nota 2B
+    colWidths.push(W.rec);   // Rec 1S
+    colWidths.push(W.falt);  // Falt 3B
+    colWidths.push(W.nota);  // Nota 3B
+    colWidths.push(W.falt);  // Falt 4B
+    colWidths.push(W.nota);  // Nota 4B
+    colWidths.push(W.rec);   // Rec 2S
+    colWidths.push(W.rec);   // Rec Fin
+    colWidths.push(W.rec);   // Rec Esp
+  }
+  colWidths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
 
-<script>window.onload = () => window.print();</script>
-</body>
-</html>`;
+  // ── Linha 1: Cabeçalho escola / info ──
+  ws.mergeCells(1, 1, 1, TOTAL_COLS);
+  const c1 = ws.getCell(1, 1);
+  c1.value = `Disciplina: Educação Física — Ano Letivo de 2026   |   ETAPA/SÉRIE: ${serie}   TURMA: ${letra}   TURNO: Manhã`;
+  c1.font = { bold: true, size: 9, name: "Arial", color: { argb: AZ } };
+  c1.alignment = { horizontal: "center", vertical: "middle" };
+  ws.getRow(1).height = 16;
 
-  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-  window.open(URL.createObjectURL(blob), "_blank");
+  // ── Função para calcular col inicial de cada bloco ──
+  const blocoCol = (b: number) => b * (COLS_BLOCO + SEP_COLS) + 1;
+
+  // ── Linhas 2-3: Cabeçalho de cada bloco ──
+  for (let b = 0; b < NUM_BLOCOS; b++) {
+    const bc = blocoCol(b);
+
+    // Linha 2: bimestres mesclados
+    const merge = (c1: number, c2: number, label: string, small = false) => {
+      if (c1 !== c2) ws.mergeCells(2, bc + c1, 2, bc + c2);
+      const cell = ws.getCell(2, bc + c1);
+      cell.value = label;
+      cell.font = small ? { ...hdrFont, size: 6.5 } : hdrFont;
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: AZ } };
+      cell.alignment = { ...centro, wrapText: true };
+      cell.border = borda();
+    };
+
+    merge(0, 0, "Nº");
+    merge(1, 2, "1º Bimestre");
+    merge(3, 4, "2º Bimestre");
+    merge(5, 5, "Rec.\n1ºSem.", true);
+    merge(6, 7, "3º Bimestre");
+    merge(8, 9, "4º Bimestre");
+    merge(10, 10, "Rec.\n2ºSem.", true);
+    merge(11, 11, "Rec.\nFinal", true);
+    merge(12, 12, "Rec.\nEsp.", true);
+
+    // Linha 3: Faltas/Notas
+    const sub = (c: number, label: string) => {
+      const cell = ws.getCell(3, bc + c);
+      cell.value = label;
+      cell.font = subFont;
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: AZC } };
+      cell.alignment = centro;
+      cell.border = borda();
+    };
+
+    // Nº ocupa 2 linhas
+    ws.mergeCells(2, bc, 3, bc);
+    sub(1, "Faltas"); sub(2, "Notas");
+    sub(3, "Faltas"); sub(4, "Notas");
+    ws.mergeCells(2, bc + 5, 3, bc + 5);
+    sub(6, "Faltas"); sub(7, "Notas");
+    sub(8, "Faltas"); sub(9, "Notas");
+    ws.mergeCells(2, bc + 10, 3, bc + 10);
+    ws.mergeCells(2, bc + 11, 3, bc + 11);
+    ws.mergeCells(2, bc + 12, 3, bc + 12);
+  }
+
+  ws.getRow(2).height = 18;
+  ws.getRow(3).height = 13;
+
+  // ── Linhas de dados (12 alunos por bloco, linhas 4-15) ──
+  for (let row = 0; row < 12; row++) {
+    const rowNum = 4 + row;
+    const bg = row % 2 === 0 ? BR : CZ;
+    ws.getRow(rowNum).height = 12;
+
+    for (let b = 0; b < NUM_BLOCOS; b++) {
+      const bc  = blocoCol(b);
+      const num = b * 12 + row + 1;
+      const al  = mapa.get(num);
+
+      const setCell = (col: number, val: any, font: any, fill: string) => {
+        const cell = ws.getCell(rowNum, bc + col);
+        cell.value = val ?? "";
+        cell.font = font;
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fill } };
+        cell.alignment = centro;
+        cell.border = bordaFina();
+      };
+
+      setCell(0, String(num).padStart(2, "0"), numFont, "FFE8EDF8");
+      setCell(1, "", { size: 8, name: "Arial" }, bg);
+      setCell(2, fmt(al?.n1), notaFont, bg);
+      setCell(3, "", { size: 8, name: "Arial" }, bg);
+      setCell(4, fmt(al?.n2), notaFont, bg);
+      setCell(5, "", { size: 8, name: "Arial" }, AM);
+      setCell(6, "", { size: 8, name: "Arial" }, bg);
+      setCell(7, fmt(al?.n3), notaFont, bg);
+      setCell(8, "", { size: 8, name: "Arial" }, bg);
+      setCell(9, fmt(al?.n4), notaFont, bg);
+      setCell(10, "", { size: 8, name: "Arial" }, AM);
+      setCell(11, "", { size: 8, name: "Arial" }, AM);
+      setCell(12, "", { size: 8, name: "Arial" }, AM);
+    }
+  }
+
+  // ── Linha de assinatura ──
+  const assRow = 17;
+  ws.getRow(assRow).height = 18;
+  const assW = Math.floor(TOTAL_COLS / 6);
+  for (let i = 0; i < 6; i++) {
+    const c1 = i * assW + 1;
+    const c2 = i < 5 ? (i + 1) * assW : TOTAL_COLS;
+    if (c1 < c2) ws.mergeCells(assRow, c1, assRow, c2);
+    const cell = ws.getCell(assRow, c1);
+    cell.value = "Assinatura do(a) Professor(a)";
+    cell.font = { size: 7, name: "Arial", color: { argb: "FF555555" } };
+    cell.alignment = { horizontal: "center", vertical: "bottom" };
+    cell.border = { top: bd("FF333333") };
+  }
+
+  // Gerar e baixar
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `Caderneta_${turma}_2026.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export function CadernetaOficial() {
@@ -134,7 +222,7 @@ export function CadernetaOficial() {
 
   const gerar = async () => {
     setGerando(true);
-    try { await gerarCaderneta(turma); }
+    try { await gerarCadernetaExcel(turma); }
     catch (e: any) { alert("Erro: " + e.message); }
     finally { setGerando(false); }
   };
@@ -145,9 +233,7 @@ export function CadernetaOficial() {
         <h2 className="text-2xl font-bold tracking-tight mb-1 text-primary-dark flex items-center gap-2">
           <BookOpen className="w-6 h-6" /> Caderneta Oficial
         </h2>
-        <p className="text-xs text-gray-500">
-          Abre em nova aba — salve como PDF com Ctrl+P
-        </p>
+        <p className="text-xs text-gray-500">Exporta em Excel (.xlsx) — paisagem A4</p>
       </div>
       <div className="p-4 space-y-5">
         <div>
@@ -163,15 +249,15 @@ export function CadernetaOficial() {
           </div>
         </div>
 
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-sm space-y-1">
-          <p className="font-bold text-amber-800">📋 Como salvar em PDF</p>
-          <ol className="text-xs space-y-1 list-decimal list-inside text-amber-700">
-            <li>Clique em "Gerar Caderneta"</li>
-            <li>Uma nova aba abrirá com o diálogo de impressão</li>
-            <li>Em "Destino", selecione <strong>Salvar como PDF</strong></li>
-            <li>Em "Mais configurações", selecione <strong>Paisagem</strong></li>
-            <li>Clique em Salvar</li>
-          </ol>
+        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-sm text-blue-800 space-y-1">
+          <p className="font-bold">📋 Estrutura da caderneta</p>
+          <ul className="text-xs space-y-1 list-disc list-inside text-blue-700">
+            <li>4 blocos lado a lado: alunos 01–12 | 13–24 | 25–36 | 37–48</li>
+            <li>1º, 2º, 3º, 4º Bimestre com Faltas + Notas mesclados</li>
+            <li>Recuperação 1ºSem., 2ºSem., Final e Especial</li>
+            <li>Notas preenchidas (vírgula) • Faltas em branco</li>
+            <li>Configurado para impressão A4 paisagem</li>
+          </ul>
         </div>
 
         <div className="bg-white border border-gray-200 rounded-2xl p-4 flex items-center justify-between">
@@ -186,9 +272,13 @@ export function CadernetaOficial() {
         <button onClick={gerar} disabled={gerando}
           className="w-full py-4 rounded-2xl bg-primary hover:bg-primary-dark disabled:opacity-50 text-white font-bold text-base transition-colors flex items-center justify-center gap-2 shadow-sm">
           {gerando
-            ? <><Loader2 className="w-5 h-5 animate-spin" /> Gerando...</>
-            : <><FileDown className="w-5 h-5" /> Gerar Caderneta</>}
+            ? <><Loader2 className="w-5 h-5 animate-spin" /> Gerando Excel...</>
+            : <><FileDown className="w-5 h-5" /> Baixar Caderneta Excel</>}
         </button>
+
+        <p className="text-xs text-center text-gray-400">
+          O arquivo <strong>Caderneta_{turma}_2026.xlsx</strong> será baixado automaticamente.
+        </p>
       </div>
     </div>
   );
