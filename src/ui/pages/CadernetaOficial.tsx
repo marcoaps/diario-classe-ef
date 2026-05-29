@@ -95,7 +95,7 @@ async function gerarPDFCaderneta(turma: string, professor = "Marco Antonio Pedro
 <meta charset="UTF-8">
 <title>Caderneta — ${turma} 2026</title>
 <style>
-  @page { size: A4 portrait; margin: 7mm 5mm; }
+  @page { size: A4 portrait; margin: 6mm 4mm; } html { transform-origin: top left; } @media print { html { zoom: 0.72; } }
   * { box-sizing: border-box; }
   body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
   table { border-collapse: collapse; width: 100%; }
@@ -112,7 +112,6 @@ async function gerarPDFCaderneta(turma: string, professor = "Marco Antonio Pedro
 <div class="titulo">Disciplina:Educação Física — Ano Letivo de 2026</div>
 <div class="info-linha">
   DISCIPLINA:<span>Educação Física</span> &nbsp;&nbsp;
-  PROFESSOR(A):<span>${professor}</span> &nbsp;&nbsp;
   ETAPA/SÉRIE:<span>${serie}</span> &nbsp;&nbsp;
   TURMA:<span>${turmaLetra}</span> &nbsp;&nbsp;
   TURNO:<span>Manhã</span>
