@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { BookOpen, Loader2, FileDown } from "lucide-react";
 import { buscarNotas } from "../../data/supabase";
 import { cn } from "../AppLayout";
 
 const TURMAS = ["6F","7B","7C","7D","7E","7F","8A","8B","8C","8D","8E","8F","9A","9B","9C","9D","9E","9F"];
 
-async function gerarPDFCaderneta(turma: string, professor = "Marco Antonio Pedro da Silva") {
+async function gerarPDFCaderneta(turma: string) {
   const [b1, b2, b3, b4] = await Promise.all([
     buscarNotas(turma, 1), buscarNotas(turma, 2),
     buscarNotas(turma, 3), buscarNotas(turma, 4),
@@ -25,202 +25,173 @@ async function gerarPDFCaderneta(turma: string, professor = "Marco Antonio Pedro
   const serie = turma.replace(/([0-9]+)([A-Z]+)/, "$1º");
   const turmaLetra = turma.replace(/[0-9]+/, "");
 
-  // 48 linhas, distribuídas em 4 blocos lado a lado (01-12, 13-24, 25-36, 37-48)
-  // Cada bloco: Nº | Falt 1B | Nota 1B | Falt 2B | Nota 2B | Rec1S | Falt 3B | Nota 3B | Falt 4B | Nota 4B | Rec2S | RecFin | RecEsp
-  const COLS_POR_BLOCO = 13; // Nº + 12 colunas de dados
-  const LINHAS = 12; // 48 alunos ÷ 4 blocos
+  // Carrega jsPDF dinamicamente
+  const { jsPDF } = await import("jspdf");
+  await import("jspdf-autotable");
 
-  const s = {
-    hdr:  `border:1px solid #555;padding:2px 1px;font-size:6.5px;text-align:center;background:#1a2e6e;color:#fff;font-weight:bold;vertical-align:middle;`,
-    sub:  `border:1px solid #555;padding:2px 1px;font-size:6px;text-align:center;background:#d0d8ee;color:#1a2e6e;font-weight:bold;vertical-align:middle;`,
-    num:  `border:1px solid #555;padding:2px 1px;font-size:6px;text-align:center;font-weight:bold;background:#eef0f8;`,
-    falt: `border:1px solid #555;padding:2px 1px;text-align:center;font-size:8px;background:#f5f5f5;`,
-    nota: `border:1px solid #555;padding:2px 1px;text-align:center;font-size:6px;font-weight:bold;color:#1a2e6e;`,
-    rec:  `border:1px solid #555;padding:2px 1px;text-align:center;font-size:8px;background:#fff8f0;`,
-    sep:  `width:6px;border:none;background:#fff;`,
-  };
+  // A4 retrato: 210 x 297mm
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const PW = 200; // largura útil
+  const ML = 5;   // margem esquerda
 
-  // Gera cabeçalho de um bloco
-  const blocoHeader1 = () => `
-    <th rowspan="3" style="${s.num}">Nº</th>
-    <th colspan="2" style="${s.hdr}">1º Bimestre</th>
-    <th colspan="2" style="${s.hdr}">2º Bimestre</th>
-    <th rowspan="2" style="${s.hdr};font-size:6px;">Recup.<br>1º Sem.</th>
-    <th colspan="2" style="${s.hdr}">3º Bimestre</th>
-    <th colspan="2" style="${s.hdr}">4º Bimestre</th>
-    <th rowspan="2" style="${s.hdr};font-size:6px;">Recup.<br>2º Sem.</th>
-    <th rowspan="2" style="${s.hdr};font-size:6px;">Recup.<br>Final</th>
-    <th rowspan="2" style="${s.hdr};font-size:6px;">Recup.<br>Especial</th>`;
+  // Cabeçalho
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.text("Disciplina:Educação Física — Ano Letivo de 2026", ML, 10);
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.text(`DISCIPLINA: Educação Física    ETAPA/SÉRIE: ${serie}    TURMA: ${turmaLetra}    TURNO: Manhã`, ML, 15);
 
-  const blocoHeader2 = () => `
-    <th style="${s.sub}">Faltas</th><th style="${s.sub}">Notas</th>
-    <th style="${s.sub}">Faltas</th><th style="${s.sub}">Notas</th>
-    <th style="${s.sub}">Faltas</th><th style="${s.sub}">Notas</th>
-    <th style="${s.sub}">Faltas</th><th style="${s.sub}">Notas</th>`;
+  // Linha separadora
+  doc.setDrawColor(26, 46, 110);
+  doc.setLineWidth(0.3);
+  doc.line(ML, 17, ML + PW, 17);
 
-  // Gera linhas de dados
-  const gerarLinhas = () => {
-    let html = "";
-    for (let linha = 0; linha < LINHAS; linha++) {
-      const bg = linha % 2 === 0 ? "#ffffff" : "#f0f3fa";
-      html += `<tr style="background:${bg};height:12px;">`;
-      for (let bloco = 0; bloco < 4; bloco++) {
-        const num = bloco * LINHAS + linha + 1;
-        const a = mapaAlunos.get(num);
-        // Separador entre blocos (exceto antes do primeiro)
-        if (bloco > 0) html += `<td style="${s.sep}"></td>`;
-        html += `
-          <td style="${s.num}">${String(num).padStart(2,"0")}</td>
-          <td style="${s.falt}"></td>
-          <td style="${s.nota}">${fmt(a?.n1)}</td>
-          <td style="${s.falt}"></td>
-          <td style="${s.nota}">${fmt(a?.n2)}</td>
-          <td style="${s.rec}"></td>
-          <td style="${s.falt}"></td>
-          <td style="${s.nota}">${fmt(a?.n3)}</td>
-          <td style="${s.falt}"></td>
-          <td style="${s.nota}">${fmt(a?.n4)}</td>
-          <td style="${s.rec}"></td>
-          <td style="${s.rec}"></td>
-          <td style="${s.rec}"></td>`;
+  // Configuração dos 4 blocos
+  const BLOCOS = 4;
+  const SEP = 2; // separador entre blocos
+  const BLOCO_W = (PW - (BLOCOS - 1) * SEP) / BLOCOS; // ~48mm por bloco
+
+  // Colunas por bloco: Nº | F1 | N1 | F2 | N2 | R1 | F3 | N3 | F4 | N4 | R2 | RF | RE
+  const COL_W = [
+    4,   // Nº
+    4, 5,  // 1ºBim Falt/Nota
+    4, 5,  // 2ºBim Falt/Nota
+    4,   // Rec 1S
+    4, 5,  // 3ºBim Falt/Nota
+    4, 5,  // 4ºBim Falt/Nota
+    4,   // Rec 2S
+    4,   // Rec Fin
+    4,   // Rec Esp
+  ]; // total = 60mm → vamos normalizar para BLOCO_W
+
+  const totalW = COL_W.reduce((a, b) => a + b, 0);
+  const scale = BLOCO_W / totalW;
+  const CW = COL_W.map(w => w * scale);
+
+  const AZUL = [26, 46, 110] as [number, number, number];
+  const AZUL_CLARO = [208, 216, 238] as [number, number, number];
+  const BRANCO = [255, 255, 255] as [number, number, number];
+  const CINZA = [245, 247, 252] as [number, number, number];
+
+  const HDR_H = 5;   // altura cabeçalho linha 1
+  const SUB_H = 4;   // altura cabeçalho linha 2
+  const ROW_H = 5;   // altura cada linha de aluno
+  const ASS_Y = 290; // y das assinaturas
+
+  // Posição X inicial de cada bloco
+  const blocoX = (b: number) => ML + b * (BLOCO_W + SEP);
+
+  // Função para x acumulado de uma coluna dentro de um bloco
+  const colX = (b: number, c: number) => blocoX(b) + CW.slice(0, c).reduce((a, v) => a + v, 0);
+
+  const COLUNAS = CW.length;
+  const NOMES_HDR1 = ["Nº","1º Bimestre","","2º Bimestre","","Rec.\n1ºSem.","3º Bimestre","","4º Bimestre","","Rec.\n2ºSem.","Rec.\nFinal","Rec.\nEsp."];
+  const NOMES_HDR2 = ["","Faltas","Notas","Faltas","Notas","","Faltas","Notas","Faltas","Notas","","",""];
+  // colspan para HDR1
+  const SPAN1 = [1,2,0,2,0,1,2,0,2,0,1,1,1];
+
+  const Y_HDR1 = 19;
+  const Y_HDR2 = Y_HDR1 + HDR_H;
+  const Y_DATA = Y_HDR2 + SUB_H;
+
+  for (let b = 0; b < BLOCOS; b++) {
+    const bx = blocoX(b);
+
+    // Desenha cabeçalho linha 1 (bimestres mesclados)
+    let cx = bx;
+    for (let c = 0; c < COLUNAS; c++) {
+      if (SPAN1[c] === 0) continue;
+      const spanW = SPAN1[c] > 1 ? CW[c] + CW[c+1] : CW[c];
+      doc.setFillColor(...AZUL);
+      doc.rect(cx, Y_HDR1, spanW, HDR_H, "FD");
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(5);
+      doc.setFont("helvetica", "bold");
+      const label = NOMES_HDR1[c];
+      const lines = label.split("\n");
+      lines.forEach((line, li) => {
+        doc.text(line, cx + spanW / 2, Y_HDR1 + 1.5 + li * 2, { align: "center" });
+      });
+      cx += spanW;
+    }
+
+    // Cabeçalho linha 2 (Faltas/Notas)
+    cx = bx;
+    for (let c = 0; c < COLUNAS; c++) {
+      doc.setFillColor(...AZUL_CLARO);
+      doc.rect(cx, Y_HDR2, CW[c], SUB_H, "FD");
+      if (NOMES_HDR2[c]) {
+        doc.setTextColor(...AZUL);
+        doc.setFontSize(4.5);
+        doc.setFont("helvetica", "bold");
+        doc.text(NOMES_HDR2[c], cx + CW[c] / 2, Y_HDR2 + 2.5, { align: "center" });
       }
-      html += `</tr>`;
+      cx += CW[c];
     }
-    return html;
-  };
 
-  const html = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>Caderneta — ${turma} 2026</title>
-<style>
-  @page {
-    size: 210mm 297mm;
-    margin: 6mm 5mm;
-  }
-  @media print {
-    html, body {
-      width: 210mm;
-      height: 297mm;
+    // Linhas de dados (12 alunos por bloco)
+    for (let row = 0; row < 12; row++) {
+      const num = b * 12 + row + 1;
+      const a = mapaAlunos.get(num);
+      const y = Y_DATA + row * ROW_H;
+      const bg = row % 2 === 0 ? BRANCO : CINZA;
+
+      cx = bx;
+      for (let c = 0; c < COLUNAS; c++) {
+        doc.setFillColor(...bg);
+        doc.setDrawColor(150, 150, 150);
+        doc.setLineWidth(0.1);
+        doc.rect(cx, y, CW[c], ROW_H, "FD");
+        cx += CW[c];
+      }
+
+      // Nº
+      doc.setTextColor(...AZUL);
+      doc.setFontSize(6);
+      doc.setFont("helvetica", "bold");
+      doc.text(String(num).padStart(2, "0"), bx + CW[0] / 2, y + 3.2, { align: "center" });
+
+      // Notas preenchidas
+      const notaStyle = (val: string) => {
+        if (!val) return;
+        doc.setFontSize(5.5);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(...AZUL);
+      };
+
+      // Nota 1B col 2, Nota 2B col 4, Nota 3B col 7, Nota 4B col 9
+      const notaCols: [number, any][] = [[2, a?.n1], [4, a?.n2], [7, a?.n3], [9, a?.n4]];
+      notaCols.forEach(([c, val]) => {
+        const v = fmt(val);
+        if (!v) return;
+        notaStyle(v);
+        const nx = bx + CW.slice(0, c).reduce((s, w) => s + w, 0);
+        doc.text(v, nx + CW[c] / 2, y + 3.2, { align: "center" });
+      });
     }
+
+    // Linha de borda externa do bloco
+    doc.setDrawColor(...AZUL);
+    doc.setLineWidth(0.3);
+    doc.rect(bx, Y_HDR1, BLOCO_W, HDR_H + SUB_H + 12 * ROW_H, "S");
   }
-  * { box-sizing: border-box; }
-  body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
-  table { border-collapse: collapse; width: 100%; }
-  .titulo { font-size: 10px; font-weight: bold; margin-bottom: 3px; }
-  .info-linha { font-size: 9px; margin-bottom: 5px; }
-  .info-linha span { border-bottom: 1px solid #333; padding: 0 4px; font-style: italic; }
-  .assinaturas { display: flex; gap: 8px; margin-top: 8px; }
-  .ass { flex: 1; border-top: 1px solid #333; padding-top: 2px; font-size: 8px; text-align: center; color: #444; }
-  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
-</style>
-</head>
-<body>
 
-<div class="titulo">Disciplina:Educação Física — Ano Letivo de 2026</div>
-<div class="info-linha">
-  DISCIPLINA:<span>Educação Física</span> &nbsp;&nbsp;
-  ETAPA/SÉRIE:<span>${serie}</span> &nbsp;&nbsp;
-  TURMA:<span>${turmaLetra}</span> &nbsp;&nbsp;
-  TURNO:<span>Manhã</span>
-</div>
+  // Assinaturas
+  const assW = PW / 6;
+  for (let i = 0; i < 6; i++) {
+    const ax = ML + i * assW;
+    doc.setDrawColor(100, 100, 100);
+    doc.setLineWidth(0.2);
+    doc.line(ax + 2, ASS_Y, ax + assW - 2, ASS_Y);
+    doc.setFontSize(5.5);
+    doc.setTextColor(80, 80, 80);
+    doc.setFont("helvetica", "normal");
+    doc.text("Assinatura do(a) Professor(a)", ax + assW / 2, ASS_Y + 3, { align: "center" });
+  }
 
-<table>
-  <colgroup>
-    <!-- Bloco 1: 48mm -->
-    <col style="width:4mm"><!-- Nº -->
-    <col style="width:4mm"><!-- Falt 1B --><col style="width:4mm"><!-- Nota 1B -->
-    <col style="width:4mm"><!-- Falt 2B --><col style="width:4mm"><!-- Nota 2B -->
-    <col style="width:3mm"><!-- Rec 1S -->
-    <col style="width:4mm"><!-- Falt 3B --><col style="width:4mm"><!-- Nota 3B -->
-    <col style="width:4mm"><!-- Falt 4B --><col style="width:4mm"><!-- Nota 4B -->
-    <col style="width:3mm"><!-- Rec 2S -->
-    <col style="width:3mm"><!-- Rec Fin -->
-    <col style="width:3mm"><!-- Rec Esp -->
-    <col style="width:2mm"><!-- Sep -->
-    <!-- Bloco 2 -->
-    <col style="width:4mm"><col style="width:4mm"><col style="width:4mm">
-    <col style="width:4mm"><col style="width:4mm"><col style="width:3mm">
-    <col style="width:4mm"><col style="width:4mm"><col style="width:4mm">
-    <col style="width:4mm"><col style="width:3mm"><col style="width:3mm"><col style="width:3mm">
-    <col style="width:2mm"><!-- Sep -->
-    <!-- Bloco 3 -->
-    <col style="width:4mm"><col style="width:4mm"><col style="width:4mm">
-    <col style="width:4mm"><col style="width:4mm"><col style="width:3mm">
-    <col style="width:4mm"><col style="width:4mm"><col style="width:4mm">
-    <col style="width:4mm"><col style="width:3mm"><col style="width:3mm"><col style="width:3mm">
-    <col style="width:2mm"><!-- Sep -->
-    <!-- Bloco 4 -->
-    <col style="width:4mm"><col style="width:4mm"><col style="width:4mm">
-    <col style="width:4mm"><col style="width:4mm"><col style="width:3mm">
-    <col style="width:4mm"><col style="width:4mm"><col style="width:4mm">
-    <col style="width:4mm"><col style="width:3mm"><col style="width:3mm"><col style="width:3mm">
-  </colgroup>
-  <thead>
-    <tr>
-      ${blocoHeader1()}
-      <td style="${s.sep}" rowspan="3"></td>
-      ${blocoHeader1()}
-      <td style="${s.sep}" rowspan="3"></td>
-      ${blocoHeader1()}
-      <td style="${s.sep}" rowspan="3"></td>
-      ${blocoHeader1()}
-    </tr>
-    <tr>
-      ${blocoHeader2()}
-      ${blocoHeader2()}
-      ${blocoHeader2()}
-      ${blocoHeader2()}
-    </tr>
-    <tr>
-      <th style="${s.sub}">Notas</th>
-      <th style="${s.sub}">Notas</th>
-      <th style="${s.sub}">Notas</th>
-      <th style="${s.sub}">Notas</th>
-      <th style="${s.sub}">Notas</th>
-      <th style="${s.sub}">Notas</th>
-      <th style="${s.sub}">Notas</th>
-      <th style="${s.sub}">Notas</th>
-    </tr>
-  </thead>
-  <tbody>
-    ${gerarLinhas()}
-  </tbody>
-</table>
-
-<div class="assinaturas">
-  <div class="ass">Assinatura do(a) Professor(a)</div>
-  <div class="ass">Assinatura do(a) Professor(a)</div>
-  <div class="ass">Assinatura do(a) Professor(a)</div>
-  <div class="ass">Assinatura do(a) Professor(a)</div>
-  <div class="ass">Assinatura do(a) Professor(a)</div>
-  <div class="ass">Assinatura do(a) Professor(a)</div>
-</div>
-
-<script>window.onload = () => { window.print(); }</script>
-</body>
-</html>`;
-
-  // Usa iframe oculto para forçar impressão em retrato sem abrir nova aba
-  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-
-  // Cria iframe oculto
-  const iframe = document.createElement("iframe");
-  iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:none;";
-  document.body.appendChild(iframe);
-  iframe.src = url;
-  iframe.onload = () => {
-    setTimeout(() => {
-      iframe.contentWindow?.focus();
-      iframe.contentWindow?.print();
-      setTimeout(() => {
-        document.body.removeChild(iframe);
-        URL.revokeObjectURL(url);
-      }, 2000);
-    }, 500);
-  };
+  // Salva o PDF diretamente
+  doc.save(`Caderneta_${turma}_2026.pdf`);
 }
 
 export function CadernetaOficial() {
@@ -240,7 +211,7 @@ export function CadernetaOficial() {
         <h2 className="text-2xl font-bold tracking-tight mb-1 text-primary-dark flex items-center gap-2">
           <BookOpen className="w-6 h-6" /> Caderneta Oficial
         </h2>
-        <p className="text-xs text-gray-500">Formato da caderneta física — A4 retrato sem nomes</p>
+        <p className="text-xs text-gray-500">Gera PDF A4 retrato — download direto</p>
       </div>
 
       <div className="p-4 space-y-5">
@@ -260,10 +231,11 @@ export function CadernetaOficial() {
         <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-sm text-blue-800 space-y-1">
           <p className="font-bold">📋 Estrutura da caderneta</p>
           <ul className="text-xs space-y-1 list-disc list-inside text-blue-700">
-            <li>4 blocos lado a lado (01–12 | 13–24 | 25–36 | 37–48)</li>
-            <li>Cada bloco: Nº + 1ºBim + 2ºBim + Rec.1S + 3ºBim + 4ºBim + Rec.2S + Rec.Fin + Rec.Esp</li>
-            <li>Sem coluna de nome — igual à caderneta física</li>
-            <li>Notas preenchidas com vírgula (8,5) • Faltas em branco</li>
+            <li>PDF A4 retrato — download direto sem diálogo de impressão</li>
+            <li>4 blocos: alunos 01–12 | 13–24 | 25–36 | 37–48</li>
+            <li>Bimestres mesclados com Faltas + Notas</li>
+            <li>Recuperações 1ºSem., 2ºSem., Final e Especial</li>
+            <li>Notas preenchidas (vírgula) • Faltas em branco</li>
           </ul>
         </div>
 
@@ -279,13 +251,12 @@ export function CadernetaOficial() {
         <button onClick={gerar} disabled={gerando}
           className="w-full py-4 rounded-2xl bg-primary hover:bg-primary-dark disabled:opacity-50 text-white font-bold text-base transition-colors flex items-center justify-center gap-2 shadow-sm">
           {gerando
-            ? <><Loader2 className="w-5 h-5 animate-spin" /> Gerando caderneta...</>
-            : <><FileDown className="w-5 h-5" /> Gerar Caderneta PDF</>}
+            ? <><Loader2 className="w-5 h-5 animate-spin" /> Gerando PDF...</>
+            : <><FileDown className="w-5 h-5" /> Baixar Caderneta PDF</>}
         </button>
 
         <p className="text-xs text-center text-gray-400">
-          Nova aba abrirá com a caderneta em A4 retrato.<br/>
-          Use <strong>Ctrl+P</strong> → "Salvar como PDF".
+          O arquivo <strong>Caderneta_{turma}_2026.pdf</strong> será baixado automaticamente.
         </p>
       </div>
     </div>
