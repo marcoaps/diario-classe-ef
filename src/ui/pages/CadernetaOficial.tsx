@@ -57,11 +57,11 @@ async function gerarCadernetaExcel(turma: string) {
   // Layout: 2 blocos lado a lado por linha, 2 linhas de blocos
   // Cada bloco: 13 colunas + 1 separador
   // 2 blocos = 26 col + 1 sep = 27 colunas → cabe em retrato A4
-  const COLS = 13; // colunas por bloco
+  const COLS = 9; // colunas por bloco (sem Faltas)
   const SEP  = 1;  // separador
 
   // Larguras das colunas (repetido para os 2 blocos + separador)
-  const blocoWidths = [3.5, 3.8, 4.2, 3.8, 4.2, 3.8, 3.8, 4.2, 3.8, 4.2, 3.8, 3.8, 3.8];
+  const blocoWidths = [4, 5.5, 5.5, 4.5, 5.5, 5.5, 4.5, 4.5, 4.5];
   const allWidths = [...blocoWidths, 1.5, ...blocoWidths]; // 2 blocos + sep
   allWidths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
 
@@ -83,14 +83,14 @@ async function gerarCadernetaExcel(turma: string) {
     };
 
     merge(0, 0, "N°");
-    merge(1, 2, "1° Bimestre");
-    merge(3, 4, "2° Bimestre");
-    merge(5, 5, "Rec.\n1°S", true);
-    merge(6, 7, "3° Bimestre");
-    merge(8, 9, "4° Bimestre");
-    merge(10, 10, "Rec.\n2°S", true);
-    merge(11, 11, "Rec.\nFin", true);
-    merge(12, 12, "Rec.\nEsp", true);
+    merge(1, 1, "1° Bim");
+    merge(2, 2, "2° Bim");
+    merge(3, 3, "Rec.\n1°S", true);
+    merge(4, 4, "3° Bim");
+    merge(5, 5, "4° Bim");
+    merge(6, 6, "Rec.\n2°S", true);
+    merge(7, 7, "Rec.\nFin", true);
+    merge(8, 8, "Rec.\nEsp", true);
 
     // Linha 2: Faltas/Notas
     const subRow = startRow + 1;
@@ -103,20 +103,12 @@ async function gerarCadernetaExcel(turma: string) {
       cell.border = borda();
     };
 
-    // Nº, Rec cols — mesclam as 2 linhas
-    ws.mergeCells(startRow, bc, subRow, bc);
-    ws.mergeCells(startRow, bc + 5, subRow, bc + 5);
-    ws.mergeCells(startRow, bc + 10, subRow, bc + 10);
-    ws.mergeCells(startRow, bc + 11, subRow, bc + 11);
-    ws.mergeCells(startRow, bc + 12, subRow, bc + 12);
-
-    sub(1, "Faltas"); sub(2, "Notas");
-    sub(3, "Faltas"); sub(4, "Notas");
-    sub(6, "Faltas"); sub(7, "Notas");
-    sub(8, "Faltas"); sub(9, "Notas");
-
-    ws.getRow(startRow).height = 18;
-    ws.getRow(subRow).height = 13;
+    // Todas as colunas mesclam as 2 linhas (sem subdivisão Falt/Nota)
+    for (let c = 0; c < 9; c++) {
+      ws.mergeCells(startRow, bc + c, subRow, bc + c);
+    }
+    ws.getRow(startRow).height = 20;
+    ws.getRow(subRow).height = 0; // oculta linha 2 (não usada)
   };
 
   // ── Função para desenhar dados de um bloco ──
@@ -138,19 +130,15 @@ async function gerarCadernetaExcel(turma: string) {
         cell.border = bordaFina();
       };
 
-      set(0,  String(num).padStart(2, "0"), nFont, "FFE8EDF8");
-      set(1,  "",          { size: 8, name: "Arial" }, bg);
-      set(2,  fmt(al?.n1), nFont, bg);
-      set(3,  "",          { size: 8, name: "Arial" }, bg);
-      set(4,  fmt(al?.n2), nFont, bg);
-      set(5,  "",          { size: 8, name: "Arial" }, AM);
-      set(6,  "",          { size: 8, name: "Arial" }, bg);
-      set(7,  fmt(al?.n3), nFont, bg);
-      set(8,  "",          { size: 8, name: "Arial" }, bg);
-      set(9,  fmt(al?.n4), nFont, bg);
-      set(10, "",          { size: 8, name: "Arial" }, AM);
-      set(11, "",          { size: 8, name: "Arial" }, AM);
-      set(12, "",          { size: 8, name: "Arial" }, AM);
+      set(0, String(num).padStart(2, "0"), nFont, "FFE8EDF8");
+      set(1, fmt(al?.n1), nFont, bg);
+      set(2, fmt(al?.n2), nFont, bg);
+      set(3, "",          { size: 8, name: "Arial" }, AM);
+      set(4, fmt(al?.n3), nFont, bg);
+      set(5, fmt(al?.n4), nFont, bg);
+      set(6, "",          { size: 8, name: "Arial" }, AM);
+      set(7, "",          { size: 8, name: "Arial" }, AM);
+      set(8, "",          { size: 8, name: "Arial" }, AM);
     }
   };
 
