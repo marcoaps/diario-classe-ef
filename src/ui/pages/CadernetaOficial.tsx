@@ -94,37 +94,52 @@ async function gerarPDFCaderneta(turma: string) {
   for (let b = 0; b < BLOCOS; b++) {
     const bx = blocoX(b);
 
-    // Desenha cabeçalho linha 1 (bimestres mesclados)
-    let cx = bx;
-    for (let c = 0; c < COLUNAS; c++) {
-      if (SPAN1[c] === 0) continue;
-      const spanW = SPAN1[c] > 1 ? CW[c] + CW[c+1] : CW[c];
+    // Cabeçalho linha 1: grupos mesclados
+    const grupos = [
+      { c: 0, span: 1, label: "N" },
+      { c: 1, span: 2, label: "1o Bim" },
+      { c: 3, span: 2, label: "2o Bim" },
+      { c: 5, span: 1, label: "Rec\n1oS" },
+      { c: 6, span: 2, label: "3o Bim" },
+      { c: 8, span: 2, label: "4o Bim" },
+      { c: 10, span: 1, label: "Rec\n2oS" },
+      { c: 11, span: 1, label: "Rec\nFin" },
+      { c: 12, span: 1, label: "Rec\nEsp" },
+    ];
+    for (const g of grupos) {
+      const gx = bx + CW.slice(0, g.c).reduce((s: number, w: number) => s + w, 0);
+      const gw = CW.slice(g.c, g.c + g.span).reduce((s: number, w: number) => s + w, 0);
       doc.setFillColor(...AZUL);
-      doc.rect(cx, Y_HDR1, spanW, HDR_H, "FD");
+      doc.setDrawColor(...AZUL);
+      doc.setLineWidth(0.2);
+      doc.rect(gx, Y_HDR1, gw, HDR_H, "FD");
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(6);
+      doc.setFontSize(5.5);
       doc.setFont("helvetica", "bold");
-      const label = NOMES_HDR1[c];
-      const lines = label.split("\n");
-      lines.forEach((line, li) => {
-        doc.text(line, cx + spanW / 2, Y_HDR1 + 2 + li * 2.5, { align: "center" });
+      const lblLines = g.label.split("\n");
+      lblLines.forEach((line: string, li: number) => {
+        const ty = Y_HDR1 + (lblLines.length > 1 ? 2.2 + li * 2.8 : HDR_H / 2 + 1.5);
+        doc.text(line, gx + gw / 2, ty, { align: "center" });
       });
-      cx += spanW;
     }
 
-    // Cabeçalho linha 2 (Faltas/Notas)
-    cx = bx;
+    // Cabeçalho linha 2: Falt/Nota por coluna
+    const subLbls = ["","Falt","Nota","Falt","Nota","Nota","Falt","Nota","Falt","Nota","Nota","Nota","Nota"];
+    let cx2 = bx;
     for (let c = 0; c < COLUNAS; c++) {
       doc.setFillColor(...AZUL_CLARO);
-      doc.rect(cx, Y_HDR2, CW[c], SUB_H, "FD");
-      if (NOMES_HDR2[c]) {
+      doc.setDrawColor(...AZUL);
+      doc.setLineWidth(0.2);
+      doc.rect(cx2, Y_HDR2, CW[c], SUB_H, "FD");
+      if (subLbls[c]) {
         doc.setTextColor(...AZUL);
         doc.setFontSize(4.5);
         doc.setFont("helvetica", "bold");
-        doc.text(NOMES_HDR2[c], cx + CW[c] / 2, Y_HDR2 + 3, { align: "center" });
+        doc.text(subLbls[c], cx2 + CW[c] / 2, Y_HDR2 + SUB_H / 2 + 1.2, { align: "center" });
       }
-      cx += CW[c];
+      cx2 += CW[c];
     }
+
 
     // Linhas de dados (12 alunos por bloco)
     for (let row = 0; row < 12; row++) {
