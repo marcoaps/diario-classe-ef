@@ -1,6 +1,6 @@
-import React from 'react';
+﻿import React from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
-import { Users, CheckSquare, GraduationCap, CalendarSearch, BarChart3, QrCode, Sparkles } from 'lucide-react';
+import { Users, CheckSquare, GraduationCap, CalendarSearch, BarChart3, QrCode, Sparkles, BookMarked } from 'lucide-react';
 import { useStore } from '../store';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -21,9 +21,9 @@ export function AppLayout() {
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-red-600 shadow-lg flex items-stretch justify-around z-50" style={{ height: '64px' }}>
         <NavItem to="/" icon={<Users />} label="Turmas" />
         <NavItem to="/attendance" icon={<CheckSquare />} label="Chamada" />
-        <NavItem to="/history" icon={<CalendarSearch />} label="Histórico" />
+        <NavItem to="/history" icon={<CalendarSearch />} label="HistÃ³rico" />
         <NavItem to="/grades" icon={<GraduationCap />} label="Notas" />
-        <NavItem to="/alunos" icon={<QrCode />} label="Alunos" />
+        <NavItem to="/caderneta" icon={<BookMarked />} label="Caderneta" />
         <NavItem to="/ia" icon={<Sparkles />} label="IA" ia />
       </nav>
     </div>
@@ -56,3 +56,4 @@ function NavItem({ to, icon, label, ia }: { to: string; icon: React.ReactNode; l
     </NavLink>
   );
 }
+
