@@ -35,8 +35,7 @@ async function gerarCadernetaExcel(turma: string) {
       fitToPage: true,
       fitToWidth: 1,
       fitToHeight: 1,
-      scale: 85,
-      margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0, footer: 0 },
+      margins: { left: 0.25, right: 0.25, top: 0.3, bottom: 0.3, header: 0, footer: 0 },
     },
   });
 
@@ -47,141 +46,94 @@ async function gerarCadernetaExcel(turma: string) {
   const AM  = "FFFFF8F0";
 
   const bd  = (c = "FF1A2E6E") => ({ style: "thin" as const, color: { argb: c } });
-  const borda     = () => ({ top: bd(), bottom: bd(), left: bd(), right: bd() });
-  const bordaFina = () => ({ top: bd("FFBBBBBb"), bottom: bd("FFBBBBBb"), left: bd("FFBBBBBb"), right: bd("FFBBBBBb") });
+  const borda     = (c = "FF1A2E6E") => ({ top: bd(c), bottom: bd(c), left: bd(c), right: bd(c) });
+  const bordaFina = () => ({ top: bd("FFCCCCcc"), bottom: bd("FFCCCCcc"), left: bd("FFCCCCcc"), right: bd("FFCCCCcc") });
 
-  const hFont  = { bold: true, size: 8, color: { argb: BR }, name: "Arial" };
-  const sFont  = { bold: true, size: 7, color: { argb: AZ }, name: "Arial" };
-  const nFont  = { bold: true, size: 8, color: { argb: AZ }, name: "Arial" };
+  const hFont = { bold: true, size: 8, color: { argb: BR }, name: "Arial" };
+  const sFont = { bold: true, size: 7, color: { argb: AZ }, name: "Arial" };
+  const nFont = { bold: true, size: 8, color: { argb: AZ }, name: "Arial" };
   const centro = { horizontal: "center" as const, vertical: "middle" as const };
 
-  // Layout: 2 blocos lado a lado por linha, 2 linhas de blocos
-  // Cada bloco: 13 colunas + 1 separador
-  // 2 blocos = 26 col + 1 sep = 27 colunas → cabe em retrato A4
-  const COLS = 9; // colunas por bloco (sem Faltas)
-  const SEP  = 1;  // separador
+  // Estrutura: Nº | 1ºBim | 2ºBim | Rec1S | 3ºBim | 4ºBim | Rec2S | RecFin | RecEsp
+  // 9 colunas × larguras calibradas para A4 retrato
+  const widths = [3.5, 7, 7, 5, 7, 7, 5, 5, 5]; // total ~51.5 → cabe em retrato
+  widths.forEach((w, i) => ws.getColumn(i + 1).width = w);
 
-  // Larguras das colunas (repetido para os 2 blocos + separador)
-  const blocoWidths = [3.2, 4.5, 4.5, 3.5, 4.5, 4.5, 3.5, 3.5, 3.5];
-  const allWidths = [...blocoWidths, 1.5, ...blocoWidths]; // 2 blocos + sep
-  allWidths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+  const TOTAL = widths.length; // 9
 
-  const blocoCol = (b: number) => b * (COLS + SEP) + 1; // col inicial do bloco (0 ou 1)
-
-  // ── Função para desenhar cabeçalho de um bloco numa linha específica ──
-  const desenharCabecalho = (startRow: number, b: number) => {
-    const bc = blocoCol(b);
-
-    // Linha 1: bimestres mesclados
-    const merge = (c1: number, c2: number, label: string, small = false) => {
-      if (c1 !== c2) ws.mergeCells(startRow, bc + c1, startRow, bc + c2);
-      const cell = ws.getCell(startRow, bc + c1);
-      cell.value = label;
-      cell.font = small ? { ...hFont, size: 6 } : hFont;
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: AZ } };
-      cell.alignment = { ...centro, wrapText: true };
-      cell.border = borda();
-    };
-
-    merge(0, 0, "N°");
-    merge(1, 1, "1° Bim");
-    merge(2, 2, "2° Bim");
-    merge(3, 3, "Rec.\n1°S", true);
-    merge(4, 4, "3° Bim");
-    merge(5, 5, "4° Bim");
-    merge(6, 6, "Rec.\n2°S", true);
-    merge(7, 7, "Rec.\nFin", true);
-    merge(8, 8, "Rec.\nEsp", true);
-
-    // Linha 2: Faltas/Notas
-    const subRow = startRow + 1;
-    const sub = (c: number, label: string) => {
-      const cell = ws.getCell(subRow, bc + c);
-      cell.value = label;
-      cell.font = sFont;
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: AZC } };
-      cell.alignment = centro;
-      cell.border = borda();
-    };
-
-    // Todas as colunas mesclam as 2 linhas (sem subdivisão Falt/Nota)
-    for (let c = 0; c < 9; c++) {
-      ws.mergeCells(startRow, bc + c, subRow, bc + c);
-    }
-    ws.getRow(startRow).height = 20;
-    ws.getRow(subRow).height = 0; // oculta linha 2 (não usada)
-  };
-
-  // ── Função para desenhar dados de um bloco ──
-  const desenharDados = (startRow: number, b: number, offset: number) => {
-    const bc = blocoCol(b);
-    for (let row = 0; row < 12; row++) {
-      const rn  = startRow + row;
-      const num = offset + row + 1;
-      const al  = mapa.get(num);
-      const bg  = row % 2 === 0 ? BR : CZ;
-      ws.getRow(rn).height = 12;
-
-      const set = (col: number, val: any, font: any, fill: string) => {
-        const cell = ws.getCell(rn, bc + col);
-        cell.value = val ?? "";
-        cell.font = font;
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fill } };
-        cell.alignment = centro;
-        cell.border = bordaFina();
-      };
-
-      set(0, String(num).padStart(2, "0"), nFont, "FFE8EDF8");
-      set(1, fmt(al?.n1), nFont, bg);
-      set(2, fmt(al?.n2), nFont, bg);
-      set(3, "",          { size: 8, name: "Arial" }, AM);
-      set(4, fmt(al?.n3), nFont, bg);
-      set(5, fmt(al?.n4), nFont, bg);
-      set(6, "",          { size: 8, name: "Arial" }, AM);
-      set(7, "",          { size: 8, name: "Arial" }, AM);
-      set(8, "",          { size: 8, name: "Arial" }, AM);
-    }
-  };
-
-  // ── Linha 1: cabeçalho info ──
-  const totalCols = COLS * 2 + SEP;
-  ws.mergeCells(1, 1, 1, totalCols);
+  // ── Linha 1: info ──
+  ws.mergeCells(1, 1, 1, TOTAL);
   const info = ws.getCell(1, 1);
   info.value = `Disciplina: Educação Física — Ano Letivo de 2026   |   ETAPA/SÉRIE: ${serie}   TURMA: ${letra}   TURNO: Manhã`;
   info.font = { bold: true, size: 9, name: "Arial", color: { argb: AZ } };
   info.alignment = { horizontal: "center", vertical: "middle" };
-  ws.getRow(1).height = 16;
+  ws.getRow(1).height = 15;
 
-  // ── Bloco superior: alunos 01-12 (col 0) e 13-24 (col 1) ──
-  desenharCabecalho(2, 0);
-  desenharCabecalho(2, 1);
-  desenharDados(4, 0, 0);
-  desenharDados(4, 1, 12);
+  // ── Linha 2: cabeçalho linha 1 (bimestres mesclados) ──
+  const hdr = (c1: number, c2: number, label: string, small = false) => {
+    if (c1 !== c2) ws.mergeCells(2, c1, 2, c2);
+    const cell = ws.getCell(2, c1);
+    cell.value = label;
+    cell.font = small ? { ...hFont, size: 6.5 } : hFont;
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: AZ } };
+    cell.alignment = { ...centro, wrapText: true };
+    cell.border = borda();
+  };
 
-  // ── Espaço entre os grupos ──
-  ws.getRow(16).height = 6;
+  hdr(1, 1, "N°");
+  hdr(2, 2, "1° Bimestre");
+  hdr(3, 3, "2° Bimestre");
+  hdr(4, 4, "Rec.\n1°Sem.", true);
+  hdr(5, 5, "3° Bimestre");
+  hdr(6, 6, "4° Bimestre");
+  hdr(7, 7, "Rec.\n2°Sem.", true);
+  hdr(8, 8, "Rec.\nFinal", true);
+  hdr(9, 9, "Rec.\nEsp.", true);
 
-  // ── Bloco inferior: alunos 25-36 (col 0) e 37-48 (col 1) ──
-  desenharCabecalho(17, 0);
-  desenharCabecalho(17, 1);
-  desenharDados(19, 0, 24);
-  desenharDados(19, 1, 36);
+  ws.getRow(2).height = 22;
 
-  // ── Assinaturas ──
-  ws.getRow(31).height = 6;
-  const assW = Math.floor(totalCols / 6);
-  ws.getRow(31).height = 4;
+  // ── Linhas 3-50: dados (48 alunos) ──
+  for (let i = 0; i < 48; i++) {
+    const rn  = 3 + i;
+    const num = i + 1;
+    const al  = mapa.get(num);
+    const bg  = i % 2 === 0 ? BR : CZ;
+    ws.getRow(rn).height = 11;
+
+    const set = (col: number, val: any, font: any, fill: string) => {
+      const cell = ws.getCell(rn, col);
+      cell.value = val ?? "";
+      cell.font = font;
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fill } };
+      cell.alignment = centro;
+      cell.border = bordaFina();
+    };
+
+    set(1, String(num).padStart(2, "0"), nFont, "FFE8EDF8");
+    set(2, fmt(al?.n1), nFont, bg);
+    set(3, fmt(al?.n2), nFont, bg);
+    set(4, "",          { size: 8, name: "Arial" }, AM);
+    set(5, fmt(al?.n3), nFont, bg);
+    set(6, fmt(al?.n4), nFont, bg);
+    set(7, "",          { size: 8, name: "Arial" }, AM);
+    set(8, "",          { size: 8, name: "Arial" }, AM);
+    set(9, "",          { size: 8, name: "Arial" }, AM);
+  }
+
+  // ── Linha 51: assinaturas ──
+  ws.getRow(51).height = 4;
+  const assW = Math.floor(TOTAL / 6);
   for (let i = 0; i < 6; i++) {
     const c1 = i * assW + 1;
-    const c2 = i < 5 ? (i + 1) * assW : totalCols;
-    if (c1 < c2) ws.mergeCells(32, c1, 32, c2);
-    const cell = ws.getCell(32, c1);
+    const c2 = i < 5 ? (i + 1) * assW : TOTAL;
+    if (c1 < c2) ws.mergeCells(52, c1, 52, c2);
+    const cell = ws.getCell(52, c1);
     cell.value = "Assinatura do(a) Professor(a)";
     cell.font = { size: 7, name: "Arial", color: { argb: "FF555555" } };
     cell.alignment = { horizontal: "center", vertical: "bottom" };
-    cell.border = { top: bd("FF333333") };
+    cell.border = { top: bd("FF444444") };
   }
-  ws.getRow(32).height = 18;
+  ws.getRow(52).height = 16;
 
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
@@ -210,7 +162,7 @@ export function CadernetaOficial() {
         <h2 className="text-2xl font-bold tracking-tight mb-1 text-primary-dark flex items-center gap-2">
           <BookOpen className="w-6 h-6" /> Caderneta Oficial
         </h2>
-        <p className="text-xs text-gray-500">Exporta em Excel (.xlsx) — retrato A4</p>
+        <p className="text-xs text-gray-500">Exporta em Excel — 1 página retrato A4</p>
       </div>
       <div className="p-4 space-y-5">
         <div>
@@ -225,16 +177,6 @@ export function CadernetaOficial() {
             ))}
           </div>
         </div>
-        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-sm text-blue-800 space-y-1">
-          <p className="font-bold">📋 Estrutura da caderneta (A4 retrato)</p>
-          <ul className="text-xs space-y-1 list-disc list-inside text-blue-700">
-            <li>Metade superior: alunos 01–12 e 13–24 lado a lado</li>
-            <li>Metade inferior: alunos 25–36 e 37–48 lado a lado</li>
-            <li>Bimestres com Faltas + Notas mesclados</li>
-            <li>Recuperações 1ºSem., 2ºSem., Final e Especial</li>
-            <li>Notas preenchidas (vírgula) • Faltas em branco</li>
-          </ul>
-        </div>
         <div className="bg-white border border-gray-200 rounded-2xl p-4 flex items-center justify-between">
           <div>
             <p className="text-xs text-gray-500 font-semibold">TURMA SELECIONADA</p>
@@ -246,11 +188,11 @@ export function CadernetaOficial() {
         <button onClick={gerar} disabled={gerando}
           className="w-full py-4 rounded-2xl bg-primary hover:bg-primary-dark disabled:opacity-50 text-white font-bold text-base transition-colors flex items-center justify-center gap-2 shadow-sm">
           {gerando
-            ? <><Loader2 className="w-5 h-5 animate-spin" /> Gerando Excel...</>
+            ? <><Loader2 className="w-5 h-5 animate-spin" /> Gerando...</>
             : <><FileDown className="w-5 h-5" /> Baixar Caderneta Excel</>}
         </button>
         <p className="text-xs text-center text-gray-400">
-          O arquivo <strong>Caderneta_{turma}_2026.xlsx</strong> será baixado automaticamente.
+          Arquivo <strong>Caderneta_{turma}_2026.xlsx</strong> — 1 página retrato A4.
         </p>
       </div>
     </div>
