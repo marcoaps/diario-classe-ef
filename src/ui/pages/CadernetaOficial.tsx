@@ -86,8 +86,8 @@ async function gerarPDFCaderneta(turma: string) {
   const colX = (b: number, c: number) => blocoX(b) + CW.slice(0, c).reduce((a, v) => a + v, 0);
 
   const COLUNAS = CW.length;
-  const NOMES_HDR1 = ["Nº","1º Bim","","2º Bim","","Rec\n1ºS","3º Bim","","4º Bim","","Rec\n2ºS","Rec\nFin","Rec\nEsp"];
-  const NOMES_HDR2 = ["","Falt","Nota","Falt","Nota","","Falt","Nota","Falt","Nota","","",""];
+  const NOMES_HDR1 = ["N","1o Bim","","2o Bim","","Rec\n1oS","3o Bim","","4o Bim","","Rec\n2oS","Rec\nFin","Rec\nEsp"];
+  const NOMES_HDR2 = ["","Falt","Nota","Falt","Nota","Nota","Falt","Nota","Falt","Nota","Nota","Nota","Nota"];
   // colspan para HDR1
   const SPAN1 = [1,2,0,2,0,1,2,0,2,0,1,1,1];
 
@@ -106,7 +106,7 @@ async function gerarPDFCaderneta(turma: string) {
       doc.setFillColor(...AZUL);
       doc.rect(cx, Y_HDR1, spanW, HDR_H, "FD");
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(5.5);
+      doc.setFontSize(6);
       doc.setFont("helvetica", "bold");
       const label = NOMES_HDR1[c];
       const lines = label.split("\n");
@@ -150,7 +150,7 @@ async function gerarPDFCaderneta(turma: string) {
       doc.setTextColor(...AZUL);
       doc.setFontSize(6);
       doc.setFont("helvetica", "bold");
-      doc.text(String(num).padStart(2, "0"), bx + CW[0] / 2, y + 3.2, { align: "center" });
+      doc.text(String(num).padStart(2, "0"), bx + CW[0] / 2, y + 3.5, { align: "center" });
 
       // Notas preenchidas
       const notaStyle = (val: string) => {
