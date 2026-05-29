@@ -95,7 +95,16 @@ async function gerarPDFCaderneta(turma: string, professor = "Marco Antonio Pedro
 <meta charset="UTF-8">
 <title>Caderneta — ${turma} 2026</title>
 <style>
-  @page { size: A4 portrait; margin: 6mm 5mm; }
+  @page {
+    size: 210mm 297mm;
+    margin: 6mm 5mm;
+  }
+  @media print {
+    html, body {
+      width: 210mm;
+      height: 297mm;
+    }
+  }
   * { box-sizing: border-box; }
   body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
   table { border-collapse: collapse; width: 100%; }
@@ -193,8 +202,25 @@ async function gerarPDFCaderneta(turma: string, professor = "Marco Antonio Pedro
 </body>
 </html>`;
 
+  // Usa iframe oculto para forçar impressão em retrato sem abrir nova aba
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-  window.open(URL.createObjectURL(blob), "_blank");
+  const url = URL.createObjectURL(blob);
+
+  // Cria iframe oculto
+  const iframe = document.createElement("iframe");
+  iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:none;";
+  document.body.appendChild(iframe);
+  iframe.src = url;
+  iframe.onload = () => {
+    setTimeout(() => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => {
+        document.body.removeChild(iframe);
+        URL.revokeObjectURL(url);
+      }, 2000);
+    }, 500);
+  };
 }
 
 export function CadernetaOficial() {
