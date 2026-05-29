@@ -62,7 +62,7 @@ async function gerarPDFCaderneta(turma: string) {
   const bw = totalBlocoW * scale; // largura de cada bloco
   const sep = SEP * scale;
 
-  const HDR1_H = 6;  // altura cabeçalho linha 1
+  const HDR1_H = 8;  // altura cabeçalho linha 1
   const HDR2_H = 4;  // altura cabeçalho linha 2
   const ROW_H  = 5;  // altura linha de dados
   const Y0 = 19;     // início da tabela
@@ -72,12 +72,12 @@ async function gerarPDFCaderneta(turma: string) {
     [0, 1, "N"],
     [1, 2, "1o Bim"],
     [3, 2, "2o Bim"],
-    [5, 1, "Rec\n1oS"],
+    [5, 1, "R\n1S"],
     [6, 2, "3o Bim"],
     [8, 2, "4o Bim"],
-    [10, 1, "Rec\n2oS"],
-    [11, 1, "Rec\nFin"],
-    [12, 1, "Rec\nEsp"],
+    [10, 1, "R\n2S"],
+    [11, 1, "R\nFin"],
+    [12, 1, "R\nEsp"],
   ];
 
   // Sub-labels HDR2
@@ -95,12 +95,12 @@ async function gerarPDFCaderneta(turma: string) {
       doc.setLineWidth(0.15);
       doc.rect(gx, Y0, gw, HDR1_H, "FD");
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(5);
+      doc.setFontSize(4.5);
       doc.setFont("helvetica", "bold");
       const lblLines = lbl.split("\n");
       lblLines.forEach((line, li) => {
         const ty = lblLines.length > 1
-          ? Y0 + 1.8 + li * 2.4
+          ? Y0 + 2.2 + li * 2.8
           : Y0 + HDR1_H / 2 + 1.5;
         doc.text(line, gx + gw / 2, ty, { align: "center" });
       });
