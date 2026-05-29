@@ -31,11 +31,11 @@ async function gerarPDFCaderneta(turma: string, professor = "Marco Antonio Pedro
   const LINHAS = 12; // 48 alunos ÷ 4 blocos
 
   const s = {
-    hdr:  `border:1px solid #555;padding:2px 1px;font-size:8px;text-align:center;background:#1a2e6e;color:#fff;font-weight:bold;vertical-align:middle;`,
-    sub:  `border:1px solid #555;padding:2px 1px;font-size:7.5px;text-align:center;background:#d0d8ee;color:#1a2e6e;font-weight:bold;vertical-align:middle;`,
-    num:  `border:1px solid #555;padding:2px 1px;font-size:8.5px;text-align:center;font-weight:bold;background:#eef0f8;`,
+    hdr:  `border:1px solid #555;padding:2px 1px;font-size:6.5px;text-align:center;background:#1a2e6e;color:#fff;font-weight:bold;vertical-align:middle;`,
+    sub:  `border:1px solid #555;padding:2px 1px;font-size:6px;text-align:center;background:#d0d8ee;color:#1a2e6e;font-weight:bold;vertical-align:middle;`,
+    num:  `border:1px solid #555;padding:2px 1px;font-size:6px;text-align:center;font-weight:bold;background:#eef0f8;`,
     falt: `border:1px solid #555;padding:2px 1px;text-align:center;font-size:8px;background:#f5f5f5;`,
-    nota: `border:1px solid #555;padding:2px 1px;text-align:center;font-size:8.5px;font-weight:bold;color:#1a2e6e;`,
+    nota: `border:1px solid #555;padding:2px 1px;text-align:center;font-size:6px;font-weight:bold;color:#1a2e6e;`,
     rec:  `border:1px solid #555;padding:2px 1px;text-align:center;font-size:8px;background:#fff8f0;`,
     sep:  `width:6px;border:none;background:#fff;`,
   };
@@ -45,12 +45,12 @@ async function gerarPDFCaderneta(turma: string, professor = "Marco Antonio Pedro
     <th rowspan="3" style="${s.num}">Nº</th>
     <th colspan="2" style="${s.hdr}">1º Bimestre</th>
     <th colspan="2" style="${s.hdr}">2º Bimestre</th>
-    <th rowspan="2" style="${s.hdr};font-size:7px;">Recup.<br>1º Sem.</th>
+    <th rowspan="2" style="${s.hdr};font-size:6px;">Recup.<br>1º Sem.</th>
     <th colspan="2" style="${s.hdr}">3º Bimestre</th>
     <th colspan="2" style="${s.hdr}">4º Bimestre</th>
-    <th rowspan="2" style="${s.hdr};font-size:7px;">Recup.<br>2º Sem.</th>
-    <th rowspan="2" style="${s.hdr};font-size:7px;">Recup.<br>Final</th>
-    <th rowspan="2" style="${s.hdr};font-size:7px;">Recup.<br>Especial</th>`;
+    <th rowspan="2" style="${s.hdr};font-size:6px;">Recup.<br>2º Sem.</th>
+    <th rowspan="2" style="${s.hdr};font-size:6px;">Recup.<br>Final</th>
+    <th rowspan="2" style="${s.hdr};font-size:6px;">Recup.<br>Especial</th>`;
 
   const blocoHeader2 = () => `
     <th style="${s.sub}">Faltas</th><th style="${s.sub}">Notas</th>
@@ -63,7 +63,7 @@ async function gerarPDFCaderneta(turma: string, professor = "Marco Antonio Pedro
     let html = "";
     for (let linha = 0; linha < LINHAS; linha++) {
       const bg = linha % 2 === 0 ? "#ffffff" : "#f0f3fa";
-      html += `<tr style="background:${bg};height:14px;">`;
+      html += `<tr style="background:${bg};height:12px;">`;
       for (let bloco = 0; bloco < 4; bloco++) {
         const num = bloco * LINHAS + linha + 1;
         const a = mapaAlunos.get(num);
@@ -95,7 +95,7 @@ async function gerarPDFCaderneta(turma: string, professor = "Marco Antonio Pedro
 <meta charset="UTF-8">
 <title>Caderneta — ${turma} 2026</title>
 <style>
-  @page { size: A4 portrait; margin: 6mm 4mm; } html { transform-origin: top left; } @media print { html { zoom: 0.72; } }
+  @page { size: A4 portrait; margin: 6mm 5mm; }
   * { box-sizing: border-box; }
   body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
   table { border-collapse: collapse; width: 100%; }
@@ -119,37 +119,34 @@ async function gerarPDFCaderneta(turma: string, professor = "Marco Antonio Pedro
 
 <table>
   <colgroup>
-    <!-- Bloco 1 -->
-    <col style="width:18px"><!-- Nº -->
-    <col style="width:24px"><!-- Falt 1B --><col style="width:22px"><!-- Nota 1B -->
-    <col style="width:24px"><!-- Falt 2B --><col style="width:22px"><!-- Nota 2B -->
-    <col style="width:22px"><!-- Rec 1S -->
-    <col style="width:24px"><!-- Falt 3B --><col style="width:22px"><!-- Nota 3B -->
-    <col style="width:24px"><!-- Falt 4B --><col style="width:22px"><!-- Nota 4B -->
-    <col style="width:22px"><!-- Rec 2S -->
-    <col style="width:22px"><!-- Rec Fin -->
-    <col style="width:22px"><!-- Rec Esp -->
-    <!-- Separador -->
-    <col style="width:6px">
+    <!-- Bloco 1: 48mm -->
+    <col style="width:4mm"><!-- Nº -->
+    <col style="width:4mm"><!-- Falt 1B --><col style="width:4mm"><!-- Nota 1B -->
+    <col style="width:4mm"><!-- Falt 2B --><col style="width:4mm"><!-- Nota 2B -->
+    <col style="width:3mm"><!-- Rec 1S -->
+    <col style="width:4mm"><!-- Falt 3B --><col style="width:4mm"><!-- Nota 3B -->
+    <col style="width:4mm"><!-- Falt 4B --><col style="width:4mm"><!-- Nota 4B -->
+    <col style="width:3mm"><!-- Rec 2S -->
+    <col style="width:3mm"><!-- Rec Fin -->
+    <col style="width:3mm"><!-- Rec Esp -->
+    <col style="width:2mm"><!-- Sep -->
     <!-- Bloco 2 -->
-    <col style="width:18px"><col style="width:24px"><col style="width:22px">
-    <col style="width:24px"><col style="width:22px"><col style="width:22px">
-    <col style="width:24px"><col style="width:22px"><col style="width:24px">
-    <col style="width:22px"><col style="width:22px"><col style="width:22px">
-    <!-- Separador -->
-    <col style="width:6px">
+    <col style="width:4mm"><col style="width:4mm"><col style="width:4mm">
+    <col style="width:4mm"><col style="width:4mm"><col style="width:3mm">
+    <col style="width:4mm"><col style="width:4mm"><col style="width:4mm">
+    <col style="width:4mm"><col style="width:3mm"><col style="width:3mm"><col style="width:3mm">
+    <col style="width:2mm"><!-- Sep -->
     <!-- Bloco 3 -->
-    <col style="width:18px"><col style="width:24px"><col style="width:22px">
-    <col style="width:24px"><col style="width:22px"><col style="width:22px">
-    <col style="width:24px"><col style="width:22px"><col style="width:24px">
-    <col style="width:22px"><col style="width:22px"><col style="width:22px">
-    <!-- Separador -->
-    <col style="width:6px">
+    <col style="width:4mm"><col style="width:4mm"><col style="width:4mm">
+    <col style="width:4mm"><col style="width:4mm"><col style="width:3mm">
+    <col style="width:4mm"><col style="width:4mm"><col style="width:4mm">
+    <col style="width:4mm"><col style="width:3mm"><col style="width:3mm"><col style="width:3mm">
+    <col style="width:2mm"><!-- Sep -->
     <!-- Bloco 4 -->
-    <col style="width:18px"><col style="width:24px"><col style="width:22px">
-    <col style="width:24px"><col style="width:22px"><col style="width:22px">
-    <col style="width:24px"><col style="width:22px"><col style="width:24px">
-    <col style="width:22px"><col style="width:22px"><col style="width:22px">
+    <col style="width:4mm"><col style="width:4mm"><col style="width:4mm">
+    <col style="width:4mm"><col style="width:4mm"><col style="width:3mm">
+    <col style="width:4mm"><col style="width:4mm"><col style="width:4mm">
+    <col style="width:4mm"><col style="width:3mm"><col style="width:3mm"><col style="width:3mm">
   </colgroup>
   <thead>
     <tr>
