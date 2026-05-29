@@ -56,10 +56,10 @@ async function gerarCadernetaExcel(turma: string) {
 
   // Estrutura: Nº | 1ºBim | 2ºBim | Rec1S | 3ºBim | 4ºBim | Rec2S | RecFin | RecEsp
   // 9 colunas × larguras calibradas para A4 retrato
-  const widths = [3.5, 7, 7, 5, 7, 7, 5, 5, 5]; // total ~51.5 → cabe em retrato
+  const widths = [3.5, 28, 7, 7, 5, 7, 7, 5, 5, 5]; // Nº + Nome + bimestres
   widths.forEach((w, i) => ws.getColumn(i + 1).width = w);
 
-  const TOTAL = widths.length; // 9
+  const TOTAL = widths.length; // 10
 
   // ── Linha 1: info ──
   ws.mergeCells(1, 1, 1, TOTAL);
@@ -81,14 +81,15 @@ async function gerarCadernetaExcel(turma: string) {
   };
 
   hdr(1, 1, "N°");
-  hdr(2, 2, "1° Bimestre");
-  hdr(3, 3, "2° Bimestre");
-  hdr(4, 4, "Rec.\n1°Sem.", true);
-  hdr(5, 5, "3° Bimestre");
-  hdr(6, 6, "4° Bimestre");
-  hdr(7, 7, "Rec.\n2°Sem.", true);
-  hdr(8, 8, "Rec.\nFinal", true);
-  hdr(9, 9, "Rec.\nEsp.", true);
+  hdr(2, 2, "NOME DO ALUNO");
+  hdr(3, 3, "1° Bimestre");
+  hdr(4, 4, "2° Bimestre");
+  hdr(5, 5, "Rec.\n1°Sem.", true);
+  hdr(6, 6, "3° Bimestre");
+  hdr(7, 7, "4° Bimestre");
+  hdr(8, 8, "Rec.\n2°Sem.", true);
+  hdr(9, 9, "Rec.\nFinal", true);
+  hdr(10, 10, "Rec.\nEsp.", true);
 
   ws.getRow(2).height = 22;
 
@@ -109,31 +110,28 @@ async function gerarCadernetaExcel(turma: string) {
       cell.border = bordaFina();
     };
 
+    // busca nome do aluno
+    const nomeAluno = [...b1,...b2,...b3,...b4].find((a: any) => a.numero === num)?.nome ?? "";
+    const nomeFormatado = nomeAluno.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase());
+
     set(1, String(num).padStart(2, "0"), nFont, "FFE8EDF8");
-    set(2, fmt(al?.n1), nFont, bg);
-    set(3, fmt(al?.n2), nFont, bg);
-    set(4, "",          { size: 8, name: "Arial" }, AM);
-    set(5, fmt(al?.n3), nFont, bg);
-    set(6, fmt(al?.n4), nFont, bg);
-    set(7, "",          { size: 8, name: "Arial" }, AM);
+    const nomeCell = ws.getCell(rn, 2);
+    nomeCell.value = nomeFormatado;
+    nomeCell.font = { size: 8, name: "Arial", color: { argb: "FF1A2E6E" } };
+    nomeCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg } };
+    nomeCell.alignment = { horizontal: "left", vertical: "middle" };
+    nomeCell.border = bordaFina();
+    set(3, fmt(al?.n1), nFont, bg);
+    set(4, fmt(al?.n2), nFont, bg);
+    set(5, "",          { size: 8, name: "Arial" }, AM);
+    set(6, fmt(al?.n3), nFont, bg);
+    set(7, fmt(al?.n4), nFont, bg);
     set(8, "",          { size: 8, name: "Arial" }, AM);
     set(9, "",          { size: 8, name: "Arial" }, AM);
+    set(10, "",         { size: 8, name: "Arial" }, AM);
   }
 
-  // ── Linha 51: assinaturas ──
-  ws.getRow(51).height = 4;
-  const assW = Math.floor(TOTAL / 6);
-  for (let i = 0; i < 6; i++) {
-    const c1 = i * assW + 1;
-    const c2 = i < 5 ? (i + 1) * assW : TOTAL;
-    if (c1 < c2) ws.mergeCells(52, c1, 52, c2);
-    const cell = ws.getCell(52, c1);
-    cell.value = "Assinatura do(a) Professor(a)";
-    cell.font = { size: 7, name: "Arial", color: { argb: "FF555555" } };
-    cell.alignment = { horizontal: "center", vertical: "bottom" };
-    cell.border = { top: bd("FF444444") };
-  }
-  ws.getRow(52).height = 16;
+
 
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
