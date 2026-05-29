@@ -30,7 +30,7 @@ async function gerarCadernetaExcel(turma: string) {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("Caderneta", {
     pageSetup: {
-      orientation: "landscape",
+      orientation: "portrait",
       paperSize: 9, // A4
       fitToPage: true,
       fitToWidth: 1,
