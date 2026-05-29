@@ -86,10 +86,6 @@ async function gerarPDFCaderneta(turma: string) {
   const colX = (b: number, c: number) => blocoX(b) + CW.slice(0, c).reduce((a, v) => a + v, 0);
 
   const COLUNAS = CW.length;
-  const NOMES_HDR1 = ["N","1o Bim","","2o Bim","","Rec\n1oS","3o Bim","","4o Bim","","Rec\n2oS","Rec\nFin","Rec\nEsp"];
-  const NOMES_HDR2 = ["","Falt","Nota","Falt","Nota","Nota","Falt","Nota","Falt","Nota","Nota","Nota","Nota"];
-  // colspan para HDR1
-  const SPAN1 = [1,2,0,2,0,1,2,0,2,0,1,1,1];
 
   const Y_HDR1 = 19;
   const Y_HDR2 = Y_HDR1 + HDR_H;
