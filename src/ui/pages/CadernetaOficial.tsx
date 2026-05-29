@@ -74,7 +74,7 @@ async function gerarPDFCaderneta(turma: string) {
   const BRANCO = [255, 255, 255] as [number, number, number];
   const CINZA = [245, 247, 252] as [number, number, number];
 
-  const HDR_H = 5;   // altura cabeçalho linha 1
+  const HDR_H = 7;   // altura cabeçalho linha 1
   const SUB_H = 4;   // altura cabeçalho linha 2
   const ROW_H = 5;   // altura cada linha de aluno
   const ASS_Y = 290; // y das assinaturas
@@ -86,8 +86,8 @@ async function gerarPDFCaderneta(turma: string) {
   const colX = (b: number, c: number) => blocoX(b) + CW.slice(0, c).reduce((a, v) => a + v, 0);
 
   const COLUNAS = CW.length;
-  const NOMES_HDR1 = ["Nº","1º Bimestre","","2º Bimestre","","Rec.\n1ºSem.","3º Bimestre","","4º Bimestre","","Rec.\n2ºSem.","Rec.\nFinal","Rec.\nEsp."];
-  const NOMES_HDR2 = ["","Faltas","Notas","Faltas","Notas","","Faltas","Notas","Faltas","Notas","","",""];
+  const NOMES_HDR1 = ["Nº","1º Bim","","2º Bim","","Rec\n1ºS","3º Bim","","4º Bim","","Rec\n2ºS","Rec\nFin","Rec\nEsp"];
+  const NOMES_HDR2 = ["","Falt","Nota","Falt","Nota","","Falt","Nota","Falt","Nota","","",""];
   // colspan para HDR1
   const SPAN1 = [1,2,0,2,0,1,2,0,2,0,1,1,1];
 
@@ -106,12 +106,12 @@ async function gerarPDFCaderneta(turma: string) {
       doc.setFillColor(...AZUL);
       doc.rect(cx, Y_HDR1, spanW, HDR_H, "FD");
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(5);
+      doc.setFontSize(5.5);
       doc.setFont("helvetica", "bold");
       const label = NOMES_HDR1[c];
       const lines = label.split("\n");
       lines.forEach((line, li) => {
-        doc.text(line, cx + spanW / 2, Y_HDR1 + 1.5 + li * 2, { align: "center" });
+        doc.text(line, cx + spanW / 2, Y_HDR1 + 2 + li * 2.5, { align: "center" });
       });
       cx += spanW;
     }
@@ -125,7 +125,7 @@ async function gerarPDFCaderneta(turma: string) {
         doc.setTextColor(...AZUL);
         doc.setFontSize(4.5);
         doc.setFont("helvetica", "bold");
-        doc.text(NOMES_HDR2[c], cx + CW[c] / 2, Y_HDR2 + 2.5, { align: "center" });
+        doc.text(NOMES_HDR2[c], cx + CW[c] / 2, Y_HDR2 + 3, { align: "center" });
       }
       cx += CW[c];
     }
