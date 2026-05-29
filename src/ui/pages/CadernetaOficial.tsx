@@ -35,6 +35,7 @@ async function gerarCadernetaExcel(turma: string) {
       fitToPage: true,
       fitToWidth: 1,
       fitToHeight: 1,
+      scale: 85,
       margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0, footer: 0 },
     },
   });
@@ -61,7 +62,7 @@ async function gerarCadernetaExcel(turma: string) {
   const SEP  = 1;  // separador
 
   // Larguras das colunas (repetido para os 2 blocos + separador)
-  const blocoWidths = [4, 5.5, 5.5, 4.5, 5.5, 5.5, 4.5, 4.5, 4.5];
+  const blocoWidths = [3.2, 4.5, 4.5, 3.5, 4.5, 4.5, 3.5, 3.5, 3.5];
   const allWidths = [...blocoWidths, 1.5, ...blocoWidths]; // 2 blocos + sep
   allWidths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
 
@@ -169,6 +170,7 @@ async function gerarCadernetaExcel(turma: string) {
   // ── Assinaturas ──
   ws.getRow(31).height = 6;
   const assW = Math.floor(totalCols / 6);
+  ws.getRow(31).height = 4;
   for (let i = 0; i < 6; i++) {
     const c1 = i * assW + 1;
     const c2 = i < 5 ? (i + 1) * assW : totalCols;
