@@ -5,7 +5,7 @@ import { cn } from "../AppLayout";
 
 const TURMAS = ["6F","7B","7C","7D","7E","7F","8A","8B","8C","8D","8E","8F","9A","9B","9C","9D","9E","9F"];
 
-async function gerarPDFCaderneta(turma: string) {
+async function gerarCaderneta(turma: string) {
   const [b1, b2, b3, b4] = await Promise.all([
     buscarNotas(turma, 1), buscarNotas(turma, 2),
     buscarNotas(turma, 3), buscarNotas(turma, 4),
@@ -23,162 +23,109 @@ async function gerarPDFCaderneta(turma: string) {
   const fmt = (n: any) =>
     n == null ? "" : typeof n === "string" ? n : Number(n).toFixed(1).replace(".", ",");
 
-  const serie = turma.replace(/([0-9]+)([A-Z]+)/, "$1o");
+  const serie = turma.replace(/([0-9]+)([A-Z]+)/, "$1º");
   const letra = turma.replace(/[0-9]+/, "");
 
-  const { jsPDF } = await import("jspdf");
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  // Gera linhas dos 4 blocos (01-12, 13-24, 25-36, 37-48)
+  const blocos = [0,1,2,3].map(b =>
+    Array.from({length:12}, (_,i) => {
+      const num = b*12 + i + 1;
+      const a = mapa.get(num);
+      return { num, n1: fmt(a?.n1), n2: fmt(a?.n2), n3: fmt(a?.n3), n4: fmt(a?.n4) };
+    })
+  );
 
-  const ML = 5;
-  const PW = 200;
-  const AZUL:    [number,number,number] = [26, 46, 110];
-  const AZUL_CL: [number,number,number] = [208, 216, 238];
-  const BRANCO:  [number,number,number] = [255, 255, 255];
-  const CINZA:   [number,number,number] = [240, 243, 250];
+  const th = `border:1px solid #1a2e6e;padding:2px;font-size:7.5px;text-align:center;background:#1a2e6e;color:#fff;font-weight:bold;vertical-align:middle;`;
+  const th2 = `border:1px solid #1a2e6e;padding:1px;font-size:6.5px;text-align:center;background:#d0d8ee;color:#1a2e6e;font-weight:bold;`;
+  const tdN = `border:1px solid #aaa;padding:1px 2px;font-size:7px;text-align:center;font-weight:bold;background:#eef0f8;width:16px;`;
+  const tdF = `border:1px solid #aaa;padding:1px;font-size:7px;text-align:center;width:18px;`;
+  const tdV = `border:1px solid #aaa;padding:1px;font-size:7.5px;text-align:center;font-weight:bold;color:#1a2e6e;width:20px;`;
+  const tdR = `border:1px solid #aaa;padding:1px;font-size:7px;text-align:center;width:18px;background:#fff8f0;`;
 
-  // Cabeçalho
-  doc.setFontSize(10); doc.setFont("helvetica", "bold");
-  doc.text("Disciplina:Educacao Fisica - Ano Letivo de 2026", ML, 10);
-  doc.setFontSize(8); doc.setFont("helvetica", "normal");
-  doc.text(`DISCIPLINA: Educacao Fisica   ETAPA/SERIE: ${serie}   TURMA: ${letra}   TURNO: Manha`, ML, 15);
+  const cabecalhoBloco = () => `
+    <tr>
+      <th rowspan="2" style="${th};width:16px;">Nº</th>
+      <th colspan="2" style="${th}">1º Bimestre</th>
+      <th colspan="2" style="${th}">2º Bimestre</th>
+      <th rowspan="2" style="${th};font-size:6px;width:18px;">Rec.<br>1ºSem.</th>
+      <th colspan="2" style="${th}">3º Bimestre</th>
+      <th colspan="2" style="${th}">4º Bimestre</th>
+      <th rowspan="2" style="${th};font-size:6px;width:18px;">Rec.<br>2ºSem.</th>
+      <th rowspan="2" style="${th};font-size:6px;width:18px;">Rec.<br>Final</th>
+      <th rowspan="2" style="${th};font-size:6px;width:18px;">Rec.<br>Esp.</th>
+    </tr>
+    <tr>
+      <th style="${th2}">Faltas</th><th style="${th2}">Notas</th>
+      <th style="${th2}">Faltas</th><th style="${th2}">Notas</th>
+      <th style="${th2}">Faltas</th><th style="${th2}">Notas</th>
+      <th style="${th2}">Faltas</th><th style="${th2}">Notas</th>
+    </tr>`;
 
-  // Layout: 4 blocos × 13 colunas
-  // Proporcoes: N=1, Falt=1.2, Nota=1.4 → por bim: 1+1.2+1.4=3.6 × 2 bim = 7.2
-  // Rec simples = 1.2 × 3 = 3.6 → total por bloco = 1 + 7.2 + 1.2 + 7.2 + 3.6 = 20.2
-  // 4 blocos = 80.8 + 3 sep × 1 = 83.8 unidades → escala = 200/83.8 = 2.386mm/unidade
-  const U = PW / (4 * 20.2 + 3 * 1); // unidade base em mm ≈ 2.38mm
-  const cw = [
-    1*U,          // N
-    1.2*U, 1.4*U, // 1o Bim: Falt, Nota
-    1.2*U, 1.4*U, // 2o Bim: Falt, Nota
-    1.3*U,        // Rec 1S
-    1.2*U, 1.4*U, // 3o Bim: Falt, Nota
-    1.2*U, 1.4*U, // 4o Bim: Falt, Nota
-    1.3*U,        // Rec 2S
-    1.3*U,        // Rec Fin
-    1.3*U,        // Rec Esp
-  ];
-  const bw = cw.reduce((s,w) => s+w, 0);
-  const sep = U;
+  const linhasBloco = (bloco: typeof blocos[0]) =>
+    bloco.map((l, i) => {
+      const bg = i % 2 === 0 ? "#fff" : "#f0f3fa";
+      return `<tr style="background:${bg};height:13px;">
+        <td style="${tdN}">${String(l.num).padStart(2,"0")}</td>
+        <td style="${tdF}"></td><td style="${tdV}">${l.n1}</td>
+        <td style="${tdF}"></td><td style="${tdV}">${l.n2}</td>
+        <td style="${tdR}"></td>
+        <td style="${tdF}"></td><td style="${tdV}">${l.n3}</td>
+        <td style="${tdF}"></td><td style="${tdV}">${l.n4}</td>
+        <td style="${tdR}"></td>
+        <td style="${tdR}"></td>
+        <td style="${tdR}"></td>
+      </tr>`;
+    }).join("");
 
-  const H1 = 8;  // altura linha 1 cabeçalho (bimestres)
-  const H2 = 5;  // altura linha 2 cabeçalho (Falt/Nota)
-  const RH = 5;  // altura linha dado
-  const Y0 = 18; // topo tabela
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Caderneta ${turma} 2026</title>
+<style>
+  @page { size: A4 landscape; margin: 8mm 6mm; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+  .wrap { display: flex; gap: 4mm; width: 100%; }
+  .bloco { flex: 1; }
+  table { border-collapse: collapse; width: 100%; }
+  .titulo { font-size: 9px; font-weight: bold; margin-bottom: 2px; }
+  .info { font-size: 8px; margin-bottom: 4px; }
+  .info span { text-decoration: underline; font-style: italic; }
+  .assinaturas { display: flex; gap: 6mm; margin-top: 5mm; }
+  .ass { flex: 1; border-top: 1px solid #333; padding-top: 2px; font-size: 7px; text-align: center; }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style>
+</head>
+<body>
+<div class="titulo">Disciplina:Educação Física — Ano Letivo de 2026</div>
+<div class="info">
+  DISCIPLINA: <span>Educação Física</span> &nbsp;
+  ETAPA/SÉRIE: <span>${serie}</span> &nbsp;
+  TURMA: <span>${letra}</span> &nbsp;
+  TURNO: <span>Manhã</span>
+</div>
 
-  // Grupos HDR1: [col_inicio, span, linha1, linha2?]
-  type Grupo = { c: number; s: number; t1: string; t2?: string };
-  const grupos: Grupo[] = [
-    { c:0,  s:1, t1:"N" },
-    { c:1,  s:2, t1:"1o Bim" },
-    { c:3,  s:2, t1:"2o Bim" },
-    { c:5,  s:1, t1:"Rec", t2:"1oS" },
-    { c:6,  s:2, t1:"3o Bim" },
-    { c:8,  s:2, t1:"4o Bim" },
-    { c:10, s:1, t1:"Rec", t2:"2oS" },
-    { c:11, s:1, t1:"Rec", t2:"Fin" },
-    { c:12, s:1, t1:"Rec", t2:"Esp" },
-  ];
+<div class="wrap">
+  ${blocos.map(bloco => `
+  <div class="bloco">
+    <table>
+      <thead>${cabecalhoBloco()}</thead>
+      <tbody>${linhasBloco(bloco)}</tbody>
+    </table>
+  </div>`).join("")}
+</div>
 
-  const subL = ["","F","N","F","N","N","F","N","F","N","N","N","N"];
+<div class="assinaturas">
+  ${[1,2,3,4,5,6].map(() => '<div class="ass">Assinatura do(a) Professor(a)</div>').join("")}
+</div>
 
-  for (let b = 0; b < 4; b++) {
-    const bx = ML + b * (bw + sep);
+<script>window.onload = () => window.print();</script>
+</body>
+</html>`;
 
-    // HDR1
-    for (const g of grupos) {
-      const gx = bx + cw.slice(0, g.c).reduce((s,w) => s+w, 0);
-      const gw = cw.slice(g.c, g.c + g.s).reduce((s,w) => s+w, 0);
-      doc.setFillColor(...AZUL);
-      doc.setDrawColor(...AZUL);
-      doc.setLineWidth(0.2);
-      doc.rect(gx, Y0, gw, H1, "FD");
-      doc.setTextColor(255,255,255);
-      doc.setFont("helvetica","bold");
-      if (g.t2) {
-        // duas linhas
-        doc.setFontSize(4.5);
-        doc.text(g.t1, gx + gw/2, Y0 + 2.5, { align:"center" });
-        doc.text(g.t2, gx + gw/2, Y0 + 5.5, { align:"center" });
-      } else {
-        // uma linha — tamanho proporcional à largura
-        const fs = Math.min(5.5, gw * 1.2);
-        doc.setFontSize(fs);
-        doc.text(g.t1, gx + gw/2, Y0 + H1/2 + 1.5, { align:"center" });
-      }
-    }
-
-    // HDR2
-    let sx = bx;
-    for (let c = 0; c < cw.length; c++) {
-      doc.setFillColor(...AZUL_CL);
-      doc.setDrawColor(...AZUL);
-      doc.setLineWidth(0.2);
-      doc.rect(sx, Y0 + H1, cw[c], H2, "FD");
-      if (subL[c]) {
-        doc.setTextColor(...AZUL);
-        doc.setFontSize(4);
-        doc.setFont("helvetica","bold");
-        doc.text(subL[c], sx + cw[c]/2, Y0 + H1 + H2/2 + 1.2, { align:"center" });
-      }
-      sx += cw[c];
-    }
-
-    // DADOS
-    for (let row = 0; row < 12; row++) {
-      const num = b * 12 + row + 1;
-      const al = mapa.get(num);
-      const y = Y0 + H1 + H2 + row * RH;
-      const bg = row % 2 === 0 ? BRANCO : CINZA;
-
-      let dx = bx;
-      for (let c = 0; c < cw.length; c++) {
-        doc.setFillColor(...bg);
-        doc.setDrawColor(160,160,160);
-        doc.setLineWidth(0.1);
-        doc.rect(dx, y, cw[c], RH, "FD");
-        dx += cw[c];
-      }
-
-      // Nº
-      doc.setTextColor(...AZUL);
-      doc.setFontSize(5.5);
-      doc.setFont("helvetica","bold");
-      doc.text(String(num).padStart(2,"0"), bx + cw[0]/2, y + RH/2 + 1.5, { align:"center" });
-
-      // Notas cols 2,4,7,9
-      for (const [ci, val] of [[2,al?.n1],[4,al?.n2],[7,al?.n3],[9,al?.n4]] as [number,any][]) {
-        const v = fmt(val);
-        if (!v) continue;
-        const nx = bx + cw.slice(0,ci).reduce((s,w)=>s+w,0);
-        doc.setTextColor(...AZUL);
-        doc.setFontSize(5.5);
-        doc.setFont("helvetica","bold");
-        doc.text(v, nx + cw[ci]/2, y + RH/2 + 1.5, { align:"center" });
-      }
-    }
-
-    // Borda bloco
-    doc.setDrawColor(...AZUL);
-    doc.setLineWidth(0.4);
-    doc.rect(bx, Y0, bw, H1 + H2 + 12 * RH, "S");
-  }
-
-  // Assinaturas
-  const assY = Y0 + H1 + H2 + 12 * RH + 8;
-  const assW = PW / 6;
-  for (let i = 0; i < 6; i++) {
-    const ax = ML + i * assW;
-    doc.setDrawColor(100,100,100);
-    doc.setLineWidth(0.2);
-    doc.line(ax+1, assY, ax+assW-1, assY);
-    doc.setFontSize(5.5);
-    doc.setTextColor(80,80,80);
-    doc.setFont("helvetica","normal");
-    doc.text("Assinatura do(a) Professor(a)", ax + assW/2, assY+3.5, { align:"center" });
-  }
-
-  doc.save(`Caderneta_${turma}_2026.pdf`);
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  window.open(URL.createObjectURL(blob), "_blank");
 }
 
 export function CadernetaOficial() {
@@ -187,7 +134,7 @@ export function CadernetaOficial() {
 
   const gerar = async () => {
     setGerando(true);
-    try { await gerarPDFCaderneta(turma); }
+    try { await gerarCaderneta(turma); }
     catch (e: any) { alert("Erro: " + e.message); }
     finally { setGerando(false); }
   };
@@ -198,7 +145,9 @@ export function CadernetaOficial() {
         <h2 className="text-2xl font-bold tracking-tight mb-1 text-primary-dark flex items-center gap-2">
           <BookOpen className="w-6 h-6" /> Caderneta Oficial
         </h2>
-        <p className="text-xs text-gray-500">Gera PDF A4 retrato — download direto</p>
+        <p className="text-xs text-gray-500">
+          Abre em nova aba — salve como PDF com Ctrl+P
+        </p>
       </div>
       <div className="p-4 space-y-5">
         <div>
@@ -213,6 +162,18 @@ export function CadernetaOficial() {
             ))}
           </div>
         </div>
+
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-sm space-y-1">
+          <p className="font-bold text-amber-800">📋 Como salvar em PDF</p>
+          <ol className="text-xs space-y-1 list-decimal list-inside text-amber-700">
+            <li>Clique em "Gerar Caderneta"</li>
+            <li>Uma nova aba abrirá com o diálogo de impressão</li>
+            <li>Em "Destino", selecione <strong>Salvar como PDF</strong></li>
+            <li>Em "Mais configurações", selecione <strong>Paisagem</strong></li>
+            <li>Clique em Salvar</li>
+          </ol>
+        </div>
+
         <div className="bg-white border border-gray-200 rounded-2xl p-4 flex items-center justify-between">
           <div>
             <p className="text-xs text-gray-500 font-semibold">TURMA SELECIONADA</p>
@@ -221,15 +182,13 @@ export function CadernetaOficial() {
           </div>
           <BookOpen className="w-10 h-10 text-gray-200" />
         </div>
+
         <button onClick={gerar} disabled={gerando}
           className="w-full py-4 rounded-2xl bg-primary hover:bg-primary-dark disabled:opacity-50 text-white font-bold text-base transition-colors flex items-center justify-center gap-2 shadow-sm">
           {gerando
-            ? <><Loader2 className="w-5 h-5 animate-spin" /> Gerando PDF...</>
-            : <><FileDown className="w-5 h-5" /> Baixar Caderneta PDF</>}
+            ? <><Loader2 className="w-5 h-5 animate-spin" /> Gerando...</>
+            : <><FileDown className="w-5 h-5" /> Gerar Caderneta</>}
         </button>
-        <p className="text-xs text-center text-gray-400">
-          O arquivo <strong>Caderneta_{turma}_2026.pdf</strong> será baixado automaticamente.
-        </p>
       </div>
     </div>
   );
