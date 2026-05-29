@@ -21,7 +21,7 @@ async function gerarPDFCaderneta(turma: string, professor = "Marco Antonio Pedro
   b3.forEach((a: any) => { const e = mapaAlunos.get(a.numero); if (e) e.n3 = a.nota_texto ?? a.nota; });
   b4.forEach((a: any) => { const e = mapaAlunos.get(a.numero); if (e) e.n4 = a.nota_texto ?? a.nota; });
 
-  const fmt = (n: any) => n == null ? "" : typeof n === "string" ? n : Number(n).toFixed(1);
+  const fmt = (n: any) => n == null ? "" : typeof n === "string" ? n : Number(n).toFixed(1).replace(".", ",");
   const serie = turma.replace(/([0-9]+)([A-Z]+)/, "$1º");
 
   const linhas = Array.from({ length: 48 }, (_, i) => {
@@ -32,13 +32,13 @@ async function gerarPDFCaderneta(turma: string, professor = "Marco Antonio Pedro
 
   // Estilos compactos para A4 retrato
   const s = {
-    hdr:  `border:1px solid #333;padding:1px 2px;font-size:6.5px;text-align:center;background:#1a2e6e;color:#fff;font-weight:bold;vertical-align:middle;`,
-    sub:  `border:1px solid #333;padding:1px 2px;font-size:6px;text-align:center;background:#d0d8ee;color:#1a2e6e;font-weight:bold;vertical-align:middle;`,
-    num:  `border:1px solid #333;padding:1px 2px;font-size:6.5px;text-align:center;font-weight:bold;background:#eef0f8;width:14px;`,
-    nome: `border:1px solid #333;padding:1px 3px;font-size:6px;overflow:hidden;white-space:nowrap;width:95px;max-width:95px;`,
-    falt: `border:1px solid #333;padding:1px;text-align:center;font-size:6px;width:16px;background:#f9f9f9;`,
-    nota: `border:1px solid #333;padding:1px;text-align:center;font-size:6.5px;font-weight:bold;width:18px;color:#1a2e6e;`,
-    rec:  `border:1px solid #333;padding:1px;text-align:center;font-size:6px;width:18px;background:#fff8f0;`,
+    hdr:  `border:1px solid #333;padding:1px 2px;font-size:8px;text-align:center;background:#1a2e6e;color:#fff;font-weight:bold;vertical-align:middle;`,
+    sub:  `border:1px solid #333;padding:1px 2px;font-size:7.5px;text-align:center;background:#d0d8ee;color:#1a2e6e;font-weight:bold;vertical-align:middle;`,
+    num:  `border:1px solid #333;padding:1px 2px;font-size:8px;text-align:center;font-weight:bold;background:#eef0f8;width:14px;`,
+    nome: `border:1px solid #333;padding:1px 3px;font-size:8px;overflow:hidden;white-space:nowrap;width:95px;max-width:95px;`,
+    falt: `border:1px solid #333;padding:1px;text-align:center;font-size:8px;width:16px;background:#f9f9f9;`,
+    nota: `border:1px solid #333;padding:1px;text-align:center;font-size:8px;font-weight:bold;width:18px;color:#1a2e6e;`,
+    rec:  `border:1px solid #333;padding:1px;text-align:center;font-size:8px;width:18px;background:#fff8f0;`,
   };
 
   const rows = linhas.map((l, i) => {
@@ -69,15 +69,15 @@ async function gerarPDFCaderneta(turma: string, professor = "Marco Antonio Pedro
 <style>
   @page { size: A4 portrait; margin: 8mm 6mm; }
   * { box-sizing: border-box; }
-  body { font-family: Arial, sans-serif; margin: 0; padding: 0; font-size: 7px; }
+  body { font-family: Arial, sans-serif; margin: 0; padding: 0; font-size: 8.5px; }
   table { border-collapse: collapse; width: 100%; table-layout: fixed; }
   .cabecalho { border: 1px solid #1a2e6e; margin-bottom: 4px; }
   .cab-titulo { background: #1a2e6e; color: #fff; font-size: 9px; font-weight: bold;
     padding: 3px 6px; text-align: center; }
   .cab-info { display: flex; border-top: 1px solid #1a2e6e; }
-  .cab-cell { flex: 1; padding: 2px 4px; border-right: 1px solid #ccc; font-size: 7px; }
+  .cab-cell { flex: 1; padding: 2px 4px; border-right: 1px solid #ccc; font-size: 8.5px; }
   .cab-cell:last-child { border-right: none; }
-  .cab-label { font-weight: bold; color: #555; font-size: 6px; display: block; }
+  .cab-label { font-weight: bold; color: #555; font-size: 7.5px; display: block; }
   .assinaturas { display: flex; gap: 6px; margin-top: 6px; }
   .ass { flex: 1; border-top: 1px solid #333; padding-top: 2px;
     font-size: 6.5px; text-align: center; color: #444; }
