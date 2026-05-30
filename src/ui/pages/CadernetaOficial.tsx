@@ -117,10 +117,10 @@ async function gerarCadernetaExcel(turma: string) {
       i === 0 || !preposicoes.has(p) ? p.charAt(0).toUpperCase() + p.slice(1) : p
     ).join(" ");
 
-    set(1, String(num).padStart(2, "0"), nFont, "FFE8EDF8");
+    set(1, String(num).padStart(2, "0"), { bold: true, size: 8, name: "Arial", color: { argb: "FF000000" } }, "FFE8EDF8");
     const nomeCell = ws.getCell(rn, 2);
     nomeCell.value = nomeFormatado;
-    nomeCell.font = { size: 8, name: "Arial", color: { argb: "FF1A2E6E" } };
+    nomeCell.font = { size: 8, name: "Arial", color: { argb: "FF000000" } };
     nomeCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg } };
     nomeCell.alignment = { horizontal: "left", vertical: "middle" };
     nomeCell.border = bordaFina();
