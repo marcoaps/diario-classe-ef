@@ -49,14 +49,14 @@ async function gerarCadernetaExcel(turma: string) {
   const borda     = (c = "FF1A2E6E") => ({ top: bd(c), bottom: bd(c), left: bd(c), right: bd(c) });
   const bordaFina = () => ({ top: bd("FFCCCCcc"), bottom: bd("FFCCCCcc"), left: bd("FFCCCCcc"), right: bd("FFCCCCcc") });
 
-  const hFont = { bold: true, size: 8, color: { argb: BR }, name: "Arial" };
+  const hFont = { bold: true, size: 10, color: { argb: BR }, name: "Arial" };
   const sFont = { bold: true, size: 7, color: { argb: AZ }, name: "Arial" };
-  const nFont = { bold: true, size: 8, color: { argb: AZ }, name: "Arial" };
+  const nFont = { bold: true, size: 11, color: { argb: AZ }, name: "Arial" };
   const centro = { horizontal: "center" as const, vertical: "middle" as const };
 
   // Estrutura: Nº | 1ºBim | 2ºBim | Rec1S | 3ºBim | 4ºBim | Rec2S | RecFin | RecEsp
   // 9 colunas × larguras calibradas para A4 retrato
-  const widths = [3.5, 28, 7, 7, 5, 7, 7, 5, 5, 5]; // Nº + Nome + bimestres
+  const widths = [4.5, 38, 9, 9, 7, 9, 9, 7, 7, 7]; // Nº + Nome + bimestres
   widths.forEach((w, i) => ws.getColumn(i + 1).width = w);
 
   const TOTAL = widths.length; // 10
@@ -65,9 +65,9 @@ async function gerarCadernetaExcel(turma: string) {
   ws.mergeCells(1, 1, 1, TOTAL);
   const info = ws.getCell(1, 1);
   info.value = `Disciplina: Educação Física — Ano Letivo de 2026   |   ETAPA/SÉRIE: ${serie}   TURMA: ${letra}   TURNO: Manhã`;
-  info.font = { bold: true, size: 9, name: "Arial", color: { argb: AZ } };
+  info.font = { bold: true, size: 11, name: "Arial", color: { argb: AZ } };
   info.alignment = { horizontal: "center", vertical: "middle" };
-  ws.getRow(1).height = 15;
+  ws.getRow(1).height = 20;
 
   // ── Linha 2: cabeçalho linha 1 (bimestres mesclados) ──
   const hdr = (c1: number, c2: number, label: string, small = false) => {
@@ -91,7 +91,7 @@ async function gerarCadernetaExcel(turma: string) {
   hdr(9, 9, "Rec.\nFinal", true);
   hdr(10, 10, "Rec.\nEsp.", true);
 
-  ws.getRow(2).height = 22;
+  ws.getRow(2).height = 28;
 
   // ── Linhas 3-50: dados (48 alunos) ──
   for (let i = 0; i < 48; i++) {
@@ -99,7 +99,7 @@ async function gerarCadernetaExcel(turma: string) {
     const num = i + 1;
     const al  = mapa.get(num);
     const bg  = i % 2 === 0 ? BR : CZ;
-    ws.getRow(rn).height = 11;
+    ws.getRow(rn).height = 16;
 
     const set = (col: number, val: any, font: any, fill: string) => {
       const cell = ws.getCell(rn, col);
@@ -117,21 +117,21 @@ async function gerarCadernetaExcel(turma: string) {
       i === 0 || !preposicoes.has(p) ? p.charAt(0).toUpperCase() + p.slice(1) : p
     ).join(" ");
 
-    set(1, String(num).padStart(2, "0"), { bold: true, size: 8, name: "Arial", color: { argb: "FF000000" } }, "FFE8EDF8");
+    set(1, String(num).padStart(2, "0"), { bold: true, size: 11, name: "Arial", color: { argb: "FF000000" } }, "FFE8EDF8");
     const nomeCell = ws.getCell(rn, 2);
     nomeCell.value = nomeFormatado;
-    nomeCell.font = { size: 8, name: "Arial", color: { argb: "FF000000" } };
+    nomeCell.font = { size: 11, name: "Arial", color: { argb: "FF000000" } };
     nomeCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg } };
     nomeCell.alignment = { horizontal: "left", vertical: "middle" };
     nomeCell.border = bordaFina();
     set(3, fmt(al?.n1), nFont, bg);
     set(4, fmt(al?.n2), nFont, bg);
-    set(5, "",          { size: 8, name: "Arial" }, AM);
+    set(5, "",          { size: 11, name: "Arial" }, AM);
     set(6, fmt(al?.n3), nFont, bg);
     set(7, fmt(al?.n4), nFont, bg);
-    set(8, "",          { size: 8, name: "Arial" }, AM);
-    set(9, "",          { size: 8, name: "Arial" }, AM);
-    set(10, "",         { size: 8, name: "Arial" }, AM);
+    set(8, "",          { size: 11, name: "Arial" }, AM);
+    set(9, "",          { size: 11, name: "Arial" }, AM);
+    set(10, "",         { size: 11, name: "Arial" }, AM);
   }
 
 
