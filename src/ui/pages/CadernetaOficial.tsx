@@ -112,7 +112,10 @@ async function gerarCadernetaExcel(turma: string) {
 
     // busca nome do aluno
     const nomeAluno = [...b1,...b2,...b3,...b4].find((a: any) => a.numero === num)?.nome ?? "";
-    const nomeFormatado = nomeAluno.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase());
+    const preposicoes = new Set(["de","da","do","dos","das","e","a","o"]);
+    const nomeFormatado = nomeAluno.toLowerCase().split(" ").map((p: string, i: number) =>
+      i === 0 || !preposicoes.has(p) ? p.charAt(0).toUpperCase() + p.slice(1) : p
+    ).join(" ");
 
     set(1, String(num).padStart(2, "0"), nFont, "FFE8EDF8");
     const nomeCell = ws.getCell(rn, 2);
