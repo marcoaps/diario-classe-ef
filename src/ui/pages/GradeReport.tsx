@@ -319,13 +319,13 @@ export function GradeReport() {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11);
       doc.text('RELACAO DE NOTAS E CONCEITOS', pW / 2, y + 29, { align: 'center' });
-      y += 35;
+      y += 30;
 
       // Borda ao redor do cabecalho institucional
       doc.setDrawColor(borda);
       doc.rect(mL, mT - 2, usableW, y - mT + 2, 'S');
 
-      y += 4;
+      y += 2;
 
       // Info turma
       doc.setFillColor(cinza);
@@ -340,7 +340,7 @@ export function GradeReport() {
       doc.text('Turno:  TARDE', mL + 4, y + 12);
       doc.text(`Turma:  ${turma.replace(/(\d+)([A-Z])/, '$1o $2')}`, mL + usableW * 0.55, y + 12);
       doc.text('Disciplina:  EDUCACAO FISICA', mL + 4, y + 18);
-      y += 22;
+      y += 16;
 
       // Header bimestre
       doc.setFillColor(azulHeader);
@@ -350,7 +350,7 @@ export function GradeReport() {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(9);
       doc.setTextColor(azulEscuro);
-      doc.text(`Divisao do periodo letivo:  ${bimestre}o BIMESTRE`, pW / 2, y + 5.5, { align: 'center' });
+      doc.text(`Divisao do periodo letivo:  ${bimestre}o BIMESTRE`, pW / 2, y + 4.2, { align: 'center' });
       y += 8;
 
       // Colunas da tabela
@@ -360,7 +360,7 @@ export function GradeReport() {
       const colFaltas = 14;
       const colNota = 16;
       const colNome = usableW - colNum - colNota - colFaltas - colSituacao - colData;
-      const altRow = 8;
+      const altRow = 6;
 
       // Header da tabela
       doc.setFillColor('#D1D5DB');
@@ -378,12 +378,12 @@ export function GradeReport() {
       doc.setFontSize(8);
       doc.setTextColor(azulEscuro);
       xc = mL;
-      doc.text('Num.', xc + colNum / 2, y + 5.5, { align: 'center' }); xc += colNum;
-      doc.text('Nome do aluno', xc + 4, y + 5.5); xc += colNome;
-      doc.text('Nota', xc + colNota / 2, y + 5.5, { align: 'center' }); xc += colNota;
-      doc.text('Faltas', xc + colFaltas / 2, y + 5.5, { align: 'center' }); xc += colFaltas;
-      doc.text('Situacao do Aluno', xc + 4, y + 5.5); xc += colSituacao;
-      doc.text('Data Situacao', xc + 4, y + 5.5);
+      doc.text('Num.', xc + colNum / 2, y + 4.2, { align: 'center' }); xc += colNum;
+      doc.text('Nome do aluno', xc + 4, y + 4.2); xc += colNome;
+      doc.text('Nota', xc + colNota / 2, y + 4.2, { align: 'center' }); xc += colNota;
+      doc.text('Faltas', xc + colFaltas / 2, y + 4.2, { align: 'center' }); xc += colFaltas;
+      doc.text('Situacao do Aluno', xc + 4, y + 4.2); xc += colSituacao;
+      doc.text('Data Situacao', xc + 4, y + 4.2);
       y += altRow;
 
       // Linhas dos alunos
@@ -412,30 +412,30 @@ export function GradeReport() {
 
         xc = mL;
         // Num
-        doc.text(String(aluno.num || ''), xc + colNum / 2, y + 5.5, { align: 'center' });
+        doc.text(String(aluno.num || ''), xc + colNum / 2, y + 4.2, { align: 'center' });
         xc += colNum;
 
         // Nome
         const nomeDisplay = aluno.nome?.length > 32
           ? aluno.nome.substring(0, 32) + '.'
           : aluno.nome || '';
-        doc.text(nomeDisplay.toUpperCase(), xc + 2, y + 5.5);
+        doc.text(nomeDisplay.toUpperCase(), xc + 2, y + 4.2);
         xc += colNome;
 
         // Nota
         if (transferido) {
           doc.setTextColor('#DC2626');
           doc.setFont('helvetica', 'bold');
-          doc.text('Transf.', xc + colNota / 2, y + 5.5, { align: 'center' });
+          doc.text('Transf.', xc + colNota / 2, y + 4.2, { align: 'center' });
           doc.setTextColor(azulEscuro);
           doc.setFont('helvetica', 'normal');
         } else {
-          doc.text(fmtNota(aluno.nota), xc + colNota / 2, y + 5.5, { align: 'center' });
+          doc.text(fmtNota(aluno.nota), xc + colNota / 2, y + 4.2, { align: 'center' });
         }
         xc += colNota;
 
         // Faltas
-        doc.text(transferido ? '-' : String(aluno.faltas ?? 0), xc + colFaltas / 2, y + 5.5, { align: 'center' });
+        doc.text(transferido ? '-' : String(aluno.faltas ?? 0), xc + colFaltas / 2, y + 4.2, { align: 'center' });
         xc += colFaltas;
 
         // Situacao
@@ -443,7 +443,7 @@ export function GradeReport() {
           doc.setTextColor('#DC2626');
           doc.setFont('helvetica', 'bold');
         }
-        doc.text(aluno.situacao || 'Em Curso', xc + 2, y + 5.5);
+        doc.text(aluno.situacao || 'Em Curso', xc + 2, y + 4.2);
         doc.setTextColor(azulEscuro);
         doc.setFont('helvetica', 'normal');
         xc += colSituacao;
@@ -452,7 +452,7 @@ export function GradeReport() {
         if (transferido && aluno.data_situacao) {
           doc.setTextColor('#DC2626');
         }
-        doc.text(aluno.data_situacao || '', xc + 2, y + 5.5);
+        doc.text(aluno.data_situacao || '', xc + 2, y + 4.2);
         doc.setTextColor(azulEscuro);
 
         y += altRow;
