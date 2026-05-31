@@ -362,104 +362,99 @@ export function GradeReport() {
       const colNome = usableW - colNum - colNota - colFaltas - colSituacao - colData;
       const altRow = 7;
 
+      const pos = { y };
+
       const desenharHeader = () => {
         doc.setFillColor('#D1D5DB');
-        doc.rect(mL, y, usableW, altRow, 'F');
+        doc.rect(mL, pos.y, usableW, altRow, 'F');
         doc.setDrawColor(borda);
         let xh = mL;
         [colNum, colNome, colNota, colFaltas, colSituacao, colData].forEach(w => {
-          doc.rect(xh, y, w, altRow, 'S');
+          doc.rect(xh, pos.y, w, altRow, 'S');
           xh += w;
         });
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(8);
         doc.setTextColor(azulEscuro);
         xh = mL;
-        doc.text('Num.', xh + colNum / 2, y + 4.8, { align: 'center' }); xh += colNum;
-        doc.text('Nome do aluno', xh + 4, y + 4.8); xh += colNome;
-        doc.text('Nota', xh + colNota / 2, y + 4.8, { align: 'center' }); xh += colNota;
-        doc.text('Faltas', xh + colFaltas / 2, y + 4.8, { align: 'center' }); xh += colFaltas;
-        doc.text('Situacao do Aluno', xh + 4, y + 4.8); xh += colSituacao;
-        doc.text('Data Situacao', xh + 4, y + 4.8);
-        y += altRow;
+        doc.text('Num.', xh + colNum / 2, pos.y + 4.8, { align: 'center' }); xh += colNum;
+        doc.text('Nome do aluno', xh + 4, pos.y + 4.8); xh += colNome;
+        doc.text('Nota', xh + colNota / 2, pos.y + 4.8, { align: 'center' }); xh += colNota;
+        doc.text('Faltas', xh + colFaltas / 2, pos.y + 4.8, { align: 'center' }); xh += colFaltas;
+        doc.text('Situacao do Aluno', xh + 4, pos.y + 4.8); xh += colSituacao;
+        doc.text('Data Situacao', xh + 4, pos.y + 4.8);
+        pos.y += altRow;
       };
 
       desenharHeader();
 
       // Linhas dos alunos
       alunos.forEach((aluno, idx) => {
-        if (y + altRow > 282) {
+        if (pos.y + altRow > 282) {
           doc.addPage();
-          y = mT;
+          pos.y = mT;
           desenharHeader();
         }
 
         const bg = idx % 2 === 0 ? '#FFFFFF' : '#F9FAFB';
         doc.setFillColor(bg);
-        doc.rect(mL, y, usableW, altRow, 'F');
+        doc.rect(mL, pos.y, usableW, altRow, 'F');
         doc.setDrawColor(borda);
 
-        xc = mL;
+        let xc = mL;
         [colNum, colNome, colNota, colFaltas, colSituacao, colData].forEach(w => {
-          doc.rect(xc, y, w, altRow, 'S');
+          doc.rect(xc, pos.y, w, altRow, 'S');
           xc += w;
         });
 
         const transferido = aluno.situacao?.toLowerCase().includes('transferi');
-
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(8);
         doc.setTextColor(azulEscuro);
 
         xc = mL;
-        // Num
-        doc.text(String(aluno.num || ''), xc + colNum / 2, y + 4.8, { align: 'center' });
+        doc.text(String(aluno.num || ''), xc + colNum / 2, pos.y + 4.8, { align: 'center' });
         xc += colNum;
 
-        // Nome
         const nomeDisplay = aluno.nome?.length > 32
           ? aluno.nome.substring(0, 32) + '.'
           : aluno.nome || '';
-        doc.text(nomeDisplay.toUpperCase(), xc + 2, y + 4.2);
+        doc.text(nomeDisplay.toUpperCase(), xc + 2, pos.y + 4.8);
         xc += colNome;
 
-        // Nota
         if (transferido) {
           doc.setTextColor('#DC2626');
           doc.setFont('helvetica', 'bold');
-          doc.text('Transf.', xc + colNota / 2, y + 4.8, { align: 'center' });
+          doc.text('Transf.', xc + colNota / 2, pos.y + 4.8, { align: 'center' });
           doc.setTextColor(azulEscuro);
           doc.setFont('helvetica', 'normal');
         } else {
-          doc.text(fmtNota(aluno.nota), xc + colNota / 2, y + 4.8, { align: 'center' });
+          doc.text(fmtNota(aluno.nota), xc + colNota / 2, pos.y + 4.8, { align: 'center' });
         }
         xc += colNota;
 
-        // Faltas
-        doc.text(transferido ? '-' : String(aluno.faltas ?? 0), xc + colFaltas / 2, y + 4.8, { align: 'center' });
+        doc.text(transferido ? '-' : String(aluno.faltas ?? 0), xc + colFaltas / 2, pos.y + 4.8, { align: 'center' });
         xc += colFaltas;
 
-        // Situacao
         if (transferido) {
           doc.setTextColor('#DC2626');
           doc.setFont('helvetica', 'bold');
         }
-        doc.text(aluno.situacao || 'Em Curso', xc + 2, y + 4.2);
+        doc.text(aluno.situacao || 'Em Curso', xc + 2, pos.y + 4.8);
         doc.setTextColor(azulEscuro);
         doc.setFont('helvetica', 'normal');
         xc += colSituacao;
 
-        // Data situacao
         if (transferido && aluno.data_situacao) {
           doc.setTextColor('#DC2626');
         }
-        doc.text(aluno.data_situacao || '', xc + 2, y + 4.2);
+        doc.text(aluno.data_situacao || '', xc + 2, pos.y + 4.8);
         doc.setTextColor(azulEscuro);
 
-        y += altRow;
+        pos.y += altRow;
       });
 
-      const nomeTurma = turma.replace(/([0-9]+)([A-Z])/, '$1o-$2');
+      const nomeTurma = turma.replace(/([0-9]+)([A-Z])/, '$1o-$2'); // eslint-disable-line
       doc.save('Notas-' + bimestre + 'oBimestre-' + nomeTurma + '.pdf');
     } catch (err) {
       alert('Erro ao gerar PDF.');
