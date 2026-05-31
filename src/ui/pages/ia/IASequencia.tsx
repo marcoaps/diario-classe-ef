@@ -37,7 +37,7 @@ interface Sequencia {
 }
 
 // ─── Componente ──────────────────────────────────────────────────────────────
-export default function IASequencia() {
+export function IASequencia() {
   const [form, setForm] = useState<FormData>({
     turma: '',
     bimestre: '',
