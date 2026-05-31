@@ -13,6 +13,7 @@ interface ExportContext {
   resumo: ResumoFrequencia;
   professor?: string;
   escola?: string;
+  transferidos?: Set<string>; // ids dos transferidos
 }
 
 function formatarDataBR(iso: string) {
@@ -20,9 +21,10 @@ function formatarDataBR(iso: string) {
   return `${d}/${m}/${y}`;
 }
 
-function situacao(a: AlunoFrequencia) {
+function situacao(a: AlunoFrequencia, transferidos?: Set<string>) {
+  if (transferidos?.has(a.id)) return 'Transf.';
   if (a.registros_total === 0) return 'Sem dados';
-  if (a.critico) return 'Crítico';
+  if (a.critico) return 'Critico';
   if (a.em_risco) return 'Em risco';
   return 'OK';
 }
@@ -30,22 +32,22 @@ function situacao(a: AlunoFrequencia) {
 function getLabelPeriodo(ctx: ExportContext): string {
   if (ctx.dataFiltro) return `Data: ${formatarDataBR(ctx.dataFiltro)}`;
   const pe = ctx.periodoEfetivo || ctx.periodo;
-  return `Período: ${formatarDataBR(pe.inicio)} a ${formatarDataBR(pe.fim)}`;
+  return `Periodo: ${formatarDataBR(pe.inicio)} a ${formatarDataBR(pe.fim)}`;
 }
 
 export function exportarExcel(ctx: ExportContext) {
   const wb = XLSX.utils.book_new();
 
   const cabecalho = [
-    [`Relatório de Frequência — ${ctx.escola || 'E.E. Instituto Odilon Pratagi'}`],
+    [`Relatorio de Frequencia - ${ctx.escola || 'E.E. Instituto Odilon Pratagi'}`],
     [
       `Turma: ${ctx.turma}`,
-      `Bimestre: ${ctx.bimestre}º`,
+      `Bimestre: ${ctx.bimestre}o`,
       getLabelPeriodo(ctx),
     ],
     [],
     ['Resumo'],
-    ['Alunos', 'Média %', 'Média Pontos', 'OK', 'Em risco', 'Críticos'],
+    ['Alunos', 'Media %', 'Media Pontos', 'OK', 'Em risco', 'Criticos'],
     [
       ctx.resumo.total_alunos,
       ctx.resumo.media_percentual,
@@ -55,32 +57,28 @@ export function exportarExcel(ctx: ExportContext) {
       ctx.resumo.total_criticos,
     ],
     [],
-    ['Nº', 'Nome', 'Aulas', 'Presenças', 'Faltas', 'Pontos', 'Frequência %', 'Situação'],
+    ['No', 'Nome', 'Aulas', 'Presencas', 'Faltas', 'Pontos', 'Frequencia %', 'Situacao'],
   ];
 
   const linhas = ctx.alunos.map((a) => [
     a.numero_chamada ?? '',
     a.nome,
-    a.registros_total,
-    a.presentes,
-    a.ausentes,
-    a.pontos,
-    a.percentual,
-    situacao(a),
+    ctx.transferidos?.has(a.id) ? '-' : a.registros_total,
+    ctx.transferidos?.has(a.id) ? '-' : a.presentes,
+    ctx.transferidos?.has(a.id) ? '-' : a.ausentes,
+    ctx.transferidos?.has(a.id) ? '-' : a.pontos,
+    ctx.transferidos?.has(a.id) ? '-' : a.percentual,
+    situacao(a, ctx.transferidos),
   ]);
 
   const ws = XLSX.utils.aoa_to_sheet([...cabecalho, ...linhas]);
-
   ws['!cols'] = [
     { wch: 5 }, { wch: 38 }, { wch: 8 }, { wch: 11 },
     { wch: 8 }, { wch: 9 }, { wch: 13 }, { wch: 12 },
   ];
-
   ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
 
-  const sufixo = ctx.dataFiltro
-    ? `_${ctx.dataFiltro}`
-    : `_bim${ctx.bimestre}`;
+  const sufixo = ctx.dataFiltro ? `_${ctx.dataFiltro}` : `_bim${ctx.bimestre}`;
   const nome = `frequencia_${ctx.turma.replace(/\s/g, '')}${sufixo}.xlsx`;
   XLSX.utils.book_append_sheet(wb, ws, ctx.dataFiltro ? 'Dia' : `Bimestre ${ctx.bimestre}`);
   XLSX.writeFile(wb, nome);
@@ -100,38 +98,41 @@ export function exportarPDF(ctx: ExportContext) {
   doc.text(ctx.escola || 'E.E. Instituto Odilon Pratagi', margin, 9);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'normal');
-  doc.text('Diário Oficial — Relatório de Frequência', margin, 16);
+  doc.text('Diario Oficial - Relatorio de Frequencia', margin, 16);
 
   doc.setTextColor(20, 20, 20);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   let y = 30;
   doc.text(`Turma: ${ctx.turma}`, margin, y);
-  doc.text(`Bimestre: ${ctx.bimestre}º`, margin + 70, y);
+  doc.text(`Bimestre: ${ctx.bimestre}o`, margin + 70, y);
   doc.text(getLabelPeriodo(ctx), margin + 110, y);
   y += 7;
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.text(
-    `Alunos: ${ctx.resumo.total_alunos}   Média: ${ctx.resumo.media_percentual}%   Pontos médios: ${ctx.resumo.media_pontos}   OK: ${ctx.resumo.total_ok}   Em risco: ${ctx.resumo.total_em_risco}   Críticos: ${ctx.resumo.total_criticos}`,
+    `Alunos: ${ctx.resumo.total_alunos}   Media: ${ctx.resumo.media_percentual}%   Pontos medios: ${ctx.resumo.media_pontos}   OK: ${ctx.resumo.total_ok}   Em risco: ${ctx.resumo.total_em_risco}   Criticos: ${ctx.resumo.total_criticos}`,
     margin, y,
   );
   y += 5;
 
   autoTable(doc, {
     startY: y,
-    head: [['Nº', 'Nome', 'Aulas', 'Pres.', 'Faltas', 'Pontos', 'Freq.%', 'Situação']],
-    body: ctx.alunos.map((a) => [
-      a.numero_chamada ?? '-',
-      a.nome,
-      a.registros_total,
-      a.presentes,
-      a.ausentes,
-      a.pontos.toFixed(1).replace('.', ','),
-      `${a.percentual.toFixed(1).replace('.', ',')}%`,
-      situacao(a),
-    ]),
+    head: [['No', 'Nome', 'Aulas', 'Pres.', 'Faltas', 'Pontos', 'Freq.%', 'Situacao']],
+    body: ctx.alunos.map((a) => {
+      const isTransf = ctx.transferidos?.has(a.id);
+      return [
+        a.numero_chamada ?? '-',
+        a.nome,
+        isTransf ? '-' : a.registros_total,
+        isTransf ? '-' : a.presentes,
+        isTransf ? '-' : a.ausentes,
+        isTransf ? '-' : a.pontos.toFixed(1).replace('.', ','),
+        isTransf ? '-' : `${a.percentual.toFixed(1).replace('.', ',')}%`,
+        situacao(a, ctx.transferidos),
+      ];
+    }),
     theme: 'grid',
     styles: { fontSize: 8, cellPadding: 1.8, lineColor: [180, 180, 180] },
     headStyles: { fillColor: [15, 50, 100], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
@@ -149,7 +150,12 @@ export function exportarPDF(ctx: ExportContext) {
       if (data.section !== 'body') return;
       const aluno = ctx.alunos[data.row.index];
       if (!aluno) return;
-      if (aluno.critico) {
+      const isTransf = ctx.transferidos?.has(aluno.id);
+      if (isTransf) {
+        data.cell.styles.fillColor = [243, 244, 246];
+        data.cell.styles.textColor = [107, 114, 128];
+        data.cell.styles.fontStyle = data.column.index === 7 ? 'bold' : 'normal';
+      } else if (aluno.critico) {
         data.cell.styles.fillColor = [254, 226, 226];
         data.cell.styles.textColor = [153, 27, 27];
       } else if (aluno.em_risco) {
@@ -173,13 +179,13 @@ export function exportarPDF(ctx: ExportContext) {
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(60, 60, 60);
-  doc.text(ctx.professor || 'Professor(a) responsável', pageWidth / 2, assinaturaY + 5, { align: 'center' });
+  doc.text(ctx.professor || 'Professor(a) responsavel', pageWidth / 2, assinaturaY + 5, { align: 'center' });
 
   const dataEmissao = new Date().toLocaleDateString('pt-BR');
   doc.setFontSize(8);
   doc.setTextColor(120, 120, 120);
   doc.text(`Emitido em ${dataEmissao}`, margin, pageHeight - 10);
-  doc.text(`Página 1 de ${doc.getNumberOfPages()}`, pageWidth - margin, pageHeight - 10, { align: 'right' });
+  doc.text(`Pagina 1 de ${doc.getNumberOfPages()}`, pageWidth - margin, pageHeight - 10, { align: 'right' });
 
   const sufixo = ctx.dataFiltro ? `_${ctx.dataFiltro}` : `_bim${ctx.bimestre}`;
   doc.save(`frequencia_${ctx.turma.replace(/\s/g, '')}${sufixo}.pdf`);

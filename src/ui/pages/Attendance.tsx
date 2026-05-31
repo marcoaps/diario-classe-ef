@@ -28,6 +28,7 @@ export function Attendance() {
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [alunos, setAlunos] = useState<AlunoSupabase[]>([]);
   const [records, setRecords] = useState<Record<string, boolean>>({});
+  const [transferidos, setTransferidos] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -41,6 +42,7 @@ export function Attendance() {
 
     const carregar = async () => {
       try {
+        // Busca alunos
         const { data, error } = await supabase
           .from('alunos')
           .select('id, nome, turma_id, numero_chamada')
@@ -53,6 +55,30 @@ export function Attendance() {
         const lista = (data || []) as AlunoSupabase[];
         setAlunos(lista);
 
+        // Busca transferidos da tabela notas (qualquer bimestre)
+        const nomes = lista.map(a => a.nome.toUpperCase());
+        if (nomes.length > 0) {
+          const { data: notasData } = await supabase
+            .from('notas')
+            .select('nome, situacao')
+            .eq('turma', turmaNorm)
+            .ilike('situacao', '%transferi%');
+
+          const nomesTransf = new Set<string>(
+            (notasData || []).map((n: any) => n.nome?.toUpperCase())
+          );
+
+          // Mapeia id do aluno para transferido
+          const idsTransf = new Set<string>();
+          lista.forEach(a => {
+            if (nomesTransf.has(a.nome.toUpperCase())) {
+              idsTransf.add(a.id);
+            }
+          });
+          if (mounted) setTransferidos(idsTransf);
+        }
+
+        // Busca frequencia existente
         const novosRecords: Record<string, boolean> = {};
         lista.forEach(a => { novosRecords[a.id] = false; });
 
@@ -87,6 +113,7 @@ export function Attendance() {
   }
 
   const handleToggle = (alunoId: string) => {
+    if (transferidos.has(alunoId)) return;
     setRecords(prev => ({ ...prev, [alunoId]: !prev[alunoId] }));
   };
 
@@ -103,11 +130,14 @@ export function Attendance() {
         .eq('data', date);
       if (errDel) throw errDel;
 
-      const recordsToSave = alunos.map(a => ({
-        aluno_id: a.id,
-        data: date,
-        presente: records[a.id] ?? false,
-      }));
+      // Nao salva frequencia de transferidos
+      const recordsToSave = alunos
+        .filter(a => !transferidos.has(a.id))
+        .map(a => ({
+          aluno_id: a.id,
+          data: date,
+          presente: records[a.id] ?? false,
+        }));
 
       const { error: insError } = await supabase.from('frequencia').insert(recordsToSave);
       if (insError) throw insError;
@@ -172,7 +202,26 @@ export function Attendance() {
               </div>
             ) : (
               alunos.map(aluno => {
+                const isTransf = transferidos.has(aluno.id);
                 const isPresent = records[aluno.id] === true;
+
+                if (isTransf) {
+                  return (
+                    <div
+                      key={aluno.id}
+                      className="p-3 rounded-xl border border-gray-200 flex items-center justify-between opacity-40 bg-gray-50"
+                    >
+                      <span className="font-semibold text-base text-gray-400 line-through">
+                        {aluno.numero_chamada ? <span className="font-mono mr-2 text-sm">{aluno.numero_chamada}</span> : null}
+                        {aluno.nome}
+                      </span>
+                      <div className="w-10 h-10 rounded-lg flex justify-center items-center font-bold text-xs bg-gray-300 text-gray-600 border border-gray-400">
+                        Transf.
+                      </div>
+                    </div>
+                  );
+                }
+
                 return (
                   <button
                     key={aluno.id}
