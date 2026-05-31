@@ -458,3 +458,4 @@ function renderInline(text: string): React.ReactNode {
   if (last < text.length) parts.push(text.slice(last));
   return parts.length === 1 ? parts[0] : <>{parts}</>;
 }
+
