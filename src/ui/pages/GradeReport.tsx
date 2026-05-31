@@ -458,13 +458,8 @@ export function GradeReport() {
         y += altRow;
       });
 
-      // Borda externa da tabela
-      doc.setDrawColor('#6B7280');
-      const tabelaY = y - altRow * (alunos.length + 1) - altRow;
-      doc.rect(mL, tabelaY + altRow * (alunos.length + 1) - altRow * alunos.length - altRow, usableW, altRow * (alunos.length + 1), 'S');
-
-      const nomeTurma = turma.replace(/(\d+)([A-Z])/, '$1o-$2');
-      doc.save(`Notas-${bimestre}oBimestre-${nomeTurma}.pdf`);
+      const nomeTurma = turma.replace(/([0-9]+)([A-Z])/, '$1o-$2');
+      doc.save('Notas-' + bimestre + 'oBimestre-' + nomeTurma + '.pdf');
     } catch (err) {
       alert('Erro ao gerar PDF.');
       console.error(err);
