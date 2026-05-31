@@ -350,7 +350,7 @@ export function GradeReport() {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(9);
       doc.setTextColor(azulEscuro);
-      doc.text(`Divisao do periodo letivo:  ${bimestre}o BIMESTRE`, pW / 2, y + 4.2, { align: 'center' });
+      doc.text(`Divisao do periodo letivo:  ${bimestre}o BIMESTRE`, pW / 2, y + 4.8, { align: 'center' });
       y += 8;
 
       // Colunas da tabela
@@ -360,37 +360,38 @@ export function GradeReport() {
       const colFaltas = 14;
       const colNota = 16;
       const colNome = usableW - colNum - colNota - colFaltas - colSituacao - colData;
-      const altRow = 6;
+      const altRow = 7;
 
-      // Header da tabela
-      doc.setFillColor('#D1D5DB');
-      doc.rect(mL, y, usableW, altRow, 'F');
-      doc.setDrawColor(borda);
+      const desenharHeader = () => {
+        doc.setFillColor('#D1D5DB');
+        doc.rect(mL, y, usableW, altRow, 'F');
+        doc.setDrawColor(borda);
+        let xh = mL;
+        [colNum, colNome, colNota, colFaltas, colSituacao, colData].forEach(w => {
+          doc.rect(xh, y, w, altRow, 'S');
+          xh += w;
+        });
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(azulEscuro);
+        xh = mL;
+        doc.text('Num.', xh + colNum / 2, y + 4.8, { align: 'center' }); xh += colNum;
+        doc.text('Nome do aluno', xh + 4, y + 4.8); xh += colNome;
+        doc.text('Nota', xh + colNota / 2, y + 4.8, { align: 'center' }); xh += colNota;
+        doc.text('Faltas', xh + colFaltas / 2, y + 4.8, { align: 'center' }); xh += colFaltas;
+        doc.text('Situacao do Aluno', xh + 4, y + 4.8); xh += colSituacao;
+        doc.text('Data Situacao', xh + 4, y + 4.8);
+        y += altRow;
+      };
 
-      // Linhas verticais do header
-      let xc = mL;
-      [colNum, colNome, colNota, colFaltas, colSituacao, colData].forEach(w => {
-        doc.rect(xc, y, w, altRow, 'S');
-        xc += w;
-      });
-
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(8);
-      doc.setTextColor(azulEscuro);
-      xc = mL;
-      doc.text('Num.', xc + colNum / 2, y + 4.2, { align: 'center' }); xc += colNum;
-      doc.text('Nome do aluno', xc + 4, y + 4.2); xc += colNome;
-      doc.text('Nota', xc + colNota / 2, y + 4.2, { align: 'center' }); xc += colNota;
-      doc.text('Faltas', xc + colFaltas / 2, y + 4.2, { align: 'center' }); xc += colFaltas;
-      doc.text('Situacao do Aluno', xc + 4, y + 4.2); xc += colSituacao;
-      doc.text('Data Situacao', xc + 4, y + 4.2);
-      y += altRow;
+      desenharHeader();
 
       // Linhas dos alunos
       alunos.forEach((aluno, idx) => {
-        if (y + altRow > 280) {
+        if (y + altRow > 282) {
           doc.addPage();
           y = mT;
+          desenharHeader();
         }
 
         const bg = idx % 2 === 0 ? '#FFFFFF' : '#F9FAFB';
@@ -412,7 +413,7 @@ export function GradeReport() {
 
         xc = mL;
         // Num
-        doc.text(String(aluno.num || ''), xc + colNum / 2, y + 4.2, { align: 'center' });
+        doc.text(String(aluno.num || ''), xc + colNum / 2, y + 4.8, { align: 'center' });
         xc += colNum;
 
         // Nome
@@ -426,16 +427,16 @@ export function GradeReport() {
         if (transferido) {
           doc.setTextColor('#DC2626');
           doc.setFont('helvetica', 'bold');
-          doc.text('Transf.', xc + colNota / 2, y + 4.2, { align: 'center' });
+          doc.text('Transf.', xc + colNota / 2, y + 4.8, { align: 'center' });
           doc.setTextColor(azulEscuro);
           doc.setFont('helvetica', 'normal');
         } else {
-          doc.text(fmtNota(aluno.nota), xc + colNota / 2, y + 4.2, { align: 'center' });
+          doc.text(fmtNota(aluno.nota), xc + colNota / 2, y + 4.8, { align: 'center' });
         }
         xc += colNota;
 
         // Faltas
-        doc.text(transferido ? '-' : String(aluno.faltas ?? 0), xc + colFaltas / 2, y + 4.2, { align: 'center' });
+        doc.text(transferido ? '-' : String(aluno.faltas ?? 0), xc + colFaltas / 2, y + 4.8, { align: 'center' });
         xc += colFaltas;
 
         // Situacao
