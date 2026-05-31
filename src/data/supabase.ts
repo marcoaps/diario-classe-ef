@@ -35,7 +35,7 @@ export async function salvarChamada(
   });
 
   const { error: upsertError } = await supabase.from("frequencia").upsert(upsertData);
-  if (upsertError) throw upsertErrclsor;
+  if (upsertError) throw upsertError;
 }
 
 export async function buscarHistoricoFrequencia(turmaId?: string, dt?: string) {
@@ -51,7 +51,7 @@ export async function buscarHistoricoFrequencia(turmaId?: string, dt?: string) {
 
   let turmaNormalizada: string | null = null;
   if (turmaId && turmaId !== 'ALL') {
-    turmaNormalizada = turmaId.replace("º", "").replace(/\s/g, "").toUpperCase();
+    turmaNormalizada = turmaId.replace("o", "").replace(/\s/g, "").toUpperCase();
   }
 
   const alunosMap = new Map();
@@ -81,7 +81,7 @@ export async function buscarHistoricoFrequencia(turmaId?: string, dt?: string) {
 }
 
 export async function buscarAlunos(turmaId: string) {
-  const turmaNormalizada = turmaId.replace("º", "").replace(/\s/g, "").toUpperCase();
+  const turmaNormalizada = turmaId.replace("o", "").replace(/\s/g, "").toUpperCase();
   const { data, error } = await supabase
     .from("alunos").select("*").eq("turma_id", turmaNormalizada)
     .order("numero_chamada", { ascending: true, nullsFirst: false });
@@ -103,13 +103,16 @@ export async function buscarRelatorioFrequencia(turmaId?: string, dataInicio?: s
 
   let turmaNormalizada: string | null = null;
   if (turmaId && turmaId !== 'ALL') {
-    turmaNormalizada = turmaId.replace("º", "").replace(/\s/g, "").toUpperCase();
+    turmaNormalizada = turmaId.replace("o", "").replace(/\s/g, "").toUpperCase();
   }
 
   const alunosMap = new Map();
   dataAlunos?.forEach((aluno: any) => {
     if (!turmaNormalizada || aluno.turma_id === turmaNormalizada) {
-      alunosMap.set(aluno.id, { id: aluno.id, nome: aluno.nome, turma_id: aluno.turma_id, numero_chamada: aluno.numero_chamada, total: 0, presencas: 0, faltas: 0 });
+      alunosMap.set(aluno.id, {
+        id: aluno.id, nome: aluno.nome, turma_id: aluno.turma_id,
+        numero_chamada: aluno.numero_chamada, total: 0, presencas: 0, faltas: 0
+      });
     }
   });
 
@@ -127,7 +130,7 @@ export async function buscarRelatorioFrequencia(turmaId?: string, dataInicio?: s
     if (aluno.total > 0) {
       const p = (aluno.presencas / aluno.total) * 100;
       const frequencia = parseFloat(p.toFixed(2));
-      let status = frequencia >= 75 ? 'OK' : frequencia >= 50 ? 'Atenção' : 'Crítico';
+      const status = frequencia >= 75 ? 'OK' : frequencia >= 50 ? 'Atencao' : 'Critico';
       relatorio.push({ ...aluno, frequencia, status });
     }
   });
@@ -142,11 +145,19 @@ export async function buscarRelatorioFrequencia(turmaId?: string, dataInicio?: s
   return relatorio;
 }
 
-// Salva notas — suporta nota numérica e nota_texto (Remaj., Transf., etc)
+// Salva notas - inclui situacao, data_situacao e faltas
 export async function salvarNotas(
   turma: string,
   bimestre: number,
-  alunos: { numero: number; nome: string; nota: number | null; nota_texto?: string | null }[]
+  alunos: {
+    numero: number;
+    nome: string;
+    nota: number | null;
+    nota_texto?: string | null;
+    situacao?: string;
+    data_situacao?: string;
+    faltas?: number;
+  }[]
 ) {
   const upsertData = alunos.map(a => ({
     turma,
@@ -155,7 +166,11 @@ export async function salvarNotas(
     nome: a.nome,
     nota: a.nota ?? null,
     nota_texto: a.nota_texto ?? null,
+    situacao: a.situacao ?? 'Em Curso',
+    data_situacao: a.data_situacao ?? '',
+    faltas: a.faltas ?? 0,
   }));
+
   const { error } = await supabase
     .from("notas")
     .upsert(upsertData, { onConflict: "turma,bimestre,nome" });
