@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { BookOpen, FileText, Loader2, Download, ChevronDown, ChevronUp, GraduationCap, Info } from 'lucide-react';
 import { getCurriculumData, formatCurriculumForPrompt, getAnoFromTurma } from '../../../data/curriculumData';
 
