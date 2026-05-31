@@ -1,285 +1,173 @@
 import React, { useState, useEffect } from "react";
-import * as XLSX from "xlsx";
 import { cn } from "../AppLayout";
-import { X, FileDown, FileSpreadsheet, Save, Trash2, Upload, Table2, CheckCircle, AlertCircle, Loader2, BookOpen, Pencil } from "lucide-react";
+import { X, FileDown, Save, Upload, Loader2 } from "lucide-react";
 import { salvarNotas, buscarNotas, supabase } from "../../data/supabase";
 
 const TURMAS = ["6F", "7B", "7C", "7D", "7E", "7F", "8A", "8B", "8C", "8D", "8E", "8F", "9A", "9B", "9C", "9D", "9E", "9F"];
 
-// Normaliza nome para comparação — remove espaços duplos, trim, uppercase
-function normalizarNome(nome: string): string {
-  return nome.trim().replace(/\s+/g, ' ').toUpperCase();
+// Mapeamento bimestre -> meses (para calcular faltas)
+const MESES_BIMESTRE: Record<number, number[]> = {
+  1: [2, 3, 4],    // fev, mar, abr
+  2: [5, 6, 7],    // mai, jun, jul
+  3: [8, 9, 10],   // ago, set, out
+  4: [10, 11, 12], // out, nov, dez
+};
+
+interface AlunoNota {
+  num: number;
+  nome: string;
+  nota: number | null;
+  situacao: string;
+  data_situacao: string;
+  faltas?: number;
 }
 
-function extrairBimestre(titulo: string): number | null {
-  const match = titulo.match(/(\d)[ºo°]\s*Bimestre/i);
-  return match ? parseInt(match[1]) : null;
-}
+async function buscarFaltasBimestre(turma: string, bimestre: number): Promise<Record<string, number>> {
+  try {
+    const meses = MESES_BIMESTRE[bimestre] || [];
+    const ano = new Date().getFullYear();
 
-function normalizarNomeAba(nomeAba: string): string {
-  return nomeAba.replace(/[ºo°ª]/g, '').replace(/\s/g, '').toUpperCase();
-}
+    // Busca alunos da turma
+    const { data: alunosData } = await supabase
+      .from('alunos')
+      .select('id, nome')
+      .eq('turma_id', turma);
+    if (!alunosData || alunosData.length === 0) return {};
 
-function parsearPlanilhaExcel(file: File): Promise<{
-  turma: string;
-  bimestre: number;
-  alunos: { numero: number; nome: string; nota: number | null }[];
-}[]> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const wb = XLSX.read(data, { type: 'array' });
-        const resultado: any[] = [];
-        wb.SheetNames.forEach((nomeAba) => {
-          const ws = wb.Sheets[nomeAba];
-          const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-          if (rows.length < 3) return;
-          const titulo = String(rows[0]?.[0] || rows[0]?.[1] || '');
-          const bimestre = extrairBimestre(titulo);
-          if (!bimestre) return;
-          const turma = normalizarNomeAba(nomeAba);
-          if (!TURMAS.includes(turma)) return;
-          const alunosMap = new Map<string, any>(); // dedup por nome normalizado
-          for (let i = 2; i < rows.length; i++) {
-            const row = rows[i];
-            const num = row[0];
-            const nome = String(row[1] || '').trim();
-            const notaRaw = row[2];
-            if (!nome || !num) continue;
-            const numInt = parseInt(String(num));
-            if (isNaN(numInt)) continue;
-            const nomeKey = normalizarNome(nome);
-            if (alunosMap.has(nomeKey)) continue; // ignora duplicata
-            const notaStr = String(notaRaw || '').trim();
-            const notaNum = parseFloat(notaStr.replace(',', '.'));
-            const nota = isNaN(notaNum) ? null : notaNum;
-            const nota_texto = isNaN(notaNum) && notaStr !== '' ? notaStr : null;
-            alunosMap.set(nomeKey, { numero: numInt, nome, nota, nota_texto });
-          }
-          const alunos = Array.from(alunosMap.values());
-          if (alunos.length > 0) resultado.push({ turma, bimestre, alunos });
-        });
-        resolve(resultado);
-      } catch (err) { reject(err); }
-    };
-    reader.onerror = reject;
-    reader.readAsArrayBuffer(file);
-  });
-}
+    const ids = alunosData.map((a: any) => a.id);
 
-async function gerarAbaDiario(wb: any, t: string, b1: any[], b2: any[], b3: any[], b4: any[]) {
-  // Dedup por nome normalizado — usa número do primeiro bimestre encontrado
-  const mapaAlunos = new Map<string, { num: number; n1: any; n2: any; n3: any; n4: any }>();
+    // Busca registros de frequencia no periodo do bimestre
+    const datas = meses.flatMap(m => {
+      const inicio = `${ano}-${String(m).padStart(2, '0')}-01`;
+      const fim = `${ano}-${String(m).padStart(2, '0')}-31`;
+      return [inicio, fim];
+    });
+    const dataInicio = datas[0];
+    const dataFim = datas[datas.length - 1];
 
-  const todos = [...b1, ...b2, ...b3, ...b4];
-  todos.forEach((a: any) => {
-    const key = normalizarNome(a.nome);
-    if (!mapaAlunos.has(key)) {
-      mapaAlunos.set(key, { num: a.numero ?? 0, n1: null, n2: null, n3: null, n4: null });
-    }
-  });
+    const { data: freqData } = await supabase
+      .from('frequencia')
+      .select('aluno_id, presente')
+      .in('aluno_id', ids)
+      .gte('data', dataInicio)
+      .lte('data', dataFim);
 
-  mapaAlunos.forEach((val, key) => {
-    const a1 = b1.find((a: any) => normalizarNome(a.nome) === key);
-    const a2 = b2.find((a: any) => normalizarNome(a.nome) === key);
-    const a3 = b3.find((a: any) => normalizarNome(a.nome) === key);
-    const a4 = b4.find((a: any) => normalizarNome(a.nome) === key);
-    val.num = a1?.numero ?? a2?.numero ?? a3?.numero ?? a4?.numero ?? 0;
-    val.n1 = a1?.nota_texto ?? (a1?.nota != null ? Number(a1.nota) : null);
-    val.n2 = a2?.nota_texto ?? (a2?.nota != null ? Number(a2.nota) : null);
-    val.n3 = a3?.nota_texto ?? (a3?.nota != null ? Number(a3.nota) : null);
-    val.n4 = a4?.nota_texto ?? (a4?.nota != null ? Number(a4.nota) : null);
-  });
+    if (!freqData) return {};
 
-  const lista = Array.from(mapaAlunos.values()).sort((a, b) => (a.num || 999) - (b.num || 999));
+    // Conta faltas por aluno
+    const faltasPorId: Record<string, number> = {};
+    freqData.forEach((r: any) => {
+      if (!r.presente) {
+        faltasPorId[r.aluno_id] = (faltasPorId[r.aluno_id] || 0) + 1;
+      }
+    });
 
-  const ws = wb.addWorksheet(t, {
-    pageSetup: { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 1,
-      margins: { left: 0.5, right: 0.5, top: 0.5, bottom: 0.5, header: 0, footer: 0 } }
-  });
-  const th = { style: 'thin' as const };
-  const bd = { top: th, bottom: th, left: th, right: th };
-  const AZ = 'FF1A2E6E', BR = 'FFFFFFFF';
-  const hFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: AZ } };
-  const hFont = { bold: true, size: 9, color: { argb: BR } };
-  const ca: any = { horizontal: 'center', vertical: 'middle', wrapText: true };
-  const sFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFD0D8EE' } };
-  const sFont = { bold: true, size: 8, color: { argb: AZ } };
-  ws.mergeCells('A1:N1');
-  ws.getCell('A1').value = 'ESCOLA ESTADUAL INSTITUTO ODILON PRATAGI';
-  ws.getCell('A1').font = { bold: true, size: 12 };
-  ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
-  ws.getRow(1).height = 20;
-  ws.mergeCells('A2:C2'); ws.getCell('A2').value = 'DISCIPLINA: Educação Física'; ws.getCell('A2').font = { bold: true, size: 10 }; ws.getCell('A2').border = bd;
-  ws.mergeCells('D2:F2'); ws.getCell('D2').value = 'ETAPA/SÉRIE: ' + t.replace(/([0-9]+)([A-Z]+)/, '$1º'); ws.getCell('D2').font = { bold: true, size: 10 }; ws.getCell('D2').border = bd;
-  ws.mergeCells('G2:I2'); ws.getCell('G2').value = 'TURMA: ' + t; ws.getCell('G2').font = { bold: true, size: 10 }; ws.getCell('G2').border = bd;
-  ws.mergeCells('J2:N2'); ws.getCell('J2').value = 'TURNO: Manhã'; ws.getCell('J2').font = { bold: true, size: 10 }; ws.getCell('J2').border = bd;
-  ws.getRow(2).height = 18;
-  ws.mergeCells(3, 1, 4, 1);
-  ws.getCell('A3').value = 'Nº'; ws.getCell('A3').font = hFont; ws.getCell('A3').fill = hFill; ws.getCell('A3').alignment = ca; ws.getCell('A3').border = bd;
-  [
-    { label: '1º Bimestre', s: 2, e: 3 }, { label: '2º Bimestre', s: 4, e: 5 },
-    { label: 'Recuperação\n1º Semestre', s: 6, e: 6 }, { label: '3º Bimestre', s: 7, e: 8 },
-    { label: '4º Bimestre', s: 9, e: 10 }, { label: 'Recuperação\n2º Semestre', s: 11, e: 11 },
-    { label: 'Recuperação\nFinal', s: 12, e: 12 }, { label: 'Recuperação\nEspecial', s: 13, e: 13 },
-  ].forEach(g => {
-    ws.mergeCells(3, g.s, 3, g.e);
-    const c = ws.getCell(3, g.s);
-    c.value = g.label; c.font = hFont; c.fill = hFill; c.alignment = ca; c.border = bd;
-  });
-  ws.getRow(3).height = 28;
-  [{ c: 2, l: 'Faltas' }, { c: 3, l: 'Notas' }, { c: 4, l: 'Faltas' }, { c: 5, l: 'Notas' },
-    { c: 6, l: 'Notas' }, { c: 7, l: 'Faltas' }, { c: 8, l: 'Notas' }, { c: 9, l: 'Faltas' },
-    { c: 10, l: 'Notas' }, { c: 11, l: 'Notas' }, { c: 12, l: 'Notas' }, { c: 13, l: 'Notas' }
-  ].forEach(s => {
-    const cell = ws.getCell(4, s.c);
-    cell.value = s.l; cell.font = sFont; cell.fill = sFill; cell.alignment = ca; cell.border = bd;
-  });
-  ws.getRow(4).height = 16;
-  for (let i = 0; i < 48; i++) {
-    const rn = 5 + i;
-    const al = lista[i];
-    const bg = i % 2 === 0 ? BR : 'FFF5F7FC';
-    const rf = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: bg } };
-    ws.getCell(rn, 1).value = al ? String(al.num).padStart(2, '0') : '';
-    ws.getCell(rn, 1).font = { bold: true, size: 9, color: { argb: AZ } };
-    ws.getCell(rn, 1).fill = rf; ws.getCell(rn, 1).alignment = { horizontal: 'center', vertical: 'middle' }; ws.getCell(rn, 1).border = bd;
-    for (let c = 2; c <= 13; c++) {
-      ws.getCell(rn, c).fill = rf; ws.getCell(rn, c).border = bd;
-      ws.getCell(rn, c).alignment = { horizontal: 'center', vertical: 'middle' }; ws.getCell(rn, c).font = { size: 9 };
-    }
-    if (al) {
-      const p = (col: number, val: any) => {
-        if (val == null) return;
-        const c = ws.getCell(rn, col);
-        if (typeof val === 'string') { c.value = val; c.font = { bold: true, size: 9, color: { argb: 'FFDC2626' } }; }
-        else { c.value = Number(val); c.numFmt = '0.0'; c.font = { bold: true, size: 9, color: { argb: AZ } }; }
-      };
-      p(3, al.n1); p(5, al.n2); p(8, al.n3); p(10, al.n4);
-    }
-    ws.getRow(rn).height = 14;
+    // Mapeia id -> nome -> faltas
+    const faltasPorNome: Record<string, number> = {};
+    alunosData.forEach((a: any) => {
+      faltasPorNome[a.nome.toUpperCase()] = faltasPorId[a.id] || 0;
+    });
+
+    return faltasPorNome;
+  } catch (err) {
+    console.error('Erro ao buscar faltas:', err);
+    return {};
   }
-  ws.mergeCells('A53:N53');
-  ws.getCell('A53').value = 'Assinatura do professor: Marco Antonio Pedro da Silva';
-  ws.getCell('A53').font = { size: 10 }; ws.getCell('A53').alignment = { horizontal: 'left', vertical: 'middle' };
-  ws.getRow(53).height = 20;
-  [5, 7, 7, 7, 7, 9, 7, 7, 7, 7, 9, 9, 9].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
-}
-
-function BtnAcao({ onClick, disabled, cor, icon: Icon, label }: {
-  onClick: () => void; disabled?: boolean; cor: string; icon: any; label: string;
-}) {
-  return (
-    <button onClick={onClick} disabled={disabled}
-      className={cn("flex flex-col items-center justify-center gap-1 py-2.5 px-1 rounded-xl font-bold text-white text-[11px] transition-all active:scale-95 disabled:opacity-50", cor)}>
-      <Icon className="w-4 h-4" />
-      <span className="leading-tight text-center">{label}</span>
-    </button>
-  );
 }
 
 export function GradeReport() {
-  const [view, setView] = useState<"notas" | "desempenho">("notas");
+  const [view, setView] = useState<"notas" | "desempenho" | "grafico">("notas");
   const [bimestre, setBimestre] = useState<1 | 2 | 3 | 4>(1);
   const [turma, setTurma] = useState("7B");
-  const [alunos, setAlunos] = useState<any[]>([]);
+  const [alunos, setAlunos] = useState<AlunoNota[]>([]);
   const [desempenho, setDesempenho] = useState<any[]>([]);
+  const [grafico, setGrafico] = useState<any[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const [showImportExcel, setShowImportExcel] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [importandoExcel, setImportandoExcel] = useState(false);
-  const [exportandoTodas, setExportandoTodas] = useState(false);
-  const [exportandoDiario, setExportandoDiario] = useState(false);
-  const [exportandoDiarioTodas, setExportandoDiarioTodas] = useState(false);
-  const [resultadoImport, setResultadoImport] = useState<{
-    turma: string; bimestre: number; total: number; status: 'ok' | 'erro'; msg?: string;
-  }[]>([]);
-  const [importConcluido, setImportConcluido] = useState(false);
-  const [editando, setEditando] = useState<any | null>(null);
-  const [editNota, setEditNota] = useState('');
-  const [editSalvando, setEditSalvando] = useState(false);
+  const [gerandoPdf, setGerandoPdf] = useState(false);
 
   useEffect(() => {
     if (view === "notas") carregarNotas();
-    else carregarDesempenho();
+    else if (view === "desempenho") carregarDesempenho();
+    else carregarGrafico();
   }, [turma, bimestre, view]);
 
   const carregarNotas = async () => {
     setIsLoading(true);
     try {
       const data = await buscarNotas(turma, bimestre);
-      // Dedup por nome normalizado ao carregar do banco
-      const mapaDedup = new Map<string, any>();
-      data.forEach((d: any) => {
-        const key = normalizarNome(d.nome);
-        if (!mapaDedup.has(key)) {
-          mapaDedup.set(key, { num: d.numero, nome: d.nome, nota: d.nota, nota_texto: d.nota_texto });
-        }
-      });
-      const lista = Array.from(mapaDedup.values()).sort((a, b) => (a.num || 999) - (b.num || 999));
-      setAlunos(lista);
+      if (data.length === 0) { setAlunos([]); return; }
+
+      // Busca faltas do app para o bimestre
+      const faltasPorNome = await buscarFaltasBimestre(turma, bimestre);
+
+      setAlunos(data.map((d: any) => ({
+        num: d.numero,
+        nome: d.nome,
+        nota: d.nota,
+        situacao: d.situacao || 'Em Curso',
+        data_situacao: d.data_situacao || '',
+        faltas: faltasPorNome[d.nome?.toUpperCase()] ?? (d.faltas ?? 0),
+      })));
       setSaved(true);
-    } catch (e) { setAlunos([]); }
-    finally { setIsLoading(false); }
+    } catch (e) {
+      setAlunos([]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const carregarDesempenho = async () => {
     setIsLoading(true);
     try {
       const [b1, b2, b3, b4] = await Promise.all([
-        buscarNotas(turma, 1), buscarNotas(turma, 2),
-        buscarNotas(turma, 3), buscarNotas(turma, 4),
+        buscarNotas(turma, 1),
+        buscarNotas(turma, 2),
+        buscarNotas(turma, 3),
+        buscarNotas(turma, 4),
       ]);
-      // Dedup por nome normalizado
-      const mapa = new Map<string, any>();
-      [...b1, ...b2, ...b3, ...b4].forEach((a: any) => {
-        const key = normalizarNome(a.nome);
-        if (!mapa.has(key)) mapa.set(key, { num: a.numero, nome: a.nome });
-      });
-      const resultado = Array.from(mapa.entries()).map(([key, base]) => {
-        const a1 = b1.find((a: any) => normalizarNome(a.nome) === key);
-        const a2 = b2.find((a: any) => normalizarNome(a.nome) === key);
-        const a3 = b3.find((a: any) => normalizarNome(a.nome) === key);
-        const a4 = b4.find((a: any) => normalizarNome(a.nome) === key);
-        const validas = [a1?.nota, a2?.nota, a3?.nota, a4?.nota].filter(n => n != null) as number[];
+      const nomes = new Set([...b1, ...b2, ...b3, ...b4].map((a: any) => a.nome));
+      const resultado = Array.from(nomes).map(nome => {
+        const a1 = b1.find((a: any) => a.nome === nome);
+        const a2 = b2.find((a: any) => a.nome === nome);
+        const a3 = b3.find((a: any) => a.nome === nome);
+        const a4 = b4.find((a: any) => a.nome === nome);
+        const notas = [a1?.nota, a2?.nota, a3?.nota, a4?.nota];
+        const validas = notas.filter(n => n !== null && n !== undefined) as number[];
         const total = validas.reduce((s, n) => s + n, 0);
         const media = validas.length > 0 ? total / validas.length : null;
-        const num = a1?.numero || a2?.numero || a3?.numero || a4?.numero || base.num;
-        return { num, nome: base.nome, b1: a1?.nota, b2: a2?.nota, b3: a3?.nota, b4: a4?.nota, total, media };
+        const num = a1?.numero || a2?.numero || a3?.numero || a4?.numero;
+        return { num, nome, b1: a1?.nota, b2: a2?.nota, b3: a3?.nota, b4: a4?.nota, total, media };
       });
       resultado.sort((a, b) => (a.num || 999) - (b.num || 999));
       setDesempenho(resultado);
-    } catch (e) { setDesempenho([]); }
-    finally { setIsLoading(false); }
+    } catch (e) {
+      setDesempenho([]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const abrirEdicao = (aluno: any) => {
-    setEditando(aluno);
-    setEditNota(aluno.nota_texto ?? (aluno.nota != null ? String(Number(aluno.nota).toFixed(1)).replace('.', ',') : ''));
-  };
-
-  const salvarEdicao = async () => {
-    if (!editando) return;
-    setEditSalvando(true);
+  const carregarGrafico = async () => {
+    setIsLoading(true);
     try {
-      const val = editNota.trim().replace(',', '.');
-      const notaNum = parseFloat(val);
-      const isTexto = isNaN(notaNum) && val !== '';
-      const nota = isTexto ? null : (isNaN(notaNum) ? null : notaNum);
-      const nota_texto = isTexto ? editNota.trim() : null;
-      const { error } = await supabase
-        .from('notas').update({ nota, nota_texto })
-        .eq('turma', turma).eq('bimestre', bimestre).ilike('nome', editando.nome);
-      if (error) throw error;
-      setAlunos(prev => prev.map(a => a.nome === editando.nome ? { ...a, nota, nota_texto } : a));
-      setEditando(null);
-    } catch (e: any) { alert('Erro ao salvar: ' + e.message); }
-    finally { setEditSalvando(false); }
+      const resultados = await Promise.all(
+        TURMAS.map(async t => {
+          const data = await buscarNotas(t, bimestre);
+          if (data.length === 0) return null;
+          const media = data.reduce((s: number, a: any) => s + Number(a.nota || 0), 0) / data.length;
+          return { turma: t, media: parseFloat(media.toFixed(1)) };
+        })
+      );
+      setGrafico(resultados.filter(Boolean));
+    } catch (e) {
+      setGrafico([]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -299,12 +187,15 @@ export function GradeReport() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 16000,
-          messages: [{ role: "user", content: [
-            { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
-            { type: "text", text: "Extraia as notas dos alunos deste PDF. Retorne SOMENTE um array JSON valido, sem markdown, sem explicacoes, sem texto extra. Formato exato: [{\"num\":1,\"nome\":\"NOME COMPLETO\",\"nota\":7.0}]. Use aspas duplas. Numeros decimais com ponto. Nao inclua alunos duplicados." }
-          ]}]
+          model: "claude-sonnet-4-5",
+          max_tokens: 8000,
+          messages: [{
+            role: "user",
+            content: [
+              { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
+              { type: "text", text: "Extraia os dados dos alunos deste PDF da RELACAO DE NOTAS E CONCEITOS. Retorne SOMENTE um array JSON valido, sem markdown, sem explicacoes, sem texto extra. Formato exato: [{\"num\":1,\"nome\":\"NOME COMPLETO\",\"nota\":7.0,\"situacao\":\"Em Curso\",\"data_situacao\":\"\"}]. Para alunos transferidos use: {\"situacao\":\"Foi Transferido\",\"data_situacao\":\"28/05/2026\"}. Use aspas duplas. Numeros decimais com ponto. Se nao houver data da situacao deixe string vazia." }
+            ]
+          }]
         })
       });
       const json = await resp.json();
@@ -312,212 +203,348 @@ export function GradeReport() {
       let text = json.content[0].text;
       let clean = text.replace(/```json|```/g, "").trim();
       const lastBracket = clean.lastIndexOf("}");
-      if (lastBracket !== -1 && !clean.endsWith("]")) clean = clean.substring(0, lastBracket + 1) + "]";
-      const parsed = JSON.parse(clean);
-      // Dedup por nome normalizado
-      const mapaDedup = new Map<string, any>();
-      parsed.forEach((a: any) => {
-        const key = normalizarNome(a.nome);
-        if (!mapaDedup.has(key)) mapaDedup.set(key, a);
-      });
-      setAlunos(Array.from(mapaDedup.values()));
-      setSaved(false); setShowImport(false);
-    } catch (e: any) { alert("Erro: " + (e?.message || JSON.stringify(e))); }
-    finally { setIsProcessing(false); }
-  };
-
-  const handleImportExcel = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setImportandoExcel(true); setResultadoImport([]); setImportConcluido(false);
-    try {
-      const turmas = await parsearPlanilhaExcel(file);
-      if (turmas.length === 0) { alert('Nenhuma aba válida encontrada. Verifique se os nomes das abas correspondem às turmas (ex: 9ª E ou 9E).'); setImportandoExcel(false); return; }
-      const resultados: typeof resultadoImport = [];
-      for (const t of turmas) {
-        try {
-          const { error: delErr } = await supabase.from('notas').delete().eq('turma', t.turma).eq('bimestre', t.bimestre);
-          if (delErr) throw delErr;
-          const todosAlunos = t.alunos.map((a: any) => ({ numero: a.numero, nome: a.nome, nota: a.nota ?? null, nota_texto: a.nota_texto ?? null }));
-          if (todosAlunos.length > 0) await salvarNotas(t.turma, t.bimestre as any, todosAlunos);
-          resultados.push({ turma: t.turma, bimestre: t.bimestre, total: t.alunos.length, status: 'ok' });
-        } catch (e: any) { resultados.push({ turma: t.turma, bimestre: t.bimestre, total: t.alunos.length, status: 'erro', msg: e.message }); }
+      if (lastBracket !== -1 && !clean.endsWith("]")) {
+        clean = clean.substring(0, lastBracket + 1) + "]";
       }
-      setResultadoImport(resultados); setImportConcluido(true); carregarNotas();
-    } catch (e: any) { alert('Erro ao ler a planilha: ' + e.message); }
-    finally { setImportandoExcel(false); }
+      const notas = JSON.parse(clean);
+
+      // Busca faltas do app para cruzar
+      const faltasPorNome = await buscarFaltasBimestre(turma, bimestre);
+      const alunosComFaltas = notas.map((a: any) => ({
+        ...a,
+        situacao: a.situacao || 'Em Curso',
+        data_situacao: a.data_situacao || '',
+        faltas: faltasPorNome[a.nome?.toUpperCase()] ?? 0,
+      }));
+
+      setAlunos(alunosComFaltas);
+      setSaved(false);
+      setShowImport(false);
+    } catch (e: any) {
+      alert("Erro: " + (e?.message || JSON.stringify(e)));
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleSalvar = async () => {
     setIsSaving(true);
     try {
-      await salvarNotas(turma, bimestre, alunos.filter(a => a.nota != null).map(a => ({ numero: a.num, nome: a.nome, nota: a.nota })));
-      setSaved(true); setTimeout(() => setSaved(false), 3000);
-    } catch (e: any) { alert("Erro ao salvar: " + e.message); }
-    finally { setIsSaving(false); }
+      await salvarNotas(
+        turma,
+        bimestre,
+        alunos
+          .filter(a => a.nota !== null && a.nota !== undefined)
+          .map(a => ({
+            numero: a.num,
+            nome: a.nome,
+            nota: a.nota,
+            situacao: a.situacao,
+            data_situacao: a.data_situacao,
+            faltas: a.faltas ?? 0,
+          }))
+      );
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e: any) {
+      alert("Erro ao salvar: " + e.message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const exportarDiarioOficialNotas = async () => {
-    setExportandoDiario(true);
-    try {
-      const ExcelJS = (await import('exceljs')).default;
-      const wb = new ExcelJS.Workbook();
-      const [b1, b2, b3, b4] = await Promise.all([buscarNotas(turma, 1), buscarNotas(turma, 2), buscarNotas(turma, 3), buscarNotas(turma, 4)]);
-      await gerarAbaDiario(wb, turma, b1, b2, b3, b4);
-      const buffer = await wb.xlsx.writeBuffer();
-      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = `diario_notas_${turma}_2026.xlsx`; a.click();
-      URL.revokeObjectURL(url);
-    } catch (e: any) { alert('Erro: ' + e.message); }
-    finally { setExportandoDiario(false); }
+  const fmtNota = (n: any) => {
+    if (n === null || n === undefined) return "-";
+    return Number(n).toFixed(1).replace(".", ",");
   };
 
-  const exportarDiarioTodasTurmas = async () => {
-    setExportandoDiarioTodas(true);
-    try {
-      const ExcelJS = (await import('exceljs')).default;
-      const wb = new ExcelJS.Workbook();
-      let abas = 0;
-      for (const t of TURMAS) {
-        const [b1, b2, b3, b4] = await Promise.all([buscarNotas(t, 1), buscarNotas(t, 2), buscarNotas(t, 3), buscarNotas(t, 4)]);
-        if (b1.length === 0 && b2.length === 0 && b3.length === 0 && b4.length === 0) continue;
-        await gerarAbaDiario(wb, t, b1, b2, b3, b4);
-        abas++;
-      }
-      if (abas === 0) { alert('Nenhuma turma com notas encontrada.'); return; }
-      const buffer = await wb.xlsx.writeBuffer();
-      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = `diario_notas_todas_turmas_2026.xlsx`; a.click();
-      URL.revokeObjectURL(url);
-    } catch (e: any) { alert('Erro: ' + e.message); }
-    finally { setExportandoDiarioTodas(false); }
+  const getBarColor = (media: number) => {
+    if (media >= 7) return "#16a34a";
+    if (media >= 5) return "#2563eb";
+    if (media >= 3) return "#d97706";
+    return "#dc2626";
   };
 
-  const exportarExcel = async () => {
+  // Gera PDF no layout do Simaed
+  const gerarPdfSimaed = async () => {
     if (alunos.length === 0) return;
-    const ExcelJS = (await import('exceljs')).default;
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet(`${turma} - ${bimestre}º Bim`);
-    const AZ = 'FF1A2E6E', VM = 'FFDC2626', BR = 'FFFFFFFF', AC = 'FFE8EDF8';
-    const bd: any = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } };
-    ws.mergeCells('A1:C1'); ws.getCell('A1').value = 'Notas do Bimestre - 2026'; ws.getCell('A1').font = { bold: true, size: 14, color: { argb: BR } }; ws.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZ } }; ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' }; ws.getRow(1).height = 28;
-    ws.mergeCells('A2:C2'); ws.getCell('A2').value = 'Disciplina: Educação Física'; ws.getCell('A2').font = { bold: true, size: 11, color: { argb: BR } }; ws.getCell('A2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: VM } }; ws.getCell('A2').alignment = { horizontal: 'center', vertical: 'middle' }; ws.getRow(2).height = 22;
-    ws.mergeCells('A3:C3'); ws.getCell('A3').value = `Turma: ${turma}   |   ${bimestre}º Bimestre`; ws.getCell('A3').font = { bold: true, size: 11, color: { argb: AZ } }; ws.getCell('A3').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AC } }; ws.getCell('A3').alignment = { horizontal: 'center', vertical: 'middle' }; ws.getRow(3).height = 20;
-    ws.getRow(4).height = 20;
-    ['Nº', 'Nome do Aluno', 'Nota'].forEach((h, i) => { const c = ws.getCell(4, i + 1); c.value = h; c.font = { bold: true, size: 11, color: { argb: BR } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZ } }; c.alignment = { horizontal: 'center', vertical: 'middle' }; c.border = bd; });
-    alunos.forEach((a, idx) => {
-      const row = 5 + idx; const bg = idx % 2 === 0 ? BR : AC;
-      ws.getCell(row, 1).value = a.num ?? ''; ws.getCell(row, 1).font = { size: 10 }; ws.getCell(row, 1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }; ws.getCell(row, 1).alignment = { horizontal: 'center', vertical: 'middle' }; ws.getCell(row, 1).border = bd;
-      ws.getCell(row, 2).value = a.nome; ws.getCell(row, 2).font = { size: 10 }; ws.getCell(row, 2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }; ws.getCell(row, 2).alignment = { vertical: 'middle' }; ws.getCell(row, 2).border = bd;
-      const nc = ws.getCell(row, 3);
-      if (a.nota_texto) { nc.value = a.nota_texto; nc.font = { bold: true, size: 10, color: { argb: VM } }; }
-      else { nc.value = a.nota != null ? Number(a.nota) : '-'; nc.font = { bold: true, size: 10, color: { argb: AZ } }; if (a.nota != null) nc.numFmt = '0.0'; }
-      nc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }; nc.alignment = { horizontal: 'center', vertical: 'middle' }; nc.border = bd;
-      ws.getRow(row).height = 16;
-    });
-    ws.getColumn(1).width = 6; ws.getColumn(2).width = 40; ws.getColumn(3).width = 10;
-    const buffer = await wb.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `notas_${turma}_bim${bimestre}.xlsx`; a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const limparLista = () => {
-    if (alunos.length === 0) return;
-    if (!window.confirm("Limpar a lista atual? Os dados salvos no banco NÃO serão afetados.")) return;
-    setAlunos([]); setSaved(false);
-  };
-
-  const exportarTodasTurmas = async () => {
-    setExportandoTodas(true);
+    setGerandoPdf(true);
     try {
-      const ExcelJS = (await import('exceljs')).default;
-      const wb = new ExcelJS.Workbook();
-      const AZ = 'FF1A2E6E', VM = 'FFDC2626', BR = 'FFFFFFFF', AC = 'FFE8EDF8';
-      const bd: any = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } };
-      for (const t of TURMAS) {
-        const data = await buscarNotas(t, bimestre);
-        if (data.length === 0) continue;
-        // Dedup ao exportar todas as turmas
-        const mapaDedup = new Map<string, any>();
-        data.forEach((d: any) => {
-          const key = normalizarNome(d.nome);
-          if (!mapaDedup.has(key)) mapaDedup.set(key, d);
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+      const pW = 210;
+      const mL = 15;
+      const mR = 15;
+      const mT = 15;
+      const usableW = pW - mL - mR;
+
+      const cinza = '#F5F5F5';
+      const azulEscuro = '#1F2937';
+      const borda = '#CCCCCC';
+      const azulHeader = '#E8F0FE';
+
+      let y = mT;
+
+      // Tenta carregar brasao
+      let brasaoLoaded = false;
+      try {
+        const res = await fetch('/brasao-acre.png');
+        if (res.ok) {
+          const buf = await res.arrayBuffer();
+          const bytes = new Uint8Array(buf);
+          let b64 = '';
+          const chunk = 8192;
+          for (let i = 0; i < bytes.length; i += chunk) {
+            b64 += String.fromCharCode(...bytes.subarray(i, i + chunk));
+          }
+          const imgData = 'data:image/png;base64,' + btoa(b64);
+          doc.addImage(imgData, 'PNG', mL, y, 18, 18);
+          brasaoLoaded = true;
+        }
+      } catch (_) {}
+
+      // Cabecalho institucional
+      const cxTexto = brasaoLoaded ? mL + 22 : mL;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(azulEscuro);
+      doc.text('ESTADO DO ACRE', pW / 2, y + 4, { align: 'center' });
+      doc.text('SECRETARIA DE ESTADO DE EDUCACAO E CULTURA', pW / 2, y + 9, { align: 'center' });
+      doc.text('ESC INSTITUTO ODILON PRATAGI', pW / 2, y + 14, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text('RUA 12 DE OUTUBRO, 205, PREDIO, RAIMUNDO CHAAR, 69932-970, Brasileia/AC', pW / 2, y + 19, { align: 'center' });
+      doc.text('iop.escola@yahoo.com.br', pW / 2, y + 23, { align: 'center' });
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.text('RELACAO DE NOTAS E CONCEITOS', pW / 2, y + 29, { align: 'center' });
+      y += 35;
+
+      // Borda ao redor do cabecalho institucional
+      doc.setDrawColor(borda);
+      doc.rect(mL, mT - 2, usableW, y - mT + 2, 'S');
+
+      y += 4;
+
+      // Info turma
+      doc.setFillColor(cinza);
+      doc.rect(mL, y, usableW, 18, 'F');
+      doc.setDrawColor(borda);
+      doc.rect(mL, y, usableW, 18, 'S');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(azulEscuro);
+      doc.text('Tipo de ensino:  ENSINO REGULAR', mL + 4, y + 6);
+      doc.text(`Serie/etapa:  ${turma.replace(/(\d+)([A-Z])/, '$1o Ano')}`, mL + usableW * 0.55, y + 6);
+      doc.text('Turno:  TARDE', mL + 4, y + 12);
+      doc.text(`Turma:  ${turma.replace(/(\d+)([A-Z])/, '$1o $2')}`, mL + usableW * 0.55, y + 12);
+      doc.text('Disciplina:  EDUCACAO FISICA', mL + 4, y + 18);
+      y += 22;
+
+      // Header bimestre
+      doc.setFillColor(azulHeader);
+      doc.rect(mL, y, usableW, 8, 'F');
+      doc.setDrawColor(borda);
+      doc.rect(mL, y, usableW, 8, 'S');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(azulEscuro);
+      doc.text(`Divisao do periodo letivo:  ${bimestre}o BIMESTRE`, pW / 2, y + 5.5, { align: 'center' });
+      y += 8;
+
+      // Colunas da tabela
+      const colNum = 12;
+      const colSituacao = 38;
+      const colData = 28;
+      const colFaltas = 14;
+      const colNota = 16;
+      const colNome = usableW - colNum - colNota - colFaltas - colSituacao - colData;
+      const altRow = 8;
+
+      // Header da tabela
+      doc.setFillColor('#D1D5DB');
+      doc.rect(mL, y, usableW, altRow, 'F');
+      doc.setDrawColor(borda);
+
+      // Linhas verticais do header
+      let xc = mL;
+      [colNum, colNome, colNota, colFaltas, colSituacao, colData].forEach(w => {
+        doc.rect(xc, y, w, altRow, 'S');
+        xc += w;
+      });
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(azulEscuro);
+      xc = mL;
+      doc.text('Num.', xc + colNum / 2, y + 5.5, { align: 'center' }); xc += colNum;
+      doc.text('Nome do aluno', xc + 4, y + 5.5); xc += colNome;
+      doc.text('Nota', xc + colNota / 2, y + 5.5, { align: 'center' }); xc += colNota;
+      doc.text('Faltas', xc + colFaltas / 2, y + 5.5, { align: 'center' }); xc += colFaltas;
+      doc.text('Situacao do Aluno', xc + 4, y + 5.5); xc += colSituacao;
+      doc.text('Data Situacao', xc + 4, y + 5.5);
+      y += altRow;
+
+      // Linhas dos alunos
+      alunos.forEach((aluno, idx) => {
+        if (y + altRow > 280) {
+          doc.addPage();
+          y = mT;
+        }
+
+        const bg = idx % 2 === 0 ? '#FFFFFF' : '#F9FAFB';
+        doc.setFillColor(bg);
+        doc.rect(mL, y, usableW, altRow, 'F');
+        doc.setDrawColor(borda);
+
+        xc = mL;
+        [colNum, colNome, colNota, colFaltas, colSituacao, colData].forEach(w => {
+          doc.rect(xc, y, w, altRow, 'S');
+          xc += w;
         });
-        const deduped = Array.from(mapaDedup.values()).sort((a, b) => (a.numero || 999) - (b.numero || 999));
-        const ws = wb.addWorksheet(`${t}`);
-        ws.mergeCells('A1:C1'); ws.getCell('A1').value = 'Notas do Bimestre - 2026'; ws.getCell('A1').font = { bold: true, size: 14, color: { argb: BR } }; ws.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZ } }; ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' }; ws.getRow(1).height = 28;
-        ws.mergeCells('A2:C2'); ws.getCell('A2').value = 'Disciplina: Educação Física'; ws.getCell('A2').font = { bold: true, size: 11, color: { argb: BR } }; ws.getCell('A2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: VM } }; ws.getCell('A2').alignment = { horizontal: 'center', vertical: 'middle' }; ws.getRow(2).height = 22;
-        ws.mergeCells('A3:C3'); ws.getCell('A3').value = `Turma: ${t}   |   ${bimestre}º Bimestre`; ws.getCell('A3').font = { bold: true, size: 11, color: { argb: AZ } }; ws.getCell('A3').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AC } }; ws.getCell('A3').alignment = { horizontal: 'center', vertical: 'middle' }; ws.getRow(3).height = 20;
-        ['Nº', 'Nome do Aluno', 'Nota'].forEach((h, i) => { const c = ws.getCell(4, i + 1); c.value = h; c.font = { bold: true, size: 11, color: { argb: BR } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZ } }; c.alignment = { horizontal: 'center', vertical: 'middle' }; c.border = bd; }); ws.getRow(4).height = 20;
-        deduped.forEach((a: any, idx: number) => {
-          const row = 5 + idx; const bg = idx % 2 === 0 ? BR : AC;
-          ws.getCell(row, 1).value = a.numero ?? ''; ws.getCell(row, 1).font = { size: 10 }; ws.getCell(row, 1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }; ws.getCell(row, 1).alignment = { horizontal: 'center', vertical: 'middle' }; ws.getCell(row, 1).border = bd;
-          ws.getCell(row, 2).value = a.nome; ws.getCell(row, 2).font = { size: 10 }; ws.getCell(row, 2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }; ws.getCell(row, 2).alignment = { vertical: 'middle' }; ws.getCell(row, 2).border = bd;
-          const nc = ws.getCell(row, 3);
-          if (a.nota_texto) { nc.value = a.nota_texto; nc.font = { bold: true, size: 10, color: { argb: VM } }; }
-          else { nc.value = a.nota != null ? Number(a.nota) : '-'; nc.font = { bold: true, size: 10, color: { argb: AZ } }; if (a.nota != null) nc.numFmt = '0.0'; }
-          nc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }; nc.alignment = { horizontal: 'center', vertical: 'middle' }; nc.border = bd;
-          ws.getRow(row).height = 16;
-        });
-        ws.getColumn(1).width = 6; ws.getColumn(2).width = 40; ws.getColumn(3).width = 10;
-      }
-      if (wb.worksheets.length === 0) { alert('Nenhuma turma com notas encontrada para este bimestre.'); return; }
-      const buffer = await wb.xlsx.writeBuffer();
-      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = `notas_todas_turmas_bim${bimestre}.xlsx`; a.click();
-      URL.revokeObjectURL(url);
-    } catch (e: any) { alert('Erro ao exportar: ' + e.message); }
-    finally { setExportandoTodas(false); }
+
+        const transferido = aluno.situacao?.toLowerCase().includes('transferi');
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(azulEscuro);
+
+        xc = mL;
+        // Num
+        doc.text(String(aluno.num || ''), xc + colNum / 2, y + 5.5, { align: 'center' });
+        xc += colNum;
+
+        // Nome
+        const nomeDisplay = aluno.nome?.length > 32
+          ? aluno.nome.substring(0, 32) + '.'
+          : aluno.nome || '';
+        doc.text(nomeDisplay.toUpperCase(), xc + 2, y + 5.5);
+        xc += colNome;
+
+        // Nota
+        if (transferido) {
+          doc.setTextColor('#DC2626');
+          doc.setFont('helvetica', 'bold');
+          doc.text('Transf.', xc + colNota / 2, y + 5.5, { align: 'center' });
+          doc.setTextColor(azulEscuro);
+          doc.setFont('helvetica', 'normal');
+        } else {
+          doc.text(fmtNota(aluno.nota), xc + colNota / 2, y + 5.5, { align: 'center' });
+        }
+        xc += colNota;
+
+        // Faltas
+        doc.text(transferido ? '-' : String(aluno.faltas ?? 0), xc + colFaltas / 2, y + 5.5, { align: 'center' });
+        xc += colFaltas;
+
+        // Situacao
+        if (transferido) {
+          doc.setTextColor('#DC2626');
+          doc.setFont('helvetica', 'bold');
+        }
+        doc.text(aluno.situacao || 'Em Curso', xc + 2, y + 5.5);
+        doc.setTextColor(azulEscuro);
+        doc.setFont('helvetica', 'normal');
+        xc += colSituacao;
+
+        // Data situacao
+        if (transferido && aluno.data_situacao) {
+          doc.setTextColor('#DC2626');
+        }
+        doc.text(aluno.data_situacao || '', xc + 2, y + 5.5);
+        doc.setTextColor(azulEscuro);
+
+        y += altRow;
+      });
+
+      // Borda externa da tabela
+      doc.setDrawColor('#6B7280');
+      const tabelaY = y - altRow * (alunos.length + 1) - altRow;
+      doc.rect(mL, tabelaY + altRow * (alunos.length + 1) - altRow * alunos.length - altRow, usableW, altRow * (alunos.length + 1), 'S');
+
+      const nomeTurma = turma.replace(/(\d+)([A-Z])/, '$1o-$2');
+      doc.save(`Notas-${bimestre}oBimestre-${nomeTurma}.pdf`);
+    } catch (err) {
+      alert('Erro ao gerar PDF.');
+      console.error(err);
+    } finally {
+      setGerandoPdf(false);
+    }
   };
 
-  const fmtNota = (n: any) => n != null ? Number(n).toFixed(1).replace(".", ",") : "-";
+  const getStatus = (nota: number) => {
+    if (nota >= 5) return { text: "Aprovado", color: "text-green-600" };
+    if (nota >= 3) return { text: "Rec.", color: "text-yellow-600" };
+    return { text: "Reprov.", color: "text-red-600" };
+  };
+
+  const BAR_H = 220;
+  const BAR_W = 30;
+  const GAP = 10;
 
   return (
     <div className="flex flex-col h-full bg-background relative" id="report-content">
       <div className="p-4 border-b border-gray-200 sticky top-0 bg-background/90 backdrop-blur-md z-10 shadow-sm print:hidden">
         <h2 className="text-2xl font-bold tracking-tight mb-3 text-primary-dark">Notas</h2>
-        <div className="flex gap-2 w-full p-1 bg-gray-200/50 rounded-xl border border-gray-200 mb-3">
-          <button onClick={() => setView("notas")} className={cn("flex-1 py-2 text-center rounded-lg text-sm font-semibold transition-all", view === "notas" ? "bg-white text-primary ring-1 ring-gray-200" : "bg-transparent text-gray-500")}>Notas</button>
-          <button onClick={() => setView("desempenho")} className={cn("flex-1 py-2 text-center rounded-lg text-sm font-semibold transition-all", view === "desempenho" ? "bg-white text-primary ring-1 ring-gray-200" : "bg-transparent text-gray-500")}>Desempenho</button>
+
+        <div className="flex gap-1 w-full p-1 bg-gray-200/50 rounded-xl border border-gray-200 mb-3">
+          {[["notas", "Notas"], ["desempenho", "Desempenho"], ["grafico", "Grafico"]].map(([v, l]) => (
+            <button key={v} onClick={() => setView(v as any)}
+              className={cn("flex-1 py-2 text-center rounded-lg text-sm font-semibold transition-all",
+                view === v ? "bg-white text-primary ring-1 ring-gray-200" : "bg-transparent text-gray-500")}>
+              {l}
+            </button>
+          ))}
         </div>
-        <div className="mb-3">
-          <label className="text-xs font-semibold text-gray-500 mb-1 block">TURMA</label>
-          <div className="grid grid-cols-9 gap-1">
-            {TURMAS.map(t => (
-              <button key={t} onClick={() => setTurma(t)} className={cn("py-1 rounded-lg text-xs font-bold transition-all", turma === t ? "bg-primary text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200")}>{t}</button>
-            ))}
-          </div>
-        </div>
-        {view === "notas" && (
-          <>
-            <div className="flex gap-2 w-full p-1 bg-gray-200/50 rounded-xl border border-gray-200 mb-3">
-              {[1, 2, 3, 4].map(b => (
-                <button key={b} onClick={() => setBimestre(b as any)} className={cn("flex-1 py-2 text-center rounded-lg text-sm font-semibold transition-all", bimestre === b ? "bg-white text-primary ring-1 ring-gray-200" : "bg-transparent text-gray-500")}>{b}o Bim</button>
+
+        {view !== "grafico" && (
+          <div className="mb-3">
+            <label className="text-xs font-semibold text-gray-500 mb-1 block">TURMA</label>
+            <div className="grid grid-cols-9 gap-1">
+              {TURMAS.map(t => (
+                <button key={t} onClick={() => setTurma(t)}
+                  className={cn("py-1 rounded-lg text-xs font-bold transition-all",
+                    turma === t ? "bg-primary text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200")}>
+                  {t}
+                </button>
               ))}
             </div>
-            <div className="grid grid-cols-5 gap-1.5 mb-1">
-              <BtnAcao onClick={() => setShowImport(true)} cor="bg-primary hover:bg-primary-dark" icon={Upload} label="PDF" />
-              <BtnAcao onClick={() => { setShowImportExcel(true); setResultadoImport([]); setImportConcluido(false); }} cor="bg-emerald-700 hover:bg-emerald-800" icon={Table2} label="Excel" />
-              <BtnAcao onClick={exportarExcel} cor="bg-emerald-600 hover:bg-emerald-700" icon={FileSpreadsheet} label="Exportar" />
-              <BtnAcao onClick={exportarTodasTurmas} disabled={exportandoTodas} cor="bg-blue-700 hover:bg-blue-800" icon={exportandoTodas ? Loader2 : FileSpreadsheet} label={exportandoTodas ? '...' : 'Todas'} />
-              <BtnAcao onClick={() => window.print()} cor="bg-gray-500 hover:bg-gray-600" icon={FileDown} label="Print" />
-            </div>
-            <div className="grid grid-cols-5 gap-1.5">
-              <BtnAcao onClick={exportarDiarioOficialNotas} disabled={exportandoDiario} cor="bg-indigo-700 hover:bg-indigo-800" icon={exportandoDiario ? Loader2 : BookOpen} label={exportandoDiario ? '...' : 'Diário'} />
-              <BtnAcao onClick={exportarDiarioTodasTurmas} disabled={exportandoDiarioTodas} cor="bg-purple-700 hover:bg-purple-800" icon={exportandoDiarioTodas ? Loader2 : BookOpen} label={exportandoDiarioTodas ? '...' : 'Diár. All'} />
-              {alunos.length > 0 && !saved && (
-                <BtnAcao onClick={handleSalvar} disabled={isSaving} cor="bg-green-600 hover:bg-green-700" icon={isSaving ? Loader2 : Save} label={isSaving ? '...' : 'Salvar'} />
-              )}
-              {alunos.length > 0 && (
-                <BtnAcao onClick={limparLista} cor="bg-red-600 hover:bg-red-700" icon={Trash2} label="Limpar" />
-              )}
-            </div>
-          </>
+          </div>
+        )}
+
+        <div className="flex gap-2 w-full p-1 bg-gray-200/50 rounded-xl border border-gray-200 mb-3">
+          {[1, 2, 3, 4].map(b => (
+            <button key={b} onClick={() => setBimestre(b as any)}
+              className={cn("flex-1 py-2 text-center rounded-lg text-sm font-semibold transition-all",
+                bimestre === b ? "bg-white text-primary ring-1 ring-gray-200" : "bg-transparent text-gray-500")}>
+              {b}o Bim
+            </button>
+          ))}
+        </div>
+
+        {view === "notas" && (
+          <div className="flex gap-2">
+            <button onClick={() => setShowImport(true)}
+              className="flex-1 py-3 bg-primary text-white rounded-xl font-bold shadow-md hover:bg-primary-dark transition-all flex items-center justify-center gap-2">
+              <Upload className="w-4 h-4" /> Carregar PDF
+            </button>
+            {alunos.length > 0 && !saved && (
+              <button onClick={handleSalvar} disabled={isSaving}
+                className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold shadow-md hover:bg-green-700 transition-all flex items-center justify-center gap-2">
+                <Save className="w-4 h-4" /> {isSaving ? "Salvando..." : "Salvar"}
+              </button>
+            )}
+            {alunos.length > 0 && (
+              <button
+                onClick={gerarPdfSimaed}
+                disabled={gerandoPdf}
+                className="py-3 px-4 bg-gray-700 text-white rounded-xl font-bold hover:bg-gray-800 transition-all flex items-center gap-1 disabled:opacity-50"
+              >
+                {gerandoPdf ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileDown className="w-5 h-5" />}
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -527,30 +554,52 @@ export function GradeReport() {
         ) : view === "notas" ? (
           alunos.length > 0 ? (
             <>
-              {saved && <div className="print:hidden mb-2 text-xs text-center text-green-600 font-semibold">Dados salvos — toque na nota para editar</div>}
+              {saved && <div className="mb-2 text-xs text-center text-green-600 font-semibold">Dados salvos</div>}
               <div className="bg-surface rounded-3xl border border-gray-200 overflow-hidden shadow-sm">
+                {/* Header da lista */}
+                <div className="flex items-center px-3 py-2 bg-gray-100 border-b border-gray-200">
+                  <span className="font-mono text-gray-400 text-xs w-5 shrink-0">N</span>
+                  <span className="font-bold text-gray-600 text-xs flex-1 ml-2">Nome</span>
+                  <span className="font-bold text-gray-600 text-xs w-10 text-center">Nota</span>
+                  <span className="font-bold text-gray-600 text-xs w-10 text-center">Faltas</span>
+                  <span className="font-bold text-gray-600 text-xs w-24 text-right">Situacao</span>
+                </div>
                 <div className="flex flex-col divide-y divide-gray-100">
-                  {alunos.map((aluno, idx) => (
-                    <div key={`${normalizarNome(aluno.nome)}-${idx}`} className="py-1 px-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors print:py-0">
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                  {alunos.map(aluno => {
+                    const transferido = aluno.situacao?.toLowerCase().includes('transferi');
+                    const status = !transferido && aluno.nota !== null ? getStatus(aluno.nota!) : null;
+                    return (
+                      <div key={aluno.nome} className="p-2 pl-3 flex items-center justify-between hover:bg-gray-50/50 transition-colors gap-1">
                         <span className="font-mono text-gray-400 text-xs w-5 shrink-0">{aluno.num}</span>
-                        <span className="font-semibold text-textPrimary text-xs truncate">{aluno.nome.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())}</span>
+                        <span className="font-semibold text-textPrimary text-xs flex-1 truncate ml-1">{aluno.nome}</span>
+                        <span className={cn("font-bold text-sm w-10 text-center shrink-0", transferido ? "text-red-500" : "text-blue-600")}>
+                          {transferido ? 'Transf.' : fmtNota(aluno.nota)}
+                        </span>
+                        <span className="text-xs text-gray-500 w-10 text-center shrink-0">
+                          {transferido ? '-' : (aluno.faltas ?? 0)}
+                        </span>
+                        <div className="w-24 text-right shrink-0">
+                          {transferido ? (
+                            <div>
+                              <span className="text-xs font-bold text-red-500 block leading-tight">Transf.</span>
+                              {aluno.data_situacao && (
+                                <span className="text-xs text-red-400 block leading-tight">{aluno.data_situacao}</span>
+                              )}
+                            </div>
+                          ) : (
+                            status && <span className={cn("text-xs font-bold", status.color)}>{status.text}</span>
+                          )}
+                        </div>
                       </div>
-                      <button onClick={() => abrirEdicao(aluno)} className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-gray-100 transition-colors group shrink-0">
-                        {aluno.nota_texto
-                          ? <span className="font-black text-red-600 text-sm">{aluno.nota_texto}</span>
-                          : <span className="font-black text-primary text-base">{fmtNota(aluno.nota)}</span>}
-                        <Pencil className="w-3 h-3 text-gray-300 group-hover:text-gray-500 transition-colors" />
-                      </button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </>
           ) : (
-            <div className="text-center p-10 text-gray-500">Nenhum dado. Carregue um PDF ou importe o Excel.</div>
+            <div className="text-center p-10 text-gray-500">Nenhum dado. Carregue um PDF do Simaed.</div>
           )
-        ) : (
+        ) : view === "desempenho" ? (
           desempenho.length > 0 ? (
             <div className="bg-surface rounded-3xl border border-gray-200 overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
@@ -567,17 +616,17 @@ export function GradeReport() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {desempenho.map((aluno, idx) => {
+                    {desempenho.map(aluno => {
                       const media = aluno.media;
                       const mediaColor = media === null ? "text-gray-400" : media >= 5 ? "text-green-600" : media >= 3 ? "text-yellow-600" : "text-red-600";
                       return (
-                        <tr key={`${normalizarNome(aluno.nome)}-${idx}`} className="hover:bg-gray-50/50">
+                        <tr key={aluno.nome} className="hover:bg-gray-50/50">
                           <td className="p-2 font-mono text-gray-400">{aluno.num}</td>
                           <td className="p-2 font-semibold text-textPrimary max-w-[100px] truncate">{aluno.nome}</td>
-                          <td className="p-2 text-center text-gray-700">{fmtNota(aluno.b1)}</td>
-                          <td className="p-2 text-center text-gray-700">{fmtNota(aluno.b2)}</td>
-                          <td className="p-2 text-center text-gray-700">{fmtNota(aluno.b3)}</td>
-                          <td className="p-2 text-center text-gray-700">{fmtNota(aluno.b4)}</td>
+                          <td className="p-2 text-center text-blue-600 font-bold">{fmtNota(aluno.b1)}</td>
+                          <td className="p-2 text-center text-blue-600 font-bold">{fmtNota(aluno.b2)}</td>
+                          <td className="p-2 text-center text-blue-600 font-bold">{fmtNota(aluno.b3)}</td>
+                          <td className="p-2 text-center text-blue-600 font-bold">{fmtNota(aluno.b4)}</td>
                           <td className={cn("p-2 text-center font-bold", mediaColor)}>{fmtNota(media)}</td>
                         </tr>
                       );
@@ -589,107 +638,59 @@ export function GradeReport() {
           ) : (
             <div className="text-center p-10 text-gray-500">Nenhum dado. Carregue os PDFs dos bimestres primeiro.</div>
           )
+        ) : (
+          grafico.length > 0 ? (
+            <div className="bg-surface rounded-3xl border border-gray-200 p-4 shadow-sm">
+              <h3 className="text-sm font-bold text-gray-700 mb-4 text-center">Media por Turma -- {bimestre}o Bimestre</h3>
+              <div className="overflow-x-auto">
+                <svg width={grafico.length * (BAR_W + GAP) + 40} height={BAR_H + 40}>
+                  {grafico.map((item, i) => {
+                    const x = 20 + i * (BAR_W + GAP);
+                    const barH = (item.media / 10) * BAR_H;
+                    const y = BAR_H - barH;
+                    return (
+                      <g key={item.turma}>
+                        <rect x={x} y={y} width={BAR_W} height={barH} fill={getBarColor(item.media)} rx={4} />
+                        <text x={x + BAR_W / 2} y={y - 4} textAnchor="middle" fontSize={9} fill="#374151" fontWeight="bold">
+                          {item.media.toFixed(1).replace(".", ",")}
+                        </text>
+                        <text x={x + BAR_W / 2} y={BAR_H + 14} textAnchor="middle" fontSize={9} fill="#6b7280">
+                          {item.turma}
+                        </text>
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
+              <div className="flex justify-center gap-4 mt-3 text-xs">
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-600 inline-block" /> 7,0</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-blue-600 inline-block" /> 5,0</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-amber-600 inline-block" /> 3,0</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-600 inline-block" /> 3,0</span>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center p-10 text-gray-500">Nenhum dado. Carregue PDFs das turmas primeiro.</div>
+          )
         )}
       </div>
-
-      {editando && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-4 sm:items-center">
-          <div className="bg-white rounded-2xl w-full max-w-sm p-6 flex flex-col gap-4">
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="text-base font-bold text-gray-800">Editar Nota</h3>
-                <p className="text-xs text-gray-500 mt-0.5 max-w-[220px] truncate">{editando.nome.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())}</p>
-                <p className="text-xs text-primary font-semibold mt-0.5">Turma {turma} — {bimestre}º Bimestre</p>
-              </div>
-              <button onClick={() => setEditando(null)} className="text-gray-400 hover:text-gray-600 p-1"><X className="w-5 h-5" /></button>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-500 block mb-1">NOVA NOTA</label>
-              <input type="text" value={editNota} onChange={e => setEditNota(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') salvarEdicao(); if (e.key === 'Escape') setEditando(null); }}
-                placeholder="Ex: 8,5 ou Remaj." autoFocus
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-lg font-bold text-center focus:outline-none focus:border-primary transition-colors" />
-              <p className="text-xs text-gray-400 mt-1.5 text-center">Use vírgula para decimais. Para notas especiais, digite o texto (ex: Remaj.)</p>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => setEditando(null)} className="flex-1 py-3 rounded-xl font-bold bg-gray-100 text-gray-600 hover:bg-gray-200 transition-all">Cancelar</button>
-              <button onClick={salvarEdicao} disabled={editSalvando}
-                className="flex-1 py-3 rounded-xl font-bold bg-primary text-white hover:bg-primary-dark transition-all flex items-center justify-center gap-2 disabled:opacity-60">
-                {editSalvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                {editSalvando ? 'Salvando...' : 'Salvar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {showImport && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white p-6 rounded-2xl w-full max-w-lg">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold">Carregar PDF — Turma {turma} | {bimestre}o Bim</h3>
+              <h3 className="text-lg font-bold">Carregar PDF -- Turma {turma} | {bimestre}o Bim</h3>
               <button onClick={() => setShowImport(false)}><X /></button>
             </div>
             {isProcessing ? (
-              <div className="text-center py-10"><p className="text-lg font-bold">Analisando PDF...</p><p className="text-sm text-gray-500">Isso pode levar alguns segundos.</p></div>
+              <div className="text-center py-10">
+                <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-blue-600" />
+                <p className="text-lg font-bold">Analisando PDF...</p>
+                <p className="text-sm text-gray-500">Extraindo notas, situacao e faltas...</p>
+              </div>
             ) : (
-              <input type="file" accept="application/pdf" onChange={handleFileUpload} className="w-full p-3 border border-gray-300 rounded-xl" />
-            )}
-          </div>
-        </div>
-      )}
-
-      {showImportExcel && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white p-6 rounded-2xl w-full max-w-lg flex flex-col gap-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-bold">Importar Notas — Excel</h3>
-              <button onClick={() => setShowImportExcel(false)}><X /></button>
-            </div>
-            {!importConcluido ? (
-              <>
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm text-emerald-800">
-                  <p className="font-bold mb-1">Formato esperado:</p>
-                  <ul className="list-disc list-inside space-y-1 text-xs">
-                    <li>Cada aba = uma turma (ex: "9ª F" ou "9F")</li>
-                    <li>Linha 1: Título com bimestre</li>
-                    <li>Linha 2: Cabeçalho (Nº, Nome, Nota)</li>
-                    <li>Linha 3+: Dados dos alunos</li>
-                  </ul>
-                </div>
-                {importandoExcel ? (
-                  <div className="flex flex-col items-center gap-3 py-6">
-                    <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
-                    <p className="text-sm font-semibold text-gray-600">Importando notas de todas as turmas...</p>
-                  </div>
-                ) : (
-                  <label className="flex flex-col items-center justify-center gap-3 py-8 border-2 border-dashed border-emerald-300 rounded-xl cursor-pointer hover:bg-emerald-50 transition-colors">
-                    <Table2 className="w-10 h-10 text-emerald-600" />
-                    <p className="font-bold text-emerald-700">Clique para selecionar a planilha</p>
-                    <p className="text-xs text-gray-400">.xlsx ou .xls</p>
-                    <input type="file" accept=".xlsx,.xls" onChange={handleImportExcel} className="hidden" />
-                  </label>
-                )}
-              </>
-            ) : (
-              <>
-                <div className="flex flex-col gap-2 max-h-80 overflow-y-auto">
-                  {resultadoImport.map((r, i) => (
-                    <div key={i} className={cn("flex items-center justify-between px-4 py-2.5 rounded-xl text-sm", r.status === 'ok' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200')}>
-                      <div className="flex items-center gap-2">
-                        {r.status === 'ok' ? <CheckCircle className="w-4 h-4 text-green-600 shrink-0" /> : <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />}
-                        <span className="font-bold">Turma {r.turma}</span>
-                        <span className="text-gray-500 text-xs">· {r.bimestre}º Bim · {r.total} alunos</span>
-                      </div>
-                      {r.status === 'erro' && <span className="text-xs text-red-600">{r.msg}</span>}
-                    </div>
-                  ))}
-                </div>
-                <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-700 font-medium text-center">
-                  ✅ {resultadoImport.filter(r => r.status === 'ok').length} turmas importadas com sucesso!
-                </div>
-                <button onClick={() => setShowImportExcel(false)} className="w-full py-3 rounded-xl font-bold bg-primary text-white hover:opacity-90 transition-all">Fechar</button>
-              </>
+              <input type="file" accept="application/pdf" onChange={handleFileUpload}
+                className="w-full p-3 border border-gray-300 rounded-xl" />
             )}
           </div>
         </div>
