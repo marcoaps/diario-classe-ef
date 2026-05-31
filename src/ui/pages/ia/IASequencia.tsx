@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { BookOpen, FileText, Loader2, Download, ChevronDown, ChevronUp, GraduationCap, Info } from 'lucide-react';
 import { getCurriculumData, formatCurriculumForPrompt, getAnoFromTurma } from '../../../data/curriculumData';
 
-// â”€â”€â”€ Turmas disponÃ­veis â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Turmas disponíveis ──────────────────────────────────────────────────────
 const TURMAS = [
   '6F',
   '7B','7C','7D','7E','7F',
@@ -12,13 +12,13 @@ const TURMAS = [
 
 const BIMESTRES = ['1','2','3','4'];
 const BIMESTRE_LABELS: Record<string, string> = {
-  '1': '1Âº Bimestre',
-  '2': '2Âº Bimestre',
-  '3': '3Âº Bimestre',
-  '4': '4Âº Bimestre',
+  '1': '1º Bimestre',
+  '2': '2º Bimestre',
+  '3': '3º Bimestre',
+  '4': '4º Bimestre',
 };
 
-// â”€â”€â”€ Tipos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Tipos ───────────────────────────────────────────────────────────────────
 interface FormData {
   turma: string;
   bimestre: string;
@@ -36,8 +36,8 @@ interface Sequencia {
   geradaEm: string;
 }
 
-// â”€â”€â”€ Componente â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-export function IASequencia() {
+// ─── Componente ──────────────────────────────────────────────────────────────
+export default function IASequencia() {
   const [form, setForm] = useState<FormData>({
     turma: '',
     bimestre: '',
@@ -58,7 +58,7 @@ export function IASequencia() {
 
   const anoSelecionado = getAnoFromTurma(form.turma);
 
-  // â”€â”€ Gera a sequÃªncia didÃ¡tica â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Gera a sequência didática ──────────────────────────────────────────────
   async function gerarSequencia() {
     if (!form.turma || !form.bimestre || !form.tema) {
       setErro('Preencha turma, bimestre e tema.');
@@ -69,7 +69,7 @@ export function IASequencia() {
     setSequencia(null);
 
     try {
-      // Monta contexto do plano de curso, se disponÃ­vel e habilitado
+      // Monta contexto do plano de curso, se disponível e habilitado
       let contextoPlanoCurso = '';
       if (form.usarPlanoCurso && curriculumPreview) {
         contextoPlanoCurso = formatCurriculumForPrompt(
@@ -79,55 +79,55 @@ export function IASequencia() {
         );
       }
 
-      const prompt = `VocÃª Ã© um professor experiente de EducaÃ§Ã£o FÃ­sica do Ensino Fundamental Anos Finais.
-Crie uma sequÃªncia didÃ¡tica detalhada para a seguinte situaÃ§Ã£o:
+      const prompt = `Você é um professor experiente de Educação Física do Ensino Fundamental Anos Finais.
+Crie uma sequência didática detalhada para a seguinte situação:
 
-TURMA: ${form.turma} (${anoSelecionado}Âº ano)
+TURMA: ${form.turma} (${anoSelecionado}º ano)
 BIMESTRE: ${BIMESTRE_LABELS[form.bimestre]}
-TEMA / CONTEÃšDO: ${form.tema}
-NÃšMERO DE AULAS: ${form.numAulas}
-${form.observacoes ? `OBSERVAÃ‡Ã•ES DO PROFESSOR: ${form.observacoes}` : ''}
+TEMA / CONTEÚDO: ${form.tema}
+NÚMERO DE AULAS: ${form.numAulas}
+${form.observacoes ? `OBSERVAÇÕES DO PROFESSOR: ${form.observacoes}` : ''}
 
-${contextoPlanoCurso ? `\n${contextoPlanoCurso}\n\nIMPORTANTE: A sequÃªncia didÃ¡tica DEVE estar alinhada ao Plano de Curso Oficial acima. Utilize os objetivos, habilidades, objetos de conhecimento, propostas de atividades e formas de avaliaÃ§Ã£o do plano como base para estruturar a sequÃªncia.` : ''}
+${contextoPlanoCurso ? `\n${contextoPlanoCurso}\n\nIMPORTANTE: A sequência didática DEVE estar alinhada ao Plano de Curso Oficial acima. Utilize os objetivos, habilidades, objetos de conhecimento, propostas de atividades e formas de avaliação do plano como base para estruturar a sequência.` : ''}
 
-A sequÃªncia didÃ¡tica deve ter a seguinte estrutura:
+A sequência didática deve ter a seguinte estrutura:
 
-## SEQUÃŠNCIA DIDÃTICA
+## SEQUÊNCIA DIDÁTICA
 **Turma:** ${form.turma} | **Bimestre:** ${BIMESTRE_LABELS[form.bimestre]}
 **Tema:** ${form.tema}
-**NÃºmero de Aulas:** ${form.numAulas}
+**Número de Aulas:** ${form.numAulas}
 
 ### OBJETIVOS DE APRENDIZAGEM
-(Liste de 3 a 5 objetivos especÃ­ficos para esta sequÃªncia)
+(Liste de 3 a 5 objetivos específicos para esta sequência)
 
 ### HABILIDADES TRABALHADAS
 (Liste as habilidades da BNCC / Plano de Curso contempladas)
 
 ### OBJETOS DE CONHECIMENTO
-(Liste os conteÃºdos conceituais, procedimentais e atitudinais)
+(Liste os conteúdos conceituais, procedimentais e atitudinais)
 
-### DESENVOLVIMENTO DA SEQUÃŠNCIA
+### DESENVOLVIMENTO DA SEQUÊNCIA
 
-#### Aula 1 â€“ [TÃ­tulo da Aula]
-**DuraÃ§Ã£o:** 50 minutos
+#### Aula 1 – [Título da Aula]
+**Duração:** 50 minutos
 **Objetivo:** ...
 **Aquecimento (10 min):** ...
 **Parte Principal (30 min):** ...
-**Volta Ã  Calma / Roda de Conversa (10 min):** ...
+**Volta à Calma / Roda de Conversa (10 min):** ...
 **Materiais:** ...
 
 (Repita para cada aula planejada)
 
-### AVALIAÃ‡ÃƒO
-(Descreva as formas de avaliaÃ§Ã£o alinhadas ao plano de curso)
+### AVALIAÇÃO
+(Descreva as formas de avaliação alinhadas ao plano de curso)
 
-### RECURSOS NECESSÃRIOS
-(Liste os materiais necessÃ¡rios para toda a sequÃªncia)
+### RECURSOS NECESSÁRIOS
+(Liste os materiais necessários para toda a sequência)
 
-### REFERÃŠNCIAS / OBSERVAÃ‡Ã•ES PEDAGÃ“GICAS
+### REFERÊNCIAS / OBSERVAÇÕES PEDAGÓGICAS
 (Dicas adicionais para o professor)
 
-Seja especÃ­fico, prÃ¡tico e adequado Ã  realidade de uma escola pÃºblica. Use linguagem clara e direta.`;
+Seja específico, prático e adequado à realidade de uma escola pública. Use linguagem clara e direta.`;
 
       const response = await fetch('/api/claude', {
         method: 'POST',
@@ -162,7 +162,7 @@ Seja especÃ­fico, prÃ¡tico e adequado Ã  realidade de uma escola pÃºblic
     }
   }
 
-  // â”€â”€ Download como .txt â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Download como .txt ─────────────────────────────────────────────────────
   function baixarSequencia() {
     if (!sequencia) return;
     const blob = new Blob([sequencia.conteudo], { type: 'text/plain;charset=utf-8' });
@@ -174,27 +174,27 @@ Seja especÃ­fico, prÃ¡tico e adequado Ã  realidade de uma escola pÃºblic
     URL.revokeObjectURL(url);
   }
 
-  // â”€â”€ RenderizaÃ§Ã£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Renderização ──────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-4xl mx-auto">
 
-        {/* CabeÃ§alho */}
+        {/* Cabeçalho */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-2">
             <div className="bg-indigo-600 p-2 rounded-lg">
               <BookOpen className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Gerador de SequÃªncia DidÃ¡tica</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Gerador de Sequência Didática</h1>
               <p className="text-sm text-gray-500">Plano de Curso 2026 integrado automaticamente</p>
             </div>
           </div>
         </div>
 
-        {/* FormulÃ¡rio */}
+        {/* Formulário */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">ConfiguraÃ§Ã£o da SequÃªncia</h2>
+          <h2 className="text-lg font-semibold text-gray-800 mb-4">Configuração da Sequência</h2>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             {/* Turma */}
@@ -229,19 +229,19 @@ Seja especÃ­fico, prÃ¡tico e adequado Ã  realidade de uma escola pÃºblic
 
             {/* Tema */}
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tema / ConteÃºdo *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Tema / Conteúdo *</label>
               <input
                 type="text"
                 value={form.tema}
                 onChange={e => setForm(f => ({ ...f, tema: e.target.value }))}
-                placeholder="Ex: Jogos cooperativos, Handebol, DanÃ§a de rua..."
+                placeholder="Ex: Jogos cooperativos, Handebol, Dança de rua..."
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               />
             </div>
 
-            {/* NÃºmero de aulas */}
+            {/* Número de aulas */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">NÃºmero de Aulas</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Número de Aulas</label>
               <select
                 value={form.numAulas}
                 onChange={e => setForm(f => ({ ...f, numAulas: e.target.value }))}
@@ -253,14 +253,14 @@ Seja especÃ­fico, prÃ¡tico e adequado Ã  realidade de uma escola pÃºblic
               </select>
             </div>
 
-            {/* ObservaÃ§Ãµes */}
+            {/* Observações */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">ObservaÃ§Ãµes (opcional)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Observações (opcional)</label>
               <input
                 type="text"
                 value={form.observacoes}
                 onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
-                placeholder="RestriÃ§Ãµes, foco especial, etc."
+                placeholder="Restrições, foco especial, etc."
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               />
             </div>
@@ -280,7 +280,7 @@ Seja especÃ­fico, prÃ¡tico e adequado Ã  realidade de uma escola pÃºblic
             <label htmlFor="usarPlanoCurso" className="flex items-center gap-2 text-sm text-indigo-800 cursor-pointer">
               <GraduationCap className="w-4 h-4" />
               <span className="font-medium">Usar Plano de Curso Oficial 2026</span>
-              <span className="text-indigo-600 text-xs">(alinha objetivos, habilidades e avaliaÃ§Ã£o ao currÃ­culo da SEEC/AC)</span>
+              <span className="text-indigo-600 text-xs">(alinha objetivos, habilidades e avaliação ao currículo da SEEC/AC)</span>
             </label>
           </div>
 
@@ -294,10 +294,10 @@ Seja especÃ­fico, prÃ¡tico e adequado Ã  realidade de uma escola pÃºblic
                 <div className="flex items-center gap-2 text-sm font-medium text-indigo-700">
                   <Info className="w-4 h-4" />
                   <span>
-                    Plano de Curso: {anoSelecionado}Âº Ano â€” {BIMESTRE_LABELS[form.bimestre]}
+                    Plano de Curso: {anoSelecionado}º Ano — {BIMESTRE_LABELS[form.bimestre]}
                   </span>
                   <span className="text-xs bg-indigo-200 text-indigo-800 px-2 py-0.5 rounded-full">
-                    {curriculumPreview.objetosConhecimento.length} conteÃºdos
+                    {curriculumPreview.objetosConhecimento.length} conteúdos
                   </span>
                 </div>
                 {showCurriculumPreview ? (
@@ -310,7 +310,7 @@ Seja especÃ­fico, prÃ¡tico e adequado Ã  realidade de uma escola pÃºblic
               {showCurriculumPreview && (
                 <div className="p-4 text-xs text-gray-700 space-y-3 max-h-96 overflow-y-auto">
                   <div>
-                    <p className="font-semibold text-gray-900 mb-1">ðŸŽ¯ Objetivos / Capacidades</p>
+                    <p className="font-semibold text-gray-900 mb-1">🎯 Objetivos / Capacidades</p>
                     <ul className="space-y-1">
                       {curriculumPreview.objetivos.slice(0, 3).map((o, i) => (
                         <li key={i} className="text-gray-600 pl-3 border-l-2 border-indigo-200">{o}</li>
@@ -321,7 +321,7 @@ Seja especÃ­fico, prÃ¡tico e adequado Ã  realidade de uma escola pÃºblic
                     </ul>
                   </div>
                   <div>
-                    <p className="font-semibold text-gray-900 mb-1">ðŸ“š Objetos de Conhecimento</p>
+                    <p className="font-semibold text-gray-900 mb-1">📚 Objetos de Conhecimento</p>
                     <div className="flex flex-wrap gap-1">
                       {curriculumPreview.objetosConhecimento.map((o, i) => (
                         <span key={i} className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded text-xs">{o}</span>
@@ -329,7 +329,7 @@ Seja especÃ­fico, prÃ¡tico e adequado Ã  realidade de uma escola pÃºblic
                     </div>
                   </div>
                   <div>
-                    <p className="font-semibold text-gray-900 mb-1">ðŸ“‹ Formas de AvaliaÃ§Ã£o</p>
+                    <p className="font-semibold text-gray-900 mb-1">📋 Formas de Avaliação</p>
                     <ul className="space-y-1">
                       {curriculumPreview.formasAvaliacao.slice(0, 3).map((f, i) => (
                         <li key={i} className="text-gray-600 pl-3 border-l-2 border-green-200">{f}</li>
@@ -341,10 +341,10 @@ Seja especÃ­fico, prÃ¡tico e adequado Ã  realidade de uma escola pÃºblic
             </div>
           )}
 
-          {/* Alerta: plano nÃ£o encontrado */}
+          {/* Alerta: plano não encontrado */}
           {form.usarPlanoCurso && form.turma && form.bimestre && !curriculumPreview && (
             <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800">
-              âš ï¸ Plano de curso nÃ£o encontrado para {anoSelecionado}Âº ano / {BIMESTRE_LABELS[form.bimestre]}. A sequÃªncia serÃ¡ gerada sem o currÃ­culo oficial.
+              ⚠️ Plano de curso não encontrado para {anoSelecionado}º ano / {BIMESTRE_LABELS[form.bimestre]}. A sequência será gerada sem o currículo oficial.
             </div>
           )}
 
@@ -355,7 +355,7 @@ Seja especÃ­fico, prÃ¡tico e adequado Ã  realidade de uma escola pÃºblic
             </div>
           )}
 
-          {/* BotÃ£o Gerar */}
+          {/* Botão Gerar */}
           <button
             onClick={gerarSequencia}
             disabled={loading || !form.turma || !form.bimestre || !form.tema}
@@ -364,12 +364,12 @@ Seja especÃ­fico, prÃ¡tico e adequado Ã  realidade de uma escola pÃºblic
             {loading ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                <span>Gerando sequÃªncia...</span>
+                <span>Gerando sequência...</span>
               </>
             ) : (
               <>
                 <BookOpen className="w-5 h-5" />
-                <span>Gerar SequÃªncia DidÃ¡tica</span>
+                <span>Gerar Sequência Didática</span>
               </>
             )}
           </button>
@@ -378,12 +378,12 @@ Seja especÃ­fico, prÃ¡tico e adequado Ã  realidade de uma escola pÃºblic
         {/* Resultado */}
         {sequencia && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            {/* CabeÃ§alho do resultado */}
+            {/* Cabeçalho do resultado */}
             <div className="bg-indigo-600 px-6 py-4 flex items-center justify-between">
               <div>
-                <h2 className="text-white font-semibold text-lg">SequÃªncia DidÃ¡tica Gerada</h2>
+                <h2 className="text-white font-semibold text-lg">Sequência Didática Gerada</h2>
                 <p className="text-indigo-200 text-sm">
-                  {sequencia.turma} â€¢ {sequencia.bimestre} â€¢ {sequencia.tema}
+                  {sequencia.turma} • {sequencia.bimestre} • {sequencia.tema}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -398,7 +398,7 @@ Seja especÃ­fico, prÃ¡tico e adequado Ã  realidade de uma escola pÃºblic
               </div>
             </div>
 
-            {/* ConteÃºdo renderizado como markdown simples */}
+            {/* Conteúdo renderizado como markdown simples */}
             <div className="p-6 prose prose-sm max-w-none overflow-x-auto">
               <MarkdownRenderer content={sequencia.conteudo} />
             </div>
@@ -409,7 +409,7 @@ Seja especÃ­fico, prÃ¡tico e adequado Ã  realidade de uma escola pÃºblic
   );
 }
 
-// â”€â”€â”€ Renderizador de markdown simples â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Renderizador de markdown simples ────────────────────────────────────────
 function MarkdownRenderer({ content }: { content: string }) {
   const lines = content.split('\n');
 
@@ -458,4 +458,3 @@ function renderInline(text: string): React.ReactNode {
   if (last < text.length) parts.push(text.slice(last));
   return parts.length === 1 ? parts[0] : <>{parts}</>;
 }
-
