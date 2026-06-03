@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 
 const DISCIPLINAS = [
@@ -21,6 +21,8 @@ interface GrupoData {
   nome: string;
   turmas: TurmaData[];
 }
+
+const STORAGE_KEY = 'rendimento_ef_2026';
 
 const makeVazio = (): Record<Disciplina, number> =>
   Object.fromEntries(DISCIPLINAS.map(d => [d, 0])) as Record<Disciplina, number>;
@@ -80,6 +82,14 @@ const COR_GRUPO: Record<string, string> = {
   '9 ANO': '#2a1a3a',
 };
 
+function carregarDados(): GrupoData[][] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return BIMESTRES.map(() => JSON.parse(JSON.stringify(GRUPOS_INICIAIS)));
+}
+
 function TelaCelular() {
   return (
     <div style={{
@@ -111,11 +121,12 @@ function TelaCelular() {
 export function RendimentoBimestre() {
   const [isMobile, setIsMobile] = useState(false);
   const [bimestre, setBimestre] = useState(0);
-  const [grupos, setGrupos] = useState<GrupoData[][]>(
-    BIMESTRES.map(() => JSON.parse(JSON.stringify(GRUPOS_INICIAIS)))
-  );
+  const [grupos, setGrupos] = useState<GrupoData[][]>(carregarDados);
   const [abaAtiva, setAbaAtiva] = useState<string | null>(null);
   const [exportando, setExportando] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [ultimoSalvo, setUltimoSalvo] = useState<string | null>(null);
+  const [alterado, setAlterado] = useState(false);
 
   useEffect(() => {
     const check = () => {
@@ -126,6 +137,50 @@ export function RendimentoBimestre() {
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
   }, []);
+
+  // Carrega timestamp do ultimo salvo
+  useEffect(() => {
+    const ts = localStorage.getItem(STORAGE_KEY + '_ts');
+    if (ts) setUltimoSalvo(ts);
+  }, []);
+
+  // Auto-save a cada 30 segundos se houver alteracoes
+  useEffect(() => {
+    if (!alterado) return;
+    const timer = setTimeout(() => {
+      salvar(true);
+    }, 30000);
+    return () => clearTimeout(timer);
+  }, [grupos, alterado]);
+
+  const salvar = useCallback((auto = false) => {
+    setSalvando(true);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(grupos));
+      const agora = new Date().toLocaleString('pt-BR');
+      localStorage.setItem(STORAGE_KEY + '_ts', agora);
+      setUltimoSalvo(agora);
+      setAlterado(false);
+      if (!auto) {
+        // Feedback visual rapido
+        setTimeout(() => setSalvando(false), 800);
+      } else {
+        setSalvando(false);
+      }
+    } catch {
+      setSalvando(false);
+    }
+  }, [grupos]);
+
+  const limpar = () => {
+    if (!confirm('Limpar todos os dados? Esta acao nao pode ser desfeita.')) return;
+    const zerado = BIMESTRES.map(() => JSON.parse(JSON.stringify(GRUPOS_INICIAIS)));
+    setGrupos(zerado);
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_KEY + '_ts');
+    setUltimoSalvo(null);
+    setAlterado(false);
+  };
 
   if (isMobile) return <TelaCelular />;
 
@@ -144,6 +199,7 @@ export function RendimentoBimestre() {
       }
       return clone;
     });
+    setAlterado(true);
   };
 
   const atualTrans = (gi: number, ti: number, valor: string) => {
@@ -152,6 +208,7 @@ export function RendimentoBimestre() {
       clone[bimestre][gi].turmas[ti].trans = valor;
       return clone;
     });
+    setAlterado(true);
   };
 
   const totaisGrupo = (turmas: TurmaData[], disc: Disciplina) => ({
@@ -217,31 +274,57 @@ export function RendimentoBimestre() {
       overflow: 'hidden', zIndex: 50,
     }}>
       {/* Header */}
-      <div style={{ background: '#0a3055', padding: '12px 24px', borderBottom: '2px solid #1565c0', flexShrink: 0 }}>
-        <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#e8eaf6' }}>
+      <div style={{ background: '#0a3055', padding: '10px 24px', borderBottom: '2px solid #1565c0', flexShrink: 0 }}>
+        <h1 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#e8eaf6' }}>
           Escola Estadual Instituto Odilon Pratagi
         </h1>
-        <p style={{ margin: '2px 0 0', fontSize: 12, color: '#90caf9' }}>
+        <p style={{ margin: '2px 0 0', fontSize: 11, color: '#90caf9' }}>
           Resultado do {BIMESTRES[bimestre]} - Ensino Fundamental - 2026
         </p>
       </div>
 
       {/* Controles */}
-      <div style={{ background: '#162032', padding: '8px 24px', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', borderBottom: '1px solid #1e3a5f', flexShrink: 0 }}>
-        <span style={{ fontSize: 13, color: '#90caf9', fontWeight: 600 }}>Bimestre:</span>
+      <div style={{ background: '#162032', padding: '8px 24px', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', borderBottom: '1px solid #1e3a5f', flexShrink: 0 }}>
+        <span style={{ fontSize: 12, color: '#90caf9', fontWeight: 600 }}>Bimestre:</span>
         {BIMESTRES.map((b, i) => (
           <button key={b} onClick={() => setBimestre(i)} style={{
-            padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer',
+            padding: '4px 12px', borderRadius: 6, border: 'none', cursor: 'pointer',
             background: bimestre === i ? '#1565c0' : '#1e3a5f',
-            color: '#e8eaf6', fontWeight: bimestre === i ? 700 : 400, fontSize: 13,
+            color: '#e8eaf6', fontWeight: bimestre === i ? 700 : 400, fontSize: 12,
           }}>{b}</button>
         ))}
         <div style={{ flex: 1 }} />
+
+        {/* Status de salvamento */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#78909c' }}>
+          {alterado && <span style={{ color: '#ffa726' }}>&#9679; Alteracoes nao salvas</span>}
+          {!alterado && ultimoSalvo && <span style={{ color: '#66bb6a' }}>&#10003; Salvo em {ultimoSalvo}</span>}
+        </div>
+
+        {/* Botao Salvar */}
+        <button onClick={() => salvar(false)} disabled={salvando || !alterado}
+          style={{
+            padding: '5px 14px', borderRadius: 6, border: 'none', cursor: alterado ? 'pointer' : 'default',
+            background: salvando ? '#1b5e20' : alterado ? '#2e7d32' : '#1e3a5f',
+            color: '#fff', fontWeight: 600, fontSize: 12,
+            opacity: !alterado && !salvando ? 0.5 : 1,
+            transition: 'all 0.2s',
+          }}>
+          {salvando ? '&#10003; Salvo!' : 'Salvar'}
+        </button>
+
         <button onClick={exportarExcel} disabled={exportando} style={{
-          padding: '6px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
-          background: '#2e7d32', color: '#fff', fontWeight: 600, fontSize: 13,
+          padding: '5px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
+          background: '#1565c0', color: '#fff', fontWeight: 600, fontSize: 12,
         }}>
           {exportando ? 'Exportando...' : 'Exportar Excel'}
+        </button>
+
+        <button onClick={limpar} style={{
+          padding: '5px 12px', borderRadius: 6, border: '1px solid #7b1a1a', cursor: 'pointer',
+          background: 'transparent', color: '#ef5350', fontWeight: 600, fontSize: 12,
+        }}>
+          Limpar
         </button>
       </div>
 
