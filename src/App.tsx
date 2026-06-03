@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { StoreProvider } from './store';
 import { AppLayout } from './ui/AppLayout';
@@ -26,8 +26,6 @@ import { IAProvasIA } from './ui/pages/ia/IAProvasIA';
 import { IAAtividadesLudicas } from './ui/pages/ia/IAAtividadesLudicas';
 import { IAAtividadesAdaptadas } from './ui/pages/ia/IAAtividadesAdaptadas';
 import { IAIdeiasAvaliacoes } from './ui/pages/ia/IAIdeiasAvaliacoes';
-import { CadernetaOficial } from './ui/pages/CadernetaOficial';
-import { CadernetaOficial } from './ui/pages/CadernetaOficial';
 import { IAProvaOficial } from './ui/pages/ia/IAProvaOficial';
 import { supabase } from './data/supabase';
 
@@ -78,7 +76,7 @@ export default function App() {
           <Route path="/history" element={<AttendanceHistory />} />
           <Route path="/report" element={<AttendanceReport />} />
           <Route path="/evaluations" element={<Evaluations />} />
-          <Route path="/grades" element={<GradeReport />} />`n          <Route path="/caderneta" element={<CadernetaOficial />} />`n          <Route path="/caderneta" element={<CadernetaOficial />} />
+          <Route path="/grades" element={<GradeReport />} />
           <Route path="/reset" element={<SystemReset />} />
           <Route path="/provas" element={<ProvasOnline />} />
           <Route path="/qrcodes" element={<GerarQRCodes />} />
@@ -103,5 +101,3 @@ export default function App() {
     </BrowserRouter>
   );
 }
-
-
