@@ -27,6 +27,7 @@ import { IAAtividadesLudicas } from './ui/pages/ia/IAAtividadesLudicas';
 import { IAAtividadesAdaptadas } from './ui/pages/ia/IAAtividadesAdaptadas';
 import { IAIdeiasAvaliacoes } from './ui/pages/ia/IAIdeiasAvaliacoes';
 import { IAProvaOficial } from './ui/pages/ia/IAProvaOficial';
+import { RendimentoBimestre } from './ui/pages/RendimentoBimestre';
 import { supabase } from './data/supabase';
 
 export function useAuth() {
@@ -81,6 +82,7 @@ export default function App() {
           <Route path="/provas" element={<ProvasOnline />} />
           <Route path="/qrcodes" element={<GerarQRCodes />} />
           <Route path="/alunos" element={<CentralAluno />} />
+          <Route path="/rendimento" element={<RendimentoBimestre />} />
 
           {/* Rotas IA */}
           <Route path="/ia" element={<IAHub />} />
