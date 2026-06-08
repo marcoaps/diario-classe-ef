@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+﻿import React, { useEffect, useState, useMemo } from 'react';
 import { useStore } from '../../store';
 import { MIN_PASSING_GRADE, MAX_ABSENCES_TOTAL, ClassRoom, Student } from '../../domain/types';
 import { ChevronRight, UserX, Users, Download, X, CheckSquare, BarChart3, CalendarSearch, Edit, Trash2, Star, ChevronDown, GraduationCap, ChevronUp, Share2, Copy, CheckCircle } from 'lucide-react';
@@ -201,22 +201,22 @@ export function Dashboard() {
           <div className="flex-1 min-w-0">
             <p className="font-black text-sm text-[#1a2e6e] leading-tight">Instituto Odilon Pratagi</p>
             <p className="text-xs text-gray-500">Escola Estadual · Brasiléia - AC</p>
-            <p className="text-lg font-black text-gray-900 mt-0.5">Olá, Professor! 👋</p>
+            <p className="text-lg font-black text-gray-900 mt-0.5">Olá, Professor! ðŸ‘‹</p>
           </div>
         </div>
         <div className="flex gap-2">
           <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 border border-red-200 text-red-700 text-xs font-bold">
-            📚 {totalStudents} alunos
+            ðŸ“š {totalStudents} alunos
           </span>
           <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 border border-red-200 text-red-700 text-xs font-bold">
-            🏫 {sortedClassRooms.length} turmas
+            ðŸ« {sortedClassRooms.length} turmas
           </span>
         </div>
       </div>
 
       <div className="px-4 flex flex-col gap-4">
 
-        {/* Botão Central do Aluno — destaque */}
+        {/* Botão Central do Aluno â€” destaque */}
         <button
           onClick={() => navigate('/alunos')}
           className="w-full flex items-center gap-4 p-4 rounded-2xl text-left transition-all active:scale-95"
@@ -230,7 +230,7 @@ export function Dashboard() {
             <p className="text-blue-300 text-xs mt-0.5">QR Codes · Provas · Resultados</p>
           </div>
           <span className="px-3 py-1.5 rounded-full text-xs font-black text-white shrink-0" style={{ background: '#dc2626' }}>
-            ACESSAR →
+            ACESSAR â†’
           </span>
         </button>
 
@@ -247,7 +247,7 @@ export function Dashboard() {
             <p className="text-gray-400 text-xs mt-0.5">Enviar link das provas pelo WhatsApp</p>
           </div>
           <span className="px-3 py-1.5 rounded-full text-xs font-black text-white shrink-0 bg-green-600">
-            ENVIAR →
+            ENVIAR â†’
           </span>
         </button>
 
@@ -306,7 +306,7 @@ export function Dashboard() {
                           {year}º
                         </div>
                         <div className="text-left">
-                          <p className="font-bold text-sm text-gray-900">{year}º Ano — EF II</p>
+                          <p className="font-bold text-sm text-gray-900">{year}º Ano â€” EF II</p>
                           <p className="text-xs text-gray-400">{turmas.length} {turmas.length === 1 ? 'turma' : 'turmas'} · {totalByYear(year)} alunos</p>
                         </div>
                       </div>
@@ -366,11 +366,11 @@ export function Dashboard() {
             {/* Botão WhatsApp */}
             <a
               href={`https://wa.me/?text=${encodeURIComponent(
-                `📚 *Portal do Aluno — Instituto Odilon Pratagi*\n\n` +
+                `ðŸ“š *Portal do Aluno â€” Instituto Odilon Pratagi*\n\n` +
                 `Acesse o link abaixo para realizar sua avaliação online:\n` +
-                `👉 ${window.location.origin}/responder\n\n` +
+                `ðŸ‘‰ ${window.location.origin}/responder\n\n` +
                 `Digite o código da prova informado pelo professor.\n\n` +
-                `_Instituto Odilon Pratagi — Brasiléia/AC_`
+                `_Instituto Odilon Pratagi â€” Brasiléia/AC_`
               )}`}
               target="_blank"
               rel="noopener noreferrer"
@@ -498,3 +498,4 @@ const StudentRiskCard: React.FC<{ student: Student }> = ({ student }) => {
     </div>
   );
 };
+
