@@ -19,10 +19,10 @@ export function AppLayout() {
         <div className="flex items-center gap-2 px-2 py-1">
           <img
             src={LOGO_URL}
-            alt="DiÃ¡rio de Classe EF"
+            alt="Diário de Classe EF"
             className="w-8 h-8 object-contain rounded-lg flex-shrink-0"
           />
-          <span className="font-bold text-base text-primary">DiÃ¡rio de Classe EF</span>
+          <span className="font-bold text-base text-primary">Diário de Classe EF</span>
         </div>
 
         <div className="flex items-center gap-sm">
@@ -48,8 +48,8 @@ export function AppLayout() {
       <nav className="fixed bottom-0 left-0 right-0 h-16 bg-surface border-t border-outline-variant shadow-lg flex items-center justify-around px-2 z-50 rounded-t-xl">
         <NavItem to="/" icon={<Users />} label="Turmas" />
         <NavItem to="/attendance" icon={<CheckSquare />} label="Chamada" />
-        <NavItem to="/history" icon={<CalendarSearch />} label="HistÃ³rico" />
-        <NavItem to="/report" icon={<BarChart3 />} label="RelatÃ³rios" />
+        <NavItem to="/history" icon={<CalendarSearch />} label="Histórico" />
+        <NavItem to="/report" icon={<BarChart3 />} label="Relatórios" />
         <NavItem to="/grades" icon={<GraduationCap />} label="Notas" />
         <NavItem to="/rendimento" icon={<TrendingUp />} label="Rendimento" />
         <NavItem to="/alunos" icon={<QrCode />} label="Alunos" />
