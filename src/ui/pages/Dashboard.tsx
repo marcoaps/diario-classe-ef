@@ -201,15 +201,15 @@ export function Dashboard() {
           <div className="flex-1 min-w-0">
             <p className="font-black text-sm text-[#1a2e6e] leading-tight">Instituto Odilon Pratagi</p>
             <p className="text-xs text-gray-500">Escola Estadual · Brasiléia - AC</p>
-            <p className="text-lg font-black text-gray-900 mt-0.5">Olá, Professor! ðŸ‘‹</p>
+            <p className="text-lg font-black text-gray-900 mt-0.5">Olá, Professor! 👋</p>
           </div>
         </div>
         <div className="flex gap-2">
           <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 border border-red-200 text-red-700 text-xs font-bold">
-            ðŸ“š {totalStudents} alunos
+            📚 {totalStudents} alunos
           </span>
           <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 border border-red-200 text-red-700 text-xs font-bold">
-            ðŸ« {sortedClassRooms.length} turmas
+             {sortedClassRooms.length} turmas
           </span>
         </div>
       </div>
@@ -366,9 +366,9 @@ export function Dashboard() {
             {/* Botão WhatsApp */}
             <a
               href={`https://wa.me/?text=${encodeURIComponent(
-                `ðŸ“š *Portal do Aluno â€” Instituto Odilon Pratagi*\n\n` +
+                `📚 *Portal do Aluno â€” Instituto Odilon Pratagi*\n\n` +
                 `Acesse o link abaixo para realizar sua avaliação online:\n` +
-                `ðŸ‘‰ ${window.location.origin}/responder\n\n` +
+                `👉 ${window.location.origin}/responder\n\n` +
                 `Digite o código da prova informado pelo professor.\n\n` +
                 `_Instituto Odilon Pratagi â€” Brasiléia/AC_`
               )}`}
