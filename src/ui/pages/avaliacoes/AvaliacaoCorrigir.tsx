@@ -62,25 +62,35 @@ export function AvaliacaoCorrigir() {
   async function iniciarCamera() {
     setErro('');
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        const video = videoRef.current;
-        video.srcObject = stream;
-        video.setAttribute('playsinline', 'true');
-        video.setAttribute('muted', 'true');
-        video.muted = true;
-        await new Promise<void>((resolve) => {
-          video.onloadedmetadata = () => resolve();
+      // Tenta camera traseira primeiro, se falhar usa qualquer camera
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { exact: 'environment' } }
         });
-        await video.play();
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
       }
+      streamRef.current = stream;
       setCameraAtiva(true);
-      scanLoop();
+      // Aguarda o elemento video estar pronto no DOM
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.muted = true;
+          videoRef.current.play().then(() => {
+            scanLoop();
+          }).catch(() => {
+            // Tenta novamente após breve delay
+            setTimeout(() => {
+              videoRef.current?.play();
+              scanLoop();
+            }, 500);
+          });
+        }
+      }, 100);
     } catch {
-      setErro('Não foi possível acessar a câmera. Verifique as permissões.');
+      setErro('Não foi possível acessar a câmera. Verifique as permissões do navegador.');
     }
   }
 
