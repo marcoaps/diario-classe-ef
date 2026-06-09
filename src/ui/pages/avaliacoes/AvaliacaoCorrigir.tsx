@@ -322,14 +322,27 @@ export function AvaliacaoCorrigir() {
                   <span className="text-xs text-on-surface-variant">Aguarde alguns segundos</span>
                 </div>
               ) : (
-                <button
-                  onClick={() => nativeInputRef.current?.click()}
-                  className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-2xl border-2 border-dashed border-outline-variant text-on-surface-variant"
-                >
-                  <Upload className="w-8 h-8" />
-                  <span className="text-sm font-medium">Toque para fotografar a folha</span>
-                  <span className="text-xs">Abre camera ou galeria</span>
-                </button>
+                <div className="relative w-full">
+                  <div className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-2xl border-2 border-dashed border-outline-variant text-on-surface-variant pointer-events-none">
+                    <Upload className="w-8 h-8" />
+                    <span className="text-sm font-medium">Toque para fotografar a folha</span>
+                    <span className="text-xs">Abre camera ou galeria</span>
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleUploadFolha}
+                    style={{
+                      position: 'absolute',
+                      top: 0, left: 0,
+                      width: '100%',
+                      height: '100%',
+                      opacity: 0,
+                      cursor: 'pointer',
+                      fontSize: '100px'
+                    }}
+                  />
+                </div>
               )}
               <p className="text-xs text-center text-on-surface-variant">
                 Certifique-se que o QR Code esta visivel na foto
