@@ -35,6 +35,8 @@ export function AvaliacaoCorrigir() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number>(0);
+  const qrConfirmRef = useRef<number>(0);
+  const lastQrRef = useRef<string>('');
 
   const [avaliacao, setAvaliacao] = useState<Avaliacao | null>(null);
   const [loading, setLoading] = useState(true);
@@ -105,7 +107,10 @@ export function AvaliacaoCorrigir() {
     rafRef.current = requestAnimationFrame(async () => {
       const video = videoRef.current;
       const canvas = canvasRef.current;
-      if (!video || !canvas || video.readyState < 2) { scanLoop(); return; }
+      if (!video || !canvas || video.readyState < 2) {
+        setTimeout(() => scanLoop(), 200);
+        return;
+      }
 
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
@@ -118,13 +123,29 @@ export function AvaliacaoCorrigir() {
         try {
           const payload: RespostaScan = JSON.parse(code.data);
           if (payload.av === id && payload.al) {
-            pararCamera();
-            await buscarAluno(payload.al);
-            return;
+            // Confirma o mesmo QR por 4 leituras consecutivas antes de processar
+            if (lastQrRef.current === code.data) {
+              qrConfirmRef.current += 1;
+            } else {
+              lastQrRef.current = code.data;
+              qrConfirmRef.current = 1;
+            }
+            if (qrConfirmRef.current >= 4) {
+              qrConfirmRef.current = 0;
+              lastQrRef.current = '';
+              pararCamera();
+              await buscarAluno(payload.al);
+              return;
+            }
           }
         } catch { /* QR invalido, continua */ }
+      } else {
+        // Nenhum QR detectado, reseta contagem
+        qrConfirmRef.current = 0;
+        lastQrRef.current = '';
       }
-      scanLoop();
+      // Scan a cada 150ms para nao sobrecarregar
+      setTimeout(() => scanLoop(), 150);
     });
   }
 
