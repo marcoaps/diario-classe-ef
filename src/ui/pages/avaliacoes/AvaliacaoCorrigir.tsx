@@ -30,8 +30,7 @@ const NUM_OBJETIVAS = 8;
 export function AvaliacaoCorrigir() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const qrInputRef = useRef<HTMLInputElement>(null);
+  const nativeInputRef = useRef<HTMLInputElement | null>(null);
 
   const [avaliacao, setAvaliacao] = useState<Avaliacao | null>(null);
   const [alunos, setAlunos] = useState<Aluno[]>([]);
@@ -47,6 +46,21 @@ export function AvaliacaoCorrigir() {
   const [modoIdentificacao, setModoIdentificacao] = useState<'qr' | 'lista'>('qr');
   const [resultados, setResultados] = useState<Array<{ aluno: Aluno; acertos: number; nota: number }>>([]);
   const [mostrarResultados, setMostrarResultados] = useState(false);
+
+  // Cria input file nativo fora do React para funcionar em todos os browsers mobile
+  useEffect(() => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.style.display = 'none';
+    input.onchange = (e: Event) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) handleUploadFolhaNativo(file);
+    };
+    document.body.appendChild(input);
+    nativeInputRef.current = input;
+    return () => { document.body.removeChild(input); };
+  }, [alunos, id]);
 
   useEffect(() => {
     async function init() {
@@ -164,6 +178,11 @@ export function AvaliacaoCorrigir() {
       setEtapa('respostas');
     }
     setAnalisando(false);
+  }
+
+  // Upload da folha - versao nativa
+  function handleUploadFolhaNativo(file: File) {
+    lerQRDaImagem(file);
   }
 
   // Upload da folha (QR + respostas na mesma imagem)
@@ -303,17 +322,14 @@ export function AvaliacaoCorrigir() {
                   <span className="text-xs text-on-surface-variant">Aguarde alguns segundos</span>
                 </div>
               ) : (
-                <label className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-2xl border-2 border-dashed border-outline-variant text-on-surface-variant cursor-pointer active:bg-surface-container-highest">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleUploadFolha}
-                  />
+                <button
+                  onClick={() => nativeInputRef.current?.click()}
+                  className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-2xl border-2 border-dashed border-outline-variant text-on-surface-variant"
+                >
                   <Upload className="w-8 h-8" />
                   <span className="text-sm font-medium">Toque para fotografar a folha</span>
                   <span className="text-xs">Abre camera ou galeria</span>
-                </label>
+                </button>
               )}
               <p className="text-xs text-center text-on-surface-variant">
                 Certifique-se que o QR Code esta visivel na foto
