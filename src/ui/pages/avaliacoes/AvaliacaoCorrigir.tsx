@@ -104,49 +104,53 @@ export function AvaliacaoCorrigir() {
   }
 
   function scanLoop() {
-    rafRef.current = requestAnimationFrame(async () => {
+    setTimeout(async () => {
       const video = videoRef.current;
-      const canvas = canvasRef.current;
-      if (!video || !canvas || video.readyState < 2) {
-        setTimeout(() => scanLoop(), 300);
+      if (!video || video.readyState < 2 || video.paused) {
+        if (cameraAtiva || streamRef.current) scanLoop();
         return;
       }
 
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(video, 0, 0);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const code = jsQR(imageData.data, imageData.width, imageData.height);
+      try {
+        // Usa canvas menor (400px) para scan mais rapido no mobile
+        const scanCanvas = document.createElement('canvas');
+        const scale = Math.min(1, 400 / video.videoWidth);
+        scanCanvas.width = Math.floor(video.videoWidth * scale);
+        scanCanvas.height = Math.floor(video.videoHeight * scale);
+        const ctx = scanCanvas.getContext('2d')!;
+        ctx.drawImage(video, 0, 0, scanCanvas.width, scanCanvas.height);
+        const imageData = ctx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: 'dontInvert'
+        });
 
-      if (code) {
-        try {
-          const payload: RespostaScan = JSON.parse(code.data);
-          if (payload.av === id && payload.al) {
-            // Confirma o mesmo QR por 4 leituras consecutivas antes de processar
-            if (lastQrRef.current === code.data) {
-              qrConfirmRef.current += 1;
-            } else {
-              lastQrRef.current = code.data;
-              qrConfirmRef.current = 1;
+        if (code) {
+          try {
+            const payload: RespostaScan = JSON.parse(code.data);
+            if (payload.av === id && payload.al) {
+              if (lastQrRef.current === code.data) {
+                qrConfirmRef.current += 1;
+              } else {
+                lastQrRef.current = code.data;
+                qrConfirmRef.current = 1;
+              }
+              if (qrConfirmRef.current >= 3) {
+                qrConfirmRef.current = 0;
+                lastQrRef.current = '';
+                pararCamera();
+                await buscarAluno(payload.al);
+                return;
+              }
             }
-            if (qrConfirmRef.current >= 8) {
-              qrConfirmRef.current = 0;
-              lastQrRef.current = '';
-              pararCamera();
-              await buscarAluno(payload.al);
-              return;
-            }
-          }
-        } catch { /* QR invalido, continua */ }
-      } else {
-        // Nenhum QR detectado, reseta contagem
-        qrConfirmRef.current = 0;
-        lastQrRef.current = '';
-      }
-      // Scan a cada 150ms para nao sobrecarregar
-      setTimeout(() => scanLoop(), 250);
-    });
+          } catch { /* QR invalido */ }
+        } else {
+          qrConfirmRef.current = 0;
+          lastQrRef.current = '';
+        }
+      } catch { /* erro no canvas, continua */ }
+
+      if (streamRef.current) scanLoop();
+    }, 400);
   }
 
   async function buscarAluno(alunoId: string) {
