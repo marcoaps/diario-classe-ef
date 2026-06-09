@@ -108,7 +108,7 @@ export function AvaliacaoCorrigir() {
       const video = videoRef.current;
       const canvas = canvasRef.current;
       if (!video || !canvas || video.readyState < 2) {
-        setTimeout(() => scanLoop(), 200);
+        setTimeout(() => scanLoop(), 300);
         return;
       }
 
@@ -130,7 +130,7 @@ export function AvaliacaoCorrigir() {
               lastQrRef.current = code.data;
               qrConfirmRef.current = 1;
             }
-            if (qrConfirmRef.current >= 4) {
+            if (qrConfirmRef.current >= 8) {
               qrConfirmRef.current = 0;
               lastQrRef.current = '';
               pararCamera();
@@ -145,7 +145,7 @@ export function AvaliacaoCorrigir() {
         lastQrRef.current = '';
       }
       // Scan a cada 150ms para nao sobrecarregar
-      setTimeout(() => scanLoop(), 150);
+      setTimeout(() => scanLoop(), 250);
     });
   }
 
