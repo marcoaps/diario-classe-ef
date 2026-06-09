@@ -2,7 +2,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
 import { ArrowLeft, Camera, CheckCircle2, AlertCircle, RefreshCw, Edit3, Save } from 'lucide-react';
-import jsQR from 'jsqr';
+
+// BarcodeDetector API nativa do browser (Chrome Android)
+declare class BarcodeDetector {
+  constructor(options?: { formats: string[] });
+  detect(image: HTMLVideoElement | HTMLCanvasElement | ImageData): Promise<Array<{ rawValue: string }>>;
+}
 
 interface Avaliacao {
   id: string;
@@ -104,63 +109,71 @@ export function AvaliacaoCorrigir() {
     setCameraAtiva(false);
   }
 
+  async function processarQR(data: string) {
+    try {
+      const payload: RespostaScan = JSON.parse(data);
+      if (payload.av === id && payload.al) {
+        if (lastQrRef.current === data) {
+          qrConfirmRef.current += 1;
+        } else {
+          lastQrRef.current = data;
+          qrConfirmRef.current = 1;
+        }
+        setDebugMsg('QR OK! Confirmando ' + qrConfirmRef.current + '/3...');
+        if (qrConfirmRef.current >= 3) {
+          qrConfirmRef.current = 0;
+          lastQrRef.current = '';
+          setDebugMsg('');
+          pararCamera();
+          await buscarAluno(payload.al);
+        }
+      } else if (payload.av && payload.av !== id) {
+        setDebugMsg('QR de outra avaliação');
+      } else {
+        setDebugMsg('QR inválido: ' + data.substring(0, 20));
+      }
+    } catch {
+      setDebugMsg('Não é QR desta avaliação');
+    }
+  }
+
   function scanLoop() {
     setTimeout(async () => {
       const video = videoRef.current;
-      if (!video || video.readyState < 2 || video.paused) {
-        if (cameraAtiva || streamRef.current) scanLoop();
-        return;
-      }
+      if (!video || video.readyState < 2 || video.paused || !streamRef.current) return;
 
       try {
-        // Usa canvas menor (400px) para scan mais rapido no mobile
-        const scanCanvas = document.createElement('canvas');
-        const scale = Math.min(1, 400 / video.videoWidth);
-        scanCanvas.width = Math.floor(video.videoWidth * scale);
-        scanCanvas.height = Math.floor(video.videoHeight * scale);
-        const ctx = scanCanvas.getContext('2d')!;
-        ctx.drawImage(video, 0, 0, scanCanvas.width, scanCanvas.height);
-        const imageData = ctx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height, {
-          inversionAttempts: 'dontInvert'
-        });
-
-        if (code) {
-          try {
-            const payload: RespostaScan = JSON.parse(code.data);
-            if (payload.av === id && payload.al) {
-              if (lastQrRef.current === code.data) {
-                qrConfirmRef.current += 1;
-              } else {
-                lastQrRef.current = code.data;
-                qrConfirmRef.current = 1;
-              }
-              setDebugMsg('QR OK! Confirmando ' + qrConfirmRef.current + '/3...');
-              if (qrConfirmRef.current >= 3) {
-                qrConfirmRef.current = 0;
-                lastQrRef.current = '';
-                setDebugMsg('');
-                pararCamera();
-                await buscarAluno(payload.al);
-                return;
-              }
-            } else if (payload.av && payload.av !== id) {
-              setDebugMsg('QR de outra avaliação: ' + payload.av.substring(0,8));
-            } else {
-              setDebugMsg('QR lido mas formato inválido: ' + code.data.substring(0,30));
-            }
-          } catch {
-            setDebugMsg('QR lido mas não é JSON: ' + code.data.substring(0,30));
+        // Tenta BarcodeDetector nativo primeiro (Chrome Android)
+        if ('BarcodeDetector' in window) {
+          const detector = new BarcodeDetector({ formats: ['qr_code'] });
+          const codes = await detector.detect(video);
+          if (codes.length > 0) {
+            await processarQR(codes[0].rawValue);
+          } else {
+            setDebugMsg('Aponte para o QR Code...');
           }
         } else {
-          qrConfirmRef.current = 0;
-          lastQrRef.current = '';
-          setDebugMsg('Procurando QR...');
+          // Fallback: jsQR via canvas
+          const { default: jsQR } = await import('jsqr');
+          const scanCanvas = document.createElement('canvas');
+          scanCanvas.width = video.videoWidth;
+          scanCanvas.height = video.videoHeight;
+          const ctx = scanCanvas.getContext('2d')!;
+          ctx.drawImage(video, 0, 0);
+          const imageData = ctx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height);
+          if (code) {
+            await processarQR(code.data);
+          } else {
+            setDebugMsg('Aponte para o QR Code...');
+          }
         }
-      } catch { /* erro no canvas, continua */ }
+      } catch (e) {
+        setDebugMsg('Erro: ' + String(e).substring(0, 40));
+      }
 
       if (streamRef.current) scanLoop();
-    }, 400);
+    }, 500);
   }
 
   async function buscarAluno(alunoId: string) {
