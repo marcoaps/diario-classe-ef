@@ -35,7 +35,7 @@ async function desenharFolha(
   aluno: Aluno
 ) {
   const W = 794;
-  const H = 500;
+  const H = 520;
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d')!;
@@ -76,9 +76,9 @@ async function desenharFolha(
   ctx.fillRect(8, 96, W - 16, 1);
 
   // QR Code
-  const qrSize = 110;
+  const qrSize = 100;
   const qrX = W - qrSize - 20;
-  const qrY = 108;
+  const qrY = 104;
 
   const payload = gerarPayload(avaliacao.id, aluno.id);
   const qrDataUrl = await QRCode.toDataURL(payload, { width: qrSize, margin: 1, errorCorrectionLevel: 'M' });
@@ -104,13 +104,13 @@ async function desenharFolha(
   // Colunas questoes
   const colW = 160;
   const startX = 20;
-  const startY = 162;
+  const startY = 182;
   const rowH = 28;
 
-  // Objetivas (1-8)
+  // Objetivas (1-8) - titulo acima das questoes com espaco suficiente
   ctx.fillStyle = '#1e293b';
   ctx.font = 'bold 11px Arial';
-  ctx.fillText('Questões Objetivas (8 questões)', startX, startY - 6);
+  ctx.fillText('Questões Objetivas (8 questões)', startX, 158);
 
   for (let i = 0; i < NUM_OBJETIVAS; i++) {
     const col = Math.floor(i / 4);
