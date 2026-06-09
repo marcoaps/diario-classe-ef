@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../data/supabase';
+import { supabase } from '../../../data/supabase';
 import { ClipboardList, Plus, QrCode, Camera, Trash2, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
 
 const TURMAS = ['6F','7B','7C','7D','7E','7F','8A','8B','8C','8D','8E','8F','9A','9B','9C','9D','9E','9F'];

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../../data/supabase';
+import { supabase } from '../../../data/supabase';
 import { ArrowLeft, Camera, CheckCircle2, AlertCircle, RefreshCw, Edit3, Save } from 'lucide-react';
 import jsQR from 'jsqr';
 

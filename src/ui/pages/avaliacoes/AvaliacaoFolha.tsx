@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../../data/supabase';
+import { supabase } from '../../../data/supabase';
 import { ArrowLeft, Printer, Download } from 'lucide-react';
 import QRCode from 'qrcode';
 
