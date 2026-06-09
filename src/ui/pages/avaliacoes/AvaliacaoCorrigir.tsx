@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
-import { ArrowLeft, Camera, CheckCircle2, AlertCircle, Save, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Upload, CheckCircle2, AlertCircle, Save, RefreshCw, QrCode, ChevronDown, ChevronUp } from 'lucide-react';
+import jsQR from 'jsqr';
 
 interface Avaliacao {
   id: string;
@@ -23,185 +24,117 @@ interface RespostaScan {
   al: string;
 }
 
-declare class BarcodeDetector {
-  constructor(options?: { formats: string[] });
-  detect(image: HTMLVideoElement): Promise<Array<{ rawValue: string }>>;
-}
-
 const LETRAS = ['A', 'B', 'C', 'D'];
 const NUM_OBJETIVAS = 8;
 
 export function AvaliacaoCorrigir() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const scanRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const qrCountRef = useRef(0);
-  const lastQrRef = useRef('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const qrInputRef = useRef<HTMLInputElement>(null);
 
   const [avaliacao, setAvaliacao] = useState<Avaliacao | null>(null);
+  const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [loading, setLoading] = useState(true);
-  const [etapa, setEtapa] = useState<'scan_qr' | 'foto_folha' | 'revisao' | 'salvo'>('scan_qr');
-  const [cameraAtiva, setCameraAtiva] = useState(false);
+  const [etapa, setEtapa] = useState<'identificar' | 'respostas' | 'salvo'>('identificar');
   const [alunoDetectado, setAlunoDetectado] = useState<Aluno | null>(null);
   const [respostas, setRespostas] = useState<Record<string, string>>({});
   const [notasSubj, setNotasSubj] = useState<Record<string, string>>({ '9': '', '10': '' });
   const [salvando, setSalvando] = useState(false);
-  const [erro, setErro] = useState('');
-  const [debugMsg, setDebugMsg] = useState('Aponte para o QR Code da folha...');
   const [analisando, setAnalisando] = useState(false);
+  const [erro, setErro] = useState('');
+  const [fotoPreview, setFotoPreview] = useState<string>('');
+  const [modoIdentificacao, setModoIdentificacao] = useState<'qr' | 'lista'>('qr');
+  const [resultados, setResultados] = useState<Array<{ aluno: Aluno; acertos: number; nota: number }>>([]);
+  const [mostrarResultados, setMostrarResultados] = useState(false);
 
   useEffect(() => {
     async function init() {
       if (!id) return;
-      const { data } = await supabase.from('avaliacoes').select('*').eq('id', id).single();
-      setAvaliacao(data);
+      const { data: av } = await supabase.from('avaliacoes').select('*').eq('id', id).single();
+      setAvaliacao(av);
+      if (av) {
+        const { data: al } = await supabase
+          .from('alunos')
+          .select('id, nome, numero_chamada')
+          .eq('turma_id', av.turma_id)
+          .order('numero_chamada');
+        setAlunos(al || []);
+      }
+      // Buscar resultados ja salvos
+      const { data: res } = await supabase
+        .from('avaliacoes_respostas')
+        .select('aluno_id, acertos, nota')
+        .eq('avaliacao_id', id);
       setLoading(false);
     }
     init();
-    return () => pararCamera();
   }, [id]);
 
-  function pararCamera() {
-    if (scanRef.current) clearTimeout(scanRef.current);
-    streamRef.current?.getTracks().forEach(t => t.stop());
-    streamRef.current = null;
-    setCameraAtiva(false);
-  }
-
-  async function iniciarCamera(facingMode: 'environment' | 'user' = 'environment') {
+  // Identifica aluno pelo QR lendo imagem uploadada
+  async function lerQRDaImagem(file: File) {
     setErro('');
-    try {
-      let stream: MediaStream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { exact: facingMode } }
-        });
-      } catch {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      }
-      streamRef.current = stream;
-      setCameraAtiva(true);
-      setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.muted = true;
-          videoRef.current.play().catch(() => {});
-        }
-      }, 100);
-    } catch {
-      setErro('Nao foi possivel acessar a camera. Verifique as permissoes.');
-    }
-  }
-
-  // Etapa 1: scan do QR Code
-  useEffect(() => {
-    if (etapa !== 'scan_qr' || !cameraAtiva) return;
-    function loop() {
-      scanRef.current = setTimeout(async () => {
-        const video = videoRef.current;
-        if (!video || video.readyState < 2 || !streamRef.current) { loop(); return; }
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height);
+      URL.revokeObjectURL(url);
+      if (code) {
         try {
-          if ('BarcodeDetector' in window) {
-            const detector = new BarcodeDetector({ formats: ['qr_code'] });
-            const codes = await detector.detect(video);
-            if (codes.length > 0) {
-              await processarQR(codes[0].rawValue);
+          const payload: RespostaScan = JSON.parse(code.data);
+          if (payload.av === id && payload.al) {
+            const aluno = alunos.find(a => a.id === payload.al);
+            if (aluno) {
+              setAlunoDetectado(aluno);
+              setFotoPreview(url);
+              analisarFolhaComIA(file, url);
             } else {
-              setDebugMsg('Aponte para o QR Code da folha...');
+              setErro('Aluno nao encontrado nesta turma.');
             }
           } else {
-            // Fallback canvas + jsQR
-            const { default: jsQR } = await import('jsqr');
-            const c = document.createElement('canvas');
-            c.width = video.videoWidth;
-            c.height = video.videoHeight;
-            c.getContext('2d')!.drawImage(video, 0, 0);
-            const img = c.getContext('2d')!.getImageData(0, 0, c.width, c.height);
-            const code = jsQR(img.data, img.width, img.height);
-            if (code) {
-              await processarQR(code.data);
-            } else {
-              setDebugMsg('Aponte para o QR Code da folha...');
-            }
+            setErro('QR Code de outra avaliacao. Verifique a folha.');
           }
-        } catch { /* continua */ }
-        if (streamRef.current && etapa === 'scan_qr') loop();
-      }, 500);
-    }
-    loop();
-    return () => { if (scanRef.current) clearTimeout(scanRef.current); };
-  }, [etapa, cameraAtiva]);
-
-  async function processarQR(data: string) {
-    try {
-      const payload: RespostaScan = JSON.parse(data);
-      if (payload.av === id && payload.al) {
-        if (lastQrRef.current === data) {
-          qrCountRef.current += 1;
-        } else {
-          lastQrRef.current = data;
-          qrCountRef.current = 1;
-        }
-        setDebugMsg('QR identificado! Aguardando confirmacao ' + qrCountRef.current + '/3...');
-        if (qrCountRef.current >= 3) {
-          qrCountRef.current = 0;
-          lastQrRef.current = '';
-          pararCamera();
-          const { data: aluno } = await supabase
-            .from('alunos')
-            .select('id, nome, numero_chamada')
-            .eq('id', payload.al)
-            .single();
-          if (aluno) {
-            setAlunoDetectado(aluno);
-            // Inicia etapa 2 automaticamente
-            setEtapa('foto_folha');
-            setDebugMsg('Fotografe a folha preenchida do aluno');
-            setTimeout(() => iniciarCamera('environment'), 300);
-          }
+        } catch {
+          setErro('QR Code invalido. Use a folha gerada pelo sistema.');
         }
       } else {
-        setDebugMsg('QR de outra avaliacao, continue procurando...');
+        setErro('QR Code nao encontrado na imagem. Certifique-se de que o QR esta visivel e nao esta cortado.');
       }
-    } catch {
-      setDebugMsg('QR invalido, continue procurando...');
-    }
+    };
+    img.src = url;
   }
 
-  // Etapa 2: capturar foto da folha e enviar para IA
-  async function capturarEAnalisar() {
-    const video = videoRef.current;
-    if (!video) return;
+  // Analisa a folha com IA para detectar respostas
+  async function analisarFolhaComIA(file: File, previewUrl: string) {
     setAnalisando(true);
     setErro('');
     try {
-      // Captura frame do video como imagem
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      canvas.getContext('2d')!.drawImage(video, 0, 0);
-      const base64 = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
-      pararCamera();
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve((reader.result as string).split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
 
-      // Envia para Claude API
       const res = await fetch('/api/claude', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-opus-4-5',
-          max_tokens: 300,
+          max_tokens: 200,
           messages: [{
             role: 'user',
             content: [
-              {
-                type: 'image',
-                source: { type: 'base64', media_type: 'image/jpeg', data: base64 }
-              },
+              { type: 'image', source: { type: 'base64', media_type: file.type || 'image/jpeg', data: base64 } },
               {
                 type: 'text',
-                text: `Esta e uma folha de respostas de prova do ensino fundamental brasileiro com 8 questoes objetivas numeradas de 1 a 8. Cada questao tem 4 alternativas em circulos: A, B, C, D. A alternativa escolhida pelo aluno esta com o circulo COMPLETAMENTE PREENCHIDO DE PRETO (bolha escura e solida). As alternativas nao escolhidas estao com o circulo apenas desenhado (vazio/branco por dentro). Analise cada questao e identifique qual circulo esta preenchido (preto solido). Retorne APENAS um JSON sem texto adicional: {"1":"A","2":"B","3":"C","4":"D","5":"A","6":"B","7":"C","8":"D"} - substitua cada letra pela alternativa preenchida na respectiva questao.`
+                text: `Esta e uma folha de respostas de prova impressa em papel do ensino fundamental. Ela tem 8 questoes objetivas (1 a 8) com 4 alternativas cada: A, B, C, D dispostas em circulos/bolinhas. O aluno preencheu/pintou completamente a bolinha da alternativa escolhida deixando-a preta e solida. As outras bolinhas estao vazias (apenas contorno). Identifique em cada questao qual bolinha esta preenchida/pintada de preto. Retorne SOMENTE o JSON: {"1":"A","2":"B","3":"C","4":"D","5":"A","6":"B","7":"C","8":"D"}`
               }
             ]
           }]
@@ -211,34 +144,47 @@ export function AvaliacaoCorrigir() {
       const data = await res.json();
       const texto = (data.content?.[0]?.text || '').trim();
       const match = texto.match(/\{[^}]+\}/);
-
       if (match) {
         const detectadas = JSON.parse(match[0]);
-        // Normaliza para maiusculas
         const normalizado: Record<string, string> = {};
         for (const k of Object.keys(detectadas)) {
-          normalizado[k] = String(detectadas[k]).toUpperCase();
+          normalizado[k] = String(detectadas[k]).toUpperCase().trim();
         }
         setRespostas(normalizado);
-        setEtapa('revisao');
+        setFotoPreview(previewUrl);
+        setEtapa('respostas');
       } else {
-        setErro('IA nao conseguiu identificar as respostas. Preencha manualmente.');
+        setErro('IA nao conseguiu detectar as respostas. Preencha manualmente.');
         setRespostas(Object.fromEntries(Array.from({ length: NUM_OBJETIVAS }, (_, i) => [String(i + 1), ''])));
-        setEtapa('revisao');
+        setEtapa('respostas');
       }
     } catch {
       setErro('Erro ao analisar. Preencha manualmente.');
       setRespostas(Object.fromEntries(Array.from({ length: NUM_OBJETIVAS }, (_, i) => [String(i + 1), ''])));
-      setEtapa('revisao');
+      setEtapa('respostas');
     }
     setAnalisando(false);
+  }
+
+  // Upload da folha (QR + respostas na mesma imagem)
+  function handleUploadFolha(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    lerQRDaImagem(file);
+  }
+
+  // Selecao manual do aluno pela lista
+  function selecionarAluno(aluno: Aluno) {
+    setAlunoDetectado(aluno);
+    setRespostas(Object.fromEntries(Array.from({ length: NUM_OBJETIVAS }, (_, i) => [String(i + 1), ''])));
+    setEtapa('respostas');
   }
 
   async function salvar() {
     if (!avaliacao || !alunoDetectado) return;
     for (let i = 1; i <= NUM_OBJETIVAS; i++) {
       if (!respostas[String(i)]) {
-        setErro('Questao ' + i + ' sem resposta. Selecione uma alternativa.');
+        setErro('Questao ' + i + ' sem resposta.');
         return;
       }
     }
@@ -248,21 +194,35 @@ export function AvaliacaoCorrigir() {
       avaliacao_id: avaliacao.id,
       aluno_id: alunoDetectado.id,
       respostas,
-      metodo_scan: 'ia',
+      metodo_scan: 'upload',
     }, { onConflict: 'avaliacao_id,aluno_id' });
     setSalvando(false);
     if (error) { setErro('Erro ao salvar: ' + error.message); return; }
+
+    // Atualiza lista de resultados
+    const { data: res } = await supabase
+      .from('avaliacoes_respostas')
+      .select('aluno_id, acertos, nota')
+      .eq('avaliacao_id', id);
+    if (res) {
+      const novosResultados = res.map(r => {
+        const al = alunos.find(a => a.id === r.aluno_id);
+        return al ? { aluno: al, acertos: r.acertos || 0, nota: r.nota || 0 } : null;
+      }).filter(Boolean) as Array<{ aluno: Aluno; acertos: number; nota: number }>;
+      setResultados(novosResultados.sort((a, b) => a.aluno.numero_chamada - b.aluno.numero_chamada));
+    }
     setEtapa('salvo');
   }
 
-  function proximoAluno() {
-    setEtapa('scan_qr');
+  function proximaFolha() {
+    setEtapa('identificar');
     setAlunoDetectado(null);
     setRespostas({});
-    setNotasSubj({ '9': '', '10': '' });
+    setFotoPreview('');
     setErro('');
-    setDebugMsg('Aponte para o QR Code da folha...');
-    setTimeout(() => iniciarCamera('environment'), 300);
+    setNotasSubj({ '9': '', '10': '' });
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (qrInputRef.current) qrInputRef.current.value = '';
   }
 
   // Calculos
@@ -288,129 +248,136 @@ export function AvaliacaoCorrigir() {
     <div className="py-4 space-y-4">
       {/* Cabecalho */}
       <div className="flex items-center gap-2">
-        <button onClick={() => { pararCamera(); navigate('/avaliacoes'); }} className="p-1 rounded-lg text-on-surface-variant">
+        <button onClick={() => navigate('/avaliacoes')} className="p-1 rounded-lg text-on-surface-variant">
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div>
-          <h1 className="text-base font-bold text-on-surface">Corrigir</h1>
+          <h1 className="text-base font-bold text-on-surface">Corrigir folhas</h1>
           <p className="text-xs text-on-surface-variant">{avaliacao.titulo} · Turma {avaliacao.turma_id}</p>
         </div>
       </div>
 
-      {/* Indicador de etapas */}
-      <div className="flex items-center gap-2">
-        {['scan_qr', 'foto_folha', 'revisao'].map((e, i) => (
-          <React.Fragment key={e}>
-            <div className={[
-              'flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold',
-              etapa === e ? 'bg-primary text-on-primary' :
-              ['scan_qr', 'foto_folha', 'revisao', 'salvo'].indexOf(etapa) > i
-                ? 'bg-secondary-container text-on-secondary-container'
-                : 'bg-outline-variant text-on-surface-variant'
-            ].join(' ')}>
-              {i + 1}
-            </div>
-            {i < 2 && <div className="flex-1 h-0.5 bg-outline-variant" />}
-          </React.Fragment>
-        ))}
-      </div>
-      <div className="flex justify-between text-xs text-on-surface-variant px-0">
-        <span>Ler QR</span>
-        <span>Foto</span>
-        <span>Revisar</span>
-      </div>
-
-      {/* ETAPA 1: SCAN QR */}
-      {etapa === 'scan_qr' && (
-        <div className="space-y-3">
-          {!cameraAtiva ? (
-            <button
-              onClick={() => iniciarCamera('environment')}
-              className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-primary text-on-primary font-semibold"
-            >
-              <Camera className="w-5 h-5" />
-              Abrir camera para QR Code
-            </button>
-          ) : (
-            <div className="relative rounded-2xl overflow-hidden border border-outline-variant bg-black">
-              <video ref={videoRef} className="w-full" playsInline muted autoPlay style={{ background: '#000', minHeight: 240 }} />
-              <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-3 py-2 text-center">
-                <span className="text-xs text-white">{debugMsg}</span>
-              </div>
-            </div>
-          )}
-          {erro && <p className="text-xs text-error">{erro}</p>}
-        </div>
-      )}
-
-      {/* ETAPA 2: FOTO DA FOLHA */}
-      {etapa === 'foto_folha' && (
-        <div className="space-y-3">
-          {alunoDetectado && (
-            <div className="bg-secondary-container rounded-2xl px-4 py-3 flex items-center gap-3">
-              <CheckCircle2 className="w-5 h-5 text-on-secondary-container flex-shrink-0" />
-              <div>
-                <p className="text-xs text-on-secondary-container font-bold">Aluno identificado</p>
-                <p className="text-sm font-bold text-on-secondary-container">{alunoDetectado.numero_chamada}. {alunoDetectado.nome}</p>
-              </div>
-            </div>
-          )}
-
-          <div className="bg-surface border border-outline-variant rounded-2xl p-3">
-            <p className="text-sm font-medium text-on-surface mb-1">Fotografe a folha preenchida</p>
-            <p className="text-xs text-on-surface-variant">Enquadre a folha inteira na camera e toque em "Capturar e analisar"</p>
-          </div>
-
-          {!cameraAtiva ? (
-            <button
-              onClick={() => iniciarCamera('environment')}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-on-primary font-semibold"
-            >
-              <Camera className="w-5 h-5" />
-              Abrir camera
-            </button>
-          ) : (
-            <div className="space-y-2">
-              <div className="relative rounded-2xl overflow-hidden border border-outline-variant bg-black">
-                <video ref={videoRef} className="w-full" playsInline muted autoPlay style={{ background: '#000', minHeight: 240 }} />
-              </div>
-              <button
-                onClick={capturarEAnalisar}
-                disabled={analisando}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-on-primary font-semibold disabled:opacity-60"
-              >
-                {analisando
-                  ? <><RefreshCw className="w-4 h-4 animate-spin" /> Analisando com IA...</>
-                  : <><Camera className="w-5 h-5" /> Capturar e analisar</>}
-              </button>
-            </div>
-          )}
-
-          <button
-            onClick={() => {
-              pararCamera();
-              setRespostas(Object.fromEntries(Array.from({ length: NUM_OBJETIVAS }, (_, i) => [String(i + 1), ''])));
-              setEtapa('revisao');
-            }}
-            className="w-full py-2 rounded-xl border border-outline-variant text-xs text-on-surface-variant"
-          >
-            Preencher manualmente
-          </button>
-
-          {erro && <p className="text-xs text-error">{erro}</p>}
-        </div>
-      )}
-
-      {/* ETAPA 3: REVISAO */}
-      {etapa === 'revisao' && alunoDetectado && (
+      {/* ETAPA 1: IDENTIFICAR ALUNO */}
+      {etapa === 'identificar' && (
         <div className="space-y-4">
-          <div className="bg-secondary-container rounded-2xl px-4 py-3">
-            <p className="text-xs text-on-secondary-container">Revise as respostas detectadas. Toque para corrigir.</p>
-            <p className="text-sm font-bold text-on-secondary-container mt-0.5">{alunoDetectado.numero_chamada}. {alunoDetectado.nome}</p>
+          <div className="bg-secondary-container rounded-2xl p-4">
+            <p className="text-sm font-medium text-on-secondary-container">
+              Fotografe ou escaneie a folha preenchida do aluno.
+            </p>
+            <p className="text-xs text-on-secondary-container mt-1">
+              O sistema le o QR Code e detecta automaticamente as respostas com IA.
+            </p>
           </div>
+
+          {/* Tabs */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setModoIdentificacao('qr')}
+              className={['flex-1 py-2 rounded-xl text-sm font-medium border transition-all',
+                modoIdentificacao === 'qr'
+                  ? 'bg-primary text-on-primary border-primary'
+                  : 'border-outline-variant text-on-surface-variant'
+              ].join(' ')}
+            >
+              Foto da folha
+            </button>
+            <button
+              onClick={() => setModoIdentificacao('lista')}
+              className={['flex-1 py-2 rounded-xl text-sm font-medium border transition-all',
+                modoIdentificacao === 'lista'
+                  ? 'bg-primary text-on-primary border-primary'
+                  : 'border-outline-variant text-on-surface-variant'
+              ].join(' ')}
+            >
+              Selecionar aluno
+            </button>
+          </div>
+
+          {/* Upload da folha completa */}
+          {modoIdentificacao === 'qr' && (
+            <div className="space-y-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleUploadFolha}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={analisando}
+                className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-2xl border-2 border-dashed border-outline-variant text-on-surface-variant disabled:opacity-60"
+              >
+                {analisando ? (
+                  <>
+                    <RefreshCw className="w-8 h-8 animate-spin text-primary" />
+                    <span className="text-sm font-medium text-primary">Lendo QR e analisando respostas...</span>
+                    <span className="text-xs">Aguarde alguns segundos</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-8 h-8" />
+                    <span className="text-sm font-medium">Toque para enviar foto da folha</span>
+                    <span className="text-xs">Foto tirada com celular ou scanner</span>
+                  </>
+                )}
+              </button>
+              <p className="text-xs text-center text-on-surface-variant">
+                Certifique-se que o QR Code esta visivel na foto
+              </p>
+            </div>
+          )}
+
+          {/* Lista de alunos */}
+          {modoIdentificacao === 'lista' && (
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {alunos.map(al => (
+                <button
+                  key={al.id}
+                  onClick={() => selecionarAluno(al)}
+                  className="w-full flex items-center justify-between px-4 py-3 bg-surface border border-outline-variant rounded-xl text-left"
+                >
+                  <div>
+                    <span className="text-xs text-on-surface-variant mr-2">{al.numero_chamada}.</span>
+                    <span className="text-sm text-on-surface">{al.nome}</span>
+                  </div>
+                  <span className="text-xs text-primary">Selecionar</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {erro && (
+            <div className="flex items-start gap-2 text-sm text-error bg-error-container rounded-xl px-3 py-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <span>{erro}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ETAPA 2: REVISAR RESPOSTAS */}
+      {etapa === 'respostas' && alunoDetectado && (
+        <div className="space-y-4">
+          <div className="bg-secondary-container rounded-2xl px-4 py-3 flex items-center gap-3">
+            <CheckCircle2 className="w-5 h-5 text-on-secondary-container flex-shrink-0" />
+            <div>
+              <p className="text-xs text-on-secondary-container">Aluno identificado</p>
+              <p className="text-sm font-bold text-on-secondary-container">{alunoDetectado.numero_chamada}. {alunoDetectado.nome}</p>
+            </div>
+          </div>
+
+          {/* Preview da foto se existir */}
+          {fotoPreview && (
+            <div className="rounded-xl overflow-hidden border border-outline-variant">
+              <img src={fotoPreview} alt="Folha" className="w-full max-h-48 object-cover object-top" />
+            </div>
+          )}
 
           <div className="bg-surface border border-outline-variant rounded-2xl p-4 space-y-2">
-            <p className="text-xs font-semibold text-on-surface-variant mb-3">Questoes Objetivas</p>
+            <p className="text-xs font-semibold text-on-surface-variant mb-3">
+              Revise as respostas — toque para corrigir
+            </p>
             {Array.from({ length: NUM_OBJETIVAS }, (_, i) => i + 1).map(n => {
               const correta = avaliacao.gabarito[String(n)];
               const marcada = respostas[String(n)];
@@ -451,7 +418,7 @@ export function AvaliacaoCorrigir() {
           </div>
 
           <div className="bg-surface border border-outline-variant rounded-2xl p-4 space-y-3">
-            <p className="text-xs font-semibold text-on-surface-variant">Questoes Subjetivas</p>
+            <p className="text-xs font-semibold text-on-surface-variant">Questoes Subjetivas — nota manual</p>
             {[9, 10].map(n => (
               <div key={n} className="flex items-center gap-3">
                 <span className="text-sm font-bold text-on-surface-variant w-6">{n}.</span>
@@ -473,30 +440,66 @@ export function AvaliacaoCorrigir() {
             </div>
           )}
 
-          <button
-            onClick={salvar}
-            disabled={salvando}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-on-primary font-semibold disabled:opacity-60"
-          >
-            <Save className="w-4 h-4" />
-            {salvando ? 'Salvando...' : 'Salvar nota'}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={proximaFolha}
+              className="px-4 py-3 rounded-2xl border border-outline-variant text-on-surface-variant text-sm"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={salvar}
+              disabled={salvando}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-on-primary font-semibold disabled:opacity-60"
+            >
+              <Save className="w-4 h-4" />
+              {salvando ? 'Salvando...' : 'Salvar nota'}
+            </button>
+          </div>
         </div>
       )}
 
-      {/* ETAPA 4: SALVO */}
+      {/* ETAPA 3: SALVO */}
       {etapa === 'salvo' && alunoDetectado && (
-        <div className="space-y-4 text-center py-8">
-          <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto" />
-          <div>
+        <div className="space-y-4">
+          <div className="text-center py-6 space-y-2">
+            <CheckCircle2 className="w-14 h-14 text-green-500 mx-auto" />
             <p className="text-base font-bold text-on-surface">Nota salva!</p>
-            <p className="text-sm text-on-surface-variant mt-1">{alunoDetectado.nome}</p>
-            <p className="text-3xl font-bold text-primary mt-2">{notaObj.toFixed(1)}</p>
-            <p className="text-xs text-on-surface-variant">de {NUM_OBJETIVAS * (avaliacao?.valor_questao || 1)} pts objetivas</p>
+            <p className="text-sm text-on-surface-variant">{alunoDetectado.nome}</p>
+            <p className="text-3xl font-bold text-primary">{notaObj.toFixed(1)}</p>
+            <p className="text-xs text-on-surface-variant">de {NUM_OBJETIVAS * avaliacao.valor_questao} pts objetivas</p>
           </div>
-          <button onClick={proximoAluno} className="w-full py-3 rounded-2xl bg-primary text-on-primary font-semibold">
-            Proximo aluno
+
+          <button
+            onClick={proximaFolha}
+            className="w-full py-3 rounded-2xl bg-primary text-on-primary font-semibold"
+          >
+            Proxima folha
           </button>
+
+          {/* Resultados salvos */}
+          {resultados.length > 0 && (
+            <div className="bg-surface border border-outline-variant rounded-2xl overflow-hidden">
+              <button
+                onClick={() => setMostrarResultados(!mostrarResultados)}
+                className="w-full flex items-center justify-between px-4 py-3"
+              >
+                <span className="text-sm font-semibold text-on-surface">{resultados.length} corrigidos ate agora</span>
+                {mostrarResultados ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+              {mostrarResultados && (
+                <div className="border-t border-outline-variant divide-y divide-outline-variant">
+                  {resultados.map(r => (
+                    <div key={r.aluno.id} className="flex items-center justify-between px-4 py-2">
+                      <span className="text-xs text-on-surface">{r.aluno.numero_chamada}. {r.aluno.nome}</span>
+                      <span className="text-xs font-bold text-primary">{r.nota.toFixed(1)} pts</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <button onClick={() => navigate('/avaliacoes')} className="w-full py-2.5 rounded-2xl border border-outline-variant text-on-surface-variant text-sm">
             Voltar para avaliacoes
           </button>
