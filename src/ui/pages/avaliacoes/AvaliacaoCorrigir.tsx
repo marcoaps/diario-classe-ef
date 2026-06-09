@@ -296,32 +296,25 @@ export function AvaliacaoCorrigir() {
           {/* Upload da folha completa */}
           {modoIdentificacao === 'qr' && (
             <div className="space-y-3">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleUploadFolha}
-              />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={analisando}
-                className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-2xl border-2 border-dashed border-outline-variant text-on-surface-variant disabled:opacity-60"
-              >
-                {analisando ? (
-                  <>
-                    <RefreshCw className="w-8 h-8 animate-spin text-primary" />
-                    <span className="text-sm font-medium text-primary">Lendo QR e analisando respostas...</span>
-                    <span className="text-xs">Aguarde alguns segundos</span>
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-8 h-8" />
-                    <span className="text-sm font-medium">Toque para enviar foto da folha</span>
-                    <span className="text-xs">Foto tirada com celular ou scanner</span>
-                  </>
-                )}
-              </button>
+              {analisando ? (
+                <div className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-2xl border-2 border-dashed border-primary">
+                  <RefreshCw className="w-8 h-8 animate-spin text-primary" />
+                  <span className="text-sm font-medium text-primary">Lendo QR e analisando respostas...</span>
+                  <span className="text-xs text-on-surface-variant">Aguarde alguns segundos</span>
+                </div>
+              ) : (
+                <label className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-2xl border-2 border-dashed border-outline-variant text-on-surface-variant cursor-pointer active:bg-surface-container-highest">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleUploadFolha}
+                  />
+                  <Upload className="w-8 h-8" />
+                  <span className="text-sm font-medium">Toque para fotografar a folha</span>
+                  <span className="text-xs">Abre camera ou galeria</span>
+                </label>
+              )}
               <p className="text-xs text-center text-on-surface-variant">
                 Certifique-se que o QR Code esta visivel na foto
               </p>
