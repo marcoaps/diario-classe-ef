@@ -67,8 +67,15 @@ export function AvaliacaoCorrigir() {
       });
       streamRef.current = stream;
       if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        const video = videoRef.current;
+        video.srcObject = stream;
+        video.setAttribute('playsinline', 'true');
+        video.setAttribute('muted', 'true');
+        video.muted = true;
+        await new Promise<void>((resolve) => {
+          video.onloadedmetadata = () => resolve();
+        });
+        await video.play();
       }
       setCameraAtiva(true);
       scanLoop();
@@ -263,7 +270,7 @@ Se não conseguir identificar uma questão, use "".`
             </button>
           ) : (
             <div className="relative rounded-2xl overflow-hidden border border-outline-variant">
-              <video ref={videoRef} className="w-full" playsInline muted />
+              <video ref={videoRef} className="w-full" playsInline muted autoPlay style={{background:"#000"}} />
               <canvas ref={canvasRef} className="hidden" />
               {/* Mira */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
