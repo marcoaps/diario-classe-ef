@@ -24,7 +24,7 @@ interface RespostaScan {
   avaliacaoId: string;
 }
 
-const LETRAS = ['A','B','C','D','E'];
+const LETRAS = ['A','B','C','D'];
 const NUM_OBJETIVAS = 8;
 const NUM_SUBJETIVAS = 2;
 

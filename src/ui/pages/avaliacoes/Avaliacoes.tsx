@@ -4,7 +4,7 @@ import { supabase } from '../../../data/supabase';
 import { ClipboardList, Plus, QrCode, Camera, Trash2, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
 
 const TURMAS = ['6F','7B','7C','7D','7E','7F','8A','8B','8C','8D','8E','8F','9A','9B','9C','9D','9E','9F'];
-const LETRAS = ['A','B','C','D','E'];
+const LETRAS = ['A','B','C','D'];
 const NUM_OBJETIVAS = 8;
 const NUM_SUBJETIVAS = 2;
 
