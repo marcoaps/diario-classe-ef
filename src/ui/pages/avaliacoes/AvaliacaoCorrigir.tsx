@@ -300,7 +300,6 @@ export function AvaliacaoCorrigir() {
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
-                capture="environment"
                 className="hidden"
                 onChange={handleUploadFolha}
               />
