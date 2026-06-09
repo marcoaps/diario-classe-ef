@@ -34,8 +34,9 @@ async function desenharFolha(
   avaliacao: Avaliacao,
   aluno: Aluno
 ) {
+  // Formato A4 portrait 210x297mm a 96dpi = 794x1123px
   const W = 794;
-  const H = 520;
+  const H = 1000;
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d')!;
@@ -43,146 +44,189 @@ async function desenharFolha(
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, W, H);
 
-  // Borda
-  ctx.strokeStyle = '#1e293b';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(8, 8, W - 16, H - 16);
+  // === MARCADORES DE ALINHAMENTO NOS 4 CANTOS (OMR) ===
+  const MARK = 24; // tamanho do marcador
+  const PAD = 16;  // distancia da borda
+  ctx.fillStyle = '#000000';
+  // Canto superior esquerdo
+  ctx.fillRect(PAD, PAD, MARK, MARK);
+  // Canto superior direito
+  ctx.fillRect(W - PAD - MARK, PAD, MARK, MARK);
+  // Canto inferior esquerdo
+  ctx.fillRect(PAD, H - PAD - MARK, MARK, MARK);
+  // Canto inferior direito
+  ctx.fillRect(W - PAD - MARK, H - PAD - MARK, MARK, MARK);
 
-  // Cabecalho
+  // === CABECALHO ===
   ctx.fillStyle = '#1e293b';
-  ctx.fillRect(8, 8, W - 16, 56);
+  ctx.fillRect(PAD + MARK + 8, PAD, W - 2*(PAD + MARK + 8), 60);
 
   ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 15px Arial';
-  ctx.fillText('E.E. INSTITUTO ODILON PRATAGI', 20, 30);
-  ctx.font = '12px Arial';
-  ctx.fillText('Educação Física — ' + avaliacao.titulo, 20, 48);
-  ctx.font = 'bold 13px Arial';
-  ctx.fillText('TURMA: ' + avaliacao.turma_id, W - 160, 30);
-  ctx.font = '12px Arial';
-  ctx.fillText('Nº: ' + (aluno.numero_chamada || '--'), W - 160, 48);
+  ctx.font = 'bold 14px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('E.E. INSTITUTO ODILON PRATAGI', W / 2, PAD + 22);
+  ctx.font = '11px Arial';
+  ctx.fillText('Educação Física — ' + avaliacao.titulo, W / 2, PAD + 40);
+  ctx.font = 'bold 12px Arial';
+  ctx.fillText('TURMA: ' + avaliacao.turma_id + '   Nº: ' + (aluno.numero_chamada || '--'), W / 2, PAD + 56);
+  ctx.textAlign = 'left';
 
-  // Linha aluno
+  // === LINHA DO ALUNO ===
+  const alunoY = PAD + 70;
   ctx.fillStyle = '#f1f5f9';
-  ctx.fillRect(8, 64, W - 16, 32);
+  ctx.fillRect(PAD + MARK + 8, alunoY, W - 2*(PAD + MARK + 8), 28);
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(PAD + MARK + 8, alunoY, W - 2*(PAD + MARK + 8), 28);
+  ctx.fillStyle = '#64748b';
+  ctx.font = '10px Arial';
+  ctx.fillText('ALUNO(A):', PAD + MARK + 16, alunoY + 18);
   ctx.fillStyle = '#1e293b';
-  ctx.font = '12px Arial';
-  ctx.fillText('ALUNO(A):', 20, 84);
-  ctx.font = 'bold 13px Arial';
-  ctx.fillText(aluno.nome, 90, 84);
+  ctx.font = 'bold 12px Arial';
+  ctx.fillText(aluno.nome.toUpperCase(), PAD + MARK + 80, alunoY + 18);
 
-  // Linha separadora
-  ctx.fillStyle = '#e2e8f0';
-  ctx.fillRect(8, 96, W - 16, 1);
-
-  // QR Code
-  const qrSize = 100;
-  const qrX = W - qrSize - 20;
-  const qrY = 104;
-
-  const payload = gerarPayload(avaliacao.id, aluno.id);
-  const qrDataUrl = await QRCode.toDataURL(payload, { width: qrSize, margin: 1, errorCorrectionLevel: 'M' });
-  const img = new Image();
-  await new Promise<void>(res => { img.onload = () => res(); img.src = qrDataUrl; });
-  ctx.drawImage(img, qrX, qrY, qrSize, qrSize);
-
+  // === QR CODE ===
+  const payload = JSON.stringify({ av: avaliacao.id, al: aluno.id });
+  const qrDataUrl = await QRCode.toDataURL(payload, { width: 120, margin: 1, errorCorrectionLevel: 'M' });
+  const qrImg = new Image();
+  await new Promise<void>(res => { qrImg.onload = () => res(); qrImg.src = qrDataUrl; });
+  const qrX = W - PAD - MARK - 8 - 120;
+  const qrY = alunoY + 34;
+  ctx.drawImage(qrImg, qrX, qrY, 120, 120);
   ctx.fillStyle = '#64748b';
   ctx.font = '9px Arial';
   ctx.textAlign = 'center';
-  ctx.fillText('Leia este QR para corrigir', qrX + qrSize / 2, qrY + qrSize + 14);
+  ctx.fillText('QR para correção', qrX + 60, qrY + 132);
   ctx.textAlign = 'left';
 
-  // Instrucoes
+  // === INSTRUCOES ===
+  const instrY = alunoY + 34;
   ctx.fillStyle = '#1e293b';
   ctx.font = 'bold 11px Arial';
-  ctx.fillText('INSTRUÇÕES:', 20, 114);
+  ctx.fillText('INSTRUÇÕES:', PAD + MARK + 16, instrY + 14);
   ctx.font = '10px Arial';
   ctx.fillStyle = '#475569';
-  ctx.fillText('Preencha completamente o círculo da alternativa escolhida.', 20, 128);
-  ctx.fillText('Use caneta azul ou preta. Não use corretivo.', 20, 142);
+  ctx.fillText('• Preencha completamente o círculo da alternativa escolhida.', PAD + MARK + 16, instrY + 30);
+  ctx.fillText('• Use caneta azul ou preta. Não use corretivo.', PAD + MARK + 16, instrY + 46);
+  ctx.fillText('• Marque apenas UMA alternativa por questão.', PAD + MARK + 16, instrY + 62);
 
-  // Colunas questoes
-  const colW = 160;
-  const startX = 20;
-  const startY = 182;
-  const rowH = 28;
+  // === QUESTOES OBJETIVAS ===
+  // Bolhas grandes: raio 16px, bem espaçadas
+  const BUBBLE_R = 16;
+  const BUBBLE_GAP = 52; // espaco entre centros das bolhas
+  const Q_ROW_H = 56;   // altura de cada linha de questao
+  const Q_START_X = PAD + MARK + 16;
+  const Q_START_Y = instrY + 90;
+  const LETRAS = ['A', 'B', 'C', 'D'];
 
-  // Objetivas (1-8) - titulo acima das questoes com espaco suficiente
   ctx.fillStyle = '#1e293b';
   ctx.font = 'bold 11px Arial';
-  ctx.fillText('Questões Objetivas (8 questões)', startX, 158);
+  ctx.fillText('QUESTÕES OBJETIVAS', Q_START_X, Q_START_Y - 8);
 
-  for (let i = 0; i < NUM_OBJETIVAS; i++) {
-    const col = Math.floor(i / 4);
-    const row = i % 4;
-    const x = startX + col * colW;
-    const y = startY + row * rowH + 4;
+  // Linha separadora
+  ctx.strokeStyle = '#1e293b';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(Q_START_X, Q_START_Y - 4);
+  ctx.lineTo(qrX - 16, Q_START_Y - 4);
+  ctx.stroke();
+
+  for (let i = 0; i < 8; i++) {
     const qn = i + 1;
+    const qy = Q_START_Y + i * Q_ROW_H + Q_ROW_H / 2;
 
     // Fundo alternado
-    if (row % 2 === 0) {
+    if (i % 2 === 0) {
       ctx.fillStyle = '#f8fafc';
-      ctx.fillRect(x - 2, y - 14, colW - 10, rowH - 2);
+      ctx.fillRect(Q_START_X - 4, qy - Q_ROW_H / 2 + 2, qrX - Q_START_X - 8, Q_ROW_H - 4);
     }
 
+    // Numero da questao
     ctx.fillStyle = '#1e293b';
-    ctx.font = 'bold 12px Arial';
-    ctx.fillText(String(qn) + '.', x, y);
+    ctx.font = 'bold 16px Arial';
+    ctx.fillText(String(qn), Q_START_X + 2, qy + 6);
 
+    // Bolhas
     LETRAS.forEach((l, li) => {
-      const cx = x + 22 + li * 24;
-      const cy = y - 5;
+      const bx = Q_START_X + 50 + li * BUBBLE_GAP;
+      const by = qy;
+
+      // Circulo da bolha
       ctx.beginPath();
-      ctx.arc(cx, cy, 9, 0, Math.PI * 2);
+      ctx.arc(bx, by, BUBBLE_R, 0, Math.PI * 2);
       ctx.strokeStyle = '#334155';
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 2;
       ctx.stroke();
-      ctx.fillStyle = '#1e293b';
-      ctx.font = '10px Arial';
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+
+      // Letra dentro da bolha
+      ctx.fillStyle = '#334155';
+      ctx.font = 'bold 13px Arial';
       ctx.textAlign = 'center';
-      ctx.fillText(l, cx, cy + 4);
+      ctx.fillText(l, bx, by + 5);
       ctx.textAlign = 'left';
     });
   }
 
-  // Subjetivas
-  const subjY = startY + 4 * rowH + 16;
+  // === QUESTOES SUBJETIVAS ===
+  const subjStartY = Q_START_Y + 8 * Q_ROW_H + 20;
+
   ctx.fillStyle = '#1e293b';
   ctx.font = 'bold 11px Arial';
-  ctx.fillText('Questões Subjetivas (2 questões) — Nota lançada pelo professor', startX, subjY);
+  ctx.fillText('QUESTÕES SUBJETIVAS — Nota lançada pelo professor', Q_START_X, subjStartY);
 
-  for (let s = 0; s < NUM_SUBJETIVAS; s++) {
-    const qn = NUM_OBJETIVAS + s + 1;
-    const y = subjY + 20 + s * 56;
+  ctx.strokeStyle = '#1e293b';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(Q_START_X, subjStartY + 4);
+  ctx.lineTo(W - PAD - MARK - 8, subjStartY + 4);
+  ctx.stroke();
+
+  for (let s = 0; s < 2; s++) {
+    const qn = 9 + s;
+    const sy = subjStartY + 24 + s * 90;
+
     ctx.fillStyle = '#f8fafc';
-    ctx.fillRect(startX - 2, y - 14, W - qrSize - 55, 50);
+    ctx.fillRect(Q_START_X - 4, sy - 4, W - 2*(PAD + MARK + 8) + 8, 80);
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(Q_START_X - 4, sy - 4, W - 2*(PAD + MARK + 8) + 8, 80);
+
     ctx.fillStyle = '#1e293b';
-    ctx.font = 'bold 12px Arial';
-    ctx.fillText(String(qn) + '.', startX, y);
+    ctx.font = 'bold 15px Arial';
+    ctx.fillText(String(qn) + '.', Q_START_X + 4, sy + 18);
+
     // Linhas para resposta
     ctx.strokeStyle = '#cbd5e1';
     ctx.lineWidth = 0.8;
     for (let ln = 0; ln < 2; ln++) {
       ctx.beginPath();
-      ctx.moveTo(startX + 20, y + 8 + ln * 18);
-      ctx.lineTo(qrX - 14, y + 8 + ln * 18);
+      ctx.moveTo(Q_START_X + 36, sy + 16 + ln * 26);
+      ctx.lineTo(W - PAD - MARK - 20, sy + 16 + ln * 26);
       ctx.stroke();
     }
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '9px Arial';
-    ctx.fillText('Nota: ____', startX, y + 44);
+
+    // Campo nota
+    ctx.fillStyle = '#1e293b';
+    ctx.font = 'bold 10px Arial';
+    ctx.fillText('NOTA:', Q_START_X + 4, sy + 68);
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(Q_START_X + 44, sy + 56, 60, 18);
   }
 
-  // Rodape
+  // === RODAPE ===
   ctx.fillStyle = '#e2e8f0';
-  ctx.fillRect(8, H - 28, W - 16, 1);
+  ctx.fillRect(PAD + MARK + 8, H - PAD - MARK - 20, W - 2*(PAD + MARK + 8), 1);
   ctx.fillStyle = '#94a3b8';
   ctx.font = '9px Arial';
-  ctx.fillText('Brasília, Acre — 2026', 20, H - 10);
+  ctx.fillText('Brasiléia, Acre — 2026', PAD + MARK + 16, H - PAD - MARK - 6);
   ctx.textAlign = 'right';
-  ctx.fillText('ID: ' + aluno.id.substring(0, 8), W - 20, H - 10);
+  ctx.fillText('ID: ' + aluno.id.substring(0, 8).toUpperCase(), W - PAD - MARK - 16, H - PAD - MARK - 6);
   ctx.textAlign = 'left';
 }
+
 
 export function AvaliacaoFolha() {
   const { id } = useParams<{ id: string }>();
