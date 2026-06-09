@@ -56,11 +56,11 @@ async function desenharFolha(
   ctx.font = 'bold 15px Arial';
   ctx.fillText('E.E. INSTITUTO ODILON PRATAGI', 20, 30);
   ctx.font = '12px Arial';
-  ctx.fillText('Educa\u00e7\u00e3o F\u00edsica \u2014 ' + avaliacao.titulo, 20, 48);
+  ctx.fillText('Educação Física — ' + avaliacao.titulo, 20, 48);
   ctx.font = 'bold 13px Arial';
   ctx.fillText('TURMA: ' + avaliacao.turma_id, W - 160, 30);
   ctx.font = '12px Arial';
-  ctx.fillText('N\u00BA: ' + (aluno.numero_chamada || '--'), W - 160, 48);
+  ctx.fillText('Nº: ' + (aluno.numero_chamada || '--'), W - 160, 48);
 
   // Linha aluno
   ctx.fillStyle = '#f1f5f9';
@@ -95,11 +95,11 @@ async function desenharFolha(
   // Instrucoes
   ctx.fillStyle = '#1e293b';
   ctx.font = 'bold 11px Arial';
-  ctx.fillText('INSTRU\u00c7\u00d5ES:', 20, 114);
+  ctx.fillText('INSTRUÇÕES:', 20, 114);
   ctx.font = '10px Arial';
   ctx.fillStyle = '#475569';
-  ctx.fillText('Preencha completamente o c\u00edrculo da alternativa escolhida.', 20, 128);
-  ctx.fillText('Use caneta azul ou preta. N\u00e3o use corretivo.', 20, 142);
+  ctx.fillText('Preencha completamente o círculo da alternativa escolhida.', 20, 128);
+  ctx.fillText('Use caneta azul ou preta. Não use corretivo.', 20, 142);
 
   // Colunas questoes
   const colW = 160;
@@ -110,7 +110,7 @@ async function desenharFolha(
   // Objetivas (1-8)
   ctx.fillStyle = '#1e293b';
   ctx.font = 'bold 11px Arial';
-  ctx.fillText('Quest\u00f5es Objetivas (8 quest\u00f5es)', startX, startY - 6);
+  ctx.fillText('Questões Objetivas (8 questões)', startX, startY - 6);
 
   for (let i = 0; i < NUM_OBJETIVAS; i++) {
     const col = Math.floor(i / 4);
@@ -149,7 +149,7 @@ async function desenharFolha(
   const subjY = startY + 4 * rowH + 16;
   ctx.fillStyle = '#1e293b';
   ctx.font = 'bold 11px Arial';
-  ctx.fillText('Quest\u00f5es Subjetivas (2 quest\u00f5es) \u2014 Nota lan\u00e7ada pelo professor', startX, subjY);
+  ctx.fillText('Questões Subjetivas (2 questões) — Nota lançada pelo professor', startX, subjY);
 
   for (let s = 0; s < NUM_SUBJETIVAS; s++) {
     const qn = NUM_OBJETIVAS + s + 1;
@@ -178,7 +178,7 @@ async function desenharFolha(
   ctx.fillRect(8, H - 28, W - 16, 1);
   ctx.fillStyle = '#94a3b8';
   ctx.font = '9px Arial';
-  ctx.fillText('Bras\u00edlia, Acre \u2014 2026', 20, H - 10);
+  ctx.fillText('Brasília, Acre — 2026', 20, H - 10);
   ctx.textAlign = 'right';
   ctx.fillText('ID: ' + aluno.id.substring(0, 8), W - 20, H - 10);
   ctx.textAlign = 'left';
@@ -249,7 +249,7 @@ export function AvaliacaoFolha() {
   );
 
   if (!avaliacao) return (
-    <div className="py-8 text-center text-on-surface-variant text-sm">Avalia\u00e7\u00e3o n\u00e3o encontrada.</div>
+    <div className="py-8 text-center text-on-surface-variant text-sm">Avaliação não encontrada.</div>
   );
 
   return (
@@ -269,7 +269,7 @@ export function AvaliacaoFolha() {
           Esta tela gera uma folha de respostas com QR Code exclusivo para cada aluno.
         </p>
         <p className="text-xs text-on-secondary-container">
-          Ao escanear o QR ap\u00f3s a prova, o sistema identifica automaticamente o aluno e a avalia\u00e7\u00e3o.
+          Ao escanear o QR após a prova, o sistema identifica automaticamente o aluno e a avaliação.
         </p>
       </div>
 
@@ -298,7 +298,7 @@ export function AvaliacaoFolha() {
       {geradoTodos && (
         <div className="space-y-3">
           <p className="text-xs font-semibold text-on-surface-variant">
-            {alunos.length} folhas geradas &mdash; pr\u00e9-visualiza\u00e7\u00e3o
+            {alunos.length} folhas geradas &mdash; pré-visualização
           </p>
           {alunos.map(al => canvases[al.id] && (
             <div key={al.id} className="border border-outline-variant rounded-xl overflow-hidden">

@@ -52,7 +52,7 @@ export function Avaliacoes() {
   }
 
   async function salvar() {
-    if (!titulo.trim()) { setErro('Informe o t\u00edtulo da avalia\u00e7\u00e3o.'); return; }
+    if (!titulo.trim()) { setErro('Informe o título da avaliação.'); return; }
     setSalvando(true);
     setErro('');
     const { error } = await supabase.from('avaliacoes').insert({
@@ -74,7 +74,7 @@ export function Avaliacoes() {
   }
 
   async function excluir(id: string) {
-    if (!confirm('Excluir esta avalia\u00e7\u00e3o e todas as respostas?')) return;
+    if (!confirm('Excluir esta avaliação e todas as respostas?')) return;
     await supabase.from('avaliacoes').delete().eq('id', id);
     carregar();
   }
@@ -93,7 +93,7 @@ export function Avaliacoes() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <ClipboardList className="w-5 h-5 text-primary" />
-          <h1 className="text-lg font-bold text-on-surface">Avalia\u00e7\u00f5es</h1>
+          <h1 className="text-lg font-bold text-on-surface">Avaliações</h1>
         </div>
         <button
           onClick={() => { setCriando(!criando); setErro(''); }}
@@ -107,11 +107,11 @@ export function Avaliacoes() {
       {/* Formulario de criacao */}
       {criando && (
         <div className="bg-surface border border-outline-variant rounded-2xl p-4 space-y-4">
-          <p className="text-sm font-semibold text-on-surface">Nova avalia\u00e7\u00e3o</p>
+          <p className="text-sm font-semibold text-on-surface">Nova avaliação</p>
 
           <div className="space-y-3">
             <div>
-              <label className="text-xs text-on-surface-variant mb-1 block">T\u00edtulo *</label>
+              <label className="text-xs text-on-surface-variant mb-1 block">Título *</label>
               <input
                 value={titulo}
                 onChange={e => setTitulo(e.target.value)}
@@ -132,7 +132,7 @@ export function Avaliacoes() {
                 </select>
               </div>
               <div>
-                <label className="text-xs text-on-surface-variant mb-1 block">Pontos por quest\u00e3o objetiva</label>
+                <label className="text-xs text-on-surface-variant mb-1 block">Pontos por questão objetiva</label>
                 <input
                   type="number"
                   step="0.5"
@@ -146,7 +146,7 @@ export function Avaliacoes() {
             </div>
 
             <div>
-              <label className="text-xs text-on-surface-variant mb-1 block">Descri\u00e7\u00e3o (opcional)</label>
+              <label className="text-xs text-on-surface-variant mb-1 block">Descrição (opcional)</label>
               <input
                 value={descricao}
                 onChange={e => setDescricao(e.target.value)}
@@ -159,7 +159,7 @@ export function Avaliacoes() {
           {/* Gabarito objetivas */}
           <div>
             <p className="text-xs font-semibold text-on-surface-variant mb-2">
-              Gabarito &mdash; Quest\u00f5es Objetivas (1 a {NUM_OBJETIVAS})
+              Gabarito &mdash; Questões Objetivas (1 a {NUM_OBJETIVAS})
             </p>
             <div className="space-y-2">
               {Array.from({ length: NUM_OBJETIVAS }, (_, i) => i + 1).map(n => (
@@ -189,10 +189,10 @@ export function Avaliacoes() {
           {/* Info subjetivas */}
           <div className="bg-secondary-container rounded-xl px-3 py-2">
             <p className="text-xs text-on-secondary-container font-medium">
-              Quest\u00f5es 9 e 10 s\u00e3o subjetivas &mdash; a nota ser\u00e1 lan\u00e7ada manualmente ao corrigir.
+              Questões 9 e 10 são subjetivas &mdash; a nota será lançada manualmente ao corrigir.
             </p>
             <p className="text-xs text-on-secondary-container mt-0.5">
-              Total poss\u00edvel estimado: {(NUM_OBJETIVAS * valorObj).toFixed(1)} pts objetivas + notas subjetivas
+              Total possível estimado: {(NUM_OBJETIVAS * valorObj).toFixed(1)} pts objetivas + notas subjetivas
             </p>
           </div>
 
@@ -210,7 +210,7 @@ export function Avaliacoes() {
               disabled={salvando}
               className="flex-1 py-2 rounded-xl bg-primary text-on-primary text-sm font-semibold disabled:opacity-50"
             >
-              {salvando ? 'Salvando...' : 'Salvar avalia\u00e7\u00e3o'}
+              {salvando ? 'Salvando...' : 'Salvar avaliação'}
             </button>
           </div>
         </div>
@@ -223,7 +223,7 @@ export function Avaliacoes() {
         </div>
       ) : lista.length === 0 ? (
         <div className="text-center py-12 text-on-surface-variant text-sm">
-          Nenhuma avalia\u00e7\u00e3o criada ainda.
+          Nenhuma avaliação criada ainda.
         </div>
       ) : (
         <div className="space-y-2">
@@ -236,7 +236,7 @@ export function Avaliacoes() {
                 <div>
                   <p className="text-sm font-semibold text-on-surface">{av.titulo}</p>
                   <p className="text-xs text-on-surface-variant">
-                    Turma {av.turma_id} &middot; {av.num_questoes} quest\u00f5es &middot; {av.valor_questao} pt/obj
+                    Turma {av.turma_id} &middot; {av.num_questoes} questões &middot; {av.valor_questao} pt/obj
                   </p>
                 </div>
                 <div className="flex items-center gap-2">

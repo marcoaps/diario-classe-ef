@@ -73,7 +73,7 @@ export function AvaliacaoCorrigir() {
       setCameraAtiva(true);
       scanLoop();
     } catch {
-      setErro('N\u00e3o foi poss\u00edvel acessar a c\u00e2mera. Verifique as permiss\u00f5es.');
+      setErro('Não foi possível acessar a câmera. Verifique as permissões.');
     }
   }
 
@@ -125,7 +125,7 @@ export function AvaliacaoCorrigir() {
       setRespostas(r);
       setEtapa('respostas');
     } else {
-      setErro('Aluno n\u00e3o encontrado para este QR Code.');
+      setErro('Aluno não encontrado para este QR Code.');
     }
   }
 
@@ -151,10 +151,10 @@ export function AvaliacaoCorrigir() {
               },
               {
                 type: 'text',
-                text: `Esta \u00e9 uma folha de respostas de prova com ${NUM_OBJETIVAS} quest\u00f5es objetivas (A B C D E).
-Identifique qual alternativa est\u00e1 marcada (preenchida/circulada) em cada quest\u00e3o de 1 a ${NUM_OBJETIVAS}.
+                text: `Esta é uma folha de respostas de prova com ${NUM_OBJETIVAS} questões objetivas (A B C D E).
+Identifique qual alternativa está marcada (preenchida/circulada) em cada questão de 1 a ${NUM_OBJETIVAS}.
 Retorne APENAS um JSON no formato: {"1":"A","2":"B","3":"C","4":"D","5":"E","6":"A","7":"B","8":"C"}
-Se n\u00e3o conseguir identificar uma quest\u00e3o, use "".`
+Se não conseguir identificar uma questão, use "".`
               }
             ]
           }]
@@ -167,7 +167,7 @@ Se n\u00e3o conseguir identificar uma quest\u00e3o, use "".`
         const detectadas = JSON.parse(match[0]);
         setRespostas(prev => ({ ...prev, ...detectadas }));
       } else {
-        setErro('IA n\u00e3o conseguiu identificar as respostas. Preencha manualmente.');
+        setErro('IA não conseguiu identificar as respostas. Preencha manualmente.');
       }
     } catch {
       setErro('Erro ao analisar com IA. Preencha manualmente.');
@@ -182,7 +182,7 @@ Se n\u00e3o conseguir identificar uma quest\u00e3o, use "".`
     // Valida objetivas
     for (let i = 1; i <= NUM_OBJETIVAS; i++) {
       if (!respostas[String(i)]) {
-        setErro(`Quest\u00e3o ${i} sem resposta. Selecione uma alternativa ou marque como branco (use X).`);
+        setErro(`Questão ${i} sem resposta. Selecione uma alternativa ou marque como branco (use X).`);
         return;
       }
     }
@@ -222,7 +222,7 @@ Se n\u00e3o conseguir identificar uma quest\u00e3o, use "".`
   );
 
   if (!avaliacao) return (
-    <div className="py-8 text-center text-sm text-on-surface-variant">Avalia\u00e7\u00e3o n\u00e3o encontrada.</div>
+    <div className="py-8 text-center text-sm text-on-surface-variant">Avaliação não encontrada.</div>
   );
 
   // Calculo de acertos para preview
@@ -249,7 +249,7 @@ Se n\u00e3o conseguir identificar uma quest\u00e3o, use "".`
         <div className="space-y-3">
           <div className="bg-secondary-container rounded-2xl p-3">
             <p className="text-sm text-on-secondary-container">
-              Aponte a c\u00e2mera para o QR Code na folha de respostas do aluno.
+              Aponte a câmera para o QR Code na folha de respostas do aluno.
             </p>
           </div>
 
@@ -259,7 +259,7 @@ Se n\u00e3o conseguir identificar uma quest\u00e3o, use "".`
               className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-primary text-on-primary font-semibold text-base"
             >
               <Camera className="w-5 h-5" />
-              Abrir c\u00e2mera
+              Abrir câmera
             </button>
           ) : (
             <div className="relative rounded-2xl overflow-hidden border border-outline-variant">
@@ -320,7 +320,7 @@ Se n\u00e3o conseguir identificar uma quest\u00e3o, use "".`
 
           {/* Questoes objetivas */}
           <div className="bg-surface border border-outline-variant rounded-2xl p-4 space-y-2">
-            <p className="text-xs font-semibold text-on-surface-variant mb-3">Quest\u00f5es Objetivas</p>
+            <p className="text-xs font-semibold text-on-surface-variant mb-3">Questões Objetivas</p>
             {Array.from({ length: NUM_OBJETIVAS }, (_, i) => i + 1).map(n => {
               const correta = avaliacao.gabarito[String(n)];
               const marcada = respostas[String(n)];
@@ -367,7 +367,7 @@ Se n\u00e3o conseguir identificar uma quest\u00e3o, use "".`
 
           {/* Subjetivas */}
           <div className="bg-surface border border-outline-variant rounded-2xl p-4 space-y-3">
-            <p className="text-xs font-semibold text-on-surface-variant">Quest\u00f5es Subjetivas &mdash; nota manual</p>
+            <p className="text-xs font-semibold text-on-surface-variant">Questões Subjetivas &mdash; nota manual</p>
             {[9, 10].map(n => (
               <div key={n} className="flex items-center gap-3">
                 <span className="text-sm font-bold text-on-surface-variant w-6">{n}.</span>
@@ -399,7 +399,7 @@ Se n\u00e3o conseguir identificar uma quest\u00e3o, use "".`
             className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-on-primary font-semibold text-sm disabled:opacity-60"
           >
             <Save className="w-4 h-4" />
-            {salvando ? 'Salvando...' : 'Salvar e pr\u00f3ximo'}
+            {salvando ? 'Salvando...' : 'Salvar e próximo'}
           </button>
         </div>
       )}
@@ -420,13 +420,13 @@ Se n\u00e3o conseguir identificar uma quest\u00e3o, use "".`
             onClick={proximoAluno}
             className="w-full py-3 rounded-2xl bg-primary text-on-primary font-semibold text-sm"
           >
-            Pr\u00f3ximo aluno
+            Próximo aluno
           </button>
           <button
             onClick={() => navigate('/avaliacoes')}
             className="w-full py-2.5 rounded-2xl border border-outline-variant text-on-surface-variant text-sm"
           >
-            Voltar para avalia\u00e7\u00f5es
+            Voltar para avaliações
           </button>
         </div>
       )}
