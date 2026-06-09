@@ -49,6 +49,7 @@ export function AvaliacaoCorrigir() {
   const [erro, setErro] = useState('');
   const [etapa, setEtapa] = useState<'scan' | 'respostas' | 'salvo'>('scan');
   const [analisandoIA, setAnalisandoIA] = useState(false);
+  const [debugMsg, setDebugMsg] = useState('');
 
   useEffect(() => {
     async function init() {
@@ -134,18 +135,27 @@ export function AvaliacaoCorrigir() {
                 lastQrRef.current = code.data;
                 qrConfirmRef.current = 1;
               }
+              setDebugMsg('QR OK! Confirmando ' + qrConfirmRef.current + '/3...');
               if (qrConfirmRef.current >= 3) {
                 qrConfirmRef.current = 0;
                 lastQrRef.current = '';
+                setDebugMsg('');
                 pararCamera();
                 await buscarAluno(payload.al);
                 return;
               }
+            } else if (payload.av && payload.av !== id) {
+              setDebugMsg('QR de outra avaliação: ' + payload.av.substring(0,8));
+            } else {
+              setDebugMsg('QR lido mas formato inválido: ' + code.data.substring(0,30));
             }
-          } catch { /* QR invalido */ }
+          } catch {
+            setDebugMsg('QR lido mas não é JSON: ' + code.data.substring(0,30));
+          }
         } else {
           qrConfirmRef.current = 0;
           lastQrRef.current = '';
+          setDebugMsg('Procurando QR...');
         }
       } catch { /* erro no canvas, continua */ }
 
@@ -313,7 +323,7 @@ Se não conseguir identificar uma questão, use "".`
               </div>
               <div className="absolute bottom-2 left-0 right-0 text-center">
                 <span className="text-xs text-white bg-black/50 px-3 py-1 rounded-full">
-                  Procurando QR Code...
+                  {debugMsg || 'Procurando QR Code...'}
                 </span>
               </div>
               <button
