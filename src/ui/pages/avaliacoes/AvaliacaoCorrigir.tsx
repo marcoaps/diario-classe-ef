@@ -201,13 +201,7 @@ export function AvaliacaoCorrigir() {
               },
               {
                 type: 'text',
-                text: `Esta e uma folha de respostas de prova com 8 questoes objetivas. Cada questao tem 4 alternativas: A, B, C, D. As respostas marcadas estao com a bolha preenchida/escurecida.
-
-Identifique qual alternativa esta marcada em cada questao de 1 a 8.
-
-Retorne APENAS um JSON no formato exato: {"1":"A","2":"B","3":"C","4":"D","5":"A","6":"B","7":"C","8":"D"}
-
-Se nao conseguir identificar uma questao com certeza, use a letra mais provavel. Nao inclua texto antes ou depois do JSON.`
+                text: `Esta e uma folha de respostas de prova do ensino fundamental brasileiro com 8 questoes objetivas numeradas de 1 a 8. Cada questao tem 4 alternativas em circulos: A, B, C, D. A alternativa escolhida pelo aluno esta com o circulo COMPLETAMENTE PREENCHIDO DE PRETO (bolha escura e solida). As alternativas nao escolhidas estao com o circulo apenas desenhado (vazio/branco por dentro). Analise cada questao e identifique qual circulo esta preenchido (preto solido). Retorne APENAS um JSON sem texto adicional: {"1":"A","2":"B","3":"C","4":"D","5":"A","6":"B","7":"C","8":"D"} - substitua cada letra pela alternativa preenchida na respectiva questao.`
               }
             ]
           }]
