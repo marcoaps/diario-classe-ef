@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { StoreProvider } from './store';
 import { AppLayout } from './ui/AppLayout';
@@ -28,6 +28,9 @@ import { IAAtividadesAdaptadas } from './ui/pages/ia/IAAtividadesAdaptadas';
 import { IAIdeiasAvaliacoes } from './ui/pages/ia/IAIdeiasAvaliacoes';
 import { IAProvaOficial } from './ui/pages/ia/IAProvaOficial';
 import { RendimentoBimestre } from './ui/pages/RendimentoBimestre';
+import { Avaliacoes } from './ui/pages/avaliacoes/Avaliacoes';
+import { AvaliacaoFolha } from './ui/pages/avaliacoes/AvaliacaoFolha';
+import { AvaliacaoCorrigir } from './ui/pages/avaliacoes/AvaliacaoCorrigir';
 import { supabase } from './data/supabase';
 
 export function useAuth() {
@@ -84,6 +87,11 @@ export default function App() {
           <Route path="/alunos" element={<CentralAluno />} />
           <Route path="/rendimento" element={<RendimentoBimestre />} />
 
+          {/* Modulo Avaliacoes com QR Code */}
+          <Route path="/avaliacoes" element={<Avaliacoes />} />
+          <Route path="/avaliacoes/folha/:id" element={<AvaliacaoFolha />} />
+          <Route path="/avaliacoes/corrigir/:id" element={<AvaliacaoCorrigir />} />
+
           {/* Rotas IA */}
           <Route path="/ia" element={<IAHub />} />
           <Route path="/ia/plano-aula" element={<IAPlanoAula />} />
@@ -103,4 +111,3 @@ export default function App() {
     </BrowserRouter>
   );
 }
-
