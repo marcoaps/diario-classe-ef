@@ -288,31 +288,33 @@ export function AvaliacaoCorrigir() {
             </p>
           </div>
 
-          {/* Upload sempre visivel */}
-          {analisando ? (
-            <div className="w-full flex flex-col items-center justify-center gap-3 py-10 rounded-2xl border-2 border-dashed border-primary bg-primary/5">
-              <RefreshCw className="w-10 h-10 animate-spin text-primary" />
-              <span className="text-sm font-medium text-primary">Analisando respostas com IA...</span>
-              <span className="text-xs text-on-surface-variant">Aguarde alguns segundos</span>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="w-full rounded-2xl border-2 border-dashed border-outline-variant overflow-hidden">
-                <label style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'8px', padding:'40px 16px', cursor:'pointer', width:'100%'}}>
-                  <Upload style={{width:40, height:40, color:'var(--color-on-surface-variant)'}} />
-                  <span style={{fontSize:15, fontWeight:600, color:'var(--color-on-surface)'}}>Escolher foto da folha</span>
-                  <span style={{fontSize:12, color:'var(--color-on-surface-variant)'}}>Selecione da galeria do celular</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    style={{display:'none'}}
-                    onChange={handleUploadFolha}
-                  />
-                </label>
+          {/* Input file SEMPRE no DOM - nunca condicional */}
+          <div style={{position:'relative', width:'100%', borderRadius:16, border:'2px dashed #94a3b8', overflow:'hidden', background: analisando ? '#eff6ff' : '#fff'}}>
+            {analisando && (
+              <div style={{position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:8, background:'#eff6ff', zIndex:2, pointerEvents:'none'}}>
+                <RefreshCw style={{width:36, height:36, color:'#2563eb'}} className="animate-spin" />
+                <span style={{fontSize:14, fontWeight:600, color:'#2563eb'}}>Analisando com IA...</span>
+                <span style={{fontSize:12, color:'#64748b'}}>Aguarde alguns segundos</span>
               </div>
-              <p className="text-xs text-center text-on-surface-variant">O QR Code deve estar visivel na foto</p>
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleUploadFolha}
+              style={{
+                position:'absolute', top:0, left:0,
+                width:'100%', height:'100%',
+                opacity:0, zIndex:3,
+                cursor:'pointer'
+              }}
+            />
+            <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:8, padding:'40px 16px', pointerEvents:'none'}}>
+              <Upload style={{width:36, height:36, color:'#64748b'}} />
+              <span style={{fontSize:15, fontWeight:600, color:'#1e293b'}}>Escolher foto da folha</span>
+              <span style={{fontSize:12, color:'#64748b'}}>Galeria ou câmera</span>
             </div>
-          )}
+          </div>
+          <p className="text-xs text-center text-on-surface-variant">O QR Code deve estar visível na foto</p>
 
           <div className="text-center">
             <span className="text-xs text-on-surface-variant">ou</span>
