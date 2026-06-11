@@ -288,86 +288,53 @@ export function AvaliacaoCorrigir() {
             </p>
           </div>
 
-          {/* Tabs */}
-          <div className="flex gap-2">
-            <button
-              onClick={() => setModoIdentificacao('qr')}
-              className={['flex-1 py-2 rounded-xl text-sm font-medium border transition-all',
-                modoIdentificacao === 'qr'
-                  ? 'bg-primary text-on-primary border-primary'
-                  : 'border-outline-variant text-on-surface-variant'
-              ].join(' ')}
-            >
-              Foto da folha
-            </button>
-            <button
-              onClick={() => setModoIdentificacao('lista')}
-              className={['flex-1 py-2 rounded-xl text-sm font-medium border transition-all',
-                modoIdentificacao === 'lista'
-                  ? 'bg-primary text-on-primary border-primary'
-                  : 'border-outline-variant text-on-surface-variant'
-              ].join(' ')}
-            >
-              Selecionar aluno
-            </button>
-          </div>
-
-          {/* Upload da folha completa */}
-          {modoIdentificacao === 'qr' && (
+          {/* Upload sempre visivel */}
+          {analisando ? (
+            <div className="w-full flex flex-col items-center justify-center gap-3 py-10 rounded-2xl border-2 border-dashed border-primary bg-primary/5">
+              <RefreshCw className="w-10 h-10 animate-spin text-primary" />
+              <span className="text-sm font-medium text-primary">Analisando respostas com IA...</span>
+              <span className="text-xs text-on-surface-variant">Aguarde alguns segundos</span>
+            </div>
+          ) : (
             <div className="space-y-3">
-              {analisando ? (
-                <div className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-2xl border-2 border-dashed border-primary">
-                  <RefreshCw className="w-8 h-8 animate-spin text-primary" />
-                  <span className="text-sm font-medium text-primary">Lendo QR e analisando respostas...</span>
-                  <span className="text-xs text-on-surface-variant">Aguarde alguns segundos</span>
-                </div>
-              ) : (
-                <div className="relative w-full">
-                  <div className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-2xl border-2 border-dashed border-outline-variant text-on-surface-variant pointer-events-none">
-                    <Upload className="w-8 h-8" />
-                    <span className="text-sm font-medium">Toque para fotografar a folha</span>
-                    <span className="text-xs">Abre camera ou galeria</span>
-                  </div>
+              <div className="w-full rounded-2xl border-2 border-dashed border-outline-variant overflow-hidden">
+                <label style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'8px', padding:'40px 16px', cursor:'pointer', width:'100%'}}>
+                  <Upload style={{width:40, height:40, color:'var(--color-on-surface-variant)'}} />
+                  <span style={{fontSize:15, fontWeight:600, color:'var(--color-on-surface)'}}>Escolher foto da folha</span>
+                  <span style={{fontSize:12, color:'var(--color-on-surface-variant)'}}>Selecione da galeria do celular</span>
                   <input
                     type="file"
                     accept="image/*"
+                    style={{display:'none'}}
                     onChange={handleUploadFolha}
-                    style={{
-                      position: 'absolute',
-                      top: 0, left: 0,
-                      width: '100%',
-                      height: '100%',
-                      opacity: 0,
-                      cursor: 'pointer',
-                      fontSize: '100px'
-                    }}
                   />
-                </div>
-              )}
-              <p className="text-xs text-center text-on-surface-variant">
-                Certifique-se que o QR Code esta visivel na foto
-              </p>
+                </label>
+              </div>
+              <p className="text-xs text-center text-on-surface-variant">O QR Code deve estar visivel na foto</p>
             </div>
           )}
 
+          <div className="text-center">
+            <span className="text-xs text-on-surface-variant">ou</span>
+          </div>
+
           {/* Lista de alunos */}
-          {modoIdentificacao === 'lista' && (
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {alunos.map(al => (
-                <button
-                  key={al.id}
-                  onClick={() => selecionarAluno(al)}
-                  className="w-full flex items-center justify-between px-4 py-3 bg-surface border border-outline-variant rounded-xl text-left"
-                >
-                  <div>
-                    <span className="text-xs text-on-surface-variant mr-2">{al.numero_chamada}.</span>
-                    <span className="text-sm text-on-surface">{al.nome}</span>
-                  </div>
-                  <span className="text-xs text-primary">Selecionar</span>
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            <p className="text-xs font-semibold text-on-surface-variant px-1">Selecionar aluno manualmente:</p>
+            {alunos.map(al => (
+              <button
+                key={al.id}
+                onClick={() => selecionarAluno(al)}
+                className="w-full flex items-center justify-between px-4 py-3 bg-surface border border-outline-variant rounded-xl text-left"
+              >
+                <div>
+                  <span className="text-xs text-on-surface-variant mr-2">{al.numero_chamada}.</span>
+                  <span className="text-sm text-on-surface">{al.nome}</span>
+                </div>
+                <span className="text-xs text-primary">Selecionar</span>
+              </button>
+            ))}
+          </div>
 
           {erro && (
             <div className="flex items-start gap-2 text-sm text-error bg-error-container rounded-xl px-3 py-2">
