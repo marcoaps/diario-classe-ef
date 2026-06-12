@@ -281,12 +281,22 @@ export function AvaliacaoFolha() {
   function imprimir() {
     const win = window.open('', '_blank');
     if (!win) return;
-    const imgs = alunos.map(al => canvases[al.id]
-      ? `<div style="page-break-after:always;margin:0;padding:0;"><img src="${canvases[al.id]}" style="width:100%;display:block;" /></div>`
-      : ''
-    ).join('');
+    const imgs = alunos.map((al, idx) => {
+      if (!canvases[al.id]) return '';
+      const isLast = idx === alunos.length - 1;
+      return `<div style="width:100%;height:100vh;margin:0;padding:0;${isLast ? '' : 'page-break-after:always;'}overflow:hidden;">
+        <img src="${canvases[al.id]}" style="width:100%;height:100%;object-fit:contain;display:block;" />
+      </div>`;
+    }).join('');
     win.document.write(`<!DOCTYPE html><html><head><title>${avaliacao?.titulo}</title>
-      <style>@media print{@page{margin:0;size:A4 landscape;}body{margin:0;}}</style>
+      <style>
+        *{box-sizing:border-box;}
+        @media print{
+          @page{margin:0;size:A4 portrait;}
+          html,body{margin:0;padding:0;width:100%;height:100%;}
+        }
+        body{margin:0;padding:0;}
+      </style>
       </head><body>${imgs}</body></html>`);
     win.document.close();
     win.focus();
