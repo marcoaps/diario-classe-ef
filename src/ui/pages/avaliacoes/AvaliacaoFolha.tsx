@@ -39,9 +39,10 @@ const QUESTOES_PLACEHOLDER: Record<number, { texto: string; alts: string[] }> = 
 };
 
 // ─── Gera HTML da prova (página 1) ───────────────────────────────────────────
-function gerarHtmlProva(avaliacao: Avaliacao): string {
+function gerarHtmlProva(avaliacao: Avaliacao, aluno: Aluno): string {
   const vObj = avaliacao.valor_questao.toFixed(1);
   const qSubj = avaliacao.questoes_subjetivas || {};
+  const serie = avaliacao.turma_id.replace(/(\d+).*/, '$1') + 'º ano';
 
   const col1 = Array.from({ length: 4 }, (_, i) => {
     const n = i + 1;
@@ -80,19 +81,21 @@ function gerarHtmlProva(avaliacao: Avaliacao): string {
   return `
     <div class="prova-page">
       <div class="cab">
-        <img class="cab-logo" src="https://i.imgur.com/3t5GEnQ.jpeg" alt="IOP" />
+        <div class="brasao">
+          <div class="brasao-anel">
+            <span class="brasao-iop">I.O.P.</span>
+            <span class="brasao-ee">E.E.</span>
+          </div>
+        </div>
         <div class="cab-info">
           <div class="cab-titulo">${avaliacao.titulo} - Ensino Fundamental - 2026</div>
-          <div class="cab-linha">Disciplina: <strong>Educação Física</strong></div>
-          <div class="cab-linha">Professor(a): <strong>Marco Pedro</strong></div>
+          <div class="cab-linha">Disciplina: <strong>Educação Física</strong> &nbsp;&nbsp; Professor(a): <strong>Jessiane / Marco Pedro</strong></div>
           <div class="cab-linha-row">
-            <span>Série: <strong>${avaliacao.turma_id.replace(/[A-F]/i, 'º ano')}</strong></span>
-            <span>Turma: <span class="ficha-blank-sm"></span></span>
+            <span>Série: <strong>${serie}</strong></span>
+            <span>Turma: <strong>${avaliacao.turma_id}</strong></span>
+            <span>Nº: <strong>${aluno.numero_chamada}</strong></span>
           </div>
-          <div class="cab-linha-row">
-            <span>Nome: <span class="ficha-blank-lg"></span></span>
-            <span>Nº: <span class="ficha-blank-sm"></span></span>
-          </div>
+          <div class="cab-nome">Nome: <strong>${aluno.nome}</strong></div>
         </div>
       </div>
       <div class="instrucoes">
@@ -117,20 +120,22 @@ const CSS_PROVA = `
   @page { size: A4 portrait; margin: 10mm; }
   body { font-family: Arial, sans-serif; font-size: 9.5pt; color: #1e293b; background: white; }
   .prova-page { width: 100%; }
-  .cab { display: flex; align-items: center; gap: 12px; border: 2px solid #1e3a5f; border-radius: 4px; padding: 8px 12px; margin-bottom: 6px; }
-  .cab-logo { width: 64px; height: 64px; min-width: 64px; max-width: 64px; object-fit: contain; border-radius: 50%; flex-shrink: 0; }
-  .cab-info { flex: 1; }
-  .cab-titulo { font-size: 11pt; font-weight: bold; margin-bottom: 2px; }
-  .cab-linha { font-size: 9pt; margin-bottom: 1px; }
-  .cab-linha-row { display: flex; gap: 24px; font-size: 9pt; margin-top: 2px; }
-  .ficha-blank-lg { display: inline-block; border-bottom: 1px solid #333; width: 180px; }
-  .ficha-blank-sm { display: inline-block; border-bottom: 1px solid #333; width: 60px; }
+  .cab { display: flex; align-items: center; gap: 10px; border: 2px solid #1e3a5f; border-radius: 4px; padding: 8px 10px; margin-bottom: 6px; }
+  .brasao { flex-shrink: 0; width: 60px; height: 60px; }
+  .brasao-anel { width: 60px; height: 60px; border-radius: 50%; background: #1e3a5f; border: 3px solid #c8a84b; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+  .brasao-iop { color: white; font-size: 14pt; font-weight: 900; line-height: 1; letter-spacing: 1px; }
+  .brasao-ee { color: #c8a84b; font-size: 7pt; font-weight: bold; letter-spacing: 2px; }
+  .cab-info { flex: 1; min-width: 0; }
+  .cab-titulo { font-size: 10.5pt; font-weight: bold; margin-bottom: 3px; }
+  .cab-linha { font-size: 9pt; margin-bottom: 2px; }
+  .cab-linha-row { display: flex; gap: 16px; font-size: 9pt; margin-bottom: 2px; }
+  .cab-nome { font-size: 9.5pt; border-top: 1px solid #cbd5e1; padding-top: 3px; margin-top: 3px; }
   .instrucoes { border: 1.5px solid #e53e3e; padding: 4px 8px; font-size: 8.5pt; margin-bottom: 6px; border-radius: 2px; }
   .parte-header { background: #1e3a5f; color: white; font-weight: bold; font-size: 10pt; text-align: center; padding: 4px; margin-bottom: 6px; margin-top: 6px; }
   .colunas { display: flex; gap: 0; margin-bottom: 4px; }
-  .col { flex: 1; padding: 0 10px; }
-  .divisor { width: 1.5px; background: #1e3a5f; flex-shrink: 0; margin: 0 2px; }
-  .questao { margin-bottom: 10px; font-size: 8.5pt; }
+  .col { flex: 1; padding: 0 8px; }
+  .divisor { width: 1.5px; background: #1e3a5f; flex-shrink: 0; align-self: stretch; }
+  .questao { margin-bottom: 9px; font-size: 8.5pt; }
   .questao-enunc { margin-bottom: 3px; line-height: 1.4; }
   .alts { padding-left: 4px; }
   .alt { line-height: 1.35; margin-bottom: 1px; }
@@ -141,9 +146,9 @@ const CSS_PROVA = `
   .diss-body { padding: 6px 8px; background: white; }
   .diss-enunc { font-size: 8.5pt; margin-bottom: 6px; line-height: 1.4; }
   .diss-label { font-weight: bold; font-size: 8.5pt; margin-bottom: 4px; }
+  .diss-linhas { }
   .linha-resp { border-bottom: 0.7px solid #94a3b8; height: 18px; }
   .rodape { font-size: 7.5pt; color: #94a3b8; text-align: center; margin-top: 8px; border-top: 1px solid #e2e8f0; padding-top: 4px; }
-  .qr-page { page-break-before: always; }
 `;
 
 // ─── Gera canvas da folha QR ──────────────────────────────────────────────────
@@ -379,12 +384,10 @@ export function AvaliacaoFolha() {
     const win = window.open('', '_blank');
     if (!win) return;
 
-    const htmlProva = gerarHtmlProva(avaliacao);
-
-    // Para cada aluno: prova HTML (page-break-after) + imagem QR
     const blocos = alunos.map((al, idx) => {
       const qrSrc = folhasQR[al.id] || '';
       const isLast = idx === alunos.length - 1;
+      const htmlProva = gerarHtmlProva(avaliacao, al);
       return `
         <div style="page-break-after: always;">
           ${htmlProva}
@@ -406,11 +409,11 @@ export function AvaliacaoFolha() {
 
   async function exportarWord() {
     if (!avaliacao || alunos.length === 0) return;
-    const htmlProva = gerarHtmlProva(avaliacao);
 
     const blocos = alunos.map((al, idx) => {
       const qrSrc = folhasQR[al.id] || '';
       const isLast = idx === alunos.length - 1;
+      const htmlProva = gerarHtmlProva(avaliacao, al);
       return `
         <div style="page-break-after:always;">
           ${htmlProva}
