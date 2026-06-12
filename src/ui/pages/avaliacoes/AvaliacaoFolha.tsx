@@ -97,12 +97,6 @@ function gerarHtmlProva(avaliacao: Avaliacao, aluno: Aluno): string {
         </tr>
       </table>
 
-      <!-- INSTRUÇÕES -->
-      <div style="border:1.5px solid #e53e3e;padding:4px 8px;font-size:10pt;margin-bottom:6px;">
-        <strong>Instruções:</strong> Leia atentamente cada questão. Use caneta azul ou preta. Não é permitido o uso de corretor.
-        Questões objetivas valem ${vObj} ponto cada. Questões dissertativas valem 1,0 ponto cada.
-      </div>
-
       <!-- PARTE 1 -->
       <div style="background:#1e3a5f;color:white;font-weight:bold;font-size:11pt;text-align:center;padding:4px;margin-bottom:6px;">
         PARTE 1 — QUESTÕES OBJETIVAS (${(8 * avaliacao.valor_questao).toFixed(1)} pontos)
