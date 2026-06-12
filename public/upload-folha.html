@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Corrigir Folha</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #f1f5f9; min-height: 100vh; padding: 20px; }
+    h1 { font-size: 18px; color: #1e293b; margin-bottom: 4px; }
+    p { font-size: 13px; color: #64748b; margin-bottom: 20px; }
+    .card { background: #fff; border-radius: 16px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+    input[type=file] { display: block; width: 100%; font-size: 16px; padding: 12px; border: 2px dashed #94a3b8; border-radius: 12px; background: #f8fafc; cursor: pointer; }
+    button { width: 100%; padding: 14px; background: #1d4ed8; color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 12px; }
+    button:disabled { background: #93c5fd; }
+    #preview { max-width: 100%; border-radius: 8px; margin-top: 12px; display: none; }
+    #status { margin-top: 12px; padding: 12px; border-radius: 8px; font-size: 14px; display: none; }
+    .ok { background: #dcfce7; color: #166534; }
+    .erro { background: #fee2e2; color: #991b1b; }
+    .info { background: #dbeafe; color: #1e40af; }
+    .respostas { display: grid; gap: 8px; margin-top: 12px; }
+    .questao { display: flex; align-items: center; gap: 8px; }
+    .questao span { font-size: 14px; font-weight: bold; width: 24px; }
+    .letras { display: flex; gap: 6px; flex: 1; }
+    .letra { flex: 1; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; font-weight: bold; text-align: center; cursor: pointer; background: #fff; }
+    .letra.selecionada { background: #1d4ed8; color: white; border-color: #1d4ed8; }
+    .letra.certa { background: #16a34a; color: white; border-color: #16a34a; }
+    .letra.errada { background: #dc2626; color: white; border-color: #dc2626; }
+    #btn-salvar { display: none; }
+    .nota-box { background: #eff6ff; border-radius: 12px; padding: 16px; text-align: center; margin-top: 12px; }
+    .nota-box .pts { font-size: 36px; font-weight: bold; color: #1d4ed8; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Corrigir Folha</h1>
+    <p id="subtitulo">Carregando avaliação...</p>
+  </div>
+
+  <div class="card" id="card-upload">
+    <p><strong>Passo 1:</strong> Selecione a foto da folha preenchida</p>
+    <input type="file" accept="image/*" id="inputFoto" onchange="processarFoto(this)">
+    <img id="preview">
+    <div id="status"></div>
+  </div>
+
+  <div class="card" id="card-respostas" style="display:none">
+    <p><strong>Passo 2:</strong> Revise as respostas detectadas</p>
+    <div class="respostas" id="respostas"></div>
+    <div class="nota-box" id="nota-box" style="display:none">
+      <div style="font-size:13px;color:#64748b">Acertos</div>
+      <div class="pts" id="pts-display">0/8</div>
+      <div style="font-size:13px;color:#64748b" id="nota-display">0.0 pts</div>
+    </div>
+    <button id="btn-salvar" onclick="salvar()">Salvar nota</button>
+  </div>
+
+  <script>
+    // Pega parametros da URL
+    const params = new URLSearchParams(window.location.search);
+    const avaliacaoId = params.get('av');
+    const supabaseUrl = 'https://rsifjxeqitgiecqwvien.supabase.co';
+    const supabaseKey = 'sb_publishable_Vw7h5WZ5BF-GzaAM0hOECg_TMjwdiby';
+
+    let alunoId = null;
+    let gabarito = {};
+    let valorQuestao = 1;
+    let respostasDetectadas = {};
+
+    async function supabaseFetch(path, opts = {}) {
+      const r = await fetch(supabaseUrl + '/rest/v1/' + path, {
+        ...opts,
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': 'Bearer ' + supabaseKey,
+          'Content-Type': 'application/json',
+          ...(opts.headers || {})
+        }
+      });
+      return r.json();
+    }
+
+    async function init() {
+      if (!avaliacaoId) {
+        document.getElementById('subtitulo').textContent = 'Erro: ID da avaliação não encontrado';
+        return;
+      }
+      const data = await supabaseFetch('avaliacoes?id=eq.' + avaliacaoId + '&select=*');
+      if (data && data[0]) {
+        gabarito = data[0].gabarito;
+        valorQuestao = data[0].valor_questao || 1;
+        document.getElementById('subtitulo').textContent = data[0].titulo + ' · Turma ' + data[0].turma_id;
+      }
+    }
+
+    async function processarFoto(input) {
+      const file = input.files[0];
+      if (!file) return;
+
+      // Preview
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = document.getElementById('preview');
+        img.src = e.target.result;
+        img.style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+
+      mostrarStatus('Lendo QR Code...', 'info');
+
+      // Ler QR Code
+      const imgEl = new Image();
+      const url = URL.createObjectURL(file);
+      imgEl.onload = async () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = imgEl.width;
+        canvas.height = imgEl.height;
+        canvas.getContext('2d').drawImage(imgEl, 0, 0);
+        URL.revokeObjectURL(url);
+
+        // Tenta BarcodeDetector nativo
+        let qrData = null;
+        if ('BarcodeDetector' in window) {
+          try {
+            const det = new BarcodeDetector({ formats: ['qr_code'] });
+            const codes = await det.detect(canvas);
+            if (codes.length > 0) qrData = codes[0].rawValue;
+          } catch(e) {}
+        }
+
+        if (!qrData) {
+          // Fallback: jsQR via CDN
+          mostrarStatus('Carregando leitor de QR...', 'info');
+          await carregarScript('https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js');
+          const imgData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imgData.data, imgData.width, imgData.height);
+          if (code) qrData = code.data;
+        }
+
+        if (!qrData) {
+          mostrarStatus('QR Code não encontrado. Certifique-se que o QR está visível na foto.', 'erro');
+          return;
+        }
+
+        try {
+          const payload = JSON.parse(qrData);
+          if (payload.av !== avaliacaoId) {
+            mostrarStatus('QR Code de outra avaliação.', 'erro');
+            return;
+          }
+          alunoId = payload.al;
+
+          // Busca nome do aluno
+          const alunos = await supabaseFetch('alunos?id=eq.' + alunoId + '&select=nome,numero_chamada');
+          const nomeAluno = alunos[0] ? alunos[0].numero_chamada + '. ' + alunos[0].nome : alunoId;
+          mostrarStatus('✓ Aluno: ' + nomeAluno, 'ok');
+        } catch(e) {
+          mostrarStatus('QR Code inválido.', 'erro');
+          return;
+        }
+
+        // Analisa com IA
+        mostrarStatus('Analisando respostas com IA...', 'info');
+        await analisarComIA(file);
+      };
+      imgEl.src = url;
+    }
+
+    async function analisarComIA(file) {
+      try {
+        const base64 = await new Promise((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res(r.result.split(',')[1]);
+          r.onerror = rej;
+          r.readAsDataURL(file);
+        });
+
+        const resp = await fetch('/api/claude', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-opus-4-5',
+            max_tokens: 200,
+            messages: [{
+              role: 'user',
+              content: [
+                { type: 'image', source: { type: 'base64', media_type: file.type || 'image/jpeg', data: base64 } },
+                { type: 'text', text: 'Folha de respostas impressa em papel com 8 questoes objetivas (1-8), cada uma com 4 bolhas circulares: A B C D. A alternativa escolhida tem a bolha completamente preenchida/pintada de preto. As outras estao vazias. Identifique qual bolha esta preenchida em cada questao. Retorne SOMENTE o JSON: {"1":"A","2":"B","3":"C","4":"D","5":"A","6":"B","7":"C","8":"D"}' }
+              ]
+            }]
+          })
+        });
+
+        const data = await resp.json();
+        const texto = (data.content?.[0]?.text || '').trim();
+        const match = texto.match(/\{[^}]+\}/);
+        if (match) {
+          respostasDetectadas = JSON.parse(match[0]);
+          for (const k of Object.keys(respostasDetectadas)) {
+            respostasDetectadas[k] = String(respostasDetectadas[k]).toUpperCase();
+          }
+          mostrarStatus('✓ Respostas detectadas! Revise abaixo.', 'ok');
+        } else {
+          respostasDetectadas = {};
+          mostrarStatus('IA não detectou. Preencha manualmente abaixo.', 'info');
+        }
+      } catch(e) {
+        respostasDetectadas = {};
+        mostrarStatus('Erro na IA. Preencha manualmente.', 'info');
+      }
+      renderRespostas();
+    }
+
+    function renderRespostas() {
+      const div = document.getElementById('respostas');
+      div.innerHTML = '';
+      for (let i = 1; i <= 8; i++) {
+        const marcada = respostasDetectadas[String(i)] || '';
+        const correta = gabarito[String(i)] || '';
+        const row = document.createElement('div');
+        row.className = 'questao';
+        row.innerHTML = '<span>' + i + '.</span><div class="letras" id="q' + i + '"></div>';
+        div.appendChild(row);
+        const letrasDiv = document.getElementById('q' + i);
+        ['A','B','C','D'].forEach(l => {
+          const btn = document.createElement('button');
+          btn.className = 'letra' + (marcada === l ? ' selecionada' : '');
+          btn.textContent = l;
+          btn.onclick = () => selecionarLetra(i, l);
+          letrasDiv.appendChild(btn);
+        });
+      }
+      document.getElementById('card-respostas').style.display = 'block';
+      document.getElementById('btn-salvar').style.display = 'block';
+      calcularNota();
+    }
+
+    function selecionarLetra(questao, letra) {
+      respostasDetectadas[String(questao)] = letra;
+      const letrasDiv = document.getElementById('q' + questao);
+      letrasDiv.querySelectorAll('.letra').forEach(btn => {
+        btn.className = 'letra' + (btn.textContent === letra ? ' selecionada' : '');
+      });
+      calcularNota();
+    }
+
+    function calcularNota() {
+      let acertos = 0;
+      for (let i = 1; i <= 8; i++) {
+        const marcada = respostasDetectadas[String(i)];
+        const correta = gabarito[String(i)];
+        if (marcada && correta) {
+          const letrasDiv = document.getElementById('q' + i);
+          if (letrasDiv) {
+            letrasDiv.querySelectorAll('.letra').forEach(btn => {
+              if (btn.textContent === marcada && btn.textContent === correta) {
+                btn.className = 'letra certa';
+              } else if (btn.textContent === marcada && btn.textContent !== correta) {
+                btn.className = 'letra errada';
+              } else if (btn.textContent === correta && marcada !== correta) {
+                btn.className = 'letra' + (btn.textContent === marcada ? ' selecionada' : '');
+              }
+            });
+          }
+          if (marcada === correta) acertos++;
+        }
+      }
+      const nota = acertos * valorQuestao;
+      document.getElementById('nota-box').style.display = 'block';
+      document.getElementById('pts-display').textContent = acertos + '/8';
+      document.getElementById('nota-display').textContent = nota.toFixed(1) + ' pts';
+    }
+
+    async function salvar() {
+      if (!alunoId || !avaliacaoId) { alert('Identifique o aluno primeiro'); return; }
+      document.getElementById('btn-salvar').disabled = true;
+      document.getElementById('btn-salvar').textContent = 'Salvando...';
+      try {
+        const r = await fetch(supabaseUrl + '/rest/v1/avaliacoes_respostas', {
+          method: 'POST',
+          headers: {
+            'apikey': supabaseKey,
+            'Authorization': 'Bearer ' + supabaseKey,
+            'Content-Type': 'application/json',
+            'Prefer': 'resolution=merge-duplicates'
+          },
+          body: JSON.stringify({
+            avaliacao_id: avaliacaoId,
+            aluno_id: alunoId,
+            respostas: respostasDetectadas,
+            metodo_scan: 'upload'
+          })
+        });
+        if (r.ok || r.status === 201 || r.status === 200) {
+          document.getElementById('btn-salvar').textContent = '✓ Salvo! Próxima folha';
+          document.getElementById('btn-salvar').style.background = '#16a34a';
+          document.getElementById('btn-salvar').onclick = () => location.reload();
+        } else {
+          throw new Error('Status ' + r.status);
+        }
+      } catch(e) {
+        alert('Erro ao salvar: ' + e.message);
+        document.getElementById('btn-salvar').disabled = false;
+        document.getElementById('btn-salvar').textContent = 'Salvar nota';
+      }
+    }
+
+    function mostrarStatus(msg, tipo) {
+      const el = document.getElementById('status');
+      el.textContent = msg;
+      el.className = tipo;
+      el.style.display = 'block';
+    }
+
+    function carregarScript(src) {
+      return new Promise((res, rej) => {
+        const s = document.createElement('script');
+        s.src = src; s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
+    }
+
+    init();
+  </script>
+</body>
+</html>
