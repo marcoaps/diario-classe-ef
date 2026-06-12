@@ -1,9 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
-import { ArrowLeft, Printer, Download, FileText, Upload, X } from 'lucide-react';
+import { ArrowLeft, Printer, Download, FileText } from 'lucide-react';
 import QRCode from 'qrcode';
-import mammoth from 'mammoth';
 
 interface Avaliacao {
   id: string;
@@ -13,6 +12,7 @@ interface Avaliacao {
   num_questoes: number;
   gabarito: Record<string, string>;
   valor_questao: number;
+  questoes_subjetivas: Record<string, string> | null;
 }
 
 interface Aluno {
@@ -26,8 +26,205 @@ const NUM_OBJETIVAS = 8;
 const NUM_SUBJETIVAS = 2;
 const LETRAS = ['A', 'B', 'C', 'D'];
 
-// ─── Desenha a folha de respostas QR (última página) ─────────────────────────
-async function desenharFolhaQR(
+// ─── Helpers de texto ────────────────────────────────────────────────────────
+function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxW: number, lineH: number): number {
+  const words = text.split(' ');
+  let line = '';
+  let curY = y;
+  for (const word of words) {
+    const test = line ? line + ' ' + word : word;
+    if (ctx.measureText(test).width > maxW && line) {
+      ctx.fillText(line, x, curY);
+      line = word;
+      curY += lineH;
+    } else {
+      line = test;
+    }
+  }
+  if (line) { ctx.fillText(line, x, curY); curY += lineH; }
+  return curY;
+}
+
+// ─── Página 1: prova com questões ────────────────────────────────────────────
+async function desenharPaginaProva(
+  canvas: HTMLCanvasElement,
+  avaliacao: Avaliacao
+): Promise<void> {
+  const W = 794;
+  const H = 1123;
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, W, H);
+
+  const PAD = 36;
+  const CW = W - PAD * 2;
+
+  // === CABEÇALHO ===
+  ctx.fillStyle = '#1e3a5f';
+  ctx.fillRect(PAD, PAD, CW, 70);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 13px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('Avaliação — Ensino Fundamental — 2026', W / 2, PAD + 18);
+  ctx.font = '11px Arial';
+  ctx.fillText('Disciplina: Educação Física', W / 2, PAD + 34);
+  ctx.fillText('Professor(a): Marco Pedro', W / 2, PAD + 48);
+  ctx.fillText(avaliacao.titulo + ' — Turma: ' + avaliacao.turma_id, W / 2, PAD + 63);
+  ctx.textAlign = 'left';
+
+  // Linha Nome/Turma/Data/Nota
+  const fiY = PAD + 78;
+  ctx.strokeStyle = '#1e3a5f';
+  ctx.lineWidth = 0.8;
+  ctx.strokeRect(PAD, fiY, CW, 24);
+  ctx.fillStyle = '#1e293b';
+  ctx.font = '10px Arial';
+  ctx.fillText('Nome: _____________________________________________  Nº: _______  Turma: _______  Data: ___/___/______  Nota: ______', PAD + 6, fiY + 15);
+
+  // Instruções
+  const instrY = fiY + 32;
+  ctx.strokeStyle = '#e53e3e';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(PAD, instrY, CW, 30);
+  ctx.fillStyle = '#1e293b';
+  ctx.font = 'bold 10px Arial';
+  ctx.fillText('Instruções:', PAD + 6, instrY + 12);
+  ctx.font = '9.5px Arial';
+  ctx.fillText('Leia atentamente cada questão. Use caneta azul ou preta. Não é permitido o uso de corretor. Objetivas: ' + avaliacao.valor_questao.toFixed(1) + ' pt cada. Dissertativas: 1,0 pt cada.', PAD + 60, instrY + 12);
+  ctx.fillText('Questões objetivas valem ' + avaliacao.valor_questao.toFixed(1) + ' ponto cada. Questões dissertativas valem 1,0 ponto cada.', PAD + 6, instrY + 23);
+
+  // === PARTE 1 — OBJETIVAS ===
+  const p1Y = instrY + 40;
+  ctx.fillStyle = '#1e3a5f';
+  ctx.fillRect(PAD, p1Y, CW, 22);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 11px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('PARTE 1 — QUESTÕES OBJETIVAS  (' + (NUM_OBJETIVAS * avaliacao.valor_questao).toFixed(1) + ' pontos)', W / 2, p1Y + 15);
+  ctx.textAlign = 'left';
+
+  // 8 questões em 2 colunas
+  const colW = (CW - 12) / 2;
+  const questoesObj = [
+    { n: 1, texto: 'Durante uma partida, um aluno tocou a bola duas vezes consecutivas. Qual a decisão correta do árbitro?' },
+    { n: 2, texto: 'O voleibol foi criado em 1895. Qual era o nome original e a principal motivação para sua criação?' },
+    { n: 3, texto: 'Quais são as dimensões oficiais da quadra de voleibol e a altura da rede para a categoria adulta?' },
+    { n: 4, texto: 'Quantos toques uma equipe pode dar antes de enviar a bola ao campo adversário e quais fundamentos são usados?' },
+    { n: 5, texto: 'No sistema rally point, como funciona a pontuação e quantos pontos são necessários para vencer um set?' },
+    { n: 6, texto: 'Quais são as características técnicas corretas do fundamento "bloqueio" no voleibol?' },
+    { n: 7, texto: 'O líbero é uma posição especial. Quais são suas principais características e limitações?' },
+    { n: 8, texto: 'Qual é a regra correta de rotação que as equipes devem seguir durante uma partida de voleibol?' },
+  ];
+
+  // Usa o enunciado cadastrado se disponível, senão usa placeholder
+  const gabarito = avaliacao.gabarito || {};
+  const ALTERNATIVAS = ['A', 'B', 'C', 'D'];
+  // Textos das alternativas — placeholder (em prova real viriam do banco)
+  const alternativasTexto: Record<number, string[]> = {
+    1: ['Permitir a continuidade da jogada', 'Marcar falta e conceder ponto ao adversário', 'Advertir o jogador e reiniciar', 'Conceder mais uma chance ao aluno'],
+    2: ['Mintonette, criado para quem achava o basquete agitado', 'Volleyball, para treinar jogadores no inverno', 'Netball, para competir com o futebol americano', 'Handvolley, para substituir o tênis'],
+    3: ['16m x 8m, Rede 2,24m (fem) e 2,43m (masc)', '18m x 9m, Rede 2,24m (fem) e 2,43m (masc)', '20m x 10m, Rede 2,20m (fem) e 2,40m (masc)', '18m x 9m, Rede 2,20m (fem) e 2,40m (masc)'],
+    4: ['4 toques: recepção, levantamento, ataque e bloqueio', '2 toques: passe e ataque', '3 toques: manchete/toque, levantamento e ataque', '5 toques: recepção, passe, levantamento, ataque e defesa'],
+    5: ['Só quem saca pontua, primeiro a 21 pontos vence', 'Qualquer equipe pontua, primeiro a 25 com 2 de diferença', 'Só quem recebe o saque pontua, primeiro a 15', 'Qualquer equipe pontua em ataques, primeiro a 30'],
+    6: ['Pode ser feito por qualquer jogador', 'Apenas jogadores da linha de frente, com salto e mãos acima da rede', 'Só pode ser feito pelo líbero', 'Permitido apenas após o terceiro toque adversário'],
+    7: ['Pode atacar de qualquer posição, uniforme igual', 'Atua só na defesa, não ataca acima da rede, uniforme diferente', 'Pode sacar, atacar e bloquear, mas não levantar', 'Substitui o levantador e pode atacar da linha de 3m'],
+    8: ['Rotação livre, qualquer posição a qualquer momento', 'Rodam no sentido horário ao conquistar o saque', 'Rotação apenas no início de cada set', 'Só a linha de frente roda, defesa permanece fixa'],
+  };
+
+  let qY = p1Y + 28;
+  const Q_LINE_H = 13;
+
+  for (let i = 0; i < NUM_OBJETIVAS; i++) {
+    const col = i < 4 ? 0 : 1;
+    const row = i % 4;
+    const qx = PAD + col * (colW + 12);
+    const qBaseY = qY + row * 148; // altura reservada por questão
+
+    ctx.fillStyle = '#1e293b';
+    ctx.font = 'bold 10px Arial';
+    const labelQ = 'Questão ' + (i + 1) + ' –';
+    ctx.fillText(labelQ, qx, qBaseY + 12);
+
+    ctx.font = '9.5px Arial';
+    const enuncW = colW - 8;
+    let nextY = wrapText(ctx, questoesObj[i].texto, qx, qBaseY + 12, enuncW, Q_LINE_H);
+
+    const alts = alternativasTexto[i + 1] || [];
+    alts.forEach((alt, ai) => {
+      ctx.font = '9.5px Arial';
+      ctx.fillStyle = '#1e293b';
+      const altLabel = '(' + ALTERNATIVAS[ai] + ') ';
+      ctx.fillText(altLabel, qx + 4, nextY);
+      ctx.font = '9px Arial';
+      nextY = wrapText(ctx, alt, qx + 4 + ctx.measureText(altLabel).width, nextY, enuncW - 20, Q_LINE_H);
+    });
+  }
+
+  // === PARTE 2 — DISSERTATIVAS ===
+  const p2Y = p1Y + 28 + 4 * 148 + 8;
+  ctx.fillStyle = '#1e3a5f';
+  ctx.fillRect(PAD, p2Y, CW, 22);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 11px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('PARTE 2 — QUESTÕES DISSERTATIVAS  (2,0 pontos)', W / 2, p2Y + 15);
+  ctx.textAlign = 'left';
+
+  const questoesSubj = avaliacao.questoes_subjetivas || {};
+  const DISS_BOX_H = 175;
+  const DISS_HDR_H = 22;
+
+  for (let s = 0; s < NUM_SUBJETIVAS; s++) {
+    const qn = NUM_OBJETIVAS + s + 1;
+    const by = p2Y + 28 + s * (DISS_BOX_H + 10);
+    const enunciado = questoesSubj[String(qn)] || '';
+
+    // Borda e cabeçalho
+    ctx.strokeStyle = '#1e3a5f';
+    ctx.lineWidth = 1.2;
+    ctx.strokeRect(PAD, by, CW, DISS_BOX_H);
+    ctx.fillStyle = '#1e3a5f';
+    ctx.fillRect(PAD, by, CW, DISS_HDR_H);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 10px Arial';
+    ctx.fillText('Questão ' + qn + '  (1,0 ponto)', PAD + 8, by + DISS_HDR_H - 7);
+
+    // Enunciado
+    ctx.fillStyle = '#1e293b';
+    ctx.font = '9.5px Arial';
+    let textY = wrapText(ctx, enunciado || '(enunciado não cadastrado)', PAD + 8, by + DISS_HDR_H + 13, CW - 16, 13);
+
+    // Label Resposta:
+    ctx.font = 'bold 10px Arial';
+    ctx.fillText('Resposta:', PAD + 8, textY + 4);
+
+    // Linhas de resposta
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 0.6;
+    const lineStart = textY + 14;
+    const availH = by + DISS_BOX_H - lineStart - 8;
+    const numLines = Math.floor(availH / 16);
+    for (let ln = 0; ln < numLines; ln++) {
+      ctx.beginPath();
+      ctx.moveTo(PAD + 8, lineStart + ln * 16);
+      ctx.lineTo(PAD + CW - 8, lineStart + ln * 16);
+      ctx.stroke();
+    }
+  }
+
+  // Rodapé
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '9px Arial';
+  ctx.fillText('Brasiléia, Acre — 2026', PAD, H - 20);
+  ctx.textAlign = 'right';
+  ctx.fillText('E.E. Instituto Odilon Pratagi — Educação Física', W - PAD, H - 20);
+  ctx.textAlign = 'left';
+}
+
+
   canvas: HTMLCanvasElement,
   avaliacao: Avaliacao,
   aluno: Aluno
@@ -212,72 +409,6 @@ async function desenharFolhaQR(
   ctx.textAlign = 'left';
 }
 
-// ─── Converte HTML da prova em imagens via canvas offscreen ──────────────────
-async function htmlParaImagens(htmlContent: string): Promise<string[]> {
-  return new Promise(resolve => {
-    // Renderiza o HTML em um iframe oculto e captura via html2canvas-like approach
-    // Usamos um div oculto com scroll para capturar página a página
-    const container = document.createElement('div');
-    container.style.cssText = `
-      position: fixed; left: -9999px; top: 0;
-      width: 794px; background: white;
-      font-family: Arial, sans-serif; font-size: 12px;
-      padding: 48px 60px; box-sizing: border-box;
-      line-height: 1.6; color: #1e293b;
-    `;
-    container.innerHTML = htmlContent;
-    document.body.appendChild(container);
-
-    // Dá tempo ao browser para renderizar
-    requestAnimationFrame(() => {
-      requestAnimationFrame(async () => {
-        const totalH = container.scrollHeight;
-        const pageH = 1027; // A4 útil a 96dpi com margens
-        const numPaginas = Math.ceil(totalH / pageH);
-        const imagens: string[] = [];
-
-        for (let p = 0; p < numPaginas; p++) {
-          const canvas = document.createElement('canvas');
-          canvas.width = 794;
-          canvas.height = 1123;
-          const ctx = canvas.getContext('2d')!;
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, 794, 1123);
-
-          // Usa foreignObject via SVG para capturar o HTML
-          const svgStr = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="794" height="1123">
-              <foreignObject width="794" height="1123" y="${-p * pageH}">
-                <div xmlns="http://www.w3.org/1999/xhtml"
-                  style="width:794px;background:white;font-family:Arial,sans-serif;
-                         font-size:12px;padding:48px 60px;box-sizing:border-box;
-                         line-height:1.6;color:#1e293b;">
-                  ${htmlContent}
-                </div>
-              </foreignObject>
-            </svg>`;
-          const blob = new Blob([svgStr], { type: 'image/svg+xml' });
-          const url = URL.createObjectURL(blob);
-          await new Promise<void>(res2 => {
-            const img = new Image();
-            img.onload = () => {
-              ctx.drawImage(img, 0, 0);
-              URL.revokeObjectURL(url);
-              imagens.push(canvas.toDataURL('image/png'));
-              res2();
-            };
-            img.onerror = () => { URL.revokeObjectURL(url); res2(); };
-            img.src = url;
-          });
-        }
-
-        document.body.removeChild(container);
-        resolve(imagens);
-      });
-    });
-  });
-}
-
 // ─── Componente principal ────────────────────────────────────────────────────
 export function AvaliacaoFolha() {
   const { id } = useParams<{ id: string }>();
@@ -289,20 +420,10 @@ export function AvaliacaoFolha() {
   const [avaliacao, setAvaliacao] = useState<Avaliacao | null>(null);
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Upload da prova
-  const [provaHtml, setProvaHtml] = useState<string>('');
-  const [nomeArquivo, setNomeArquivo] = useState('');
-  const [carregandoWord, setCarregandoWord] = useState(false);
-
-  // Geração
   const [gerandoIdx, setGerandoIdx] = useState<number | null>(null);
-  // Cada aluno tem: array de páginas (prova + QR)
   const [paginasPorAluno, setPaginasPorAluno] = useState<Record<string, string[]>>({});
   const [geradoTodos, setGeradoTodos] = useState(false);
-  const [paginasProva, setPaginasProva] = useState<string[]>([]);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [paginaProvaBase, setPaginaProvaBase] = useState<string>('');
 
   useEffect(() => {
     async function init() {
@@ -326,44 +447,25 @@ export function AvaliacaoFolha() {
     init();
   }, [id]);
 
-  // ── Importar Word ──
-  async function importarWord(file: File) {
-    setCarregandoWord(true);
-    try {
-      const arrayBuffer = await file.arrayBuffer();
-      const result = await mammoth.convertToHtml({ arrayBuffer });
-      setProvaHtml(result.value);
-      setNomeArquivo(file.name);
-      setGeradoTodos(false);
-      setPaginasPorAluno({});
-    } catch (e) {
-      alert('Erro ao importar o arquivo Word. Verifique se é um .docx válido.');
-    } finally {
-      setCarregandoWord(false);
-    }
-  }
-
   // ── Gerar todas as folhas ──
   async function gerarTodos() {
     if (!avaliacao) return;
     setGeradoTodos(false);
     setPaginasPorAluno({});
 
-    // 1. Converte prova HTML → imagens (igual para todos)
-    let pProva: string[] = [];
-    if (provaHtml) {
-      pProva = await htmlParaImagens(provaHtml);
-      setPaginasProva(pProva);
-    }
+    // 1. Gerar página da prova (igual para todos)
+    const canvasProva = document.createElement('canvas');
+    await desenharPaginaProva(canvasProva, avaliacao);
+    const imgProva = canvasProva.toDataURL('image/png');
+    setPaginaProvaBase(imgProva);
 
-    // 2. Para cada aluno: páginas da prova + folha QR
+    // 2. Para cada aluno: página prova + folha QR personalizada
     const novos: Record<string, string[]> = {};
     for (let i = 0; i < alunos.length; i++) {
       setGerandoIdx(i);
-      const canvas = document.createElement('canvas');
-      await desenharFolhaQR(canvas, avaliacao, alunos[i]);
-      const qrImg = canvas.toDataURL('image/png');
-      novos[alunos[i].id] = [...pProva, qrImg];
+      const canvasQR = document.createElement('canvas');
+      await desenharFolhaQR(canvasQR, avaliacao, alunos[i]);
+      novos[alunos[i].id] = [imgProva, canvasQR.toDataURL('image/png')];
     }
 
     setPaginasPorAluno(novos);
@@ -456,59 +558,22 @@ export function AvaliacaoFolha() {
         </button>
         <div>
           <h1 className="text-base font-bold text-on-surface">{avaliacao.titulo}</h1>
-          <p className="text-xs text-on-surface-variant">Turma {avaliacao.turma_id} &middot; {alunos.length} alunos</p>
+          <p className="text-xs text-on-surface-variant">
+            Turma {avaliacao.turma_id} &middot; {alunos.length} aluno{alunos.length !== 1 ? 's' : ''}
+            {alunosCriticosIds ? ' (críticos)' : ''}
+          </p>
         </div>
-      </div>
-
-      {/* Upload da prova */}
-      <div className="bg-surface-variant rounded-2xl p-4 space-y-3">
-        <p className="text-sm font-semibold text-on-surface-variant">
-          Prova (opcional) — arquivo Word
-        </p>
-        <p className="text-xs text-on-surface-variant">
-          Importe o .docx da prova. As p\u00e1ginas da prova ser\u00e3o adicionadas antes da folha de respostas QR de cada aluno.
-        </p>
-
-        {nomeArquivo ? (
-          <div className="flex items-center justify-between bg-primary/10 rounded-xl px-3 py-2">
-            <span className="text-xs font-medium text-primary truncate">{nomeArquivo}</span>
-            <button
-              onClick={() => { setProvaHtml(''); setNomeArquivo(''); setGeradoTodos(false); setPaginasPorAluno({}); }}
-              className="ml-2 p-1 rounded-full text-on-surface-variant hover:text-error"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={carregandoWord}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-outline-variant text-on-surface-variant text-sm font-medium hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
-          >
-            {carregandoWord
-              ? <><div className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" /> Importando...</>
-              : <><Upload className="w-4 h-4" /> Selecionar arquivo .docx</>
-            }
-          </button>
-        )}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-          className="hidden"
-          onChange={e => { const f = e.target.files?.[0]; if (f) importarWord(f); e.target.value = ''; }}
-        />
       </div>
 
       {/* Informativo */}
       <div className="bg-secondary-container rounded-2xl p-4 space-y-1">
         <p className="text-sm font-medium text-on-secondary-container">
-          {provaHtml
-            ? '\u2705 Prova carregada. Cada aluno receber\u00e1: p\u00e1ginas da prova + folha de respostas QR.'
-            : 'Sem prova importada: ser\u00e1 gerada apenas a folha de respostas QR para cada aluno.'}
+          Cada aluno recebe: <strong>Página 1</strong> — prova com as 10 questões &nbsp;+&nbsp; <strong>Página 2</strong> — folha de respostas com QR Code individual.
         </p>
         <p className="text-xs text-on-secondary-container">
-          O QR Code identifica automaticamente o aluno e a avalia\u00e7\u00e3o na corre\u00e7\u00e3o.
+          {avaliacao.questoes_subjetivas?.['9']
+            ? '✅ Enunciados das questões 9 e 10 cadastrados.'
+            : '⚠️ Enunciados das questões 9 e 10 não cadastrados — aparecerá placeholder na prova.'}
         </p>
       </div>
 
@@ -543,30 +608,35 @@ export function AvaliacaoFolha() {
         )}
       </div>
 
-      {/* Preview */}
+      {/* Preview — mostra prova (igual p/ todos) + folha QR de cada aluno */}
       {geradoTodos && (
-        <div className="space-y-3">
+        <div className="space-y-4">
+          {/* Prévia da página da prova */}
+          {paginaProvaBase && (
+            <div className="border border-outline-variant rounded-xl overflow-hidden">
+              <div className="px-3 py-1.5 bg-surface-variant">
+                <span className="text-xs font-semibold text-on-surface-variant">Página 1 — Prova (igual para todos os alunos)</span>
+              </div>
+              <img src={paginaProvaBase} alt="Prova" className="w-full" />
+            </div>
+          )}
+
           <p className="text-xs font-semibold text-on-surface-variant">
-            {alunos.length} alunos &mdash;{' '}
-            {provaHtml ? `${paginasProva.length} p\u00e1g. prova + 1 QR` : '1 p\u00e1g. QR'} cada
+            Página 2 — Folha de respostas QR (individual por aluno)
           </p>
           {alunos.map(al => {
             const pages = paginasPorAluno[al.id];
-            if (!pages || pages.length === 0) return null;
-            // Mostra só a última página (folha QR) no preview — evita scroll infinito
-            const qrPage = pages[pages.length - 1];
+            if (!pages || pages.length < 2) return null;
+            const qrPage = pages[1];
             return (
               <div key={al.id} className="border border-outline-variant rounded-xl overflow-hidden">
                 <div className="px-3 py-1.5 bg-surface flex items-center justify-between">
                   <span className="text-xs text-on-surface-variant">
                     {al.numero_chamada}. {al.nome}
-                    <span className="ml-2 text-on-surface-variant/60">
-                      &middot; {pages.length} p\u00e1g.
-                    </span>
                   </span>
                   <a
                     href={qrPage}
-                    download={`folha_${al.numero_chamada}_${al.nome.split(' ')[0]}.png`}
+                    download={`folha_qr_${al.numero_chamada}_${al.nome.split(' ')[0]}.png`}
                     className="flex items-center gap-1 text-xs text-primary"
                   >
                     <Download className="w-3 h-3" />

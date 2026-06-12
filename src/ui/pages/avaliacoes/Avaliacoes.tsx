@@ -16,6 +16,7 @@ interface Avaliacao {
   num_questoes: number;
   gabarito: Record<string, string>;
   valor_questao: number;
+  questoes_subjetivas: Record<string, string> | null;
   criado_em: string;
 }
 
@@ -34,6 +35,8 @@ export function Avaliacoes() {
   const [descricao, setDescricao] = useState('');
   const [turmaId, setTurmaId] = useState('6F');
   const [gabarito, setGabarito] = useState<Record<string, string>>(gabaritoPadrao());
+  const [enunciado9, setEnunciado9] = useState('');
+  const [enunciado10, setEnunciado10] = useState('');
   const [valorQuestao, setValorQuestao] = useState('1.0');
   const [salvando, setSalvando] = useState(false);
   const [expandido, setExpandido] = useState<string | null>(null);
@@ -62,11 +65,14 @@ export function Avaliacoes() {
       num_questoes: NUM_OBJETIVAS + NUM_SUBJETIVAS,
       gabarito,
       valor_questao: parseFloat(valorQuestao) || 1.0,
+      questoes_subjetivas: { '9': enunciado9.trim(), '10': enunciado10.trim() },
     });
     setSalvando(false);
     if (error) { setErro('Erro ao salvar: ' + error.message); return; }
     setTitulo('');
     setDescricao('');
+    setEnunciado9('');
+    setEnunciado10('');
     setGabarito(gabaritoPadrao());
     setValorQuestao('1.0');
     setCriando(false);
@@ -186,13 +192,37 @@ export function Avaliacoes() {
             </div>
           </div>
 
-          {/* Info subjetivas */}
-          <div className="bg-secondary-container rounded-xl px-3 py-2">
-            <p className="text-xs text-on-secondary-container font-medium">
-              Questões 9 e 10 são subjetivas &mdash; a nota será lançada manualmente ao corrigir.
+          {/* Enunciados das dissertativas */}
+          <div className="space-y-3">
+            <p className="text-xs font-semibold text-on-surface-variant">
+              Questões Dissertativas — Enunciados (aparecem na prova impressa)
             </p>
-            <p className="text-xs text-on-secondary-container mt-0.5">
-              Total possível estimado: {(NUM_OBJETIVAS * valorObj).toFixed(1)} pts objetivas + notas subjetivas
+            <div>
+              <label className="text-xs text-on-surface-variant mb-1 block">
+                Questão 9 — enunciado *
+              </label>
+              <textarea
+                value={enunciado9}
+                onChange={e => setEnunciado9(e.target.value)}
+                rows={3}
+                placeholder="Digite o enunciado da questão 9..."
+                className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface resize-none"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-on-surface-variant mb-1 block">
+                Questão 10 — enunciado *
+              </label>
+              <textarea
+                value={enunciado10}
+                onChange={e => setEnunciado10(e.target.value)}
+                rows={3}
+                placeholder="Digite o enunciado da questão 10..."
+                className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface resize-none"
+              />
+            </div>
+            <p className="text-xs text-on-surface-variant">
+              Total estimado: {(NUM_OBJETIVAS * valorObj).toFixed(1)} pts objetivas + {(NUM_SUBJETIVAS * valorSubj).toFixed(1)} pts dissertativas
             </p>
           </div>
 
