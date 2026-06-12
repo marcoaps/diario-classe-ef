@@ -278,7 +278,7 @@ export function Avaliacoes() {
                       Folhas QR
                     </button>
                     <button
-                      onClick={() => navigate(`/avaliacoes/corrigir/${av.id}`)}
+                      onClick={() => window.open(`/upload-folha.html?av=${av.id}`, '_blank')}
                       className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-secondary-container text-on-secondary-container text-xs font-semibold"
                     >
                       <Camera className="w-4 h-4" />
