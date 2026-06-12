@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
-import { ArrowLeft, Printer, Download, FileText } from 'lucide-react';
+import { ArrowLeft, Printer, FileText, Download } from 'lucide-react';
 import QRCode from 'qrcode';
 
 interface Avaliacao {
@@ -26,29 +26,136 @@ const NUM_OBJETIVAS = 8;
 const NUM_SUBJETIVAS = 2;
 const LETRAS = ['A', 'B', 'C', 'D'];
 
-// ─── Helpers de texto ────────────────────────────────────────────────────────
-function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxW: number, lineH: number): number {
-  const words = text.split(' ');
-  let line = '';
-  let curY = y;
-  for (const word of words) {
-    const test = line ? line + ' ' + word : word;
-    if (ctx.measureText(test).width > maxW && line) {
-      ctx.fillText(line, x, curY);
-      line = word;
-      curY += lineH;
-    } else {
-      line = test;
-    }
-  }
-  if (line) { ctx.fillText(line, x, curY); curY += lineH; }
-  return curY;
+// Questões placeholder — substituir pelos enunciados reais quando vierem do banco
+const QUESTOES_PLACEHOLDER: Record<number, { texto: string; alts: string[] }> = {
+  1: { texto: 'Durante uma partida, um aluno tocou a bola duas vezes consecutivas. Qual a decisão correta do árbitro?', alts: ['Permitir a continuidade da jogada, pois é permitido no voleibol escolar', 'Marcar falta e conceder o ponto para a equipe adversária', 'Advertir o jogador e reiniciar a jogada', 'Conceder mais uma chance, pois o aluno está aprendendo'] },
+  2: { texto: 'O voleibol foi criado em 1895 por William Morgan nos Estados Unidos. Qual era o nome original deste esporte e qual foi a principal motivação para sua criação?', alts: ['Mintonette, criado para pessoas que achavam o basquetebol muito agitado', 'Volleyball, desenvolvido para treinar jogadores de basquete no inverno', 'Netball, inventado para competir com o futebol americano', 'Handvolley, criado para substituir o tênis em locais fechados'] },
+  3: { texto: 'Em relação às dimensões oficiais da quadra de voleibol e altura da rede, quais são as medidas corretas para a categoria adulta?', alts: ['Quadra: 16m x 8m, Rede: 2,24m (feminino) e 2,43m (masculino)', 'Quadra: 18m x 9m, Rede: 2,24m (feminino) e 2,43m (masculino)', 'Quadra: 20m x 10m, Rede: 2,20m (feminino) e 2,40m (masculino)', 'Quadra: 18m x 9m, Rede: 2,20m (feminino) e 2,40m (masculino)'] },
+  4: { texto: 'Durante uma sequência de jogo, uma equipe pode tocar a bola quantas vezes antes de enviá-la para o campo adversário, e quais fundamentos são tradicionalmente utilizados nessa sequência?', alts: ['4 toques: recepção, levantamento, ataque e bloqueio', '2 toques: passe e ataque', '3 toques: manchete ou toque, levantamento e ataque', '5 toques: recepção, passe, levantamento, ataque e defesa'] },
+  5: { texto: 'No sistema de pontuação atual do voleibol, conhecido como rally point system, como funciona a contagem de pontos e quantos pontos são necessários para vencer um set?', alts: ['Apenas a equipe que saca pode pontuar, primeiro a fazer 21 pontos vence', 'Qualquer equipe pode pontuar a cada jogada, primeiro a fazer 25 pontos com 2 de diferença vence', 'Apenas quem recebe o saque pode pontuar, primeiro a fazer 15 pontos vence', 'Qualquer equipe pode pontuar, mas apenas em jogadas de ataque, primeiro a fazer 30 pontos vence'] },
+  6: { texto: 'Sobre o fundamento "bloqueio" no voleibol, quais são as características técnicas corretas desta ação?', alts: ['Pode ser executado por qualquer jogador, inclusive os da linha de defesa', 'É realizado apenas por jogadores da linha de frente, com salto e mãos acima da rede', 'Só pode ser feito pelo líbero da equipe', 'É permitido apenas após o terceiro toque da equipe adversária'] },
+  7: { texto: 'O líbero é uma posição especial no voleibol moderno. Quais são as principais características e limitações desta função?', alts: ['Pode atacar de qualquer posição e usar uniforme da mesma cor da equipe', 'Atua apenas na defesa, não pode atacar acima da linha da rede e usa uniforme de cor diferente', 'Pode sacar, atacar e bloquear, mas não pode fazer levantamento', 'Substitui apenas o levantador e pode atacar da linha de 3 metros'] },
+  8: { texto: 'Sobre a rotação no voleibol, qual é a regra correta que as equipes devem seguir durante uma partida?', alts: ['A rotação é livre, cada jogador pode ocupar qualquer posição a qualquer momento', 'Os jogadores devem rodar no sentido horário toda vez que a equipe conquista o direito de sacar', 'A rotação acontece apenas no início de cada set', 'Apenas os jogadores da linha de frente fazem rotação, os da defesa permanecem fixos'] },
+};
+
+// ─── Gera HTML da prova (página 1) ───────────────────────────────────────────
+function gerarHtmlProva(avaliacao: Avaliacao): string {
+  const vObj = avaliacao.valor_questao.toFixed(1);
+  const qSubj = avaliacao.questoes_subjetivas || {};
+
+  const questoesHtml = Array.from({ length: NUM_OBJETIVAS }, (_, i) => {
+    const n = i + 1;
+    const q = QUESTOES_PLACEHOLDER[n];
+    const altsHtml = q.alts.map((a, ai) =>
+      `<div class="alt"><span class="alt-letra">(${LETRAS[ai]})</span> ${a}</div>`
+    ).join('');
+    return `
+      <div class="questao">
+        <div class="questao-enunc"><strong>Questão ${n} –</strong> ${q.texto}</div>
+        <div class="alts">${altsHtml}</div>
+      </div>`;
+  }).join('');
+
+  // Divide em 2 colunas: q1-4 esquerda, q5-8 direita
+  const col1 = Array.from({ length: 4 }, (_, i) => {
+    const n = i + 1;
+    const q = QUESTOES_PLACEHOLDER[n];
+    const altsHtml = q.alts.map((a, ai) =>
+      `<div class="alt"><span class="alt-letra">(${LETRAS[ai]})</span> ${a}</div>`
+    ).join('');
+    return `<div class="questao"><div class="questao-enunc"><strong>Questão ${n} –</strong> ${q.texto}</div><div class="alts">${altsHtml}</div></div>`;
+  }).join('');
+
+  const col2 = Array.from({ length: 4 }, (_, i) => {
+    const n = i + 5;
+    const q = QUESTOES_PLACEHOLDER[n];
+    const altsHtml = q.alts.map((a, ai) =>
+      `<div class="alt"><span class="alt-letra">(${LETRAS[ai]})</span> ${a}</div>`
+    ).join('');
+    return `<div class="questao"><div class="questao-enunc"><strong>Questão ${n} –</strong> ${q.texto}</div><div class="alts">${altsHtml}</div></div>`;
+  }).join('');
+
+  const dissHtml = Array.from({ length: NUM_SUBJETIVAS }, (_, s) => {
+    const n = NUM_OBJETIVAS + s + 1;
+    const enunciado = qSubj[String(n)] || '';
+    return `
+      <div class="diss-box">
+        <div class="diss-header">Questão ${n} <span class="diss-pts">(1,0 ponto)</span></div>
+        <div class="diss-body">
+          ${enunciado ? `<div class="diss-enunc">${enunciado}</div>` : ''}
+          <div class="diss-label">Resposta:</div>
+          <div class="diss-linhas">
+            ${Array.from({ length: 8 }, () => '<div class="linha-resp"></div>').join('')}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="prova-page">
+      <div class="cab">
+        <div class="cab-titulo">Avaliação — Ensino Fundamental — 2026</div>
+        <div class="cab-sub">Disciplina: Educação Física &nbsp;|&nbsp; Professor(a): Marco Pedro</div>
+        <div class="cab-sub">${avaliacao.titulo} — Turma: ${avaliacao.turma_id}</div>
+      </div>
+      <div class="ficha">
+        Nome: <span class="linha-ficha"></span> &nbsp; Nº: <span class="linha-ficha-sm"></span> &nbsp;
+        Turma: <span class="linha-ficha-sm"></span> &nbsp; Data: <span class="linha-ficha-sm"></span> &nbsp;
+        Nota: <span class="linha-ficha-sm"></span>
+      </div>
+      <div class="instrucoes">
+        <strong>Instruções:</strong> Leia atentamente cada questão. Use caneta azul ou preta. Não é permitido o uso de corretor.
+        Questões objetivas valem ${vObj} ponto cada. Questões dissertativas valem 1,0 ponto cada.
+      </div>
+      <div class="parte-header">PARTE 1 — QUESTÕES OBJETIVAS (${(NUM_OBJETIVAS * avaliacao.valor_questao).toFixed(1)} pontos)</div>
+      <div class="colunas">
+        <div class="col">${col1}</div>
+        <div class="col">${col2}</div>
+      </div>
+      <div class="parte-header">PARTE 2 — QUESTÕES DISSERTATIVAS (2,0 pontos)</div>
+      ${dissHtml}
+      <div class="rodape">Brasiléia, Acre — 2026 &nbsp;&nbsp;&nbsp; E.E. Instituto Odilon Pratagi — Educação Física</div>
+    </div>`;
 }
 
-// ─── Página 1: prova com questões ────────────────────────────────────────────
-async function desenharPaginaProva(
+// ─── CSS da prova ─────────────────────────────────────────────────────────────
+const CSS_PROVA = `
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  @page { size: A4 portrait; margin: 10mm; }
+  body { font-family: Arial, sans-serif; font-size: 9.5pt; color: #1e293b; background: white; }
+  .prova-page { width: 100%; }
+  .cab { background: #1e3a5f; color: white; text-align: center; padding: 8px 12px; margin-bottom: 6px; }
+  .cab-titulo { font-size: 12pt; font-weight: bold; }
+  .cab-sub { font-size: 9pt; margin-top: 2px; }
+  .ficha { border: 1px solid #1e3a5f; padding: 4px 8px; font-size: 9pt; margin-bottom: 5px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .linha-ficha { display: inline-block; border-bottom: 1px solid #333; width: 220px; }
+  .linha-ficha-sm { display: inline-block; border-bottom: 1px solid #333; width: 60px; }
+  .instrucoes { border: 1px solid #e53e3e; padding: 4px 8px; font-size: 8.5pt; margin-bottom: 6px; }
+  .parte-header { background: #1e3a5f; color: white; font-weight: bold; font-size: 10pt; text-align: center; padding: 4px; margin-bottom: 6px; margin-top: 6px; }
+  .colunas { display: flex; gap: 12px; margin-bottom: 4px; }
+  .col { flex: 1; }
+  .questao { margin-bottom: 10px; font-size: 8.5pt; }
+  .questao-enunc { margin-bottom: 3px; line-height: 1.4; }
+  .alts { padding-left: 4px; }
+  .alt { line-height: 1.35; margin-bottom: 1px; }
+  .alt-letra { font-weight: bold; }
+  .diss-box { border: 1.5px solid #1e3a5f; margin-bottom: 10px; }
+  .diss-header { background: #1e3a5f; color: white; font-weight: bold; font-size: 9.5pt; padding: 4px 8px; }
+  .diss-pts { font-weight: normal; font-size: 8.5pt; opacity: 0.85; }
+  .diss-body { padding: 6px 8px; background: white; }
+  .diss-enunc { font-size: 8.5pt; margin-bottom: 6px; line-height: 1.4; }
+  .diss-label { font-weight: bold; font-size: 8.5pt; margin-bottom: 4px; }
+  .diss-linhas { }
+  .linha-resp { border-bottom: 0.7px solid #94a3b8; height: 18px; margin-bottom: 0; }
+  .rodape { font-size: 7.5pt; color: #94a3b8; text-align: center; margin-top: 8px; border-top: 1px solid #e2e8f0; padding-top: 4px; }
+  .qr-page { page-break-before: always; }
+`;
+
+// ─── Gera canvas da folha QR ──────────────────────────────────────────────────
+async function desenharFolhaQR(
   canvas: HTMLCanvasElement,
-  avaliacao: Avaliacao
+  avaliacao: Avaliacao,
+  aluno: Aluno
 ): Promise<void> {
   const W = 794;
   const H = 1123;
@@ -59,190 +166,12 @@ async function desenharPaginaProva(
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, W, H);
 
-  const PAD = 36;
-  const CW = W - PAD * 2;
-
-  // === CABEÇALHO ===
-  ctx.fillStyle = '#1e3a5f';
-  ctx.fillRect(PAD, PAD, CW, 70);
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 13px Arial';
-  ctx.textAlign = 'center';
-  ctx.fillText('Avaliação — Ensino Fundamental — 2026', W / 2, PAD + 18);
-  ctx.font = '11px Arial';
-  ctx.fillText('Disciplina: Educação Física', W / 2, PAD + 34);
-  ctx.fillText('Professor(a): Marco Pedro', W / 2, PAD + 48);
-  ctx.fillText(avaliacao.titulo + ' — Turma: ' + avaliacao.turma_id, W / 2, PAD + 63);
-  ctx.textAlign = 'left';
-
-  // Linha Nome/Turma/Data/Nota
-  const fiY = PAD + 78;
-  ctx.strokeStyle = '#1e3a5f';
-  ctx.lineWidth = 0.8;
-  ctx.strokeRect(PAD, fiY, CW, 24);
-  ctx.fillStyle = '#1e293b';
-  ctx.font = '10px Arial';
-  ctx.fillText('Nome: _____________________________________________  Nº: _______  Turma: _______  Data: ___/___/______  Nota: ______', PAD + 6, fiY + 15);
-
-  // Instruções
-  const instrY = fiY + 32;
-  ctx.strokeStyle = '#e53e3e';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(PAD, instrY, CW, 30);
-  ctx.fillStyle = '#1e293b';
-  ctx.font = 'bold 10px Arial';
-  ctx.fillText('Instruções:', PAD + 6, instrY + 12);
-  ctx.font = '9.5px Arial';
-  ctx.fillText('Leia atentamente cada questão. Use caneta azul ou preta. Não é permitido o uso de corretor. Objetivas: ' + avaliacao.valor_questao.toFixed(1) + ' pt cada. Dissertativas: 1,0 pt cada.', PAD + 60, instrY + 12);
-  ctx.fillText('Questões objetivas valem ' + avaliacao.valor_questao.toFixed(1) + ' ponto cada. Questões dissertativas valem 1,0 ponto cada.', PAD + 6, instrY + 23);
-
-  // === PARTE 1 — OBJETIVAS ===
-  const p1Y = instrY + 40;
-  ctx.fillStyle = '#1e3a5f';
-  ctx.fillRect(PAD, p1Y, CW, 22);
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 11px Arial';
-  ctx.textAlign = 'center';
-  ctx.fillText('PARTE 1 — QUESTÕES OBJETIVAS  (' + (NUM_OBJETIVAS * avaliacao.valor_questao).toFixed(1) + ' pontos)', W / 2, p1Y + 15);
-  ctx.textAlign = 'left';
-
-  // 8 questões em 2 colunas
-  const colW = (CW - 12) / 2;
-  const questoesObj = [
-    { n: 1, texto: 'Durante uma partida, um aluno tocou a bola duas vezes consecutivas. Qual a decisão correta do árbitro?' },
-    { n: 2, texto: 'O voleibol foi criado em 1895. Qual era o nome original e a principal motivação para sua criação?' },
-    { n: 3, texto: 'Quais são as dimensões oficiais da quadra de voleibol e a altura da rede para a categoria adulta?' },
-    { n: 4, texto: 'Quantos toques uma equipe pode dar antes de enviar a bola ao campo adversário e quais fundamentos são usados?' },
-    { n: 5, texto: 'No sistema rally point, como funciona a pontuação e quantos pontos são necessários para vencer um set?' },
-    { n: 6, texto: 'Quais são as características técnicas corretas do fundamento "bloqueio" no voleibol?' },
-    { n: 7, texto: 'O líbero é uma posição especial. Quais são suas principais características e limitações?' },
-    { n: 8, texto: 'Qual é a regra correta de rotação que as equipes devem seguir durante uma partida de voleibol?' },
-  ];
-
-  // Usa o enunciado cadastrado se disponível, senão usa placeholder
-  const gabarito = avaliacao.gabarito || {};
-  const ALTERNATIVAS = ['A', 'B', 'C', 'D'];
-  // Textos das alternativas — placeholder (em prova real viriam do banco)
-  const alternativasTexto: Record<number, string[]> = {
-    1: ['Permitir a continuidade da jogada', 'Marcar falta e conceder ponto ao adversário', 'Advertir o jogador e reiniciar', 'Conceder mais uma chance ao aluno'],
-    2: ['Mintonette, criado para quem achava o basquete agitado', 'Volleyball, para treinar jogadores no inverno', 'Netball, para competir com o futebol americano', 'Handvolley, para substituir o tênis'],
-    3: ['16m x 8m, Rede 2,24m (fem) e 2,43m (masc)', '18m x 9m, Rede 2,24m (fem) e 2,43m (masc)', '20m x 10m, Rede 2,20m (fem) e 2,40m (masc)', '18m x 9m, Rede 2,20m (fem) e 2,40m (masc)'],
-    4: ['4 toques: recepção, levantamento, ataque e bloqueio', '2 toques: passe e ataque', '3 toques: manchete/toque, levantamento e ataque', '5 toques: recepção, passe, levantamento, ataque e defesa'],
-    5: ['Só quem saca pontua, primeiro a 21 pontos vence', 'Qualquer equipe pontua, primeiro a 25 com 2 de diferença', 'Só quem recebe o saque pontua, primeiro a 15', 'Qualquer equipe pontua em ataques, primeiro a 30'],
-    6: ['Pode ser feito por qualquer jogador', 'Apenas jogadores da linha de frente, com salto e mãos acima da rede', 'Só pode ser feito pelo líbero', 'Permitido apenas após o terceiro toque adversário'],
-    7: ['Pode atacar de qualquer posição, uniforme igual', 'Atua só na defesa, não ataca acima da rede, uniforme diferente', 'Pode sacar, atacar e bloquear, mas não levantar', 'Substitui o levantador e pode atacar da linha de 3m'],
-    8: ['Rotação livre, qualquer posição a qualquer momento', 'Rodam no sentido horário ao conquistar o saque', 'Rotação apenas no início de cada set', 'Só a linha de frente roda, defesa permanece fixa'],
-  };
-
-  let qY = p1Y + 28;
-  const Q_LINE_H = 13;
-
-  for (let i = 0; i < NUM_OBJETIVAS; i++) {
-    const col = i < 4 ? 0 : 1;
-    const row = i % 4;
-    const qx = PAD + col * (colW + 12);
-    const qBaseY = qY + row * 148; // altura reservada por questão
-
-    ctx.fillStyle = '#1e293b';
-    ctx.font = 'bold 10px Arial';
-    const labelQ = 'Questão ' + (i + 1) + ' –';
-    ctx.fillText(labelQ, qx, qBaseY + 12);
-
-    ctx.font = '9.5px Arial';
-    const enuncW = colW - 8;
-    let nextY = wrapText(ctx, questoesObj[i].texto, qx, qBaseY + 12, enuncW, Q_LINE_H);
-
-    const alts = alternativasTexto[i + 1] || [];
-    alts.forEach((alt, ai) => {
-      ctx.font = '9.5px Arial';
-      ctx.fillStyle = '#1e293b';
-      const altLabel = '(' + ALTERNATIVAS[ai] + ') ';
-      ctx.fillText(altLabel, qx + 4, nextY);
-      ctx.font = '9px Arial';
-      nextY = wrapText(ctx, alt, qx + 4 + ctx.measureText(altLabel).width, nextY, enuncW - 20, Q_LINE_H);
-    });
-  }
-
-  // === PARTE 2 — DISSERTATIVAS ===
-  const p2Y = p1Y + 28 + 4 * 148 + 8;
-  ctx.fillStyle = '#1e3a5f';
-  ctx.fillRect(PAD, p2Y, CW, 22);
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 11px Arial';
-  ctx.textAlign = 'center';
-  ctx.fillText('PARTE 2 — QUESTÕES DISSERTATIVAS  (2,0 pontos)', W / 2, p2Y + 15);
-  ctx.textAlign = 'left';
-
-  const questoesSubj = avaliacao.questoes_subjetivas || {};
-  const DISS_BOX_H = 175;
-  const DISS_HDR_H = 22;
-
-  for (let s = 0; s < NUM_SUBJETIVAS; s++) {
-    const qn = NUM_OBJETIVAS + s + 1;
-    const by = p2Y + 28 + s * (DISS_BOX_H + 10);
-    const enunciado = questoesSubj[String(qn)] || '';
-
-    // Borda e cabeçalho
-    ctx.strokeStyle = '#1e3a5f';
-    ctx.lineWidth = 1.2;
-    ctx.strokeRect(PAD, by, CW, DISS_BOX_H);
-    ctx.fillStyle = '#1e3a5f';
-    ctx.fillRect(PAD, by, CW, DISS_HDR_H);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 10px Arial';
-    ctx.fillText('Questão ' + qn + '  (1,0 ponto)', PAD + 8, by + DISS_HDR_H - 7);
-
-    // Enunciado
-    ctx.fillStyle = '#1e293b';
-    ctx.font = '9.5px Arial';
-    let textY = wrapText(ctx, enunciado || '(enunciado não cadastrado)', PAD + 8, by + DISS_HDR_H + 13, CW - 16, 13);
-
-    // Label Resposta:
-    ctx.font = 'bold 10px Arial';
-    ctx.fillText('Resposta:', PAD + 8, textY + 4);
-
-    // Linhas de resposta
-    ctx.strokeStyle = '#94a3b8';
-    ctx.lineWidth = 0.6;
-    const lineStart = textY + 14;
-    const availH = by + DISS_BOX_H - lineStart - 8;
-    const numLines = Math.floor(availH / 16);
-    for (let ln = 0; ln < numLines; ln++) {
-      ctx.beginPath();
-      ctx.moveTo(PAD + 8, lineStart + ln * 16);
-      ctx.lineTo(PAD + CW - 8, lineStart + ln * 16);
-      ctx.stroke();
-    }
-  }
-
-  // Rodapé
-  ctx.fillStyle = '#94a3b8';
-  ctx.font = '9px Arial';
-  ctx.fillText('Brasiléia, Acre — 2026', PAD, H - 20);
-  ctx.textAlign = 'right';
-  ctx.fillText('E.E. Instituto Odilon Pratagi — Educação Física', W - PAD, H - 20);
-  ctx.textAlign = 'left';
-}
-
-
-// ─── Desenha a folha de respostas QR (última página) ─────────────────────────
-async function desenharFolhaQR(
-  canvas: HTMLCanvasElement,
-  avaliacao: Avaliacao,
-  aluno: Aluno
-) {
-  const W = 794;
-  const H = 1250; // ligeiramente maior para acomodar caixas subjetivas
-  canvas.width = W;
-  canvas.height = H;
-  const ctx = canvas.getContext('2d')!;
-
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, W, H);
-
-  // Marcadores OMR nos 4 cantos
   const MARK = 24;
   const PAD = 16;
+  const CX = PAD + MARK + 8;
+  const CW = W - 2 * (PAD + MARK + 8);
+
+  // Marcadores OMR
   ctx.fillStyle = '#000000';
   ctx.fillRect(PAD, PAD, MARK, MARK);
   ctx.fillRect(W - PAD - MARK, PAD, MARK, MARK);
@@ -250,8 +179,6 @@ async function desenharFolhaQR(
   ctx.fillRect(W - PAD - MARK, H - PAD - MARK, MARK, MARK);
 
   // Cabeçalho
-  const CX = PAD + MARK + 8;
-  const CW = W - 2 * (PAD + MARK + 8);
   ctx.fillStyle = '#1e293b';
   ctx.fillRect(CX, PAD, CW, 60);
   ctx.fillStyle = '#ffffff';
@@ -320,7 +247,7 @@ async function desenharFolhaQR(
   ctx.lineTo(qrX - 16, Q_START_Y - 4);
   ctx.stroke();
 
-  for (let i = 0; i < NUM_OBJETIVAS; i++) {
+  for (let i = 0; i < 8; i++) {
     const qy = Q_START_Y + i * Q_ROW_H + Q_ROW_H / 2;
     if (i % 2 === 0) {
       ctx.fillStyle = '#f8fafc';
@@ -346,29 +273,24 @@ async function desenharFolhaQR(
     });
   }
 
-  // === QUESTÕES SUBJETIVAS — estilo print 1 ===
-  const subjStartY = Q_START_Y + NUM_OBJETIVAS * Q_ROW_H + 18;
+  // Questões subjetivas — caixas estilo print1
+  const subjStartY = Q_START_Y + 8 * Q_ROW_H + 18;
   const valorSubj = avaliacao.valor_questao || 1.0;
-  const BOX_H = 185;   // altura total de cada caixa
-  const HDR_H = 24;    // altura do cabeçalho azul
-  const GAP   = 12;    // espaço entre as duas caixas
+  const BOX_H = 185;
+  const HDR_H = 24;
+  const GAP = 12;
 
-  for (let s = 0; s < NUM_SUBJETIVAS; s++) {
-    const qn  = NUM_OBJETIVAS + s + 1;
-    const bx  = CX - 4;
-    const bw  = CW + 8;
-    const by  = subjStartY + s * (BOX_H + GAP);
+  for (let s = 0; s < 2; s++) {
+    const qn = 8 + s + 1;
+    const bx = CX - 4;
+    const bw = CW + 8;
+    const by = subjStartY + s * (BOX_H + GAP);
 
-    // Borda externa (azul escuro, igual ao print 1)
     ctx.strokeStyle = '#1e3a5f';
     ctx.lineWidth = 1.5;
     ctx.strokeRect(bx, by, bw, BOX_H);
-
-    // Cabeçalho da caixa — fundo azul escuro
     ctx.fillStyle = '#1e3a5f';
     ctx.fillRect(bx, by, bw, HDR_H);
-
-    // "Questão N  (X,0 ponto)"
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 11px Arial';
     ctx.textAlign = 'left';
@@ -376,26 +298,19 @@ async function desenharFolhaQR(
     ctx.font = '10px Arial';
     ctx.fillStyle = '#cbd5e1';
     ctx.fillText('(' + valorSubj.toFixed(1).replace('.', ',') + ' ponto)', bx + 8 + ctx.measureText('Quest\u00e3o ' + qn + '  ').width, by + HDR_H - 7);
-
-    // Fundo branco do corpo
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(bx, by + HDR_H, bw, BOX_H - HDR_H);
-
-    // Label "Resposta:"
     ctx.fillStyle = '#1e293b';
     ctx.font = 'bold 10px Arial';
     ctx.fillText('Resposta:', bx + 8, by + HDR_H + 16);
-
-    // Linhas de resposta (8 linhas, mais espaçadas)
     ctx.strokeStyle = '#94a3b8';
     ctx.lineWidth = 0.7;
     const lineStartY = by + HDR_H + 26;
     const lineSpacing = (BOX_H - HDR_H - 34) / 8;
     for (let ln = 0; ln < 8; ln++) {
-      const ly = lineStartY + ln * lineSpacing;
       ctx.beginPath();
-      ctx.moveTo(bx + 8, ly);
-      ctx.lineTo(bx + bw - 8, ly);
+      ctx.moveTo(bx + 8, lineStartY + ln * lineSpacing);
+      ctx.lineTo(bx + bw - 8, lineStartY + ln * lineSpacing);
       ctx.stroke();
     }
   }
@@ -411,7 +326,7 @@ async function desenharFolhaQR(
   ctx.textAlign = 'left';
 }
 
-// ─── Componente principal ────────────────────────────────────────────────────
+// ─── Componente principal ─────────────────────────────────────────────────────
 export function AvaliacaoFolha() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -423,9 +338,8 @@ export function AvaliacaoFolha() {
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [loading, setLoading] = useState(true);
   const [gerandoIdx, setGerandoIdx] = useState<number | null>(null);
-  const [paginasPorAluno, setPaginasPorAluno] = useState<Record<string, string[]>>({});
+  const [folhasQR, setFolhasQR] = useState<Record<string, string>>({});
   const [geradoTodos, setGeradoTodos] = useState(false);
-  const [paginaProvaBase, setPaginaProvaBase] = useState<string>('');
 
   useEffect(() => {
     async function init() {
@@ -449,70 +363,66 @@ export function AvaliacaoFolha() {
     init();
   }, [id]);
 
-  // ── Gerar todas as folhas ──
   async function gerarTodos() {
     if (!avaliacao) return;
     setGeradoTodos(false);
-    setPaginasPorAluno({});
-
-    // 1. Gerar página da prova (igual para todos)
-    const canvasProva = document.createElement('canvas');
-    await desenharPaginaProva(canvasProva, avaliacao);
-    const imgProva = canvasProva.toDataURL('image/png');
-    setPaginaProvaBase(imgProva);
-
-    // 2. Para cada aluno: página prova + folha QR personalizada
-    const novos: Record<string, string[]> = {};
+    setFolhasQR({});
+    const novos: Record<string, string> = {};
     for (let i = 0; i < alunos.length; i++) {
       setGerandoIdx(i);
-      const canvasQR = document.createElement('canvas');
-      await desenharFolhaQR(canvasQR, avaliacao, alunos[i]);
-      novos[alunos[i].id] = [imgProva, canvasQR.toDataURL('image/png')];
+      const canvas = document.createElement('canvas');
+      await desenharFolhaQR(canvas, avaliacao, alunos[i]);
+      novos[alunos[i].id] = canvas.toDataURL('image/png');
     }
-
-    setPaginasPorAluno(novos);
+    setFolhasQR(novos);
     setGerandoIdx(null);
     setGeradoTodos(true);
   }
 
-  // ── Imprimir ──
   function imprimir() {
+    if (!avaliacao) return;
     const win = window.open('', '_blank');
     if (!win) return;
 
-    const blocos = alunos.flatMap((al, idx) => {
-      const pages = paginasPorAluno[al.id] || [];
-      return pages.map((src, pi) => {
-        const isLast = idx === alunos.length - 1 && pi === pages.length - 1;
-        return `<div style="width:100%;height:100vh;margin:0;padding:0;${isLast ? '' : 'page-break-after:always;'}overflow:hidden;">
-          <img src="${src}" style="width:100%;height:100%;object-fit:contain;display:block;" />
+    const htmlProva = gerarHtmlProva(avaliacao);
+
+    // Para cada aluno: prova HTML (page-break-after) + imagem QR
+    const blocos = alunos.map((al, idx) => {
+      const qrSrc = folhasQR[al.id] || '';
+      const isLast = idx === alunos.length - 1;
+      return `
+        <div style="page-break-after: always;">
+          ${htmlProva}
+        </div>
+        <div style="${isLast ? '' : 'page-break-after: always;'}">
+          <img src="${qrSrc}" style="width:100%;display:block;" />
         </div>`;
-      });
     }).join('');
 
-    win.document.write(`<!DOCTYPE html><html><head><title>${avaliacao?.titulo}</title>
-      <style>
-        *{box-sizing:border-box;}
-        @media print{@page{margin:0;size:A4 portrait;}html,body{margin:0;padding:0;width:100%;height:100%;}}
-        body{margin:0;padding:0;}
-      </style></head><body>${blocos}</body></html>`);
+    win.document.write(`<!DOCTYPE html><html><head>
+      <meta charset="utf-8">
+      <title>${avaliacao.titulo}</title>
+      <style>${CSS_PROVA}</style>
+    </head><body>${blocos}</body></html>`);
     win.document.close();
     win.focus();
     setTimeout(() => win.print(), 600);
   }
 
-  // ── Export Word (.doc) ──
   async function exportarWord() {
     if (!avaliacao || alunos.length === 0) return;
+    const htmlProva = gerarHtmlProva(avaliacao);
 
-    const blocos = alunos.flatMap((al, idx) => {
-      const pages = paginasPorAluno[al.id] || [];
-      return pages.map((src, pi) => {
-        const isLastPage = idx === alunos.length - 1 && pi === pages.length - 1;
-        return `<div style="page-break-after:${isLastPage ? 'auto' : 'always'}">
-          <img src="${src}" width="700" style="display:block;margin:0 auto;" />
+    const blocos = alunos.map((al, idx) => {
+      const qrSrc = folhasQR[al.id] || '';
+      const isLast = idx === alunos.length - 1;
+      return `
+        <div style="page-break-after:always;">
+          ${htmlProva}
+        </div>
+        <div style="page-break-after:${isLast ? 'auto' : 'always'};">
+          <img src="${qrSrc}" width="700" style="display:block;margin:0 auto;" />
         </div>`;
-      });
     }).join('');
 
     const html = `
@@ -522,13 +432,10 @@ export function AvaliacaoFolha() {
       <head>
         <meta charset="utf-8">
         <title>${avaliacao.titulo}</title>
-        <!--[if gte mso 9]>
-        <xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml>
-        <![endif]-->
-        <style>@page{margin:0;size:A4 portrait;}body{margin:0;padding:0;}div{margin:0;padding:0;}</style>
+        <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]-->
+        <style>${CSS_PROVA} @page{margin:10mm;size:A4 portrait;}</style>
       </head>
-      <body>${blocos}</body>
-      </html>`;
+      <body>${blocos}</body></html>`;
 
     const blob = new Blob([html], { type: 'application/msword' });
     const url = URL.createObjectURL(blob);
@@ -539,7 +446,6 @@ export function AvaliacaoFolha() {
     URL.revokeObjectURL(url);
   }
 
-  // ── Render ──
   if (loading) return (
     <div className="flex justify-center py-20">
       <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
@@ -547,7 +453,7 @@ export function AvaliacaoFolha() {
   );
 
   if (!avaliacao) return (
-    <div className="py-8 text-center text-on-surface-variant text-sm">Avalia\u00e7\u00e3o n\u00e3o encontrada.</div>
+    <div className="py-8 text-center text-on-surface-variant text-sm">Avaliação não encontrada.</div>
   );
 
   return (
@@ -567,19 +473,19 @@ export function AvaliacaoFolha() {
         </div>
       </div>
 
-      {/* Informativo */}
+      {/* Info */}
       <div className="bg-secondary-container rounded-2xl p-4 space-y-1">
         <p className="text-sm font-medium text-on-secondary-container">
-          Cada aluno recebe: <strong>Página 1</strong> — prova com as 10 questões &nbsp;+&nbsp; <strong>Página 2</strong> — folha de respostas com QR Code individual.
+          <strong>Pág. 1</strong> — Prova em texto (HTML) &nbsp;+&nbsp; <strong>Pág. 2</strong> — Folha QR individual
         </p>
         <p className="text-xs text-on-secondary-container">
           {avaliacao.questoes_subjetivas?.['9']
             ? '✅ Enunciados das questões 9 e 10 cadastrados.'
-            : '⚠️ Enunciados das questões 9 e 10 não cadastrados — aparecerá placeholder na prova.'}
+            : '⚠️ Enunciados das questões 9 e 10 não cadastrados.'}
         </p>
       </div>
 
-      {/* Botões de ação */}
+      {/* Botões */}
       <div className="flex gap-2">
         <button
           onClick={gerarTodos}
@@ -587,8 +493,8 @@ export function AvaliacaoFolha() {
           className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-on-primary font-semibold text-sm disabled:opacity-60"
         >
           {gerandoIdx !== null
-            ? `Gerando ${gerandoIdx + 1}/${alunos.length}...`
-            : 'Gerar todas as folhas'}
+            ? `Gerando QR ${gerandoIdx + 1}/${alunos.length}...`
+            : 'Gerar folhas QR'}
         </button>
         {geradoTodos && (
           <button
@@ -610,26 +516,15 @@ export function AvaliacaoFolha() {
         )}
       </div>
 
-      {/* Preview — mostra prova (igual p/ todos) + folha QR de cada aluno */}
+      {/* Preview folhas QR */}
       {geradoTodos && (
-        <div className="space-y-4">
-          {/* Prévia da página da prova */}
-          {paginaProvaBase && (
-            <div className="border border-outline-variant rounded-xl overflow-hidden">
-              <div className="px-3 py-1.5 bg-surface-variant">
-                <span className="text-xs font-semibold text-on-surface-variant">Página 1 — Prova (igual para todos os alunos)</span>
-              </div>
-              <img src={paginaProvaBase} alt="Prova" className="w-full" />
-            </div>
-          )}
-
+        <div className="space-y-3">
           <p className="text-xs font-semibold text-on-surface-variant">
-            Página 2 — Folha de respostas QR (individual por aluno)
+            Folhas QR geradas — {alunos.length} aluno{alunos.length !== 1 ? 's' : ''}
           </p>
           {alunos.map(al => {
-            const pages = paginasPorAluno[al.id];
-            if (!pages || pages.length < 2) return null;
-            const qrPage = pages[1];
+            const src = folhasQR[al.id];
+            if (!src) return null;
             return (
               <div key={al.id} className="border border-outline-variant rounded-xl overflow-hidden">
                 <div className="px-3 py-1.5 bg-surface flex items-center justify-between">
@@ -637,15 +532,15 @@ export function AvaliacaoFolha() {
                     {al.numero_chamada}. {al.nome}
                   </span>
                   <a
-                    href={qrPage}
-                    download={`folha_qr_${al.numero_chamada}_${al.nome.split(' ')[0]}.png`}
+                    href={src}
+                    download={`qr_${al.numero_chamada}_${al.nome.split(' ')[0]}.png`}
                     className="flex items-center gap-1 text-xs text-primary"
                   >
                     <Download className="w-3 h-3" />
-                    Baixar QR
+                    Baixar
                   </a>
                 </div>
-                <img src={qrPage} alt={al.nome} className="w-full" />
+                <img src={src} alt={al.nome} className="w-full" />
               </div>
             );
           })}
