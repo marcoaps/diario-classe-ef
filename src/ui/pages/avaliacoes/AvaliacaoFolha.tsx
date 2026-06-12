@@ -43,20 +43,6 @@ function gerarHtmlProva(avaliacao: Avaliacao): string {
   const vObj = avaliacao.valor_questao.toFixed(1);
   const qSubj = avaliacao.questoes_subjetivas || {};
 
-  const questoesHtml = Array.from({ length: NUM_OBJETIVAS }, (_, i) => {
-    const n = i + 1;
-    const q = QUESTOES_PLACEHOLDER[n];
-    const altsHtml = q.alts.map((a, ai) =>
-      `<div class="alt"><span class="alt-letra">(${LETRAS[ai]})</span> ${a}</div>`
-    ).join('');
-    return `
-      <div class="questao">
-        <div class="questao-enunc"><strong>Questão ${n} –</strong> ${q.texto}</div>
-        <div class="alts">${altsHtml}</div>
-      </div>`;
-  }).join('');
-
-  // Divide em 2 colunas: q1-4 esquerda, q5-8 direita
   const col1 = Array.from({ length: 4 }, (_, i) => {
     const n = i + 1;
     const q = QUESTOES_PLACEHOLDER[n];
@@ -94,22 +80,29 @@ function gerarHtmlProva(avaliacao: Avaliacao): string {
   return `
     <div class="prova-page">
       <div class="cab">
-        <div class="cab-titulo">Avaliação — Ensino Fundamental — 2026</div>
-        <div class="cab-sub">Disciplina: Educação Física &nbsp;|&nbsp; Professor(a): Marco Pedro</div>
-        <div class="cab-sub">${avaliacao.titulo} — Turma: ${avaliacao.turma_id}</div>
-      </div>
-      <div class="ficha">
-        Nome: <span class="linha-ficha"></span> &nbsp; Nº: <span class="linha-ficha-sm"></span> &nbsp;
-        Turma: <span class="linha-ficha-sm"></span> &nbsp; Data: <span class="linha-ficha-sm"></span> &nbsp;
-        Nota: <span class="linha-ficha-sm"></span>
+        <img class="cab-logo" src="https://i.imgur.com/3t5GEnQ.jpeg" alt="IOP" />
+        <div class="cab-info">
+          <div class="cab-titulo">${avaliacao.titulo} - Ensino Fundamental - 2026</div>
+          <div class="cab-linha">Disciplina: <strong>Educação Física</strong></div>
+          <div class="cab-linha">Professor(a): <strong>Marco Pedro</strong></div>
+          <div class="cab-linha-row">
+            <span>Série: <strong>${avaliacao.turma_id.replace(/[A-F]/i, 'º ano')}</strong></span>
+            <span>Turma: <span class="ficha-blank-sm"></span></span>
+          </div>
+          <div class="cab-linha-row">
+            <span>Nome: <span class="ficha-blank-lg"></span></span>
+            <span>Nº: <span class="ficha-blank-sm"></span></span>
+          </div>
+        </div>
       </div>
       <div class="instrucoes">
-        <strong>Instruções:</strong> Leia atentamente cada questão. Use caneta azul ou preta. Não é permitido o uso de corretor.
+        <strong>Instruções:</strong> Leia atentamente cada questão antes de responder. Use caneta azul ou preta. Não é permitido o uso de corretor.
         Questões objetivas valem ${vObj} ponto cada. Questões dissertativas valem 1,0 ponto cada.
       </div>
       <div class="parte-header">PARTE 1 — QUESTÕES OBJETIVAS (${(NUM_OBJETIVAS * avaliacao.valor_questao).toFixed(1)} pontos)</div>
       <div class="colunas">
         <div class="col">${col1}</div>
+        <div class="divisor"></div>
         <div class="col">${col2}</div>
       </div>
       <div class="parte-header">PARTE 2 — QUESTÕES DISSERTATIVAS (2,0 pontos)</div>
@@ -124,16 +117,19 @@ const CSS_PROVA = `
   @page { size: A4 portrait; margin: 10mm; }
   body { font-family: Arial, sans-serif; font-size: 9.5pt; color: #1e293b; background: white; }
   .prova-page { width: 100%; }
-  .cab { background: #1e3a5f; color: white; text-align: center; padding: 8px 12px; margin-bottom: 6px; }
-  .cab-titulo { font-size: 12pt; font-weight: bold; }
-  .cab-sub { font-size: 9pt; margin-top: 2px; }
-  .ficha { border: 1px solid #1e3a5f; padding: 4px 8px; font-size: 9pt; margin-bottom: 5px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-  .linha-ficha { display: inline-block; border-bottom: 1px solid #333; width: 220px; }
-  .linha-ficha-sm { display: inline-block; border-bottom: 1px solid #333; width: 60px; }
-  .instrucoes { border: 1px solid #e53e3e; padding: 4px 8px; font-size: 8.5pt; margin-bottom: 6px; }
+  .cab { display: flex; align-items: center; gap: 12px; border: 2px solid #1e3a5f; border-radius: 4px; padding: 8px 12px; margin-bottom: 6px; }
+  .cab-logo { width: 64px; height: 64px; object-fit: contain; border-radius: 50%; flex-shrink: 0; }
+  .cab-info { flex: 1; }
+  .cab-titulo { font-size: 11pt; font-weight: bold; margin-bottom: 2px; }
+  .cab-linha { font-size: 9pt; margin-bottom: 1px; }
+  .cab-linha-row { display: flex; gap: 24px; font-size: 9pt; margin-top: 2px; }
+  .ficha-blank-lg { display: inline-block; border-bottom: 1px solid #333; width: 180px; }
+  .ficha-blank-sm { display: inline-block; border-bottom: 1px solid #333; width: 60px; }
+  .instrucoes { border: 1.5px solid #e53e3e; padding: 4px 8px; font-size: 8.5pt; margin-bottom: 6px; border-radius: 2px; }
   .parte-header { background: #1e3a5f; color: white; font-weight: bold; font-size: 10pt; text-align: center; padding: 4px; margin-bottom: 6px; margin-top: 6px; }
-  .colunas { display: flex; gap: 12px; margin-bottom: 4px; }
-  .col { flex: 1; }
+  .colunas { display: flex; gap: 0; margin-bottom: 4px; }
+  .col { flex: 1; padding: 0 10px; }
+  .divisor { width: 1.5px; background: #1e3a5f; flex-shrink: 0; margin: 0 2px; }
   .questao { margin-bottom: 10px; font-size: 8.5pt; }
   .questao-enunc { margin-bottom: 3px; line-height: 1.4; }
   .alts { padding-left: 4px; }
@@ -145,8 +141,7 @@ const CSS_PROVA = `
   .diss-body { padding: 6px 8px; background: white; }
   .diss-enunc { font-size: 8.5pt; margin-bottom: 6px; line-height: 1.4; }
   .diss-label { font-weight: bold; font-size: 8.5pt; margin-bottom: 4px; }
-  .diss-linhas { }
-  .linha-resp { border-bottom: 0.7px solid #94a3b8; height: 18px; margin-bottom: 0; }
+  .linha-resp { border-bottom: 0.7px solid #94a3b8; height: 18px; }
   .rodape { font-size: 7.5pt; color: #94a3b8; text-align: center; margin-top: 8px; border-top: 1px solid #e2e8f0; padding-top: 4px; }
   .qr-page { page-break-before: always; }
 `;
