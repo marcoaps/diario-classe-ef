@@ -36,7 +36,7 @@ async function desenharFolha(
 ) {
   // Formato A4 portrait 210x297mm a 96dpi = 794x1123px
   const W = 794;
-  const H = 1000;
+  const H = 1100;
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d')!;
@@ -174,7 +174,7 @@ async function desenharFolha(
 
   ctx.fillStyle = '#1e293b';
   ctx.font = 'bold 11px Arial';
-  ctx.fillText('QUESTÕES SUBJETIVAS — Nota lançada pelo professor', Q_START_X, subjStartY);
+  ctx.fillText('QUESTÕES SUBJETIVAS', Q_START_X, subjStartY);
 
   ctx.strokeStyle = '#1e293b';
   ctx.lineWidth = 1.5;
@@ -185,35 +185,36 @@ async function desenharFolha(
 
   for (let s = 0; s < 2; s++) {
     const qn = 9 + s;
-    const sy = subjStartY + 24 + s * 90;
+    const boxH = 110;
+    const sy = subjStartY + 24 + s * (boxH + 12);
 
     ctx.fillStyle = '#f8fafc';
-    ctx.fillRect(Q_START_X - 4, sy - 4, W - 2*(PAD + MARK + 8) + 8, 80);
+    ctx.fillRect(Q_START_X - 4, sy - 4, W - 2*(PAD + MARK + 8) + 8, boxH);
     ctx.strokeStyle = '#e2e8f0';
     ctx.lineWidth = 1;
-    ctx.strokeRect(Q_START_X - 4, sy - 4, W - 2*(PAD + MARK + 8) + 8, 80);
+    ctx.strokeRect(Q_START_X - 4, sy - 4, W - 2*(PAD + MARK + 8) + 8, boxH);
 
     ctx.fillStyle = '#1e293b';
     ctx.font = 'bold 15px Arial';
-    ctx.fillText(String(qn) + '.', Q_START_X + 4, sy + 18);
+    ctx.fillText(String(qn) + '.', Q_START_X + 4, sy + 16);
 
-    // Linhas para resposta
+    // 5 linhas para resposta
     ctx.strokeStyle = '#cbd5e1';
     ctx.lineWidth = 0.8;
-    for (let ln = 0; ln < 2; ln++) {
+    for (let ln = 0; ln < 5; ln++) {
       ctx.beginPath();
-      ctx.moveTo(Q_START_X + 36, sy + 16 + ln * 26);
-      ctx.lineTo(W - PAD - MARK - 20, sy + 16 + ln * 26);
+      ctx.moveTo(Q_START_X + 36, sy + 14 + ln * 17);
+      ctx.lineTo(W - PAD - MARK - 20, sy + 14 + ln * 17);
       ctx.stroke();
     }
 
     // Campo nota
     ctx.fillStyle = '#1e293b';
     ctx.font = 'bold 10px Arial';
-    ctx.fillText('NOTA:', Q_START_X + 4, sy + 68);
+    ctx.fillText('NOTA:', Q_START_X + 4, sy + 98);
     ctx.strokeStyle = '#334155';
     ctx.lineWidth = 1;
-    ctx.strokeRect(Q_START_X + 44, sy + 56, 60, 18);
+    ctx.strokeRect(Q_START_X + 44, sy + 86, 60, 18);
   }
 
   // === RODAPE ===
