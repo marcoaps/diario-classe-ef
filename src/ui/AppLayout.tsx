@@ -34,10 +34,10 @@ export function AppLayout() {
         <div className="flex items-center gap-2 px-2 py-1">
           <img
             src={LOGO_URL}
-            alt="Di\u00e1rio de Classe EF"
+            alt="Diario de Classe EF"
             className="w-8 h-8 object-contain rounded-lg flex-shrink-0"
           />
-          <span className="font-bold text-base text-primary">Di\u00e1rio de Classe EF</span>
+          <span className="font-bold text-base text-primary">Diário de Classe EF</span>
         </div>
         <div className="flex items-center gap-sm">
           <button
@@ -70,7 +70,7 @@ export function AppLayout() {
         />
       )}
 
-      {/* Popup "Mais" */}
+      {/* Popup Mais */}
       {maisAberto && (
         <div className="fixed bottom-20 right-2 z-50 bg-surface rounded-2xl shadow-xl border border-outline-variant overflow-hidden w-52">
           <div className="px-4 py-2.5 border-b border-outline-variant flex items-center justify-between">
@@ -82,13 +82,13 @@ export function AppLayout() {
           <PopupItem
             to="/ia"
             icon={<Sparkles className="w-5 h-5" />}
-            label="IA — Seq. Did\u00e1tica"
+            label="IA — Seq. Didática"
             onClick={() => setMaisAberto(false)}
           />
           <PopupItem
             to="/avaliacoes"
             icon={<ClipboardList className="w-5 h-5" />}
-            label="Avalia\u00e7\u00f5es QR"
+            label="Avaliações QR"
             onClick={() => setMaisAberto(false)}
           />
           <PopupItem
@@ -104,11 +104,9 @@ export function AppLayout() {
       <nav className="fixed bottom-0 left-0 right-0 h-16 bg-surface border-t border-outline-variant shadow-lg flex items-center justify-around px-2 z-50 rounded-t-xl">
         <NavItem to="/" icon={<Users />} label="Turmas" />
         <NavItem to="/attendance" icon={<CheckSquare />} label="Chamada" />
-        <NavItem to="/history" icon={<CalendarSearch />} label="Hist\u00f3rico" />
-        <NavItem to="/report" icon={<BarChart3 />} label="Relat\u00f3rios" />
+        <NavItem to="/history" icon={<CalendarSearch />} label="Histórico" />
+        <NavItem to="/report" icon={<BarChart3 />} label="Relatórios" />
         <NavItem to="/grades" icon={<GraduationCap />} label="Notas" />
-
-        {/* Botão Mais */}
         <button
           onClick={() => setMaisAberto(prev => !prev)}
           className={cn(
