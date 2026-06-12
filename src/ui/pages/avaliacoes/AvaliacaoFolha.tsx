@@ -225,6 +225,8 @@ async function desenharPaginaProva(
 }
 
 
+// ─── Desenha a folha de respostas QR (última página) ─────────────────────────
+async function desenharFolhaQR(
   canvas: HTMLCanvasElement,
   avaliacao: Avaliacao,
   aluno: Aluno
