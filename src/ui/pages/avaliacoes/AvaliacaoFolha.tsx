@@ -33,7 +33,7 @@ async function desenharFolhaQR(
   aluno: Aluno
 ) {
   const W = 794;
-  const H = 1123; // A4 a 96dpi
+  const H = 1250; // ligeiramente maior para acomodar caixas subjetivas
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d')!;
@@ -147,35 +147,56 @@ async function desenharFolhaQR(
     });
   }
 
-  // Questões subjetivas
+  // === QUESTÕES SUBJETIVAS — estilo print 1 ===
   const subjStartY = Q_START_Y + NUM_OBJETIVAS * Q_ROW_H + 18;
-  ctx.fillStyle = '#1e293b';
-  ctx.font = 'bold 11px Arial';
-  ctx.fillText('QUEST\u00d5ES SUBJETIVAS', Q_START_X, subjStartY);
-  ctx.strokeStyle = '#1e293b';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(Q_START_X, subjStartY + 4);
-  ctx.lineTo(W - PAD - MARK - 8, subjStartY + 4);
-  ctx.stroke();
+  const valorSubj = avaliacao.valor_questao || 1.0;
+  const BOX_H = 185;   // altura total de cada caixa
+  const HDR_H = 24;    // altura do cabeçalho azul
+  const GAP   = 12;    // espaço entre as duas caixas
 
   for (let s = 0; s < NUM_SUBJETIVAS; s++) {
-    const boxH = 140;
-    const sy = subjStartY + 24 + s * (boxH + 10);
-    ctx.fillStyle = '#f8fafc';
-    ctx.fillRect(CX - 4, sy - 4, CW + 8, boxH);
-    ctx.strokeStyle = '#e2e8f0';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(CX - 4, sy - 4, CW + 8, boxH);
+    const qn  = NUM_OBJETIVAS + s + 1;
+    const bx  = CX - 4;
+    const bw  = CW + 8;
+    const by  = subjStartY + s * (BOX_H + GAP);
+
+    // Borda externa (azul escuro, igual ao print 1)
+    ctx.strokeStyle = '#1e3a5f';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(bx, by, bw, BOX_H);
+
+    // Cabeçalho da caixa — fundo azul escuro
+    ctx.fillStyle = '#1e3a5f';
+    ctx.fillRect(bx, by, bw, HDR_H);
+
+    // "Questão N  (X,0 ponto)"
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 11px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText('Quest\u00e3o ' + qn, bx + 8, by + HDR_H - 7);
+    ctx.font = '10px Arial';
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillText('(' + valorSubj.toFixed(1).replace('.', ',') + ' ponto)', bx + 8 + ctx.measureText('Quest\u00e3o ' + qn + '  ').width, by + HDR_H - 7);
+
+    // Fundo branco do corpo
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(bx, by + HDR_H, bw, BOX_H - HDR_H);
+
+    // Label "Resposta:"
     ctx.fillStyle = '#1e293b';
-    ctx.font = 'bold 15px Arial';
-    ctx.fillText(String(NUM_OBJETIVAS + s + 1) + '.', Q_START_X + 4, sy + 16);
-    ctx.strokeStyle = '#cbd5e1';
-    ctx.lineWidth = 0.8;
-    for (let ln = 0; ln < 7; ln++) {
+    ctx.font = 'bold 10px Arial';
+    ctx.fillText('Resposta:', bx + 8, by + HDR_H + 16);
+
+    // Linhas de resposta (8 linhas, mais espaçadas)
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 0.7;
+    const lineStartY = by + HDR_H + 26;
+    const lineSpacing = (BOX_H - HDR_H - 34) / 8;
+    for (let ln = 0; ln < 8; ln++) {
+      const ly = lineStartY + ln * lineSpacing;
       ctx.beginPath();
-      ctx.moveTo(Q_START_X + 36, sy + 14 + ln * 18);
-      ctx.lineTo(W - PAD - MARK - 20, sy + 14 + ln * 18);
+      ctx.moveTo(bx + 8, ly);
+      ctx.lineTo(bx + bw - 8, ly);
       ctx.stroke();
     }
   }
