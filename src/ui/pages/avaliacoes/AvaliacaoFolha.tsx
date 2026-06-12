@@ -345,7 +345,7 @@ export function AvaliacaoFolha() {
     URL.revokeObjectURL(url);
   }
 
-
+  if (loading) return (
     <div className="flex justify-center py-20">
       <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
     </div>
