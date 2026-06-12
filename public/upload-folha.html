@@ -276,14 +276,10 @@
       document.getElementById('btn-salvar').disabled = true;
       document.getElementById('btn-salvar').textContent = 'Salvando...';
       try {
-        const r = await fetch(supabaseUrl + '/rest/v1/avaliacoes_respostas', {
+        // Usa service key via API route do Vercel
+        const r = await fetch('/api/salvar-resposta', {
           method: 'POST',
-          headers: {
-            'apikey': supabaseKey,
-            'Authorization': 'Bearer ' + supabaseKey,
-            'Content-Type': 'application/json',
-            'Prefer': 'resolution=merge-duplicates'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             avaliacao_id: avaliacaoId,
             aluno_id: alunoId,
@@ -291,12 +287,13 @@
             metodo_scan: 'upload'
           })
         });
-        if (r.ok || r.status === 201 || r.status === 200) {
+        const data = await r.json();
+        if (r.ok && !data.error) {
           document.getElementById('btn-salvar').textContent = '✓ Salvo! Próxima folha';
           document.getElementById('btn-salvar').style.background = '#16a34a';
           document.getElementById('btn-salvar').onclick = () => location.reload();
         } else {
-          throw new Error('Status ' + r.status);
+          throw new Error(data.error || 'Status ' + r.status);
         }
       } catch(e) {
         alert('Erro ao salvar: ' + e.message);
