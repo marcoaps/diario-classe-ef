@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
-import { ArrowLeft, Printer, Download } from 'lucide-react';
+import { ArrowLeft, Printer, Download, FileText } from 'lucide-react';
 import QRCode from 'qrcode';
 
 interface Avaliacao {
@@ -296,7 +296,56 @@ export function AvaliacaoFolha() {
     setTimeout(() => win.print(), 500);
   }
 
-  if (loading) return (
+  async function exportarWord() {
+    if (!avaliacao || alunos.length === 0) return;
+    // Gera canvases se ainda não foram gerados
+    const imgs: Record<string, string> = { ...canvases };
+    if (!geradoTodos) {
+      for (let i = 0; i < alunos.length; i++) {
+        const canvas = document.createElement('canvas');
+        await desenharFolha(canvas, avaliacao, alunos[i]);
+        imgs[alunos[i].id] = canvas.toDataURL('image/png');
+      }
+    }
+
+    // Monta HTML com as imagens para download como .doc
+    const imgsHtml = alunos.map((al, idx) => {
+      if (!imgs[al.id]) return '';
+      const isLast = idx === alunos.length - 1;
+      return `<div style="page-break-after:${isLast ? 'auto' : 'always'}">
+        <img src="${imgs[al.id]}" width="700" style="display:block;margin:0 auto;" />
+      </div>`;
+    }).join('');
+
+    const html = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office"
+            xmlns:w="urn:schemas-microsoft-com:office:word"
+            xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8">
+        <title>${avaliacao.titulo}</title>
+        <!--[if gte mso 9]>
+        <xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml>
+        <![endif]-->
+        <style>
+          @page { margin: 0; size: A4 portrait; }
+          body { margin: 0; padding: 0; }
+          div { margin: 0; padding: 0; }
+        </style>
+      </head>
+      <body>${imgsHtml}</body>
+      </html>`;
+
+    const blob = new Blob([html], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${avaliacao.titulo}_${avaliacao.turma_id}.doc`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+
     <div className="flex justify-center py-20">
       <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
     </div>
@@ -344,6 +393,15 @@ export function AvaliacaoFolha() {
           >
             <Printer className="w-4 h-4" />
             Imprimir
+          </button>
+        )}
+        {geradoTodos && (
+          <button
+            onClick={exportarWord}
+            className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-blue-600 text-white font-semibold text-sm"
+          >
+            <FileText className="w-4 h-4" />
+            Word
           </button>
         )}
       </div>
