@@ -207,14 +207,6 @@ async function desenharFolha(
       ctx.lineTo(W - PAD - MARK - 20, sy + 14 + ln * 17);
       ctx.stroke();
     }
-
-    // Campo nota
-    ctx.fillStyle = '#1e293b';
-    ctx.font = 'bold 10px Arial';
-    ctx.fillText('NOTA:', Q_START_X + 4, sy + 98);
-    ctx.strokeStyle = '#334155';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(Q_START_X + 44, sy + 86, 60, 18);
   }
 
   // === RODAPE ===
