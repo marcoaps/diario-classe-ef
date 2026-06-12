@@ -36,7 +36,7 @@ async function desenharFolha(
 ) {
   // Formato A4 portrait 210x297mm a 96dpi = 794x1123px
   const W = 794;
-  const H = 1100;
+  const H = 1200;
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d')!;
@@ -185,7 +185,7 @@ async function desenharFolha(
 
   for (let s = 0; s < 2; s++) {
     const qn = 9 + s;
-    const boxH = 110;
+    const boxH = 160;
     const sy = subjStartY + 24 + s * (boxH + 12);
 
     ctx.fillStyle = '#f8fafc';
@@ -198,13 +198,13 @@ async function desenharFolha(
     ctx.font = 'bold 15px Arial';
     ctx.fillText(String(qn) + '.', Q_START_X + 4, sy + 16);
 
-    // 5 linhas para resposta
+    // 8 linhas para resposta
     ctx.strokeStyle = '#cbd5e1';
     ctx.lineWidth = 0.8;
-    for (let ln = 0; ln < 5; ln++) {
+    for (let ln = 0; ln < 8; ln++) {
       ctx.beginPath();
-      ctx.moveTo(Q_START_X + 36, sy + 14 + ln * 17);
-      ctx.lineTo(W - PAD - MARK - 20, sy + 14 + ln * 17);
+      ctx.moveTo(Q_START_X + 36, sy + 14 + ln * 18);
+      ctx.lineTo(W - PAD - MARK - 20, sy + 14 + ln * 18);
       ctx.stroke();
     }
   }
