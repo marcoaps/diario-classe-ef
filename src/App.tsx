@@ -31,6 +31,7 @@ import { RendimentoBimestre } from './ui/pages/RendimentoBimestre';
 import { Avaliacoes } from './ui/pages/avaliacoes/Avaliacoes';
 import { AvaliacaoFolha } from './ui/pages/avaliacoes/AvaliacaoFolha';
 import { AvaliacaoCorrigir } from './ui/pages/avaliacoes/AvaliacaoCorrigir';
+import { AvaliacaoResultados } from './ui/pages/avaliacoes/AvaliacaoResultados';
 import { supabase } from './data/supabase';
 
 export function useAuth() {
@@ -91,6 +92,7 @@ export default function App() {
           <Route path="/avaliacoes" element={<Avaliacoes />} />
           <Route path="/avaliacoes/folha/:id" element={<AvaliacaoFolha />} />
           <Route path="/avaliacoes/corrigir/:id" element={<AvaliacaoCorrigir />} />
+          <Route path="/avaliacoes/resultados/:id" element={<AvaliacaoResultados />} />
 
           {/* Rotas IA */}
           <Route path="/ia" element={<IAHub />} />
