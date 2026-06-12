@@ -46,68 +46,90 @@ function gerarHtmlProva(avaliacao: Avaliacao, aluno: Aluno): string {
   const qSubj = avaliacao.questoes_subjetivas || {};
   const serie = avaliacao.turma_id.replace(/(\d+).*/, '$1') + 'º ano';
 
-  const col1 = Array.from({ length: 4 }, (_, i) => {
-    const n = i + 1;
+  function questaoHtml(n: number): string {
     const q = QUESTOES_PLACEHOLDER[n];
+    if (!q) return '';
     const altsHtml = q.alts.map((a, ai) =>
-      `<div class="alt"><span class="alt-letra">(${LETRAS[ai]})</span> ${a}</div>`
+      `<tr><td style="width:20px;font-weight:bold;vertical-align:top;padding:1px 4px;">(${LETRAS[ai]})</td><td style="vertical-align:top;padding:1px 2px;">${a}</td></tr>`
     ).join('');
-    return `<div class="questao"><div class="questao-enunc"><strong>Questão ${n} –</strong> ${q.texto}</div><div class="alts">${altsHtml}</div></div>`;
-  }).join('');
+    return `
+      <div style="margin-bottom:8px;">
+        <div style="font-weight:bold;margin-bottom:2px;">Questão ${n} –</div>
+        <div style="margin-bottom:3px;line-height:1.4;">${q.texto}</div>
+        <table style="border-collapse:collapse;width:100%;">${altsHtml}</table>
+      </div>`;
+  }
 
-  const col2 = Array.from({ length: 4 }, (_, i) => {
-    const n = i + 5;
-    const q = QUESTOES_PLACEHOLDER[n];
-    const altsHtml = q.alts.map((a, ai) =>
-      `<div class="alt"><span class="alt-letra">(${LETRAS[ai]})</span> ${a}</div>`
-    ).join('');
-    return `<div class="questao"><div class="questao-enunc"><strong>Questão ${n} –</strong> ${q.texto}</div><div class="alts">${altsHtml}</div></div>`;
-  }).join('');
+  const q1a4 = [1,2,3,4].map(questaoHtml).join('');
+  const q5a8 = [5,6,7,8].map(questaoHtml).join('');
 
-  const dissHtml = Array.from({ length: NUM_SUBJETIVAS }, (_, s) => {
-    const n = NUM_OBJETIVAS + s + 1;
+  const dissHtml = [1,2].map(s => {
+    const n = 8 + s;
     const enunciado = qSubj[String(n)] || '';
     return `
-      <div class="diss-box">
-        <div class="diss-header">Questão ${n} <span class="diss-pts">(1,0 ponto)</span></div>
-        <div class="diss-body">
-          ${enunciado ? `<div class="diss-enunc">${enunciado}</div>` : ''}
-          <div class="diss-label">Resposta:</div>
-          <div class="diss-linhas">
-            ${Array.from({ length: 8 }, () => '<div class="linha-resp"></div>').join('')}
-          </div>
+      <div style="border:1.5px solid #1e3a5f;margin-bottom:10px;page-break-inside:avoid;">
+        <div style="background:#1e3a5f;color:white;font-weight:bold;padding:4px 8px;">
+          Questão ${n} <span style="font-weight:normal;opacity:0.85;">(1,0 ponto)</span>
+        </div>
+        <div style="padding:6px 8px;background:white;">
+          ${enunciado ? `<div style="margin-bottom:6px;line-height:1.4;">${enunciado}</div>` : ''}
+          <div style="font-weight:bold;margin-bottom:4px;">Resposta:</div>
+          ${[0,1,2,3,4,5,6,7].map(() => '<div style="border-bottom:0.7px solid #94a3b8;height:20px;"></div>').join('')}
         </div>
       </div>`;
   }).join('');
 
   return `
-    <div class="prova-page">
-      <div class="cab">
-        <img class="cab-logo" src="${LOGO_IOP}" alt="IOP" />
-        <div class="cab-info">
-          <div class="cab-titulo">${avaliacao.titulo} - Ensino Fundamental - 2026</div>
-          <div class="cab-linha">Disciplina: <strong>Educação Física</strong> &nbsp;&nbsp; Professor(a): <strong>Jessiane / Marco Pedro</strong></div>
-          <div class="cab-linha-row">
-            <span>Série: <strong>${serie}</strong></span>
-            <span>Turma: <strong>${avaliacao.turma_id}</strong></span>
-            <span>Nº: <strong>${aluno.numero_chamada}</strong></span>
-          </div>
-          <div class="cab-nome">Nome: <strong>${aluno.nome}</strong></div>
-        </div>
-      </div>
-      <div class="instrucoes">
-        <strong>Instruções:</strong> Leia atentamente cada questão antes de responder. Use caneta azul ou preta. Não é permitido o uso de corretor.
+    <div style="font-family:Arial,sans-serif;font-size:12pt;color:#1e293b;width:100%;">
+
+      <!-- CABEÇALHO -->
+      <table style="width:100%;border:2px solid #1e3a5f;border-radius:4px;margin-bottom:6px;border-collapse:collapse;">
+        <tr>
+          <td style="width:72px;padding:6px;vertical-align:middle;text-align:center;">
+            <img src="${LOGO_IOP}" style="width:64px;height:64px;object-fit:contain;display:block;" />
+          </td>
+          <td style="padding:6px;vertical-align:middle;">
+            <div style="font-size:11pt;font-weight:bold;margin-bottom:2px;">${avaliacao.titulo} - Ensino Fundamental - 2026</div>
+            <div style="font-size:10pt;margin-bottom:1px;">Disciplina: <strong>Educação Física</strong> &nbsp;|&nbsp; Professor(a): <strong>Jessiane / Marco Pedro</strong></div>
+            <div style="font-size:10pt;margin-bottom:1px;">Série: <strong>${serie}</strong> &nbsp;|&nbsp; Turma: <strong>${avaliacao.turma_id}</strong> &nbsp;|&nbsp; Nº: <strong>${aluno.numero_chamada}</strong></div>
+            <div style="font-size:10pt;border-top:1px solid #cbd5e1;padding-top:3px;margin-top:3px;">Nome: <strong>${aluno.nome}</strong></div>
+          </td>
+        </tr>
+      </table>
+
+      <!-- INSTRUÇÕES -->
+      <div style="border:1.5px solid #e53e3e;padding:4px 8px;font-size:10pt;margin-bottom:6px;">
+        <strong>Instruções:</strong> Leia atentamente cada questão. Use caneta azul ou preta. Não é permitido o uso de corretor.
         Questões objetivas valem ${vObj} ponto cada. Questões dissertativas valem 1,0 ponto cada.
       </div>
-      <div class="parte-header">PARTE 1 — QUESTÕES OBJETIVAS (${(NUM_OBJETIVAS * avaliacao.valor_questao).toFixed(1)} pontos)</div>
-      <div class="colunas">
-        <div class="col">${col1}</div>
-        <div class="divisor"></div>
-        <div class="col">${col2}</div>
+
+      <!-- PARTE 1 -->
+      <div style="background:#1e3a5f;color:white;font-weight:bold;font-size:11pt;text-align:center;padding:4px;margin-bottom:6px;">
+        PARTE 1 — QUESTÕES OBJETIVAS (${(8 * avaliacao.valor_questao).toFixed(1)} pontos)
       </div>
-      <div class="parte-header">PARTE 2 — QUESTÕES DISSERTATIVAS (2,0 pontos)</div>
+
+      <!-- 2 COLUNAS via TABLE -->
+      <table style="width:100%;border-collapse:collapse;margin-bottom:4px;">
+        <tr>
+          <td style="width:49%;vertical-align:top;padding-right:8px;border-right:1.5px solid #1e3a5f;">
+            ${q1a4}
+          </td>
+          <td style="width:2%;"></td>
+          <td style="width:49%;vertical-align:top;padding-left:8px;">
+            ${q5a8}
+          </td>
+        </tr>
+      </table>
+
+      <!-- PARTE 2 -->
+      <div style="background:#1e3a5f;color:white;font-weight:bold;font-size:11pt;text-align:center;padding:4px;margin-bottom:6px;margin-top:4px;">
+        PARTE 2 — QUESTÕES DISSERTATIVAS (2,0 pontos)
+      </div>
       ${dissHtml}
-      <div class="rodape">Brasiléia, Acre — 2026 &nbsp;&nbsp;&nbsp; E.E. Instituto Odilon Pratagi — Educação Física</div>
+
+      <div style="font-size:9pt;color:#94a3b8;text-align:center;margin-top:8px;border-top:1px solid #e2e8f0;padding-top:4px;">
+        Brasiléia, Acre — 2026 &nbsp;&nbsp;&nbsp; E.E. Instituto Odilon Pratagi — Educação Física
+      </div>
     </div>`;
 }
 
@@ -115,35 +137,9 @@ function gerarHtmlProva(avaliacao: Avaliacao, aluno: Aluno): string {
 const CSS_PROVA = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
   @page { size: A4 portrait; margin: 10mm; }
-  body { font-family: Arial, sans-serif; font-size: 9.5pt; color: #1e293b; background: white; }
-  .prova-page { width: 100%; }
-  .cab { display: flex; align-items: center; gap: 10px; border: 2px solid #1e3a5f; border-radius: 4px; padding: 8px 10px; margin-bottom: 6px; overflow: hidden; }
-  .cab-logo { width: 64px !important; height: 64px !important; min-width: 64px !important; max-width: 64px !important; max-height: 64px !important; object-fit: contain !important; flex-shrink: 0 !important; display: block !important; }
-  .cab-info { flex: 1; min-width: 0; }
-  .cab-titulo { font-size: 10.5pt; font-weight: bold; margin-bottom: 3px; }
-  .cab-linha { font-size: 9pt; margin-bottom: 2px; }
-  .cab-linha-row { display: flex; gap: 16px; font-size: 9pt; margin-bottom: 2px; }
-  .cab-nome { font-size: 9.5pt; border-top: 1px solid #cbd5e1; padding-top: 3px; margin-top: 3px; }
-  .instrucoes { border: 1.5px solid #e53e3e; padding: 4px 8px; font-size: 8.5pt; margin-bottom: 6px; border-radius: 2px; }
-  .parte-header { background: #1e3a5f; color: white; font-weight: bold; font-size: 10pt; text-align: center; padding: 4px; margin-bottom: 6px; margin-top: 6px; }
-  .colunas { display: flex; gap: 0; margin-bottom: 4px; }
-  .col { flex: 1; padding: 0 8px; }
-  .divisor { width: 1.5px; background: #1e3a5f; flex-shrink: 0; align-self: stretch; }
-  .questao { margin-bottom: 9px; font-size: 8.5pt; }
-  .questao-enunc { margin-bottom: 3px; line-height: 1.4; }
-  .alts { padding-left: 4px; }
-  .alt { line-height: 1.35; margin-bottom: 1px; }
-  .alt-letra { font-weight: bold; }
-  .diss-box { border: 1.5px solid #1e3a5f; margin-bottom: 10px; }
-  .diss-header { background: #1e3a5f; color: white; font-weight: bold; font-size: 9.5pt; padding: 4px 8px; }
-  .diss-pts { font-weight: normal; font-size: 8.5pt; opacity: 0.85; }
-  .diss-body { padding: 6px 8px; background: white; }
-  .diss-enunc { font-size: 8.5pt; margin-bottom: 6px; line-height: 1.4; }
-  .diss-label { font-weight: bold; font-size: 8.5pt; margin-bottom: 4px; }
-  .diss-linhas { }
-  .linha-resp { border-bottom: 0.7px solid #94a3b8; height: 18px; }
-  .rodape { font-size: 7.5pt; color: #94a3b8; text-align: center; margin-top: 8px; border-top: 1px solid #e2e8f0; padding-top: 4px; }
+  body { font-family: Arial, sans-serif; font-size: 12pt; color: #1e293b; background: white; }
 `;
+
 
 // ─── Gera canvas da folha QR ──────────────────────────────────────────────────
 async function desenharFolhaQR(
