@@ -186,12 +186,13 @@ export function AttendanceReport() {
     try {
       const gabarito: Record<string, string> = {};
       for (let i = 1; i <= 8; i++) gabarito[String(i)] = 'A';
+      const turmaNormalizada = normalizarTurma(turmaId);
       const { data: avaliacao, error } = await supabase
         .from('avaliacoes')
         .insert({
-          titulo: `Recuperação ${turmaId} — ${new Date().toLocaleDateString('pt-BR')}`,
+          titulo: `Recuperação ${turmaNormalizada} — ${new Date().toLocaleDateString('pt-BR')}`,
           descricao: `Alunos críticos (frequência baixa) — ${alunosCriticos.length} alunos`,
-          turma_id: turmaId,
+          turma_id: turmaNormalizada,
           num_questoes: 10,
           gabarito,
           valor_questao: 1.0,
@@ -426,12 +427,13 @@ function ResumoCard({ icon, label, value, tone }: { icon: React.ReactNode; label
     try {
       const gabarito: Record<string, string> = {};
       for (let i = 1; i <= 8; i++) gabarito[String(i)] = 'A';
+      const turmaNormalizada = normalizarTurma(turmaId);
       const { data: avaliacao, error } = await supabase
         .from('avaliacoes')
         .insert({
-          titulo: `Recuperação ${turmaId} — ${new Date().toLocaleDateString('pt-BR')}`,
+          titulo: `Recuperação ${turmaNormalizada} — ${new Date().toLocaleDateString('pt-BR')}`,
           descricao: `Alunos críticos (frequência baixa) — ${alunosCriticos.length} alunos`,
-          turma_id: turmaId,
+          turma_id: turmaNormalizada,
           num_questoes: 10,
           gabarito,
           valor_questao: 1.0,
@@ -465,12 +467,13 @@ function BarraProgresso({ percentual, critico, emRisco }: { percentual: number; 
     try {
       const gabarito: Record<string, string> = {};
       for (let i = 1; i <= 8; i++) gabarito[String(i)] = 'A';
+      const turmaNormalizada = normalizarTurma(turmaId);
       const { data: avaliacao, error } = await supabase
         .from('avaliacoes')
         .insert({
-          titulo: `Recuperação ${turmaId} — ${new Date().toLocaleDateString('pt-BR')}`,
+          titulo: `Recuperação ${turmaNormalizada} — ${new Date().toLocaleDateString('pt-BR')}`,
           descricao: `Alunos críticos (frequência baixa) — ${alunosCriticos.length} alunos`,
-          turma_id: turmaId,
+          turma_id: turmaNormalizada,
           num_questoes: 10,
           gabarito,
           valor_questao: 1.0,
