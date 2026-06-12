@@ -118,7 +118,7 @@ const CSS_PROVA = `
   body { font-family: Arial, sans-serif; font-size: 9.5pt; color: #1e293b; background: white; }
   .prova-page { width: 100%; }
   .cab { display: flex; align-items: center; gap: 12px; border: 2px solid #1e3a5f; border-radius: 4px; padding: 8px 12px; margin-bottom: 6px; }
-  .cab-logo { width: 64px; height: 64px; object-fit: contain; border-radius: 50%; flex-shrink: 0; }
+  .cab-logo { width: 64px; height: 64px; min-width: 64px; max-width: 64px; object-fit: contain; border-radius: 50%; flex-shrink: 0; }
   .cab-info { flex: 1; }
   .cab-titulo { font-size: 11pt; font-weight: bold; margin-bottom: 2px; }
   .cab-linha { font-size: 9pt; margin-bottom: 1px; }
