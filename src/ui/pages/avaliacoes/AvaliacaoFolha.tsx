@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
 import { ArrowLeft, Printer, Download } from 'lucide-react';
 import QRCode from 'qrcode';
@@ -231,6 +231,9 @@ async function desenharFolha(
 export function AvaliacaoFolha() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const criticosParam = new URLSearchParams(location.search).get('criticos');
+  const alunosCriticosIds = criticosParam ? criticosParam.split(',') : null;
   const [avaliacao, setAvaliacao] = useState<Avaliacao | null>(null);
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [loading, setLoading] = useState(true);
@@ -244,11 +247,15 @@ export function AvaliacaoFolha() {
       const { data: av } = await supabase.from('avaliacoes').select('*').eq('id', id).single();
       setAvaliacao(av);
       if (av) {
-        const { data: al } = await supabase
+        let query = supabase
           .from('alunos')
           .select('id, nome, numero_chamada, token_acesso')
           .eq('turma_id', av.turma_id)
           .order('numero_chamada');
+        if (alunosCriticosIds && alunosCriticosIds.length > 0) {
+          query = query.in('id', alunosCriticosIds);
+        }
+        const { data: al } = await query;
         setAlunos(al || []);
       }
       setLoading(false);
