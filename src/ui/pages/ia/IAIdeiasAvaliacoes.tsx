@@ -150,33 +150,50 @@ export function IAIdeiasAvaliacoes() {
       </table>`;
   }
 
+  function questaoHtmlCompacto(q: Questao): string {
+    return `<div style="margin-bottom:8px;page-break-inside:avoid;">
+      <div style="font-weight:bold;font-size:10pt;margin-bottom:2px;">Quest&#227;o ${q.numero}</div>
+      ${q.imageUrl ? `<img src="${q.imageUrl}" style="width:150px;height:100px;object-fit:cover;margin-bottom:3px;display:block;border-radius:4px;float:left;margin-right:8px;" />` : ''}
+      <div style="font-size:10pt;margin-bottom:3px;">${q.pergunta}</div>
+      <div style="clear:both;margin-left:8px;font-size:10pt;">A) ${q.opcaoA}</div>
+      <div style="margin-left:8px;font-size:10pt;">B) ${q.opcaoB}</div>
+      <div style="clear:both;"></div>
+    </div>`;
+  }
+
   function questoesHtmlStr(): string {
-    // Layout 2 colunas para caber em 2 páginas A4
     const metade = Math.ceil(questoes.length / 2);
     const col1 = questoes.slice(0, metade);
     const col2 = questoes.slice(metade);
-
-    function questaoHtml(q: Questao): string {
-      return `<div style="margin-bottom:10px;page-break-inside:avoid;">
-        <div style="font-weight:bold;font-size:10pt;margin-bottom:3px;">Quest&#227;o ${q.numero}</div>
-        ${q.imageUrl ? `<img src="${q.imageUrl}" style="width:160px;height:110px;object-fit:cover;margin-bottom:4px;display:block;border-radius:4px;" />` : ''}
-        <div style="font-size:10pt;margin-bottom:4px;text-align:justify;">${q.pergunta}</div>
-        <div style="margin-left:10px;margin-bottom:2px;font-size:10pt;">A) ${q.opcaoA}</div>
-        <div style="margin-left:10px;font-size:10pt;">B) ${q.opcaoB}</div>
-      </div>`;
-    }
-
     return `<table width="100%" style="border-collapse:collapse;">
       <tr>
-        <td width="49%" style="vertical-align:top;padding-right:8px;border-right:1px solid #e2e8f0;">
-          ${col1.map(questaoHtml).join('')}
+        <td width="49%" style="vertical-align:top;padding-right:6px;border-right:1px solid #e2e8f0;">
+          ${col1.map(questaoHtmlCompacto).join('')}
         </td>
         <td width="2%"></td>
-        <td width="49%" style="vertical-align:top;padding-left:8px;">
-          ${col2.map(questaoHtml).join('')}
+        <td width="49%" style="vertical-align:top;padding-left:6px;">
+          ${col2.map(questaoHtmlCompacto).join('')}
         </td>
       </tr>
     </table>`;
+  }
+
+  function questoesWordStr(): string {
+    // Word: coluna única, imagem ao lado do texto via float
+    return questoes.map(q => `
+      <div style="margin-bottom:10px;overflow:hidden;">
+        <div style="font-weight:bold;font-size:10pt;margin-bottom:3px;">Quest&#227;o ${q.numero}</div>
+        <table width="100%" style="border-collapse:collapse;">
+          <tr>
+            ${q.imageUrl ? `<td width="130" style="vertical-align:top;padding-right:8px;"><img src="${q.imageUrl}" width="120" height="85" style="width:120px;height:85px;object-fit:cover;display:block;" /></td>` : ''}
+            <td style="vertical-align:top;">
+              <div style="font-size:10pt;margin-bottom:4px;">${q.pergunta}</div>
+              <div style="font-size:10pt;margin-bottom:2px;">A) ${q.opcaoA}</div>
+              <div style="font-size:10pt;">B) ${q.opcaoB}</div>
+            </td>
+          </tr>
+        </table>
+      </div>`).join('');
   }
 
   function gabaritoHtmlStr(): string {
@@ -197,8 +214,7 @@ export function IAIdeiasAvaliacoes() {
 
   function exportarWord() {
     const nome = alunoNome || '____________________________________________';
-    // Word inclui gabarito separado para o professor
-    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>Avaliacao Adaptada</title><style>body{font-family:Arial,sans-serif;font-size:10pt;}@page{size:A4 portrait;margin:8mm;}</style></head><body>${cabecalhoHtml(nome)}${questoesHtmlStr()}${gabaritoHtmlStr()}</body></html>`;
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>Avaliacao Adaptada</title><style>body{font-family:Arial,sans-serif;font-size:10pt;}@page{size:A4 portrait;margin:10mm;}</style></head><body>${cabecalhoHtml(nome)}${questoesWordStr()}${gabaritoHtmlStr()}</body></html>`;
     const blob = new Blob([html], { type: 'application/msword' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
