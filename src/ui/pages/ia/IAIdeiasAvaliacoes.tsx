@@ -28,7 +28,8 @@ async function buscarImagemPexels(query: string, index = 0): Promise<string | nu
 export function IAIdeiasAvaliacoes() {
   const navigate = useNavigate();
   const [tema, setTema] = useState('');
-  const [serie, setSerie] = useState('8 Ano');
+  const [serie, setSerie] = useState('8º Ano');
+  const [turma, setTurma] = useState('');
   const [deficiencia, setDeficiencia] = useState('Deficiencia Intelectual (DI)');
   const [objetivo, setObjetivo] = useState('');
   const [aluno, setAluno] = useState('');
@@ -68,7 +69,10 @@ export function IAIdeiasAvaliacoes() {
   }
 
   async function gerar() {
-    if (!tema.trim() || !objetivo.trim()) { setErro('Preencha o Tema e o Objetivo.'); return; }
+    if (!tema.trim() || !objetivo.trim() || !aluno.trim()) {
+      setErro('Preencha o Tema, Objetivo e Nome do Aluno.');
+      return;
+    }
     setErro(''); setGerando(true); setQuestoes([]); setEtapa('Gerando questoes com IA...');
     try {
       const prompt = 'Voce e especialista em educacao inclusiva. Crie EXATAMENTE 7 questoes adaptadas para: Tema: ' + tema + ', Serie: ' + serie + ', NEE: ' + deficiencia + ', Objetivo: ' + objetivo + '. REGRAS: linguagem simples e curta, apenas 2 alternativas (A e B), questoes visuais, imageQuery SEMPRE em ingles para busca Pexels. Responda APENAS JSON valido sem texto extra: {"questoes":[{"numero":1,"imageQuery":"volleyball players court","pergunta":"pergunta simples","opcaoA":"opcao A","opcaoB":"opcao B","resposta":"A","habilidade":"habilidade pedagogica"}]}';
@@ -97,7 +101,6 @@ export function IAIdeiasAvaliacoes() {
   }
 
   function cabecalhoHtml(nomeAluno: string): string {
-    const letraTurma = serie.replace(/[^A-Za-z]/g, '') || '';
     return `
       <table width="100%" style="border:2px solid #1e3a5f;border-collapse:collapse;margin-bottom:12px;">
         <tr>
@@ -107,7 +110,7 @@ export function IAIdeiasAvaliacoes() {
           <td style="padding:6px;vertical-align:middle;">
             <div style="font-size:11pt;font-weight:bold;">Avalia&#231;&#227;o - Ensino Fundamental - 2026</div>
             <div style="font-size:10pt;">Disciplina: <strong>Educa&#231;&#227;o F&#237;sica</strong> &nbsp;&nbsp; Professor(a): <strong>Marco Pedro</strong></div>
-            <div style="font-size:10pt;">S&#233;rie: <strong>${serie}</strong> &nbsp;&nbsp; Turma: <strong>${letraTurma}</strong></div>
+            <div style="font-size:10pt;">S&#233;rie: <strong>${serie}</strong> &nbsp;&nbsp; Turma: <strong>${turma || '___'}</strong></div>
             <div style="font-size:10pt;border-top:1px solid #cbd5e1;padding-top:3px;margin-top:3px;">
               Aluno(a): <strong>${nomeAluno}</strong> &nbsp;&nbsp; Data: ____/____/______
             </div>
@@ -169,12 +172,16 @@ export function IAIdeiasAvaliacoes() {
           <label className="text-xs font-semibold text-on-surface-variant block mb-1">Tema *</label>
           <input value={tema} onChange={e => setTema(e.target.value)} onBlur={handleTemaBlur} placeholder="Ex: Voleibol, Higiene Corporal..." className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface" />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <div>
-            <label className="text-xs font-semibold text-on-surface-variant block mb-1">Serie *</label>
+            <label className="text-xs font-semibold text-on-surface-variant block mb-1">Série *</label>
             <select value={serie} onChange={e => setSerie(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface">
-              {['6 Ano','7 Ano','8 Ano','9 Ano'].map(s => <option key={s}>{s}</option>)}
+              {['6º Ano','7º Ano','8º Ano','9º Ano'].map(s => <option key={s}>{s}</option>)}
             </select>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-on-surface-variant block mb-1">Turma</label>
+            <input value={turma} onChange={e => setTurma(e.target.value)} placeholder="Ex: A, B, F..." className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface" />
           </div>
           <div>
             <label className="text-xs font-semibold text-on-surface-variant block mb-1">NEE *</label>
@@ -191,8 +198,8 @@ export function IAIdeiasAvaliacoes() {
           <textarea value={objetivo} onChange={e => setObjetivo(e.target.value)} rows={2} placeholder="Preenchido automaticamente ao digitar o tema..." className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface resize-none" />
         </div>
         <div>
-          <label className="text-xs font-semibold text-on-surface-variant block mb-1">Nome do Aluno (opcional)</label>
-          <input value={aluno} onChange={e => setAluno(e.target.value)} placeholder="Deixe em branco para linha pontilhada" className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface" />
+          <label className="text-xs font-semibold text-on-surface-variant block mb-1">Nome do Aluno *</label>
+          <input value={aluno} onChange={e => setAluno(e.target.value)} placeholder="Nome completo do aluno" className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface" />
         </div>
         {erro && <p className="text-xs text-error">{erro}</p>}
         <button onClick={gerar} disabled={gerando} className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-on-primary font-semibold text-sm disabled:opacity-60">
