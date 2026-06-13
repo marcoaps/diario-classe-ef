@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
-import { ArrowLeft, Printer, FileText, Download } from 'lucide-react';
+import { ArrowLeft, Printer, FileText, Download, Sparkles } from 'lucide-react';
 import QRCode from 'qrcode';
 
 interface Avaliacao {
@@ -320,6 +320,41 @@ export function AvaliacaoFolha() {
   const [gerandoIdx, setGerandoIdx] = useState<number | null>(null);
   const [folhasQR, setFolhasQR] = useState<Record<string, string>>({});
   const [geradoTodos, setGeradoTodos] = useState(false);
+  const [gerandoIA, setGerandoIA] = useState(false);
+  const [enunciadoGerado, setEnunciadoGerado] = useState(false);
+
+  async function gerarEnunciadosIA() {
+    if (!avaliacao) return;
+    setGerandoIA(true);
+    setEnunciadoGerado(false);
+    try {
+      const resp = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1024,
+          messages: [{ role: 'user', content: 'Voce e professor de Educacao Fisica do Ensino Fundamental. Gere EXATAMENTE 2 questoes dissertativas sobre o tema: "' + avaliacao.titulo + '". Cada questao deve ser desafiadora, contextualizada para alunos do Fundamental II, pedir que o aluno explique ou justifique conceitos, e ter entre 2 e 4 linhas. Responda APENAS em JSON sem texto adicional: {"q9": "enunciado da questao 9", "q10": "enunciado da questao 10"}' }]
+        })
+      });
+      const data = await resp.json();
+      const text = data.content?.[0]?.text || '';
+      const clean = text.replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(clean);
+      if (parsed.q9 && parsed.q10) {
+        await supabase.from('avaliacoes').update({
+          questoes_subjetivas: { '9': parsed.q9, '10': parsed.q10 }
+        }).eq('id', avaliacao.id);
+        setAvaliacao(prev => prev ? { ...prev, questoes_subjetivas: { '9': parsed.q9, '10': parsed.q10 } } : prev);
+        setEnunciadoGerado(true);
+        setGeradoTodos(false);
+      }
+    } catch (e) {
+      alert('Erro ao gerar enunciados. Tente novamente.');
+    } finally {
+      setGerandoIA(false);
+    }
+  }
 
   useEffect(() => {
     async function init() {
@@ -451,16 +486,33 @@ export function AvaliacaoFolha() {
         </div>
       </div>
 
-      {/* Info */}
-      <div className="bg-secondary-container rounded-2xl p-4 space-y-1">
+      {/* Info + Gerar enunciados IA */}
+      <div className="bg-secondary-container rounded-2xl p-4 space-y-3">
         <p className="text-sm font-medium text-on-secondary-container">
           <strong>Pág. 1</strong> — Prova em texto (HTML) &nbsp;+&nbsp; <strong>Pág. 2</strong> — Folha QR individual
         </p>
-        <p className="text-xs text-on-secondary-container">
-          {avaliacao.questoes_subjetivas?.['9']
-            ? '✅ Enunciados das questões 9 e 10 cadastrados.'
-            : '⚠️ Enunciados das questões 9 e 10 não cadastrados.'}
-        </p>
+        {avaliacao.questoes_subjetivas?.['9'] ? (
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-on-secondary-container">✅ Enunciados cadastrados:</p>
+            <p className="text-xs text-on-secondary-container"><strong>Q9:</strong> {avaliacao.questoes_subjetivas['9']}</p>
+            <p className="text-xs text-on-secondary-container"><strong>Q10:</strong> {avaliacao.questoes_subjetivas['10']}</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-xs text-on-secondary-container">⚠️ Enunciados das questões 9 e 10 não cadastrados.</p>
+            <button
+              onClick={gerarEnunciadosIA}
+              disabled={gerandoIA}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-semibold disabled:opacity-60"
+            >
+              <Sparkles className="w-4 h-4" />
+              {gerandoIA ? 'Gerando enunciados com IA...' : 'Gerar enunciados Q9 e Q10 com IA'}
+            </button>
+          </div>
+        )}
+        {enunciadoGerado && (
+          <p className="text-xs text-green-700 font-semibold">✅ Enunciados gerados e salvos! Clique em "Gerar folhas QR" para aplicar.</p>
+        )}
       </div>
 
       {/* Botões */}
