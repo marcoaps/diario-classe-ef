@@ -29,6 +29,7 @@ export function Attendance() {
   const [alunos, setAlunos] = useState<AlunoSupabase[]>([]);
   const [records, setRecords] = useState<Record<string, boolean>>({});
   const [transferidos, setTransferidos] = useState<Set<string>>(new Set());
+  const [especiais, setEspeciais] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -68,7 +69,6 @@ export function Attendance() {
             (notasData || []).map((n: any) => n.nome?.toUpperCase())
           );
 
-          // Mapeia id do aluno para transferido
           const idsTransf = new Set<string>();
           lista.forEach(a => {
             if (nomesTransf.has(a.nome.toUpperCase())) {
@@ -77,6 +77,21 @@ export function Attendance() {
           });
           if (mounted) setTransferidos(idsTransf);
         }
+
+        // Busca alunos especiais (AEE)
+        const { data: aeeData } = await supabase
+          .from('alunos_especiais')
+          .select('nome');
+        const nomesAEE = new Set<string>(
+          (aeeData || []).map((e: any) => e.nome?.toLowerCase().trim())
+        );
+        const idsAEE = new Set<string>();
+        lista.forEach(a => {
+          if (nomesAEE.has(a.nome.toLowerCase().trim())) {
+            idsAEE.add(a.id);
+          }
+        });
+        if (mounted) setEspeciais(idsAEE);
 
         // Busca frequencia existente
         const novosRecords: Record<string, boolean> = {};
@@ -203,6 +218,7 @@ export function Attendance() {
             ) : (
               alunos.map(aluno => {
                 const isTransf = transferidos.has(aluno.id);
+                const isEspecial = especiais.has(aluno.id);
                 const isPresent = records[aluno.id] === true;
 
                 if (isTransf) {
@@ -231,9 +247,14 @@ export function Attendance() {
                       isPresent ? "bg-white border-teal-500/30 ring-1 ring-teal-200" : "bg-white border-red-500/30 ring-1 ring-red-200"
                     )}
                   >
-                    <span className={cn("font-semibold text-base transition-colors", isPresent ? "text-teal-800" : "text-red-800")}>
+                    <span className={cn("font-semibold text-base transition-colors flex items-center gap-2", isPresent ? "text-teal-800" : "text-red-800")}>
                       {aluno.numero_chamada ? <span className="font-mono text-gray-500 mr-2 text-sm">{aluno.numero_chamada}</span> : null}
                       {aluno.nome}
+                      {isEspecial && (
+                        <span className="ml-1 px-1.5 py-0.5 rounded-md bg-purple-100 text-purple-700 text-[10px] font-bold border border-purple-300">
+                          AEE
+                        </span>
+                      )}
                     </span>
                     <div className={cn(
                       "w-10 h-10 rounded-lg flex justify-center items-center font-bold text-lg shadow-sm border",
