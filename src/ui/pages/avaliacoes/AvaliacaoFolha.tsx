@@ -72,7 +72,10 @@ function gerarHtmlProva(avaliacao: Avaliacao, aluno: Aluno): string {
           Questão ${n} <span style="font-weight:normal;opacity:0.85;">(1,0 ponto)</span>
         </div>
         <div style="padding:6px 8px;background:white;">
-          ${enunciado ? `<div style="margin-bottom:6px;line-height:1.4;">${enunciado}</div>` : ''}
+          ${enunciado
+            ? `<div style="margin-bottom:6px;line-height:1.6;font-size:11pt;">${enunciado}</div>`
+            : `<div style="margin-bottom:6px;line-height:1.6;font-size:11pt;color:#64748b;font-style:italic;">[Enunciado não cadastrado — edite a avaliação para adicionar]</div>`
+          }
           <div style="font-weight:bold;margin-bottom:4px;">Resposta:</div>
           ${[0,1,2,3,4,5,6,7].map(() => '<div style="border-bottom:0.7px solid #94a3b8;height:20px;"></div>').join('')}
         </div>
@@ -423,7 +426,7 @@ export function AvaliacaoFolha() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${avaliacao.titulo}_${avaliacao.turma_id}.doc`;
+    a.download = `${avaliacao.titulo}_${avaliacao.turma_id}_${Date.now()}.doc`;
     a.click();
     URL.revokeObjectURL(url);
   }
