@@ -90,7 +90,7 @@ function gerarHtmlProva(avaliacao: Avaliacao, aluno: Aluno): string {
           </td>
           <td style="padding:6px;vertical-align:middle;">
             <div style="font-size:11pt;font-weight:bold;margin-bottom:2px;">Avaliação - Ensino Fundamental - 2026</div>
-            <div style="font-size:10pt;margin-bottom:1px;">Disciplina: <strong>Educação Física</strong> &nbsp;|&nbsp; Professor(a): <strong>Jessiane / Marco Pedro</strong></div>
+            <div style="font-size:10pt;margin-bottom:1px;">Disciplina: <strong>Educação Física</strong> &nbsp;|&nbsp; Professor(a): <strong>Marco Pedro</strong></div>
             <div style="font-size:10pt;margin-bottom:1px;">Série: <strong>${serie}</strong> &nbsp;|&nbsp; Turma: <strong>${avaliacao.turma_id}</strong> &nbsp;|&nbsp; Nº: <strong>${aluno.numero_chamada}</strong></div>
             <div style="font-size:10pt;border-top:1px solid #cbd5e1;padding-top:3px;margin-top:3px;">Nome: <strong>${aluno.nome}</strong></div>
           </td>

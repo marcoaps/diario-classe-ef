@@ -299,6 +299,7 @@ export function Avaliacoes() {
                   </div>
 
                   {/* Acoes */}
+                  <EnunciadosEditor avaliacao={av} onSalvo={carregar} />
                   <div className="flex gap-2">
                     <button
                       onClick={() => navigate(`/avaliacoes/folha/${av.id}`)}
@@ -334,6 +335,57 @@ export function Avaliacoes() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function EnunciadosEditor({ avaliacao, onSalvo }: { avaliacao: Avaliacao; onSalvo: () => void }) {
+  const [e9, setE9] = React.useState(avaliacao.questoes_subjetivas?.['9'] || '');
+  const [e10, setE10] = React.useState(avaliacao.questoes_subjetivas?.['10'] || '');
+  const [salvando, setSalvando] = React.useState(false);
+  const [salvo, setSalvo] = React.useState(false);
+
+  async function salvar() {
+    setSalvando(true);
+    await supabase.from('avaliacoes').update({
+      questoes_subjetivas: { '9': e9.trim(), '10': e10.trim() }
+    }).eq('id', avaliacao.id);
+    setSalvando(false);
+    setSalvo(true);
+    setTimeout(() => setSalvo(false), 2000);
+    onSalvo();
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-semibold text-on-surface-variant">Enunciados — Questões 9 e 10</p>
+      <div>
+        <label className="text-xs text-on-surface-variant">Questão 9</label>
+        <textarea
+          value={e9}
+          onChange={e => setE9(e.target.value)}
+          rows={2}
+          className="w-full mt-1 px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface resize-none"
+          placeholder="Enunciado da questão 9..."
+        />
+      </div>
+      <div>
+        <label className="text-xs text-on-surface-variant">Questão 10</label>
+        <textarea
+          value={e10}
+          onChange={e => setE10(e.target.value)}
+          rows={2}
+          className="w-full mt-1 px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface resize-none"
+          placeholder="Enunciado da questão 10..."
+        />
+      </div>
+      <button
+        onClick={salvar}
+        disabled={salvando}
+        className="w-full py-2 rounded-xl bg-secondary-container text-on-secondary-container text-xs font-semibold disabled:opacity-50"
+      >
+        {salvo ? '✅ Enunciados salvos!' : salvando ? 'Salvando...' : 'Salvar enunciados'}
+      </button>
     </div>
   );
 }
