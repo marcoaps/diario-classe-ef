@@ -151,34 +151,54 @@ export function IAIdeiasAvaliacoes() {
   }
 
   function questoesHtmlStr(): string {
-    return questoes.map(q => `
-      <div style="margin-bottom:20px;page-break-inside:avoid;">
-        <div style="font-weight:bold;font-size:12pt;margin-bottom:6px;">Quest&#227;o ${q.numero}</div>
-        ${q.imageUrl ? `<img src="${q.imageUrl}" style="width:200px;height:150px;object-fit:cover;margin-bottom:8px;display:block;border-radius:6px;" />` : ''}
-        <div style="font-size:12pt;margin-bottom:8px;text-align:justify;">${q.pergunta}</div>
-        <div style="margin-left:16px;margin-bottom:4px;font-size:12pt;">A) ${q.opcaoA}</div>
-        <div style="margin-left:16px;font-size:12pt;">B) ${q.opcaoB}</div>
-      </div>`).join('');
+    // Layout 2 colunas para caber em 2 páginas A4
+    const metade = Math.ceil(questoes.length / 2);
+    const col1 = questoes.slice(0, metade);
+    const col2 = questoes.slice(metade);
+
+    function questaoHtml(q: Questao): string {
+      return `<div style="margin-bottom:10px;page-break-inside:avoid;">
+        <div style="font-weight:bold;font-size:10pt;margin-bottom:3px;">Quest&#227;o ${q.numero}</div>
+        ${q.imageUrl ? `<img src="${q.imageUrl}" style="width:160px;height:110px;object-fit:cover;margin-bottom:4px;display:block;border-radius:4px;" />` : ''}
+        <div style="font-size:10pt;margin-bottom:4px;text-align:justify;">${q.pergunta}</div>
+        <div style="margin-left:10px;margin-bottom:2px;font-size:10pt;">A) ${q.opcaoA}</div>
+        <div style="margin-left:10px;font-size:10pt;">B) ${q.opcaoB}</div>
+      </div>`;
+    }
+
+    return `<table width="100%" style="border-collapse:collapse;">
+      <tr>
+        <td width="49%" style="vertical-align:top;padding-right:8px;border-right:1px solid #e2e8f0;">
+          ${col1.map(questaoHtml).join('')}
+        </td>
+        <td width="2%"></td>
+        <td width="49%" style="vertical-align:top;padding-left:8px;">
+          ${col2.map(questaoHtml).join('')}
+        </td>
+      </tr>
+    </table>`;
   }
 
   function gabaritoHtmlStr(): string {
-    return `<div style="margin-top:24px;border-top:2px dashed #94a3b8;padding-top:12px;">
-      <div style="font-weight:bold;font-size:12pt;margin-bottom:6px;">GABARITO</div>
-      <div style="font-size:11pt;">${questoes.map(q => q.numero + ') ' + q.resposta).join('   ')}</div>
+    return `<div style="margin-top:16px;border-top:2px dashed #94a3b8;padding-top:10px;">
+      <div style="font-weight:bold;font-size:10pt;margin-bottom:4px;">GABARITO</div>
+      <div style="font-size:10pt;">${questoes.map(q => q.numero + ') ' + q.resposta).join('   ')}</div>
     </div>`;
   }
 
   function imprimir() {
     const nome = alunoNome || '____________________________________________';
-    const css = `*{box-sizing:border-box;margin:0;padding:0;}@page{size:A4 portrait;margin:10mm;}body{font-family:Arial,sans-serif;font-size:12pt;color:#1e293b;}`;
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>E.E.E. Fundamental - Instituto Odilon Pratagi - 2026</title><style>${css}</style></head><body>${cabecalhoHtml(nome)}${questoesHtmlStr()}${gabaritoHtmlStr()}<script>setTimeout(function(){window.print();},600);<\/script></body></html>`;
+    const css = `*{box-sizing:border-box;margin:0;padding:0;}@page{size:A4 portrait;margin:8mm;}body{font-family:Arial,sans-serif;font-size:10pt;color:#1e293b;}`;
+    // Sem gabarito na impressão do aluno
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>E.E.E. Fundamental - Instituto Odilon Pratagi - 2026</title><style>${css}</style></head><body>${cabecalhoHtml(nome)}${questoesHtmlStr()}<script>setTimeout(function(){window.print();},600);<\/script></body></html>`;
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
     window.open(URL.createObjectURL(blob), '_blank');
   }
 
   function exportarWord() {
     const nome = alunoNome || '____________________________________________';
-    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>Avaliacao Adaptada</title><style>body{font-family:Arial,sans-serif;font-size:12pt;}@page{size:A4 portrait;margin:10mm;}</style></head><body>${cabecalhoHtml(nome)}${questoesHtmlStr()}${gabaritoHtmlStr()}</body></html>`;
+    // Word inclui gabarito separado para o professor
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>Avaliacao Adaptada</title><style>body{font-family:Arial,sans-serif;font-size:10pt;}@page{size:A4 portrait;margin:8mm;}</style></head><body>${cabecalhoHtml(nome)}${questoesHtmlStr()}${gabaritoHtmlStr()}</body></html>`;
     const blob = new Blob([html], { type: 'application/msword' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
