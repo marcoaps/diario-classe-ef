@@ -84,11 +84,11 @@ const FERRAMENTAS = [
   },
   {
     rota: '/ia/ideias-avaliacoes',
-    titulo: 'Ideias para Avaliações Adaptadas',
-    descricao: 'Gere ideias criativas de avaliação adaptadas ao perfil e necessidades dos alunos.',
+    titulo: 'Avaliação Adaptada — Educação Especial',
+    descricao: 'Gera avaliações com 7 questões visuais para alunos com DI, TEA, TDAH, Dislexia e outras NEE.',
     icon: Lightbulb,
-    cor: 'from-yellow-500 to-amber-400',
-    tag: 'AVALIAÇÕES',
+    cor: 'from-purple-600 to-indigo-500',
+    tag: 'EDUCAÇÃO ESPECIAL',
   },
 ];
 
