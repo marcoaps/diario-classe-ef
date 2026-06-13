@@ -50,12 +50,11 @@ function gerarHtmlProva(avaliacao: Avaliacao, aluno: Aluno): string {
     const q = QUESTOES_PLACEHOLDER[n];
     if (!q) return '';
     const altsHtml = q.alts.map((a, ai) =>
-      `<tr><td style="width:20px;font-weight:bold;vertical-align:top;padding:1px 4px;">(${LETRAS[ai]})</td><td style="vertical-align:top;padding:1px 2px;">${a}</td></tr>`
+      `<tr><td style="width:20px;font-weight:bold;vertical-align:top;padding:1px 4px;">(${LETRAS[ai]})</td><td style="vertical-align:top;padding:1px 2px;text-align:justify;">${a}</td></tr>`
     ).join('');
-    return `
-      <div style="margin-bottom:8px;">
-        <div style="font-weight:bold;margin-bottom:2px;">Questão ${n} –</div>
-        <div style="margin-bottom:3px;line-height:1.4;">${q.texto}</div>
+    return `<div style="margin-bottom:8px;">
+        <div style="font-weight:bold;margin-bottom:2px;text-align:left;">Questão ${n} –</div>
+        <div style="margin-bottom:3px;line-height:1.4;text-align:justify;">${q.texto}</div>
         <table style="border-collapse:collapse;width:100%;">${altsHtml}</table>
       </div>`;
   }
@@ -72,7 +71,7 @@ function gerarHtmlProva(avaliacao: Avaliacao, aluno: Aluno): string {
           Questão ${n} <span style="font-weight:normal;opacity:0.85;">(1,0 ponto)</span>
         </div>
         <div style="padding:8px 8px 10px 8px;background:white;">
-          <div style="line-height:1.6;font-size:11pt;margin-bottom:10px;">${enunciado || ''}</div>
+          <div style="line-height:1.6;font-size:11pt;margin-bottom:10px;text-align:justify;">${enunciado || ''}</div>
           <div style="font-size:10pt;color:#1e293b;border-top:1px dashed #cbd5e1;padding-top:6px;">
             <strong>Resposta:</strong> <em>Escreva sua resposta no gabarito disponível na página seguinte.</em>
           </div>
@@ -127,8 +126,17 @@ function gerarHtmlProva(avaliacao: Avaliacao, aluno: Aluno): string {
 // ─── CSS da prova ─────────────────────────────────────────────────────────────
 const CSS_PROVA = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  @page { size: A4 portrait; margin: 10mm; }
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+    margin-header: 0;
+    margin-footer: 0;
+  }
+  @page { orphans: 0; widows: 0; }
+  html, body { margin: 0; padding: 0; }
   body { font-family: Arial, sans-serif; font-size: 12pt; color: #1e293b; background: white; }
+  p, div, td { text-align: justify; }
+  .questao-enunc, .alt { text-align: justify; }
 `;
 
 
@@ -415,8 +423,11 @@ export function AvaliacaoFolha() {
 
     win.document.write(`<!DOCTYPE html><html><head>
       <meta charset="utf-8">
-      <title>${avaliacao.titulo}</title>
-      <style>${CSS_PROVA}</style>
+      <title></title>
+      <style>${CSS_PROVA}
+        @page { margin: 10mm; }
+        head title { display: none; }
+      </style>
     </head><body>${blocos}</body></html>`);
     win.document.close();
     win.focus();
