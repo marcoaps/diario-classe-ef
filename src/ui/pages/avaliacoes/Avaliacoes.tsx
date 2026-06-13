@@ -44,7 +44,7 @@ export function Avaliacoes() {
   const [gerandoIA, setGerandoIA] = useState(false);
 
   async function gerarEnunciadosIA() {
-    if (!titulo.trim()) { setErro('Informe o título da avaliação antes de gerar com IA.'); return; }
+    if (!titulo.trim()) { setErro('Informe o titulo da avaliacao antes de gerar com IA.'); return; }
     setGerandoIA(true);
     setErro('');
     try {
@@ -54,19 +54,7 @@ export function Avaliacoes() {
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
           max_tokens: 1024,
-          messages: [{
-            role: 'user',
-            content: `Você é professor de Educação Física do Ensino Fundamental. Gere EXATAMENTE 2 questões dissertativas (questões 9 e 10) sobre o tema: "${titulo}${descricao ? ' — ' + descricao : ''}".
-
-Cada questão deve:
-- Ser desafiadora, contextualizada e adequada para alunos do Ensino Fundamental II
-- Pedir que o aluno explique, justifique ou relacione conceitos
-- Valer 1,0 ponto
-- Ter entre 2 e 4 linhas de enunciado
-
-Responda APENAS no formato JSON abaixo, sem texto adicional:
-{"q9": "enunciado da questão 9 aqui", "q10": "enunciado da questão 10 aqui"}`
-          }]
+          messages: [{ role: 'user', content: 'Voce e professor de Educacao Fisica do Ensino Fundamental. Gere EXATAMENTE 2 questoes dissertativas sobre o tema: "' + titulo + (descricao ? ' - ' + descricao : '') + '". Cada questao deve ser desafiadora, contextualizada e adequada para alunos do Fundamental II, pedir que o aluno explique ou justifique conceitos, valer 1,0 ponto e ter entre 2 e 4 linhas. Responda APENAS no formato JSON sem texto adicional: {"q9": "enunciado da questao 9", "q10": "enunciado da questao 10"}' }]
         })
       });
       const data = await resp.json();
@@ -236,7 +224,7 @@ Responda APENAS no formato JSON abaixo, sem texto adicional:
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold text-on-surface-variant">
-                Questões Dissertativas — Enunciados
+                Questoes Dissertativas — Enunciados
               </p>
               <button
                 onClick={gerarEnunciadosIA}
@@ -250,36 +238,29 @@ Responda APENAS no formato JSON abaixo, sem texto adicional:
             {gerandoIA && (
               <div className="flex items-center gap-2 text-xs text-on-surface-variant">
                 <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                Gerando enunciados com base no tema da avaliação...
+                Gerando enunciados com base no tema...
               </div>
             )}
             <div>
-              <label className="text-xs text-on-surface-variant mb-1 block">
-                Questão 9 — enunciado
-              </label>
+              <label className="text-xs text-on-surface-variant mb-1 block">Questao 9</label>
               <textarea
                 value={enunciado9}
                 onChange={e => setEnunciado9(e.target.value)}
                 rows={3}
-                placeholder="Digite ou gere com IA o enunciado da questão 9..."
+                placeholder="Clique em Gerar com IA ou digite o enunciado..."
                 className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface resize-none"
               />
             </div>
             <div>
-              <label className="text-xs text-on-surface-variant mb-1 block">
-                Questão 10 — enunciado
-              </label>
+              <label className="text-xs text-on-surface-variant mb-1 block">Questao 10</label>
               <textarea
                 value={enunciado10}
                 onChange={e => setEnunciado10(e.target.value)}
                 rows={3}
-                placeholder="Digite ou gere com IA o enunciado da questão 10..."
+                placeholder="Clique em Gerar com IA ou digite o enunciado..."
                 className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface resize-none"
               />
             </div>
-            <p className="text-xs text-on-surface-variant">
-              Total estimado: {(NUM_OBJETIVAS * valorObj).toFixed(1)} pts objetivas + {(NUM_SUBJETIVAS * valorSubj).toFixed(1)} pts dissertativas
-            </p>
           </div>
 
           {erro && <p className="text-xs text-red-500">{erro}</p>}
