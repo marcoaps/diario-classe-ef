@@ -408,8 +408,8 @@ export function AvaliacaoFolha() {
         <div style="page-break-after: always;">
           ${htmlProva}
         </div>
-        <div style="${isLast ? '' : 'page-break-after: always;'}">
-          <img src="${qrSrc}" style="width:100%;display:block;" />
+        <div style="${isLast ? '' : 'page-break-after: always;'}text-align:center;">
+          <img src="${qrSrc}" style="width:100%;max-width:794px;display:block;margin:0 auto;" />
         </div>`;
     }).join('');
 
@@ -434,8 +434,8 @@ export function AvaliacaoFolha() {
         <div style="page-break-after:always;">
           ${htmlProva}
         </div>
-        <div style="page-break-after:${isLast ? 'auto' : 'always'};">
-          <img src="${qrSrc}" width="700" style="display:block;margin:0 auto;" />
+        <div style="page-break-after:${isLast ? 'auto' : 'always'};text-align:center;">
+          <img src="${qrSrc}" width="794" style="display:block;margin:0 auto;max-width:794px;" />
         </div>`;
     }).join('');
 
