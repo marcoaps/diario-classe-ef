@@ -473,8 +473,12 @@ export function AvaliacaoFolha() {
         <div style="page-break-after:always;">
           ${htmlProva}
         </div>
-        <div style="page-break-after:${isLast ? 'auto' : 'always'};text-align:center;">
-          <img src="${qrSrc}" width="794" style="display:block;margin:0 auto;max-width:794px;" />
+        <div style="page-break-after:${isLast ? 'auto' : 'always'};">
+          <table width="100%" border="0" cellpadding="0" cellspacing="0">
+            <tr><td align="center">
+              <img src="${qrSrc}" width="794" height="1123" style="display:block;" />
+            </td></tr>
+          </table>
         </div>`;
     }).join('');
 
