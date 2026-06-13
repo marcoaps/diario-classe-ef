@@ -71,10 +71,11 @@ function gerarHtmlProva(avaliacao: Avaliacao, aluno: Aluno): string {
         <div style="background:#1e3a5f;color:white;font-weight:bold;padding:5px 8px;font-size:11pt;">
           Questão ${n} <span style="font-weight:normal;opacity:0.85;">(1,0 ponto)</span>
         </div>
-        <div style="padding:8px 8px 4px 8px;background:white;">
-          <div style="line-height:1.6;font-size:11pt;margin-bottom:8px;">${enunciado || ''}</div>
-          <div style="font-weight:bold;margin-bottom:6px;font-size:11pt;">Resposta:</div>
-          ${[0,1,2,3,4,5,6,7,8,9].map(() => '<div style="border-bottom:0.7px solid #94a3b8;height:22px;"></div>').join('')}
+        <div style="padding:8px 8px 10px 8px;background:white;">
+          <div style="line-height:1.6;font-size:11pt;margin-bottom:10px;">${enunciado || ''}</div>
+          <div style="font-size:10pt;color:#1e293b;border-top:1px dashed #cbd5e1;padding-top:6px;">
+            <strong>Resposta:</strong> <em>Escreva sua resposta no gabarito disponível na página seguinte.</em>
+          </div>
         </div>
       </div>`;
   }).join('');
