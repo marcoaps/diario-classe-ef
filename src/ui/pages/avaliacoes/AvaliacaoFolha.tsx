@@ -423,7 +423,7 @@ export function AvaliacaoFolha() {
 
     win.document.write(`<!DOCTYPE html><html><head>
       <meta charset="utf-8">
-      <title>   </title>
+      <title>E.E. Ensino Fundamental — Instituto Odilon Pratagi — 2026</title>
       <style>${CSS_PROVA}
         @page {
           margin: 10mm;
