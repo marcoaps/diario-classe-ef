@@ -71,7 +71,9 @@ export function AttendanceReport() {
 
   const emRisco = alunos.filter((a) => a.em_risco || a.critico);
   const alunosCriticos = alunos.filter((a) =>
-    a.critico && !nomesExcluidos.has(a.nome.toLowerCase().trim())
+    a.critico &&
+    a.percentual <= 33 &&
+    !nomesExcluidos.has(a.nome.toLowerCase().trim())
   );
 
   const handleExcel = () => exportarExcel({
