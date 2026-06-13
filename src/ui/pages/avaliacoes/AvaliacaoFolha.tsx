@@ -405,8 +405,6 @@ export function AvaliacaoFolha() {
 
   function imprimir() {
     if (!avaliacao) return;
-    const win = window.open('', '_blank');
-    if (!win) return;
 
     const blocos = alunos.map((al, idx) => {
       const qrSrc = folhasQR[al.id] || '';
@@ -421,25 +419,22 @@ export function AvaliacaoFolha() {
         </div>`;
     }).join('');
 
-    win.document.write(`<!DOCTYPE html><html><head>
+    const html = `<!DOCTYPE html><html><head>
       <meta charset="utf-8">
-      <title>E.E.E. Fundamental — Instituto Odilon Pratagi — 2026</title>
+      <title>E.E.E. Fundamental \u2014 Instituto Odilon Pratagi \u2014 2026</title>
       <style>${CSS_PROVA}
-        @page {
-          margin: 10mm;
-          size: A4 portrait;
-        }
+        @page { margin: 10mm; size: A4 portrait; }
       </style>
     </head><body>${blocos}
-    <script>
-      window.onbeforeprint = function() {
-        document.title = ' ';
-      };
-    </script>
-    </body></html>`);
-    win.document.close();
-    win.focus();
-    setTimeout(() => win.print(), 600);
+    <script>setTimeout(function(){ window.print(); }, 600);<\/script>
+    </body></html>`;
+
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank');
+    if (win) {
+      win.onafterprint = () => URL.revokeObjectURL(url);
+    }
   }
 
   async function exportarWord() {
