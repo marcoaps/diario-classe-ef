@@ -175,7 +175,7 @@ async function desenharFolhaQR(
   ctx.textAlign = 'center';
   ctx.fillText('E.E. INSTITUTO ODILON PRATAGI', W / 2, PAD + 22);
   ctx.font = '11px Arial';
-  ctx.fillText('Educa\u00e7\u00e3o F\u00edsica \u2014 ' + avaliacao.titulo, W / 2, PAD + 40);
+  ctx.fillText('Educa\u00e7\u00e3o F\u00edsica \u2014 ' + avaliacao.titulo.replace(/Recupera\u00e7\u00e3o/gi, 'Avalia\u00e7\u00e3o'), W / 2, PAD + 40);
   ctx.font = 'bold 12px Arial';
   ctx.fillText('TURMA: ' + avaliacao.turma_id + '   N\u00ba: ' + (aluno.numero_chamada || '--'), W / 2, PAD + 56);
   ctx.textAlign = 'left';
