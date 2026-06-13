@@ -214,7 +214,7 @@ export function AttendanceReport() {
       const { data: avaliacao, error } = await supabase
         .from('avaliacoes')
         .insert({
-          titulo: `Recuperação ${turmaNormalizada} — ${new Date().toLocaleDateString('pt-BR')}`,
+          titulo: `Avaliação — ${turmaNormalizada} — ${bimestre}ºBimestre — ${new Date().getFullYear()}`,
           descricao: `Alunos críticos (frequência baixa) — ${alunosCriticos.length} alunos`,
           turma_id: turmaNormalizada,
           num_questoes: 10,
@@ -455,7 +455,7 @@ function ResumoCard({ icon, label, value, tone }: { icon: React.ReactNode; label
       const { data: avaliacao, error } = await supabase
         .from('avaliacoes')
         .insert({
-          titulo: `Recuperação ${turmaNormalizada} — ${new Date().toLocaleDateString('pt-BR')}`,
+          titulo: `Avaliação — ${turmaNormalizada} — ${bimestre}ºBimestre — ${new Date().getFullYear()}`,
           descricao: `Alunos críticos (frequência baixa) — ${alunosCriticos.length} alunos`,
           turma_id: turmaNormalizada,
           num_questoes: 10,
@@ -495,7 +495,7 @@ function BarraProgresso({ percentual, critico, emRisco }: { percentual: number; 
       const { data: avaliacao, error } = await supabase
         .from('avaliacoes')
         .insert({
-          titulo: `Recuperação ${turmaNormalizada} — ${new Date().toLocaleDateString('pt-BR')}`,
+          titulo: `Avaliação — ${turmaNormalizada} — ${bimestre}ºBimestre — ${new Date().getFullYear()}`,
           descricao: `Alunos críticos (frequência baixa) — ${alunosCriticos.length} alunos`,
           turma_id: turmaNormalizada,
           num_questoes: 10,
