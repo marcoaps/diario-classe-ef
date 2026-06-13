@@ -68,16 +68,13 @@ function gerarHtmlProva(avaliacao: Avaliacao, aluno: Aluno): string {
     const enunciado = qSubj[String(n)] || '';
     return `
       <div style="border:1.5px solid #1e3a5f;margin-bottom:10px;page-break-inside:avoid;">
-        <div style="background:#1e3a5f;color:white;font-weight:bold;padding:4px 8px;">
+        <div style="background:#1e3a5f;color:white;font-weight:bold;padding:5px 8px;font-size:11pt;">
           Questão ${n} <span style="font-weight:normal;opacity:0.85;">(1,0 ponto)</span>
         </div>
-        <div style="padding:6px 8px;background:white;">
-          ${enunciado
-            ? `<div style="margin-bottom:6px;line-height:1.6;font-size:11pt;">${enunciado}</div>`
-            : `<div style="margin-bottom:6px;line-height:1.6;font-size:11pt;color:#64748b;font-style:italic;">[Enunciado não cadastrado — edite a avaliação para adicionar]</div>`
-          }
-          <div style="font-weight:bold;margin-bottom:4px;">Resposta:</div>
-          ${[0,1,2,3,4,5,6,7].map(() => '<div style="border-bottom:0.7px solid #94a3b8;height:20px;"></div>').join('')}
+        <div style="padding:8px 8px 4px 8px;background:white;">
+          <div style="line-height:1.6;font-size:11pt;margin-bottom:8px;">${enunciado || ''}</div>
+          <div style="font-weight:bold;margin-bottom:6px;font-size:11pt;">Resposta:</div>
+          ${[0,1,2,3,4,5,6,7,8,9].map(() => '<div style="border-bottom:0.7px solid #94a3b8;height:22px;"></div>').join('')}
         </div>
       </div>`;
   }).join('');
@@ -92,7 +89,7 @@ function gerarHtmlProva(avaliacao: Avaliacao, aluno: Aluno): string {
             <img src="${LOGO_IOP}" width="64" height="64" style="width:64px;height:64px;max-width:64px;max-height:64px;object-fit:contain;display:block;" />
           </td>
           <td style="padding:6px;vertical-align:middle;">
-            <div style="font-size:11pt;font-weight:bold;margin-bottom:2px;">${avaliacao.titulo} - Ensino Fundamental - 2026</div>
+            <div style="font-size:11pt;font-weight:bold;margin-bottom:2px;">Avaliação - Ensino Fundamental - 2026</div>
             <div style="font-size:10pt;margin-bottom:1px;">Disciplina: <strong>Educação Física</strong> &nbsp;|&nbsp; Professor(a): <strong>Jessiane / Marco Pedro</strong></div>
             <div style="font-size:10pt;margin-bottom:1px;">Série: <strong>${serie}</strong> &nbsp;|&nbsp; Turma: <strong>${avaliacao.turma_id}</strong> &nbsp;|&nbsp; Nº: <strong>${aluno.numero_chamada}</strong></div>
             <div style="font-size:10pt;border-top:1px solid #cbd5e1;padding-top:3px;margin-top:3px;">Nome: <strong>${aluno.nome}</strong></div>
@@ -118,10 +115,6 @@ function gerarHtmlProva(avaliacao: Avaliacao, aluno: Aluno): string {
         </tr>
       </table>
 
-      <!-- PARTE 2 -->
-      <div style="background:#1e3a5f;color:white;font-weight:bold;font-size:11pt;text-align:center;padding:4px;margin-bottom:6px;margin-top:4px;">
-        PARTE 2 — QUESTÕES DISSERTATIVAS (2,0 pontos)
-      </div>
       ${dissHtml}
 
       <div style="font-size:9pt;color:#94a3b8;text-align:center;margin-top:8px;border-top:1px solid #e2e8f0;padding-top:4px;">
