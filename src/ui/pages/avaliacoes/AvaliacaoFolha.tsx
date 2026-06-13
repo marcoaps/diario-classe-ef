@@ -379,6 +379,18 @@ export function AvaliacaoFolha() {
           e.nome.toLowerCase().trim()
         );
 
+        // Buscar nomes dos transferidos
+        const { data: transferidos } = await supabase
+          .from('notas')
+          .select('nome')
+          .eq('turma', av.turma_id)
+          .ilike('situacao', '%transferi%');
+        const nomesTransferidos = (transferidos || []).map((e: { nome: string }) =>
+          e.nome.toLowerCase().trim()
+        );
+
+        const nomesExcluidos = new Set([...nomesEspeciais, ...nomesTransferidos]);
+
         let query = supabase
           .from('alunos')
           .select('id, nome, numero_chamada, token_acesso')
@@ -389,9 +401,9 @@ export function AvaliacaoFolha() {
         }
         const { data: al } = await query;
 
-        // Excluir alunos especiais da lista
+        // Excluir especiais e transferidos da lista
         const filtrados = (al || []).filter(
-          (a: Aluno) => !nomesEspeciais.includes(a.nome.toLowerCase().trim())
+          (a: Aluno) => !nomesExcluidos.has(a.nome.toLowerCase().trim())
         );
         setAlunos(filtrados);
       }

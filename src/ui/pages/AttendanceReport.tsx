@@ -25,7 +25,27 @@ export function AttendanceReport() {
   const [exportandoDiario, setExportandoDiario] = useState(false);
   const [exportandoDiarioOficial, setExportandoDiarioOficial] = useState(false);
   const [criandoAvaliacao, setCriandoAvaliacao] = useState(false);
+  const [nomesExcluidos, setNomesExcluidos] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
+
+  // Carregar nomes excluídos (especiais + transferidos) ao montar
+  React.useEffect(() => {
+    async function carregarExcluidos() {
+      // Especiais
+      const { data: aee } = await supabase.from('alunos_especiais').select('nome');
+      // Transferidos
+      const { data: transf } = await supabase
+        .from('notas')
+        .select('nome')
+        .ilike('situacao', '%transferi%');
+      const nomes = new Set<string>([
+        ...(aee || []).map((e: any) => e.nome.toLowerCase().trim()),
+        ...(transf || []).map((e: any) => e.nome.toLowerCase().trim()),
+      ]);
+      setNomesExcluidos(nomes);
+    }
+    carregarExcluidos();
+  }, []);
 
   const uniqueClassRooms = useMemo(
     () =>
@@ -50,7 +70,9 @@ export function AttendanceReport() {
   );
 
   const emRisco = alunos.filter((a) => a.em_risco || a.critico);
-  const alunosCriticos = alunos.filter((a) => a.critico);
+  const alunosCriticos = alunos.filter((a) =>
+    a.critico && !nomesExcluidos.has(a.nome.toLowerCase().trim())
+  );
 
   const handleExcel = () => exportarExcel({
     turma: turmaId, bimestre, periodo,
