@@ -13,6 +13,7 @@ interface Aluno {
 }
 
 
+interface Questao {
   numero: number;
   imageQuery: string;
   imageUrl?: string;
