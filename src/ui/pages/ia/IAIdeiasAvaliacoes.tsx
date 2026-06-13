@@ -153,7 +153,7 @@ export function IAIdeiasAvaliacoes() {
     return questoes.map(q => `
       <div style="margin-bottom:20px;page-break-inside:avoid;">
         <div style="font-weight:bold;font-size:12pt;margin-bottom:6px;">Quest&#227;o ${q.numero}</div>
-        ${q.imageUrl ? `<img src="${q.imageUrl}" width="260" style="max-height:160px;margin-bottom:8px;display:block;border-radius:6px;" />` : ''}
+        ${q.imageUrl ? `<img src="${q.imageUrl}" style="width:260px;height:180px;object-fit:cover;margin-bottom:8px;display:block;border-radius:6px;" />` : ''}
         <div style="font-size:12pt;margin-bottom:8px;text-align:justify;">${q.pergunta}</div>
         <div style="margin-left:16px;margin-bottom:4px;font-size:12pt;">A) ${q.opcaoA}</div>
         <div style="margin-left:16px;font-size:12pt;">B) ${q.opcaoB}</div>
