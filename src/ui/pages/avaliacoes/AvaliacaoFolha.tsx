@@ -423,12 +423,20 @@ export function AvaliacaoFolha() {
 
     win.document.write(`<!DOCTYPE html><html><head>
       <meta charset="utf-8">
-      <title></title>
+      <title>   </title>
       <style>${CSS_PROVA}
-        @page { margin: 10mm; }
-        head title { display: none; }
+        @page {
+          margin: 10mm;
+          size: A4 portrait;
+        }
       </style>
-    </head><body>${blocos}</body></html>`);
+    </head><body>${blocos}
+    <script>
+      window.onbeforeprint = function() {
+        document.title = ' ';
+      };
+    </script>
+    </body></html>`);
     win.document.close();
     win.focus();
     setTimeout(() => win.print(), 600);
