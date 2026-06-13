@@ -371,6 +371,14 @@ export function AvaliacaoFolha() {
       const { data: av } = await supabase.from('avaliacoes').select('*').eq('id', id).single();
       setAvaliacao(av);
       if (av) {
+        // Buscar nomes dos alunos especiais
+        const { data: especiais } = await supabase
+          .from('alunos_especiais')
+          .select('nome');
+        const nomesEspeciais = (especiais || []).map((e: { nome: string }) =>
+          e.nome.toLowerCase().trim()
+        );
+
         let query = supabase
           .from('alunos')
           .select('id, nome, numero_chamada, token_acesso')
@@ -380,7 +388,12 @@ export function AvaliacaoFolha() {
           query = query.in('id', alunosCriticosIds);
         }
         const { data: al } = await query;
-        setAlunos(al || []);
+
+        // Excluir alunos especiais da lista
+        const filtrados = (al || []).filter(
+          (a: Aluno) => !nomesEspeciais.includes(a.nome.toLowerCase().trim())
+        );
+        setAlunos(filtrados);
       }
       setLoading(false);
     }
