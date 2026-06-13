@@ -151,12 +151,12 @@ export function IAIdeiasAvaliacoes() {
   }
 
   function questaoHtmlCompacto(q: Questao): string {
-    return `<div style="margin-bottom:8px;page-break-inside:avoid;">
-      <div style="font-weight:bold;font-size:10pt;margin-bottom:2px;">Quest&#227;o ${q.numero}</div>
-      ${q.imageUrl ? `<img src="${q.imageUrl}" style="width:150px;height:100px;object-fit:cover;margin-bottom:3px;display:block;border-radius:4px;float:left;margin-right:8px;" />` : ''}
-      <div style="font-size:10pt;margin-bottom:3px;">${q.pergunta}</div>
-      <div style="clear:both;margin-left:8px;font-size:10pt;">A) ${q.opcaoA}</div>
-      <div style="margin-left:8px;font-size:10pt;">B) ${q.opcaoB}</div>
+    return `<div style="margin-bottom:10px;page-break-inside:avoid;overflow:hidden;">
+      <div style="font-weight:bold;font-size:12pt;margin-bottom:3px;">Quest&#227;o ${q.numero}</div>
+      ${q.imageUrl ? `<img src="${q.imageUrl}" style="width:140px;height:95px;object-fit:cover;margin-bottom:3px;display:block;border-radius:4px;float:left;margin-right:8px;" />` : ''}
+      <div style="font-size:11pt;margin-bottom:4px;">${q.pergunta}</div>
+      <div style="clear:both;margin-left:6px;font-size:11pt;">A) ${q.opcaoA}</div>
+      <div style="margin-left:6px;font-size:11pt;">B) ${q.opcaoB}</div>
       <div style="clear:both;"></div>
     </div>`;
   }
@@ -205,7 +205,7 @@ export function IAIdeiasAvaliacoes() {
 
   function imprimir() {
     const nome = alunoNome || '____________________________________________';
-    const css = `*{box-sizing:border-box;margin:0;padding:0;}@page{size:A4 portrait;margin:8mm;}body{font-family:Arial,sans-serif;font-size:10pt;color:#1e293b;}`;
+    const css = `*{box-sizing:border-box;margin:0;padding:0;}@page{size:A4 portrait;margin:8mm;}body{font-family:Arial,sans-serif;font-size:11pt;color:#1e293b;}`;
     // Sem gabarito na impressão do aluno
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>E.E.E. Fundamental - Instituto Odilon Pratagi - 2026</title><style>${css}</style></head><body>${cabecalhoHtml(nome)}${questoesHtmlStr()}<script>setTimeout(function(){window.print();},600);<\/script></body></html>`;
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
