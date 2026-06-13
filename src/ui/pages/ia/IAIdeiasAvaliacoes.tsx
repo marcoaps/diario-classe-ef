@@ -43,6 +43,7 @@ export function IAIdeiasAvaliacoes() {
   const [objetivo, setObjetivo] = useState('');
   const [aluno, setAluno] = useState('');
   const [alunoNome, setAlunoNome] = useState('');
+  const [alunoNumero, setAlunoNumero] = useState<number | null>(null);
   const [listaAlunos, setListaAlunos] = useState<Aluno[]>([]);
   const [buscandoAlunos, setBuscandoAlunos] = useState(false);
   const [questoes, setQuestoes] = useState<Questao[]>([]);
@@ -140,7 +141,7 @@ export function IAIdeiasAvaliacoes() {
           <td style="padding:6px;vertical-align:middle;">
             <div style="font-size:11pt;font-weight:bold;">Avalia&#231;&#227;o - Ensino Fundamental - 2026</div>
             <div style="font-size:10pt;">Disciplina: <strong>Educa&#231;&#227;o F&#237;sica</strong> &nbsp;&nbsp; Professor(a): <strong>Marco Pedro</strong></div>
-            <div style="font-size:10pt;">S&#233;rie: <strong>${serie}</strong> &nbsp;&nbsp; Turma: <strong>${turma || '___'}</strong></div>
+            <div style="font-size:10pt;">S&#233;rie: <strong>${serie}</strong> &nbsp;&nbsp; Turma: <strong>${turma || '___'}</strong> &nbsp;&nbsp; N&#186;: <strong>${alunoNumero || '___'}</strong></div>
             <div style="font-size:10pt;border-top:1px solid #cbd5e1;padding-top:3px;margin-top:3px;">
               Aluno(a): <strong>${nomeAluno}</strong> &nbsp;&nbsp; Data: ____/____/______
             </div>
@@ -153,7 +154,7 @@ export function IAIdeiasAvaliacoes() {
     return questoes.map(q => `
       <div style="margin-bottom:20px;page-break-inside:avoid;">
         <div style="font-weight:bold;font-size:12pt;margin-bottom:6px;">Quest&#227;o ${q.numero}</div>
-        ${q.imageUrl ? `<img src="${q.imageUrl}" style="width:260px;height:180px;object-fit:cover;margin-bottom:8px;display:block;border-radius:6px;" />` : ''}
+        ${q.imageUrl ? `<img src="${q.imageUrl}" style="width:200px;height:150px;object-fit:cover;margin-bottom:8px;display:block;border-radius:6px;" />` : ''}
         <div style="font-size:12pt;margin-bottom:8px;text-align:justify;">${q.pergunta}</div>
         <div style="margin-left:16px;margin-bottom:4px;font-size:12pt;">A) ${q.opcaoA}</div>
         <div style="margin-left:16px;font-size:12pt;">B) ${q.opcaoB}</div>
@@ -239,6 +240,7 @@ export function IAIdeiasAvaliacoes() {
                 setAluno(e.target.value);
                 const found = listaAlunos.find(a => a.id === e.target.value);
                 setAlunoNome(found?.nome || '');
+                setAlunoNumero(found?.numero_chamada || null);
               }}
               className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface"
             >
