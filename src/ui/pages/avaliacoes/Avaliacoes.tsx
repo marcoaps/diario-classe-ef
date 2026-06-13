@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
-import { ClipboardList, Plus, QrCode, Camera, Trash2, ChevronDown, ChevronUp, CheckCircle2, BarChart2 } from 'lucide-react';
+import { ClipboardList, Plus, QrCode, Camera, Trash2, ChevronDown, ChevronUp, CheckCircle2, BarChart2, Sparkles } from 'lucide-react';
 
 const TURMAS = ['6F','7B','7C','7D','7E','7F','8A','8B','8C','8D','8E','8F','9A','9B','9C','9D','9E','9F'];
 const LETRAS = ['A','B','C','D'];
@@ -41,6 +41,46 @@ export function Avaliacoes() {
   const [salvando, setSalvando] = useState(false);
   const [expandido, setExpandido] = useState<string | null>(null);
   const [erro, setErro] = useState('');
+  const [gerandoIA, setGerandoIA] = useState(false);
+
+  async function gerarEnunciadosIA() {
+    if (!titulo.trim()) { setErro('Informe o título da avaliação antes de gerar com IA.'); return; }
+    setGerandoIA(true);
+    setErro('');
+    try {
+      const resp = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1024,
+          messages: [{
+            role: 'user',
+            content: `Você é professor de Educação Física do Ensino Fundamental. Gere EXATAMENTE 2 questões dissertativas (questões 9 e 10) sobre o tema: "${titulo}${descricao ? ' — ' + descricao : ''}".
+
+Cada questão deve:
+- Ser desafiadora, contextualizada e adequada para alunos do Ensino Fundamental II
+- Pedir que o aluno explique, justifique ou relacione conceitos
+- Valer 1,0 ponto
+- Ter entre 2 e 4 linhas de enunciado
+
+Responda APENAS no formato JSON abaixo, sem texto adicional:
+{"q9": "enunciado da questão 9 aqui", "q10": "enunciado da questão 10 aqui"}`
+          }]
+        })
+      });
+      const data = await resp.json();
+      const text = data.content?.[0]?.text || '';
+      const clean = text.replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(clean);
+      if (parsed.q9) setEnunciado9(parsed.q9);
+      if (parsed.q10) setEnunciado10(parsed.q10);
+    } catch (e) {
+      setErro('Erro ao gerar enunciados com IA. Tente novamente.');
+    } finally {
+      setGerandoIA(false);
+    }
+  }
 
   useEffect(() => { carregar(); }, []);
 
@@ -194,30 +234,46 @@ export function Avaliacoes() {
 
           {/* Enunciados das dissertativas */}
           <div className="space-y-3">
-            <p className="text-xs font-semibold text-on-surface-variant">
-              Questões Dissertativas — Enunciados (aparecem na prova impressa)
-            </p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-on-surface-variant">
+                Questões Dissertativas — Enunciados
+              </p>
+              <button
+                onClick={gerarEnunciadosIA}
+                disabled={gerandoIA}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-semibold disabled:opacity-60"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                {gerandoIA ? 'Gerando...' : 'Gerar com IA'}
+              </button>
+            </div>
+            {gerandoIA && (
+              <div className="flex items-center gap-2 text-xs text-on-surface-variant">
+                <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                Gerando enunciados com base no tema da avaliação...
+              </div>
+            )}
             <div>
               <label className="text-xs text-on-surface-variant mb-1 block">
-                Questão 9 — enunciado *
+                Questão 9 — enunciado
               </label>
               <textarea
                 value={enunciado9}
                 onChange={e => setEnunciado9(e.target.value)}
                 rows={3}
-                placeholder="Digite o enunciado da questão 9..."
+                placeholder="Digite ou gere com IA o enunciado da questão 9..."
                 className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface resize-none"
               />
             </div>
             <div>
               <label className="text-xs text-on-surface-variant mb-1 block">
-                Questão 10 — enunciado *
+                Questão 10 — enunciado
               </label>
               <textarea
                 value={enunciado10}
                 onChange={e => setEnunciado10(e.target.value)}
                 rows={3}
-                placeholder="Digite o enunciado da questão 10..."
+                placeholder="Digite ou gere com IA o enunciado da questão 10..."
                 className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface resize-none"
               />
             </div>
