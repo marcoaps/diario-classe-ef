@@ -375,6 +375,8 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
       const row = 5 + r;
       const alunoObj = alunos[r];
       const cell = ws.getCell(row, colTotFaltas);
+      const altF = r % 2 === 0;
+      const bgF = altF ? cinza : cinzaClar;
       if (alunoObj) {
         const freqAluno = freqTurma[alunoObj.id] || {};
         const faltas = datas.filter(dt => {
@@ -382,17 +384,16 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
           const dk = dataKey(dt);
           return dk in freqAluno && !freqAluno[dk];
         }).length;
-        const alt = r % 2 === 0;
         fmtCell(cell, {
           value: faltas > 0 ? faltas : '',
           bold: faltas > 0, size: 9,
           color: faltas > 0 ? '8B0000' : '000000',
           fill: faltas > 0
             ? { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFFFCCCC' } }
-            : (alt ? cinza : cinzaClar),
+            : bgF,
         });
       } else {
-        fmtCell(cell, { value: '', fill: alt ? cinza : cinzaClar });
+        fmtCell(cell, { value: '', fill: bgF });
       }
     }
     fmtCell(ws.getCell(totRow, colTotFaltas), {
