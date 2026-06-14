@@ -157,7 +157,7 @@ export function Dashboard() {
       const { error: delError } = await supabase.from('alunos').delete().eq('turma_id', turmaNormalizada);
       if (delError) throw delError;
       if (uniqueLines.length > 0) {
-        const inserts = uniqueLines.map((name, index) => ({ nome: name, turma_id: turmaNormalizada, numero_chamada: index + 1 }));
+        const inserts = uniqueLines.map((name, index) => ({ nome: name, turma_id: turmaNormalizada, numero_chamada: index + 1, token_acesso: uuidv4() }));
         const { error: insError } = await supabase.from('alunos').insert(inserts);
         if (insError) throw insError;
         const mapped = inserts.map((a, i) => ({ id: uuidv4(), classRoomId: classToConfirm.id, name: a.nome, numero_chamada: a.numero_chamada, numberInClass: i + 1 }));
@@ -216,7 +216,7 @@ export function Dashboard() {
 
       <div className="px-4 flex flex-col gap-4">
 
-        {/* Botão Central do Aluno â€” destaque */}
+        {/* Botão Central do Aluno — destaque */}
         <button
           onClick={() => navigate('/alunos')}
           className="w-full flex items-center gap-4 p-4 rounded-2xl text-left transition-all active:scale-95"
@@ -306,7 +306,7 @@ export function Dashboard() {
                           {year}º
                         </div>
                         <div className="text-left">
-                          <p className="font-bold text-sm text-gray-900">{year}º Ano â€” EF II</p>
+                          <p className="font-bold text-sm text-gray-900">{year}º Ano — EF II</p>
                           <p className="text-xs text-gray-400">{turmas.length} {turmas.length === 1 ? 'turma' : 'turmas'} · {totalByYear(year)} alunos</p>
                         </div>
                       </div>
@@ -366,11 +366,11 @@ export function Dashboard() {
             {/* Botão WhatsApp */}
             <a
               href={`https://wa.me/?text=${encodeURIComponent(
-                `📚 *Portal do Aluno â€” Instituto Odilon Pratagi*\n\n` +
+                `📚 *Portal do Aluno — Instituto Odilon Pratagi*\n\n` +
                 `Acesse o link abaixo para realizar sua avaliação online:\n` +
                 `👉 ${window.location.origin}/responder\n\n` +
                 `Digite o código da prova informado pelo professor.\n\n` +
-                `_Instituto Odilon Pratagi â€” Brasiléia/AC_`
+                `_Instituto Odilon Pratagi — Brasiléia/AC_`
               )}`}
               target="_blank"
               rel="noopener noreferrer"
