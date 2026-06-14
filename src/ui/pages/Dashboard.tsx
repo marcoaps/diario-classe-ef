@@ -116,7 +116,7 @@ export function Dashboard() {
     const normalizeName = (n: string) => n.trim().toLowerCase().replace(/\s+/g, ' ');
     const toInsertMap = new Map<string, string>();
     lines.forEach(name => { const k = normalizeName(name); if (!toInsertMap.has(k)) toInsertMap.set(k, name); });
-    const toInsert = Array.from(toInsertMap.values()).map(nome => ({ nome, turma_id: turmaNormalizada }));
+    const toInsert = Array.from(toInsertMap.values()).map(nome => ({ nome, turma_id: turmaNormalizada, token_acesso: uuidv4() }));
     try {
       const { data: existing } = await supabase.from('alunos').select('nome, turma_id, numero_chamada').eq('turma_id', turmaNormalizada);
       const existingNames = new Set(existing?.map((e: any) => normalizeName(e.nome)) || []);
@@ -149,17 +149,30 @@ export function Dashboard() {
     if (!classToConfirm) return;
     setSavingList(true);
     const lines = editListText.split('\n').map(l => l.trim().replace(/\s+/g, ' ')).filter(l => l.length > 0);
-    const turmaNormalizada = classToConfirm.name.replace("º", "").replace(/\s/g, "").toUpperCase();
+    const turmaNormalizada = classToConfirm.name.replace(/º/g, '').replace(/\s/g, '').toUpperCase();
     const uniqueLines: string[] = [];
     const seen = new Set<string>();
     for (const line of lines) { const lower = line.toLowerCase(); if (!seen.has(lower)) { seen.add(lower); uniqueLines.push(line); } }
     try {
+      // Buscar alunos existentes para preservar IDs e token_acesso
+      const { data: existentes } = await supabase.from('alunos').select('id, nome, token_acesso').eq('turma_id', turmaNormalizada);
+      const mapaExistentes = new Map((existentes || []).map((a: any) => [a.nome.toLowerCase().trim(), a]));
+
       const { error: delError } = await supabase.from('alunos').delete().eq('turma_id', turmaNormalizada);
-      if (delError) throw delError;
+      if (delError) throw new Error('Erro ao deletar: ' + delError.message);
+
       if (uniqueLines.length > 0) {
-        const inserts = uniqueLines.map((name, index) => ({ nome: name, turma_id: turmaNormalizada, numero_chamada: index + 1, token_acesso: uuidv4() }));
+        const inserts = uniqueLines.map((name, index) => {
+          const existente = mapaExistentes.get(name.toLowerCase().trim());
+          return {
+            nome: name,
+            turma_id: turmaNormalizada,
+            numero_chamada: index + 1,
+            token_acesso: existente?.token_acesso || uuidv4(),
+          };
+        });
         const { error: insError } = await supabase.from('alunos').insert(inserts);
-        if (insError) throw insError;
+        if (insError) throw new Error('Erro ao inserir: ' + insError.message);
         const mapped = inserts.map((a, i) => ({ id: uuidv4(), classRoomId: classToConfirm.id, name: a.nome, numero_chamada: a.numero_chamada, numberInClass: i + 1 }));
         setFetchedStudents(mapped);
         setStudentCounts(prev => ({ ...prev, [classToConfirm.id]: mapped.length }));
@@ -167,10 +180,13 @@ export function Dashboard() {
         setFetchedStudents([]); setStudentCounts(prev => ({ ...prev, [classToConfirm.id]: 0 }));
       }
       setShowEditListModal(false);
-      setCardMessage("Turma atualizada com sucesso");
+      setCardMessage('Turma atualizada com sucesso');
       setTimeout(() => setCardMessage(null), 3000);
-      alert("Turma atualizada com sucesso!");
-    } catch (err: any) { setCardMessage("Erro: " + err.message); setTimeout(() => setCardMessage(null), 3000); }
+    } catch (err: any) {
+      alert('Erro ao salvar: ' + err.message);
+      setCardMessage('Erro: ' + err.message);
+      setTimeout(() => setCardMessage(null), 5000);
+    }
     setSavingList(false);
   };
 
