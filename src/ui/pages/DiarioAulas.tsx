@@ -110,14 +110,42 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
   const datas = gerarDatas(cfg.diaSemana);
 
   // Buscar alunos de todas as turmas
-  const alunosPorTurma: Record<string, string[]> = {};
+  // Buscar alunos E frequências de todas as turmas
+  const alunosPorTurma: Record<string, { id: string; nome: string }[]> = {};
+  const frequenciasPorTurma: Record<string, Record<string, Record<string, boolean>>> = {};
+  // frequenciasPorTurma[turma][aluno_id][data] = presente
+
   for (const turma of cfg.turmas) {
-    const { data } = await supabase
+    const { data: alunosData } = await supabase
       .from('alunos')
-      .select('nome, numero_chamada')
+      .select('id, nome, numero_chamada')
       .eq('turma_id', turma)
       .order('numero_chamada');
-    alunosPorTurma[turma] = (data || []).map((a: any) => a.nome);
+    alunosPorTurma[turma] = (alunosData || []).map((a: any) => ({ id: a.id, nome: a.nome }));
+
+    // Buscar frequências da turma no ano 2026
+    const ids = (alunosData || []).map((a: any) => a.id);
+    if (ids.length > 0) {
+      const { data: freqData } = await supabase
+        .from('frequencia')
+        .select('aluno_id, data, presente')
+        .in('aluno_id', ids)
+        .gte('data', '2026-01-01')
+        .lte('data', '2026-12-31');
+
+      const mapa: Record<string, Record<string, boolean>> = {};
+      for (const reg of (freqData || [])) {
+        if (!mapa[reg.aluno_id]) mapa[reg.aluno_id] = {};
+        // data pode vir como '2026-03-09' ou '09/03/2026'
+        const dataKey = reg.data?.substring(0, 10) ?? '';
+        mapa[reg.aluno_id][dataKey] = reg.presente;
+      }
+      frequenciasPorTurma[turma] = mapa;
+    }
+  }
+
+  function dataKey(dt: DiaTipo): string {
+    return `${dt.ano}-${String(dt.mes).padStart(2,'0')}-${String(dt.dia).padStart(2,'0')}`;
   }
 
   const wb = new ExcelJS.Workbook();
@@ -130,6 +158,7 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
     });
 
     const alunos = alunosPorTurma[turma] || [];
+    const freqTurma = frequenciasPorTurma[turma] || {};
     const COR = cfg.cor.toUpperCase();
     const COR_CLAR = COR === '1A6B3A' ? 'C6EFCE' :
                      COR === '1A2E6E' ? 'BDD7EE' : 'FFCCCC';
@@ -264,6 +293,12 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
       }
     }
 
+    // Cores P/F
+    const presFill = { type: 'pattern' as const, pattern: 'solid' as const,
+                       fgColor: { argb: 'FF92D050' } }; // verde
+    const faltFill = { type: 'pattern' as const, pattern: 'solid' as const,
+                       fgColor: { argb: 'FFFF4444' } }; // vermelho
+
     // ── Linhas de alunos ──
     const maxAlunos = Math.max(alunos.length, 35);
     for (let r = 0; r < maxAlunos; r++) {
@@ -271,12 +306,13 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
       ws.getRow(row).height = 16;
       const alt = r % 2 === 0;
       const bgLinha = alt ? cinza : cinzaClar;
+      const alunoObj = alunos[r];
 
       fmtCell(ws.getCell(row, 1), {
         value: r + 1, bold: true, size: 8, fill: bgLinha,
       });
       fmtCell(ws.getCell(row, 2), {
-        value: alunos[r] ?? '', size: 9, fill: bgLinha, hAlign: 'left',
+        value: alunoObj?.nome ?? '', size: 9, fill: bgLinha, hAlign: 'left',
       });
 
       for (let i = 0; i < datas.length; i++) {
@@ -287,13 +323,28 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
           fmtCell(cell, { value: '', fill: vermelho });
         } else if (dt.label === 'Planejamento') {
           fmtCell(cell, { value: '', fill: amarelo });
+        } else if (alunoObj) {
+          // Verificar se há registro de frequência
+          const dk = dataKey(dt);
+          const freqAluno = freqTurma[alunoObj.id];
+          if (freqAluno && dk in freqAluno) {
+            const presente = freqAluno[dk];
+            fmtCell(cell, {
+              value: presente ? 'P' : 'F',
+              bold: true, size: 8,
+              color: presente ? '1A5E1A' : '8B0000',
+              fill: presente ? presFill : faltFill,
+            });
+          } else {
+            fmtCell(cell, { value: '', fill: bgLinha });
+          }
         } else {
           fmtCell(cell, { value: '', fill: bgLinha });
         }
       }
     }
 
-    // ── Linha totais ──
+    // ── Linha totais aulas letivas ──
     const totRow = 5 + maxAlunos;
     ws.getRow(totRow).height = 18;
     ws.mergeCells(totRow, 1, totRow, 2);
@@ -313,6 +364,40 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
         fmtCell(cell, { value: '', fill: amarelo });
       }
     }
+
+    // ── Coluna de total de faltas por aluno ──
+    const colTotFaltas = 3 + datas.length;
+    ws.getColumn(colTotFaltas).width = 7;
+    fmtCell(ws.getCell(4, colTotFaltas), {
+      value: 'FALTAS', bold: true, size: 8, color: 'FFFFFF', fill: azulEsc,
+    });
+    for (let r = 0; r < maxAlunos; r++) {
+      const row = 5 + r;
+      const alunoObj = alunos[r];
+      const cell = ws.getCell(row, colTotFaltas);
+      if (alunoObj) {
+        const freqAluno = freqTurma[alunoObj.id] || {};
+        const faltas = datas.filter(dt => {
+          if (dt.feriado || dt.label === 'Planejamento') return false;
+          const dk = dataKey(dt);
+          return dk in freqAluno && !freqAluno[dk];
+        }).length;
+        const alt = r % 2 === 0;
+        fmtCell(cell, {
+          value: faltas > 0 ? faltas : '',
+          bold: faltas > 0, size: 9,
+          color: faltas > 0 ? '8B0000' : '000000',
+          fill: faltas > 0
+            ? { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFFFCCCC' } }
+            : (alt ? cinza : cinzaClar),
+        });
+      } else {
+        fmtCell(cell, { value: '', fill: alt ? cinza : cinzaClar });
+      }
+    }
+    fmtCell(ws.getCell(totRow, colTotFaltas), {
+      value: 'TOTAL', bold: true, size: 8, color: 'FFFFFF', fill: azulEsc,
+    });
 
     // ── Legenda ──
     const legRow = totRow + 2;
