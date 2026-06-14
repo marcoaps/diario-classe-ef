@@ -368,10 +368,9 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
       const col2 = col + 1;
       const dt = datas[i];
       if (!dt.feriado && dt.label !== 'Planejamento') {
-        aulaNum++;
-        fmtCell(ws.getCell(totRow, col),  { value: aulaNum * 2 - 1, bold: true, size: 8, color: '001F5B', fill: corClar });
-        aulaNum++;
-        fmtCell(ws.getCell(totRow, col2), { value: aulaNum, bold: true, size: 8, color: '001F5B', fill: corClar });
+        aulaNum += 2;
+        fmtCell(ws.getCell(totRow, col),  { value: aulaNum - 1, bold: true, size: 8, color: '001F5B', fill: corClar });
+        fmtCell(ws.getCell(totRow, col2), { value: aulaNum,     bold: true, size: 8, color: '001F5B', fill: corClar });
       } else if (dt.feriado) {
         fmtCell(ws.getCell(totRow, col),  { value: '', fill: vermelho });
         fmtCell(ws.getCell(totRow, col2), { value: '', fill: vermelho });
