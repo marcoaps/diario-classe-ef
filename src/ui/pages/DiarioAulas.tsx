@@ -354,21 +354,24 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
       }
     }
 
-    // ── Linha totais aulas letivas ──
+    // ── Linha totais aulas letivas — número sequencial ──
     const totRow = 5 + maxAlunos;
     ws.getRow(totRow).height = 18;
     ws.mergeCells(totRow, 1, totRow, 2);
     fmtCell(ws.getCell(totRow, 1), {
-      value: 'TOTAL DE AULAS LETIVAS NO ANO',
+      value: 'Nº DA AULA',
       bold: true, size: 9, color: 'FFFFFF', fill: azulEsc,
     });
+    let aulaNum = 0;
     for (let i = 0; i < datas.length; i++) {
       const col  = 3 + i * 2;
       const col2 = col + 1;
       const dt = datas[i];
       if (!dt.feriado && dt.label !== 'Planejamento') {
-        fmtCell(ws.getCell(totRow, col),  { value: 1, bold: true, size: 9, color: '001F5B', fill: corClar });
-        fmtCell(ws.getCell(totRow, col2), { value: 1, bold: true, size: 9, color: '001F5B', fill: corClar });
+        aulaNum++;
+        fmtCell(ws.getCell(totRow, col),  { value: aulaNum * 2 - 1, bold: true, size: 8, color: '001F5B', fill: corClar });
+        aulaNum++;
+        fmtCell(ws.getCell(totRow, col2), { value: aulaNum, bold: true, size: 8, color: '001F5B', fill: corClar });
       } else if (dt.feriado) {
         fmtCell(ws.getCell(totRow, col),  { value: '', fill: vermelho });
         fmtCell(ws.getCell(totRow, col2), { value: '', fill: vermelho });
@@ -378,37 +381,59 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
       }
     }
 
-    // ── Coluna de total de faltas por aluno ──
-    const colTotFaltas = 3 + datas.length * 2; // após todas as colunas duplas
+    // ── Colunas: FALTAS e TOTAL ──
+    const colTotFaltas = 3 + datas.length * 2;
+    const colTotPresencas = colTotFaltas + 1;
     ws.getColumn(colTotFaltas).width = 7;
-    fmtCell(ws.getCell(4, colTotFaltas), {
-      value: 'FALTAS', bold: true, size: 8, color: 'FFFFFF', fill: azulEsc,
-    });
+    ws.getColumn(colTotPresencas).width = 7;
+
+    fmtCell(ws.getCell(4, colTotFaltas),    { value: 'FALTAS',    bold: true, size: 8, color: 'FFFFFF', fill: { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFCC0000' } } });
+    fmtCell(ws.getCell(4, colTotPresencas), { value: 'PRESENÇAS', bold: true, size: 8, color: 'FFFFFF', fill: { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FF375623' } } });
+
+    const totalLetivas = datas.filter(d => !d.feriado && d.label !== 'Planejamento').length * 2;
+
     for (let r = 0; r < maxAlunos; r++) {
       const row = 5 + r;
       const alunoObj = alunos[r];
-      const cell = ws.getCell(row, colTotFaltas);
       const altF = r % 2 === 0;
       const bgF = altF ? cinza : cinzaClar;
+      const cellF = ws.getCell(row, colTotFaltas);
+      const cellP = ws.getCell(row, colTotPresencas);
+
       if (alunoObj) {
         const freqAluno = freqTurma[alunoObj.id] || {};
-        const faltas = datas.filter(dt => {
+        const diasFalta = datas.filter(dt => {
           if (dt.feriado || dt.label === 'Planejamento') return false;
           const dk = dataKey(dt);
           return dk in freqAluno && !freqAluno[dk];
         }).length;
-        fmtCell(cell, {
-          value: faltas > 0 ? faltas * 2 : '', // 2 h/a por falta
+        const faltas = diasFalta * 2;
+        const presencas = totalLetivas - faltas;
+
+        fmtCell(cellF, {
+          value: faltas > 0 ? faltas : '',
           bold: faltas > 0, size: 9,
           color: faltas > 0 ? '8B0000' : '000000',
           fill: faltas > 0
             ? { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFFFCCCC' } }
             : bgF,
         });
+        fmtCell(cellP, {
+          value: presencas > 0 ? presencas : '',
+          bold: false, size: 9, color: '1A5E1A',
+          fill: presencas > 0
+            ? { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFD8F0D0' } }
+            : bgF,
+        });
       } else {
-        fmtCell(cell, { value: '', fill: bgF });
+        fmtCell(cellF, { value: '', fill: bgF });
+        fmtCell(cellP, { value: '', fill: bgF });
       }
     }
+
+    // Totais nas colunas FALTAS e PRESENÇAS
+    fmtCell(ws.getCell(totRow, colTotFaltas),    { value: 'F', bold: true, size: 8, color: 'FFFFFF', fill: azulEsc });
+    fmtCell(ws.getCell(totRow, colTotPresencas), { value: `${totalLetivas}h/a`, bold: true, size: 8, color: 'FFFFFF', fill: azulEsc });
     fmtCell(ws.getCell(totRow, colTotFaltas), {
       value: 'TOTAL', bold: true, size: 8, color: 'FFFFFF', fill: azulEsc,
     });
