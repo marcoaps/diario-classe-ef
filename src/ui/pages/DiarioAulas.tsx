@@ -18,6 +18,7 @@ const FERIADOS: Record<string, string> = {
   '2026-04-03': 'Sexta Santa',
   '2026-05-01': 'Dia do Trabalho',
   '2026-06-04': 'Corpus Christi',
+  '2026-06-15': 'Aniv. Acre',
   '2026-08-07': 'Independência',
   '2026-09-01': 'Dia da Amazônia',
   '2026-09-15': 'Fer. Municipal',
