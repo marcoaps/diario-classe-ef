@@ -26,6 +26,7 @@ import { IAProvasIA } from './ui/pages/ia/IAProvasIA';
 import { IAAtividadesLudicas } from './ui/pages/ia/IAAtividadesLudicas';
 import { IAAtividadesAdaptadas } from './ui/pages/ia/IAAtividadesAdaptadas';
 import { IAIdeiasAvaliacoes } from './ui/pages/ia/IAIdeiasAvaliacoes';
+import { DiarioAulas } from './ui/pages/DiarioAulas';
 import { IAProvaOficial } from './ui/pages/ia/IAProvaOficial';
 import { RendimentoBimestre } from './ui/pages/RendimentoBimestre';
 import { Avaliacoes } from './ui/pages/avaliacoes/Avaliacoes';
@@ -106,6 +107,7 @@ export default function App() {
           <Route path="/ia/atividades-ludicas" element={<IAAtividadesLudicas />} />
           <Route path="/ia/atividades-adaptadas" element={<IAAtividadesAdaptadas />} />
           <Route path="/ia/ideias-avaliacoes" element={<IAIdeiasAvaliacoes />} />
+          <Route path="/diario-aulas" element={<DiarioAulas />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />
