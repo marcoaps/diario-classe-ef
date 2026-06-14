@@ -210,11 +210,11 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
     // Larguras
     ws.getColumn(1).width = 4.5;
     ws.getColumn(2).width = 34;
-    for (let i = 0; i < datas.length; i++) {
-      ws.getColumn(3 + i).width = 4.2;
+    for (let i = 0; i < datas.length * 2; i++) {
+      ws.getColumn(3 + i).width = 4.0;
     }
 
-    const lastCol = 2 + datas.length;
+    const lastCol = 2 + datas.length * 2; // 2 colunas por data (2 h/a)
 
     // ── Linha 1: Título ──
     ws.getRow(1).height = 26;
@@ -240,7 +240,7 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
     let mesAtual = -1;
     let mesInicio = 3;
     for (let i = 0; i < datas.length; i++) {
-      const col = 3 + i;
+      const col = 3 + i * 2; // 2 colunas por data
       const mes = datas[i].mes;
       if (mes !== mesAtual) {
         if (mesAtual !== -1) {
@@ -273,22 +273,29 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
     });
 
     for (let i = 0; i < datas.length; i++) {
-      const col = 3 + i;
+      const col = 3 + i * 2; // coluna 1 de cada par
+      const col2 = col + 1;  // coluna 2 de cada par
       const dt = datas[i];
-      const cell = ws.getCell(4, col);
       if (dt.feriado) {
-        const label = dt.feriado.length > 18 ? dt.feriado.substring(0, 18) : dt.feriado;
-        fmtCell(cell, {
+        const label = dt.feriado.length > 16 ? dt.feriado.substring(0, 16) : dt.feriado;
+        // Merge das 2 colunas do feriado
+        ws.mergeCells(4, col, 4, col2);
+        fmtCell(ws.getCell(4, col), {
           value: label, bold: true, size: 6.5, color: '8B0000',
           fill: vermelho, rotation: 90, wrapText: true,
         });
       } else if (dt.label === 'Planejamento') {
-        fmtCell(cell, {
+        ws.mergeCells(4, col, 4, col2);
+        fmtCell(ws.getCell(4, col), {
           value: 'PLANJ.', bold: true, size: 6, color: '5C4200',
           fill: amarelo, rotation: 90, wrapText: true,
         });
       } else {
-        fmtCell(cell, {
+        // 2 colunas com o mesmo dia (1ª e 2ª hora-aula)
+        fmtCell(ws.getCell(4, col), {
+          value: dt.dia, bold: true, size: 9, color: '001F5B', fill: corClar,
+        });
+        fmtCell(ws.getCell(4, col2), {
           value: dt.dia, bold: true, size: 9, color: '001F5B', fill: corClar,
         });
       }
@@ -317,30 +324,32 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
       });
 
       for (let i = 0; i < datas.length; i++) {
-        const col = 3 + i;
+        const col  = 3 + i * 2;
+        const col2 = col + 1;
         const dt = datas[i];
-        const cell = ws.getCell(row, col);
         if (dt.feriado) {
-          fmtCell(cell, { value: '', fill: vermelho });
+          fmtCell(ws.getCell(row, col),  { value: '', fill: vermelho });
+          fmtCell(ws.getCell(row, col2), { value: '', fill: vermelho });
         } else if (dt.label === 'Planejamento') {
-          fmtCell(cell, { value: '', fill: amarelo });
+          fmtCell(ws.getCell(row, col),  { value: '', fill: amarelo });
+          fmtCell(ws.getCell(row, col2), { value: '', fill: amarelo });
         } else if (alunoObj) {
-          // Verificar se há registro de frequência
           const dk = dataKey(dt);
           const freqAluno = freqTurma[alunoObj.id];
           if (freqAluno && dk in freqAluno) {
             const presente = freqAluno[dk];
-            fmtCell(cell, {
-              value: presente ? 'P' : 'F',
-              bold: true, size: 8,
-              color: presente ? '1A5E1A' : '8B0000',
-              fill: presente ? presFill : faltFill,
-            });
+            const val = presente ? 'P' : 'F';
+            const cor = presente ? '1A5E1A' : '8B0000';
+            const fl  = presente ? presFill : faltFill;
+            fmtCell(ws.getCell(row, col),  { value: val, bold: true, size: 8, color: cor, fill: fl });
+            fmtCell(ws.getCell(row, col2), { value: val, bold: true, size: 8, color: cor, fill: fl });
           } else {
-            fmtCell(cell, { value: '', fill: bgLinha });
+            fmtCell(ws.getCell(row, col),  { value: '', fill: bgLinha });
+            fmtCell(ws.getCell(row, col2), { value: '', fill: bgLinha });
           }
         } else {
-          fmtCell(cell, { value: '', fill: bgLinha });
+          fmtCell(ws.getCell(row, col),  { value: '', fill: bgLinha });
+          fmtCell(ws.getCell(row, col2), { value: '', fill: bgLinha });
         }
       }
     }
@@ -354,20 +363,23 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
       bold: true, size: 9, color: 'FFFFFF', fill: azulEsc,
     });
     for (let i = 0; i < datas.length; i++) {
-      const col = 3 + i;
+      const col  = 3 + i * 2;
+      const col2 = col + 1;
       const dt = datas[i];
-      const cell = ws.getCell(totRow, col);
       if (!dt.feriado && dt.label !== 'Planejamento') {
-        fmtCell(cell, { value: 1, bold: true, size: 9, color: '001F5B', fill: corClar });
+        fmtCell(ws.getCell(totRow, col),  { value: 1, bold: true, size: 9, color: '001F5B', fill: corClar });
+        fmtCell(ws.getCell(totRow, col2), { value: 1, bold: true, size: 9, color: '001F5B', fill: corClar });
       } else if (dt.feriado) {
-        fmtCell(cell, { value: '', fill: vermelho });
+        fmtCell(ws.getCell(totRow, col),  { value: '', fill: vermelho });
+        fmtCell(ws.getCell(totRow, col2), { value: '', fill: vermelho });
       } else {
-        fmtCell(cell, { value: '', fill: amarelo });
+        fmtCell(ws.getCell(totRow, col),  { value: '', fill: amarelo });
+        fmtCell(ws.getCell(totRow, col2), { value: '', fill: amarelo });
       }
     }
 
     // ── Coluna de total de faltas por aluno ──
-    const colTotFaltas = 3 + datas.length;
+    const colTotFaltas = 3 + datas.length * 2; // após todas as colunas duplas
     ws.getColumn(colTotFaltas).width = 7;
     fmtCell(ws.getCell(4, colTotFaltas), {
       value: 'FALTAS', bold: true, size: 8, color: 'FFFFFF', fill: azulEsc,
@@ -386,7 +398,7 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
           return dk in freqAluno && !freqAluno[dk];
         }).length;
         fmtCell(cell, {
-          value: faltas > 0 ? faltas : '',
+          value: faltas > 0 ? faltas * 2 : '', // 2 h/a por falta
           bold: faltas > 0, size: 9,
           color: faltas > 0 ? '8B0000' : '000000',
           fill: faltas > 0
