@@ -246,7 +246,7 @@ export function Dashboard() {
             <p className="text-blue-300 text-xs mt-0.5">QR Codes · Provas · Resultados</p>
           </div>
           <span className="px-3 py-1.5 rounded-full text-xs font-black text-white shrink-0" style={{ background: '#dc2626' }}>
-            ACESSAR â†’
+            ACESSAR ↗
           </span>
         </button>
 
@@ -263,7 +263,7 @@ export function Dashboard() {
             <p className="text-gray-400 text-xs mt-0.5">Enviar link das provas pelo WhatsApp</p>
           </div>
           <span className="px-3 py-1.5 rounded-full text-xs font-black text-white shrink-0 bg-green-600">
-            ENVIAR â†’
+            ENVIAR ↗
           </span>
         </button>
 
