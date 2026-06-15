@@ -43,13 +43,15 @@ const PLANEJAMENTOS = new Set([
   '2026-12-14','2026-12-15','2026-12-16',
 ]);
 
-// Recesso julho + início e fim do ano
+// Recesso e férias — só exclui períodos sem aula alguma
 function emRecessoOuFerias(d: Date): boolean {
   const mes = d.getMonth() + 1;
   const dia = d.getDate();
   if (mes < 3) return true;                        // antes do início
-  if (mes === 3 && dia < 9) return true;           // planejamento março
-  if (mes === 7) return true;                      // recesso julho
+  if (mes === 3 && dia < 9) return true;           // planejamento inicial março
+  if (mes === 7 && dia >= 1 && dia <= 10) return true;  // recesso 1-10 julho
+  if (mes === 7 && dia >= 13 && dia <= 17) return true; // planejamento 13-17 julho
+  if (mes === 7 && dia >= 20 && dia <= 31) return true; // férias professores
   if (mes === 12 && dia > 16) return true;         // fim do ano
   return false;
 }
@@ -57,7 +59,6 @@ function emRecessoOuFerias(d: Date): boolean {
 function pad(n: number) { return String(n).padStart(2, '0'); }
 
 function gerarDatas(diaSemana: number): DiaTipo[] {
-  // 0=Dom,1=Seg,2=Ter,3=Qua,4=Qui,5=Sex,6=Sab
   const resultado: DiaTipo[] = [];
   const d = new Date(2026, 0, 1);
   const fim = new Date(2026, 11, 16);
@@ -66,13 +67,16 @@ function gerarDatas(diaSemana: number): DiaTipo[] {
       const chave = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
       const feriado = FERIADOS[chave] || null;
       const ehPlanj = PLANEJAMENTOS.has(chave);
-      resultado.push({
-        dia: d.getDate(),
-        mes: d.getMonth() + 1,
-        ano: d.getFullYear(),
-        feriado: feriado && !ehPlanj ? feriado : null,
-        label: feriado || (ehPlanj ? 'Planejamento' : ''),
-      });
+      // Excluir dias de planejamento — não são aulas com alunos
+      if (!ehPlanj) {
+        resultado.push({
+          dia: d.getDate(),
+          mes: d.getMonth() + 1,
+          ano: d.getFullYear(),
+          feriado: feriado || null,
+          label: feriado || '',
+        });
+      }
     }
     d.setDate(d.getDate() + 1);
   }
@@ -581,10 +585,6 @@ export function DiarioAulas() {
                     <span className="flex items-center gap-1">
                       <span className="w-3 h-3 rounded-sm bg-red-200 inline-block" />
                       {datas.filter(d => d.feriado).length} feriados
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <span className="w-3 h-3 rounded-sm bg-yellow-200 inline-block" />
-                      {datas.filter(d => d.label === 'Planejamento').length} planejamentos
                     </span>
                   </div>
                 </div>
