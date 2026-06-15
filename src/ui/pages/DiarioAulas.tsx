@@ -47,12 +47,13 @@ const PLANEJAMENTOS = new Set([
 function emRecessoOuFerias(d: Date): boolean {
   const mes = d.getMonth() + 1;
   const dia = d.getDate();
-  if (mes < 3) return true;                        // antes do início
-  if (mes === 3 && dia < 9) return true;           // planejamento inicial março
-  if (mes === 7 && dia >= 1 && dia <= 10) return true;  // recesso 1-10 julho
-  if (mes === 7 && dia >= 13 && dia <= 17) return true; // planejamento 13-17 julho
-  if (mes === 7 && dia >= 20 && dia <= 31) return true; // férias professores
-  if (mes === 12 && dia > 16) return true;         // fim do ano
+  if (mes < 3) return true;                              // antes do início
+  if (mes === 3 && dia < 9) return true;                 // planejamento inicial março
+  if (mes === 7 && dia >= 1 && dia <= 3) return true;    // recesso 1-3 julho
+  if (mes === 7 && dia >= 8 && dia <= 10) return true;   // recesso 8-10 julho
+  if (mes === 7 && dia >= 13 && dia <= 17) return true;  // planejamento 13-17 julho
+  if (mes === 7 && dia >= 18 && dia <= 31) return true;  // férias professores
+  if (mes === 12 && dia > 16) return true;               // fim do ano
   return false;
 }
 
