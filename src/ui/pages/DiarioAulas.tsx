@@ -83,7 +83,14 @@ function gerarDatas(diaSemana: number): DiaTipo[] {
   return resultado;
 }
 
-// ─── Configuração dos grupos ──────────────────────────────────────────────────
+function toTitleCase(nome: string): string {
+  const preps = new Set(['de','da','do','das','dos','e','a','o','em','por','com']);
+  return nome.toLowerCase().split(' ').map((p, i) =>
+    i === 0 || !preps.has(p) ? p.charAt(0).toUpperCase() + p.slice(1) : p
+  ).join(' ');
+}
+
+
 const GRUPOS = {
   'Segunda-Feira': {
     diaSemana: 1,
@@ -126,7 +133,7 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
       .select('id, nome, numero_chamada')
       .eq('turma_id', turma)
       .order('numero_chamada');
-    alunosPorTurma[turma] = (alunosData || []).map((a: any) => ({ id: a.id, nome: a.nome }));
+    alunosPorTurma[turma] = (alunosData || []).map((a: any) => ({ id: a.id, nome: toTitleCase(a.nome) }));
 
     // Buscar frequências da turma no ano 2026
     const ids = (alunosData || []).map((a: any) => a.id);
