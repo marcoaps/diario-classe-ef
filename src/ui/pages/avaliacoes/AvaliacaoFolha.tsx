@@ -474,44 +474,49 @@ export function AvaliacaoFolha() {
     setGeradoTodos(true);
   }
 
-  function imprimir() {
+  function imprimirProva() {
     if (!avaliacao) return;
-
     const textoApoioHtml = gerarHtmlTextoApoio(avaliacao);
-    const blocos = alunos.map((al, idx) => {
-      const qrSrc = folhasQR[al.id] || '';
-      const isLast = idx === alunos.length - 1;
-      const htmlProva = gerarHtmlProva(avaliacao, al);
-      // Página 1: texto de apoio (se existir), Página 2: questões, Página 3: QR
-      const paginaTexto = textoApoioHtml
-        ? `<div style="page-break-after: always;">${textoApoioHtml}</div>`
-        : '';
-      return `
-        ${paginaTexto}
-        <div style="page-break-after: always;">
-          ${htmlProva}
-        </div>
-        <div style="${isLast ? '' : 'page-break-after: always;'}text-align:center;">
-          <img src="${qrSrc}" style="width:100%;max-width:794px;display:block;margin:0 auto;" />
-        </div>`;
-    }).join('');
-
+    // Prova igual para todos — gera só uma vez
+    const htmlProva = gerarHtmlProva(avaliacao, alunos[0]);
+    const paginaTexto = textoApoioHtml
+      ? `<div style="page-break-after: always;">${textoApoioHtml}</div>`
+      : '';
     const html = `<!DOCTYPE html><html><head>
       <meta charset="utf-8">
-      <title>E.E.E. Fundamental \u2014 Instituto Odilon Pratagi \u2014 2026</title>
-      <style>${CSS_PROVA}
-        @page { margin: 10mm; size: A4 portrait; }
-      </style>
-    </head><body>${blocos}
-    <script>setTimeout(function(){ window.print(); }, 600);<\/script>
+      <title>E.E.E. Fundamental — Instituto Odilon Pratagi — 2026</title>
+      <style>${CSS_PROVA} @page { margin: 10mm; size: A4 portrait; }</style>
+    </head><body>
+      ${paginaTexto}
+      <div>${htmlProva}</div>
+      <script>setTimeout(function(){ window.print(); }, 600);<\/script>
     </body></html>`;
-
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const win = window.open(url, '_blank');
-    if (win) {
-      win.onafterprint = () => URL.revokeObjectURL(url);
-    }
+    if (win) win.onafterprint = () => URL.revokeObjectURL(url);
+  }
+
+  function imprimirQR() {
+    if (!avaliacao) return;
+    const blocos = alunos.map((al, idx) => {
+      const qrSrc = folhasQR[al.id] || '';
+      const isLast = idx === alunos.length - 1;
+      return `<div style="${isLast ? '' : 'page-break-after: always;'}text-align:center;">
+        <img src="${qrSrc}" style="width:100%;max-width:794px;display:block;margin:0 auto;" />
+      </div>`;
+    }).join('');
+    const html = `<!DOCTYPE html><html><head>
+      <meta charset="utf-8">
+      <title>Folhas QR — ${avaliacao.titulo}</title>
+      <style>* { margin:0; padding:0; box-sizing:border-box; } @page { margin:0; size: A4 portrait; } body { background:white; }</style>
+    </head><body>${blocos}
+      <script>setTimeout(function(){ window.print(); }, 600);<\/script>
+    </body></html>`;
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank');
+    if (win) win.onafterprint = () => URL.revokeObjectURL(url);
   }
 
   async function exportarWord() {
@@ -623,7 +628,7 @@ export function AvaliacaoFolha() {
       </div>
 
       {/* Botões */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button
           onClick={gerarTodos}
           disabled={gerandoIdx !== null}
@@ -633,24 +638,29 @@ export function AvaliacaoFolha() {
             ? `Gerando QR ${gerandoIdx + 1}/${alunos.length}...`
             : 'Gerar folhas QR'}
         </button>
+        <button
+          onClick={imprimirProva}
+          className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-secondary-container text-on-secondary-container font-semibold text-sm"
+        >
+          <Printer className="w-4 h-4" />
+          Prova
+        </button>
         {geradoTodos && (
           <button
-            onClick={imprimir}
-            className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-secondary-container text-on-secondary-container font-semibold text-sm"
+            onClick={imprimirQR}
+            className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-teal-600 text-white font-semibold text-sm"
           >
             <Printer className="w-4 h-4" />
-            Imprimir
+            QR
           </button>
         )}
-        {geradoTodos && (
-          <button
-            onClick={exportarWord}
-            className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-blue-600 text-white font-semibold text-sm"
-          >
-            <FileText className="w-4 h-4" />
-            Word
-          </button>
-        )}
+        <button
+          onClick={exportarWord}
+          className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-blue-600 text-white font-semibold text-sm"
+        >
+          <FileText className="w-4 h-4" />
+          Word
+        </button>
       </div>
 
       {/* Preview folhas QR */}
