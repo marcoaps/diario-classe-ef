@@ -703,15 +703,6 @@ export function AvaliacaoFolha() {
           <Printer className="w-4 h-4" />
           Prova
         </button>
-        {geradoTodos && (
-          <button
-            onClick={imprimirQR}
-            className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-teal-600 text-white font-semibold text-sm"
-          >
-            <Printer className="w-4 h-4" />
-            Imprimir todos
-          </button>
-        )}
         <button
           onClick={exportarWord}
           className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-blue-600 text-white font-semibold text-sm"
