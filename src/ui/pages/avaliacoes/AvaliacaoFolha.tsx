@@ -138,7 +138,7 @@ function gerarHtmlProva(avaliacao: Avaliacao, aluno: Aluno): string {
             <div style="font-size:11pt;font-weight:bold;margin-bottom:2px;">Avaliação - Ensino Fundamental - 2026</div>
             <div style="font-size:10pt;margin-bottom:1px;">Disciplina: <strong>Educa&#231;&#227;o F&#237;sica</strong> &nbsp;&nbsp; Professor(a): <strong>Marco Pedro</strong></div>
             <div style="font-size:10pt;margin-bottom:1px;">S&#233;rie: <strong>${serie}</strong> &nbsp;&nbsp; Turma: <strong>${avaliacao.turma_id.replace(/\d+/, '')}</strong> &nbsp;&nbsp; N&#186;: <strong>${aluno.numero_chamada}</strong></div>
-            <div style="font-size:10pt;border-top:1px solid #cbd5e1;padding-top:3px;margin-top:3px;">Nome: <span style="border-bottom:1px solid #333;display:inline-block;width:260px;">&nbsp;</span> &nbsp;&nbsp; N&#186;: <span style="border-bottom:1px solid #333;display:inline-block;width:36px;">&nbsp;</span> &nbsp;&nbsp; Data: ____/____/______</div>
+            <div style="font-size:10pt;border-top:1px solid #cbd5e1;padding-top:3px;margin-top:3px;">Nome: <span style="border-bottom:1px solid #333;display:inline-block;width:320px;">&nbsp;</span> &nbsp;&nbsp; Data: ____/____/______</div>
           </td>
         </tr>
       </table>
