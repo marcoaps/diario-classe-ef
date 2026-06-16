@@ -17,6 +17,7 @@ interface Avaliacao {
   gabarito: Record<string, string>;
   valor_questao: number;
   questoes_subjetivas: Record<string, string> | null;
+  texto_apoio: string | null;
   criado_em: string;
 }
 
@@ -36,6 +37,8 @@ export function Avaliacoes() {
   const [turmaId, setTurmaId] = useState('6F');
   const [gabarito, setGabarito] = useState<Record<string, string>>(gabaritoPadrao());
   const [enunciado9, setEnunciado9] = useState('');
+  const [textoApoio, setTextoApoio] = useState('');
+  const [gerandoTexto, setGerandoTexto] = useState(false);
   const [enunciado10, setEnunciado10] = useState('');
   const [valorQuestao, setValorQuestao] = useState('1.0');
   const [salvando, setSalvando] = useState(false);
@@ -70,6 +73,30 @@ export function Avaliacoes() {
     }
   }
 
+  async function gerarTextoApoioIA() {
+    if (!titulo.trim()) { setErro('Informe o titulo antes de gerar o texto de apoio.'); return; }
+    setGerandoTexto(true);
+    setErro('');
+    try {
+      const resp = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1500,
+          messages: [{ role: 'user', content: 'Voce e professor de Educacao Fisica do Ensino Fundamental. Crie um TEXTO DE APOIO para uma avaliacao sobre o tema: "' + titulo + (descricao ? ' - ' + descricao : '') + '". O texto deve: ter entre 15 e 25 linhas, ser informativo e adequado para alunos do Ensino Fundamental II, abordar os principais conceitos do tema, conter TODAS as respostas das questoes objetivas e dissertativas de forma implicita ou explicita no proprio texto, usar linguagem clara e acessivel. Retorne APENAS o texto, sem titulo nem introducao.' }]
+        })
+      });
+      const data = await resp.json();
+      const text = data.content?.[0]?.text || '';
+      setTextoApoio(text.trim());
+    } catch (e) {
+      setErro('Erro ao gerar texto de apoio.');
+    } finally {
+      setGerandoTexto(false);
+    }
+  }
+
   useEffect(() => { carregar(); }, []);
 
   async function carregar() {
@@ -94,6 +121,7 @@ export function Avaliacoes() {
       gabarito,
       valor_questao: parseFloat(valorQuestao) || 1.0,
       questoes_subjetivas: { '9': enunciado9.trim(), '10': enunciado10.trim() },
+      texto_apoio: textoApoio.trim() || null,
     });
     setSalvando(false);
     if (error) { setErro('Erro ao salvar: ' + error.message); return; }
@@ -101,6 +129,7 @@ export function Avaliacoes() {
     setDescricao('');
     setEnunciado9('');
     setEnunciado10('');
+    setTextoApoio('');
     setGabarito(gabaritoPadrao());
     setValorQuestao('1.0');
     setCriando(false);
@@ -261,6 +290,34 @@ export function Avaliacoes() {
                 className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface resize-none"
               />
             </div>
+          </div>
+
+          {/* Texto de Apoio */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-on-surface-variant">Texto de Apoio (opcional)</p>
+              <button
+                onClick={gerarTextoApoioIA}
+                disabled={gerandoTexto}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-secondary-container text-on-secondary-container text-xs font-semibold disabled:opacity-60"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                {gerandoTexto ? 'Gerando...' : 'Gerar com IA'}
+              </button>
+            </div>
+            {gerandoTexto && (
+              <div className="flex items-center gap-2 text-xs text-on-surface-variant">
+                <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                Gerando texto com respostas embutidas...
+              </div>
+            )}
+            <textarea
+              value={textoApoio}
+              onChange={e => setTextoApoio(e.target.value)}
+              rows={5}
+              placeholder="A IA gera um texto cujas respostas estao contidas nele. Pagina 1 = texto, Pagina 2 = questoes."
+              className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface resize-none"
+            />
           </div>
 
           {erro && <p className="text-xs text-red-500">{erro}</p>}
