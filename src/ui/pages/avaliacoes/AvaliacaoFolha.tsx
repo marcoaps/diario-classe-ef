@@ -518,26 +518,12 @@ export function AvaliacaoFolha() {
     if (!avaliacao || alunos.length === 0) return;
 
     const textoApoioHtml = gerarHtmlTextoApoio(avaliacao);
-    const blocos = alunos.map((al, idx) => {
-      const qrSrc = folhasQR[al.id] || '';
-      const isLast = idx === alunos.length - 1;
-      const htmlProva = gerarHtmlProva(avaliacao, al);
-      const paginaTexto = textoApoioHtml
-        ? `<div style="page-break-after:always;">${textoApoioHtml}</div>`
-        : '';
-      return `
-        ${paginaTexto}
-        <div style="page-break-after:always;">
-          ${htmlProva}
-        </div>
-        <div style="page-break-after:${isLast ? 'auto' : 'always'};">
-          <table width="100%" border="0" cellpadding="0" cellspacing="0">
-            <tr><td align="center">
-              <img src="${qrSrc}" width="794" height="1123" style="display:block;" />
-            </td></tr>
-          </table>
-        </div>`;
-    }).join('');
+    // Word: texto de apoio (pág 1) + questões (pág 2) — sem QR, sem gabarito
+    // Prova é igual para todos, só gera uma vez
+    const htmlProva = gerarHtmlProva(avaliacao, alunos[0]);
+    const paginaTexto = textoApoioHtml
+      ? `<div style="page-break-after:always;">${textoApoioHtml}</div>`
+      : '';
 
     const html = `
       <html xmlns:o="urn:schemas-microsoft-com:office:office"
@@ -546,10 +532,30 @@ export function AvaliacaoFolha() {
       <head>
         <meta charset="utf-8">
         <title>${avaliacao.titulo}</title>
-        <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]-->
-        <style>${CSS_PROVA} @page{margin:10mm;size:A4 portrait;}</style>
+        <!--[if gte mso 9]>
+        <xml>
+          <w:WordDocument>
+            <w:View>Print</w:View>
+            <w:Zoom>100</w:Zoom>
+            <w:DoNotOptimizeForBrowser/>
+          </w:WordDocument>
+        </xml>
+        <![endif]-->
+        <style>
+          ${CSS_PROVA}
+          @page {
+            size: 21cm 29.7cm;
+            margin: 10mm;
+          }
+          body { margin: 0; }
+          div { page-break-inside: avoid; }
+        </style>
       </head>
-      <body>${blocos}</body></html>`;
+      <body>
+        ${paginaTexto}
+        <div>${htmlProva}</div>
+      </body>
+      </html>`;
 
     const blob = new Blob([html], { type: 'application/msword' });
     const url = URL.createObjectURL(blob);
