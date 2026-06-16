@@ -24,3 +24,5 @@ export default defineConfig(({mode}) => {
     },
   };
 });
+
+// cache-bust: 20260616-192249
