@@ -190,7 +190,7 @@ const CSS_PROVA = `
 async function desenharFolhaQR(
   canvas: HTMLCanvasElement,
   avaliacao: Avaliacao,
-  aluno: Aluno
+  turmaId: string
 ): Promise<void> {
   const W = 794;
   const H = 1123;
@@ -223,7 +223,7 @@ async function desenharFolhaQR(
   ctx.font = '11px Arial';
   ctx.fillText('Educa\u00e7\u00e3o F\u00edsica \u2014 ' + avaliacao.titulo.replace(/Recupera\u00e7\u00e3o/gi, 'Avalia\u00e7\u00e3o'), W / 2, PAD + 40);
   ctx.font = 'bold 12px Arial';
-  ctx.fillText('TURMA: ' + avaliacao.turma_id + '   N\u00ba: ' + (aluno.numero_chamada || '--'), W / 2, PAD + 56);
+  ctx.fillText('TURMA: ' + turmaId, W / 2, PAD + 56);
   ctx.textAlign = 'left';
 
   // Linha do aluno
@@ -236,12 +236,16 @@ async function desenharFolhaQR(
   ctx.fillStyle = '#64748b';
   ctx.font = '10px Arial';
   ctx.fillText('ALUNO(A):', CX + 8, alunoY + 18);
-  ctx.fillStyle = '#1e293b';
-  ctx.font = 'bold 12px Arial';
-  ctx.fillText(aluno.nome.toUpperCase(), CX + 72, alunoY + 18);
+  // Linha em branco para o aluno preencher
+  ctx.strokeStyle = '#334155';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(CX + 72, alunoY + 20);
+  ctx.lineTo(CX + CW - 8, alunoY + 20);
+  ctx.stroke();
 
   // QR Code
-  const payload = JSON.stringify({ av: avaliacao.id, al: aluno.id });
+  const payload = JSON.stringify({ av: avaliacao.id, turma: turmaId });
   const qrDataUrl = await QRCode.toDataURL(payload, { width: 130, margin: 1, errorCorrectionLevel: 'M' });
   const qrImg = new Image();
   await new Promise<void>(res => { qrImg.onload = () => res(); qrImg.src = qrDataUrl; });
@@ -357,7 +361,7 @@ async function desenharFolhaQR(
   ctx.font = '9px Arial';
   ctx.fillText('Bras\u00edl\u00e9ia, Acre \u2014 2026', CX + 8, H - PAD - MARK - 6);
   ctx.textAlign = 'right';
-  ctx.fillText('ID: ' + aluno.id.substring(0, 8).toUpperCase(), W - PAD - MARK - 16, H - PAD - MARK - 6);
+  ctx.fillText('TURMA: ' + turmaId, W - PAD - MARK - 16, H - PAD - MARK - 6);
   ctx.textAlign = 'left';
 }
 
@@ -462,12 +466,16 @@ export function AvaliacaoFolha() {
     if (!avaliacao) return;
     setGeradoTodos(false);
     setFolhasQR({});
+    // Gerar 1 folha QR por turma (não por aluno)
+    const turmasUnicas = Array.from(new Set(alunos.map(a => a.turma_id).filter(Boolean)));
+    // Se não houver turma_id nos alunos, usa a turma da avaliação
+    const turmas = turmasUnicas.length > 0 ? turmasUnicas : [avaliacao.turma_id];
     const novos: Record<string, string> = {};
-    for (let i = 0; i < alunos.length; i++) {
+    for (let i = 0; i < turmas.length; i++) {
       setGerandoIdx(i);
       const canvas = document.createElement('canvas');
-      await desenharFolhaQR(canvas, avaliacao, alunos[i]);
-      novos[alunos[i].id] = canvas.toDataURL('image/png');
+      await desenharFolhaQR(canvas, avaliacao, turmas[i]);
+      novos[turmas[i]] = canvas.toDataURL('image/png');
     }
     setFolhasQR(novos);
     setGerandoIdx(null);
@@ -499,9 +507,9 @@ export function AvaliacaoFolha() {
 
   function imprimirQR() {
     if (!avaliacao) return;
-    const blocos = alunos.map((al, idx) => {
-      const qrSrc = folhasQR[al.id] || '';
-      const isLast = idx === alunos.length - 1;
+    const turmasEntries = Object.entries(folhasQR);
+    const blocos = turmasEntries.map(([turma, qrSrc], idx) => {
+      const isLast = idx === turmasEntries.length - 1;
       return `<div style="${isLast ? '' : 'page-break-after: always;'}text-align:center;">
         <img src="${qrSrc}" style="width:100%;max-width:794px;display:block;margin:0 auto;" />
       </div>`;
@@ -635,7 +643,7 @@ export function AvaliacaoFolha() {
           className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-on-primary font-semibold text-sm disabled:opacity-60"
         >
           {gerandoIdx !== null
-            ? `Gerando QR ${gerandoIdx + 1}/${alunos.length}...`
+            ? `Gerando QR ${gerandoIdx + 1}...`
             : 'Gerar folhas QR'}
         </button>
         <button
@@ -669,28 +677,24 @@ export function AvaliacaoFolha() {
           <p className="text-xs font-semibold text-on-surface-variant">
             Folhas QR geradas — {alunos.length} aluno{alunos.length !== 1 ? 's' : ''}
           </p>
-          {alunos.map(al => {
-            const src = folhasQR[al.id];
-            if (!src) return null;
-            return (
-              <div key={al.id} className="border border-outline-variant rounded-xl overflow-hidden">
-                <div className="px-3 py-1.5 bg-surface flex items-center justify-between">
-                  <span className="text-xs text-on-surface-variant">
-                    {al.numero_chamada}. {al.nome}
-                  </span>
-                  <a
-                    href={src}
-                    download={`qr_${al.numero_chamada}_${al.nome.split(' ')[0]}.png`}
-                    className="flex items-center gap-1 text-xs text-primary"
-                  >
-                    <Download className="w-3 h-3" />
-                    Baixar
-                  </a>
-                </div>
-                <img src={src} alt={al.nome} className="w-full" />
+          {Object.entries(folhasQR).map(([turma, src]) => (
+            <div key={turma} className="border border-outline-variant rounded-xl overflow-hidden">
+              <div className="px-3 py-1.5 bg-surface flex items-center justify-between">
+                <span className="text-xs font-semibold text-on-surface-variant">
+                  Turma {turma}
+                </span>
+                <a
+                  href={src}
+                  download={`folha_qr_turma_${turma}.png`}
+                  className="flex items-center gap-1 text-xs text-primary"
+                >
+                  <Download className="w-3 h-3" />
+                  Baixar
+                </a>
               </div>
-            );
-          })}
+              <img src={src} alt={`Turma ${turma}`} className="w-full" />
+            </div>
+          ))}
         </div>
       )}
     </div>
