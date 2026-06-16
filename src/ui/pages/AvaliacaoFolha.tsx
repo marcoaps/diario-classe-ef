@@ -491,13 +491,13 @@ export function AvaliacaoFolha() {
     if (!avaliacao) return;
     setGeradoTodos(false);
     setFolhasQR({});
-    // Gerar 1 folha QR por grupo de série: 6º, 7º, 8º, 9º
-    const grupos = [
-      { label: '6º Ano', serie: '6' },
-      { label: '7º Ano', serie: '7' },
-      { label: '8º Ano', serie: '8' },
-      { label: '9º Ano', serie: '9' },
-    ];
+    // Detecta o nível pela série da avaliação:
+    // 6º/7º → 2 folhas: "6º Ano" + "7º Ano"  (QUESTOES_SIMPLES)
+    // 8º/9º → 2 folhas: "8º Ano" + "9º Ano"  (QUESTOES_ELABORADAS)
+    const serie = parseInt(avaliacao.turma_id.replace(/\D/g, '').charAt(0));
+    const grupos = serie >= 8
+      ? [{ label: '8º Ano' }, { label: '9º Ano' }]
+      : [{ label: '6º Ano' }, { label: '7º Ano' }];
     const novos: Record<string, string> = {};
     for (let i = 0; i < grupos.length; i++) {
       setGerandoIdx(i);
@@ -693,7 +693,7 @@ export function AvaliacaoFolha() {
           className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-on-primary font-semibold text-sm disabled:opacity-60"
         >
           {gerandoIdx !== null
-            ? `Gerando ${gerandoIdx + 1}/4...`
+            ? `Gerando ${gerandoIdx + 1}/2...`
             : 'Gerar folhas QR'}
         </button>
         <button
