@@ -694,7 +694,7 @@ export function AvaliacaoFolha() {
         >
           {gerandoIdx !== null
             ? `Gerando ${gerandoIdx + 1}/2...`
-            : '🔄 Gerar QR v2'}
+            : '🔄 Gerar folhas QR'}
         </button>
         <button
           onClick={imprimirProva}
