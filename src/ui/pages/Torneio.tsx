@@ -316,7 +316,7 @@ export default function Torneio() {
                 className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white text-lg font-semibold focus:outline-none focus:border-indigo-500 mb-4"
                 placeholder="Nome do torneio..." />
               <div className="flex flex-wrap gap-2">
-                {['Copa Municipal','Campeonato Escolar','Liga dos Amigos','Copa do Bairro'].map(n => (
+                {['Copa Municipal','Campeonato Escolar','Liga dos Amigos','Copa do Bairro','Interclasses 2026'].map(n => (
                   <button key={n} onClick={() => setTournName(n)}
                     className="px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-700 text-slate-300 text-xs hover:bg-slate-600 transition-colors">{n}</button>
                 ))}
