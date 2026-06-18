@@ -3,7 +3,7 @@ import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import {
   Users, CheckSquare, GraduationCap, CloudOff, Cloud,
   CalendarSearch, BarChart3, QrCode, ClipboardList,
-  Sparkles, MoreHorizontal, X, BookOpen
+  Sparkles, MoreHorizontal, X, BookOpen, Trophy
 } from 'lucide-react';
 import { useStore } from '../store';
 import { clsx, type ClassValue } from 'clsx';
@@ -15,7 +15,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-const MAIS_PATHS = ['/ia', '/avaliacoes', '/alunos', '/diario-aulas'];
+const MAIS_PATHS = ['/ia', '/avaliacoes', '/alunos', '/diario-aulas', '/torneio'];
 
 export function AppLayout() {
   const { isSynced, triggerSync } = useStore();
@@ -37,7 +37,7 @@ export function AppLayout() {
             alt="Diario de Classe EF"
             className="w-8 h-8 object-contain rounded-lg flex-shrink-0"
           />
-          <span className="font-bold text-base text-primary">Diário de Classe EF</span>
+          <span className="font-bold text-base text-primary">Di&#225;rio de Classe EF</span>
         </div>
         <div className="flex items-center gap-sm">
           <button
@@ -82,25 +82,31 @@ export function AppLayout() {
           <PopupItem
             to="/diario-aulas"
             icon={<BookOpen className="w-5 h-5" />}
-            label="Diário de Aulas"
+            label="Di&#225;rio de Aulas"
             onClick={() => setMaisAberto(false)}
           />
           <PopupItem
             to="/ia"
             icon={<Sparkles className="w-5 h-5" />}
-            label="IA — Seq. Didática"
+            label="IA &#8212; Seq. Did&#225;tica"
             onClick={() => setMaisAberto(false)}
           />
           <PopupItem
             to="/avaliacoes"
             icon={<ClipboardList className="w-5 h-5" />}
-            label="Avaliações QR"
+            label="Avalia&#231;&#245;es QR"
             onClick={() => setMaisAberto(false)}
           />
           <PopupItem
             to="/alunos"
             icon={<QrCode className="w-5 h-5" />}
             label="Alunos / QR"
+            onClick={() => setMaisAberto(false)}
+          />
+          <PopupItem
+            to="/torneio"
+            icon={<Trophy className="w-5 h-5" />}
+            label="Torneio"
             onClick={() => setMaisAberto(false)}
           />
         </div>
@@ -110,8 +116,8 @@ export function AppLayout() {
       <nav className="fixed bottom-0 left-0 right-0 h-16 bg-surface border-t border-outline-variant shadow-lg flex items-center justify-around px-2 z-50 rounded-t-xl">
         <NavItem to="/" icon={<Users />} label="Turmas" />
         <NavItem to="/attendance" icon={<CheckSquare />} label="Chamada" />
-        <NavItem to="/history" icon={<CalendarSearch />} label="Histórico" />
-        <NavItem to="/report" icon={<BarChart3 />} label="Relatórios" />
+        <NavItem to="/history" icon={<CalendarSearch />} label="Hist&#243;rico" />
+        <NavItem to="/report" icon={<BarChart3 />} label="Relat&#243;rios" />
         <NavItem to="/grades" icon={<GraduationCap />} label="Notas" />
         <button
           onClick={() => setMaisAberto(prev => !prev)}

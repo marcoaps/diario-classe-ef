@@ -33,6 +33,7 @@ import { Avaliacoes } from './ui/pages/avaliacoes/Avaliacoes';
 import { AvaliacaoFolha } from './ui/pages/avaliacoes/AvaliacaoFolha';
 import { AvaliacaoCorrigir } from './ui/pages/avaliacoes/AvaliacaoCorrigir';
 import { AvaliacaoResultados } from './ui/pages/avaliacoes/AvaliacaoResultados';
+import Torneio from './ui/pages/Torneio';
 import { supabase } from './data/supabase';
 
 export function useAuth() {
@@ -88,6 +89,7 @@ export default function App() {
           <Route path="/qrcodes" element={<GerarQRCodes />} />
           <Route path="/alunos" element={<CentralAluno />} />
           <Route path="/rendimento" element={<RendimentoBimestre />} />
+          <Route path="/torneio" element={<Torneio />} />
 
           {/* Modulo Avaliacoes com QR Code */}
           <Route path="/avaliacoes" element={<Avaliacoes />} />
