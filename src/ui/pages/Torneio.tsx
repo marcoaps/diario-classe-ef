@@ -8,6 +8,7 @@ interface Team {
   color: string;
 }
 
+interface Player { id: string; name: string; teamId: string | null; number?: string; }
 interface Match {
   id: string;
   teamA: string | null;
@@ -37,6 +38,7 @@ interface Tournament {
   phase: string;
   swissRound: number;
   playoffsN: number;
+  players: Player[];
   champion: string | null;
 }
 
@@ -44,6 +46,22 @@ interface Standing {
   teamId: string;
   P: number; J: number; V: number; E: number; D: number;
   GP: number; GC: number; SG: number;
+}
+
+// ─── PARSER DE IMPORTAÇÃO ────────────────────────────────────────────────────
+
+interface ParsedPlayer { rawLine: string; name: string; teamName: string | null; number: string | null; }
+
+function parseImportText(text: string): ParsedPlayer[] {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0 && !l.startsWith('#'));
+  return lines.map(raw => {
+    const numMatch = raw.match(/^#?(\d{1,2})\s+(.+)$/);
+    let rest = raw; let number: string | null = null;
+    if (numMatch) { number = numMatch[1]; rest = numMatch[2]; }
+    const sepMatch = rest.match(/^(.+?)(?:\s*[,;|]\s*|\s+-\s+)(.+)$/);
+    if (sepMatch) { return { rawLine: raw, name: sepMatch[1].trim(), teamName: sepMatch[2].trim() || null, number }; }
+    return { rawLine: raw, name: rest.trim(), teamName: null, number };
+  });
 }
 
 // ─── CONSTANTES ──────────────────────────────────────────────────────────────
@@ -220,7 +238,7 @@ export default function Torneio() {
       if (sh.length % 2 !== 0) matches.push({ id: 'sw_r1_bye', teamA: sh[sh.length-1].id, teamB: null, sA: 3, sB: 0, played: true, round: 1, phase: 'swiss', group: null, isBye: true });
       phase = 'swiss';
     }
-    setTourn({ name: tournName || 'Torneio', teams, format, groups, matches, phase, swissRound: 1, playoffsN, champion: null });
+    setTourn({ name: tournName || 'Torneio', teams, players: [], format, groups, matches, phase, swissRound: 1, playoffsN, champion: null });
     setScreen('tournament'); setActiveTab('matches');
   };
 
@@ -426,8 +444,9 @@ export default function Torneio() {
   const swissAllDone = tourn.format === 'swiss' && pendingMs.length === 0;
 
   const tabs = [
-    { id: 'matches', label: '⚔️ Jogos' },
+    { id: 'matches',   label: '⚔️ Jogos' },
     { id: 'standings', label: '📊 Classificação' },
+    { id: 'players',   label: `👤 Jogadores${tourn.players.length ? ` (${tourn.players.length})` : ''}` },
     ...(tourn.format !== 'round_robin' && tourn.format !== 'swiss' ? [{ id: 'bracket', label: '🎯 Chave' }] : []),
     ...(tourn.groups ? [{ id: 'groups', label: '👥 Grupos' }] : []),
   ];
@@ -550,6 +569,7 @@ export default function Torneio() {
 
       {/* Standings tab */}
       {activeTab === 'standings' && <StandingsTable standings={standings} teams={tourn.teams} getTeam={getTeam} />}
+      {activeTab === 'players' && <PlayersTab tourn={tourn} onUpdate={setTourn} />}
 
       {/* Bracket tab */}
       {activeTab === 'bracket' && (
@@ -586,6 +606,235 @@ function getPlayedMatches(T: Tournament): Match[] {
     if (T.format === 'league_playoffs' && T.phase === 'league') return m.phase === 'league';
     return true;
   });
+}
+
+
+// ─── ABA DE JOGADORES ────────────────────────────────────────────────────────
+
+function PlayersTab({ tourn, onUpdate }: { tourn: Tournament; onUpdate: (t: Tournament) => void }) {
+  const [view, setView] = useState<'list' | 'import'>('list');
+  const [importText, setImportText] = useState('');
+  const [preview, setPreview] = useState<{
+    parsed: ParsedPlayer[]; found: string[]; notFound: string[]; noTeam: ParsedPlayer[];
+  } | null>(null);
+  const [createMissing, setCreateMissing] = useState<Record<string, boolean>>({});
+  const [importDone, setImportDone] = useState(false);
+
+  const byTeam = useMemo(() => {
+    const map: Record<string, Player[]> = {};
+    tourn.players.forEach(p => { const key = p.teamId ?? '__noTeam__'; if (!map[key]) map[key] = []; map[key].push(p); });
+    return map;
+  }, [tourn.players]);
+
+  const handleProcess = () => {
+    if (!importText.trim()) return;
+    const parsed = parseImportText(importText);
+    const teamNames = [...new Set(parsed.map(p => p.teamName).filter(Boolean))] as string[];
+    const found = teamNames.filter(n => tourn.teams.some(t => t.name.toLowerCase() === n.toLowerCase()));
+    const notFound = teamNames.filter(n => !tourn.teams.some(t => t.name.toLowerCase() === n.toLowerCase()));
+    const noTeam = parsed.filter(p => !p.teamName);
+    setPreview({ parsed, found, notFound, noTeam });
+    const init: Record<string, boolean> = {};
+    notFound.forEach(n => { init[n] = true; });
+    setCreateMissing(init);
+    setImportDone(false);
+  };
+
+  const handleConfirm = () => {
+    if (!preview) return;
+    let newTeams = [...tourn.teams];
+    preview.notFound.forEach(name => {
+      if (createMissing[name]) {
+        const id = `team_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        newTeams.push({ id, name, color: TEAM_COLORS[newTeams.length % TEAM_COLORS.length] });
+      }
+    });
+    const newPlayers = [...tourn.players];
+    preview.parsed.forEach(p => {
+      const teamId = p.teamName
+        ? newTeams.find(t => t.name.toLowerCase() === p.teamName!.toLowerCase())?.id ?? null
+        : null;
+      newPlayers.push({ id: `pl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, name: p.name, teamId, number: p.number ?? undefined });
+    });
+    onUpdate({ ...tourn, teams: newTeams, players: newPlayers });
+    setImportText(''); setPreview(null); setImportDone(true);
+    setTimeout(() => { setView('list'); setImportDone(false); }, 1500);
+  };
+
+  const handleRemovePlayer = (id: string) => { onUpdate({ ...tourn, players: tourn.players.filter(p => p.id !== id) }); };
+  const handleClearAll = () => { if (window.confirm('Remover todos os jogadores?')) onUpdate({ ...tourn, players: [] }); };
+
+  return (
+    <div>
+      <div className="flex gap-2 mb-4">
+        <button onClick={() => { setView('list'); setPreview(null); }}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'list' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+          👤 Lista ({tourn.players.length})
+        </button>
+        <button onClick={() => setView('import')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'import' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+          📋 Importar em Lote
+        </button>
+      </div>
+
+      {view === 'list' && (
+        <div>
+          {tourn.players.length === 0 ? (
+            <div className="text-center py-14 bg-slate-800/50 rounded-2xl border border-dashed border-slate-600">
+              <div className="text-4xl mb-3">👤</div>
+              <div className="text-white font-semibold mb-1">Nenhum jogador cadastrado</div>
+              <div className="text-slate-400 text-sm mb-4">Use "Importar em Lote" para cadastrar rapidamente</div>
+              <button onClick={() => setView('import')} className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors">
+                📋 Ir para Importação
+              </button>
+            </div>
+          ) : (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-slate-400 text-sm">{tourn.players.length} jogador{tourn.players.length !== 1 ? 'es' : ''}</span>
+                <button onClick={handleClearAll} className="text-xs text-red-400 hover:text-red-300 border border-red-400/30 px-2.5 py-1 rounded-lg transition-colors">Limpar tudo</button>
+              </div>
+              {tourn.teams.map(team => {
+                const players = byTeam[team.id] ?? []; if (!players.length) return null;
+                return (
+                  <div key={team.id} className="mb-4 bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-700 bg-slate-900/50">
+                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: team.color }} />
+                      <span className="text-white font-semibold text-sm">{team.name}</span>
+                      <span className="ml-auto text-slate-400 text-xs">{players.length} jogadores</span>
+                    </div>
+                    {players.map((p, i) => (
+                      <div key={p.id} className={`flex items-center gap-3 px-4 py-2.5 text-sm ${i < players.length - 1 ? 'border-b border-slate-700/50' : ''}`}>
+                        {p.number && <span className="w-6 text-center text-xs font-bold text-slate-400 flex-shrink-0">#{p.number}</span>}
+                        <span className="flex-1 text-slate-200">{p.name}</span>
+                        <button onClick={() => handleRemovePlayer(p.id)} className="text-slate-600 hover:text-red-400 text-xs transition-colors px-1">✕</button>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+              {byTeam['__noTeam__']?.length > 0 && (
+                <div className="mb-4 bg-slate-800 rounded-xl border border-dashed border-slate-600 overflow-hidden">
+                  <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-700">
+                    <span className="text-slate-400 font-semibold text-sm">Sem time definido</span>
+                    <span className="ml-auto text-slate-500 text-xs">{byTeam['__noTeam__'].length} jogadores</span>
+                  </div>
+                  {byTeam['__noTeam__'].map((p, i) => (
+                    <div key={p.id} className={`flex items-center gap-3 px-4 py-2.5 text-sm ${i < byTeam['__noTeam__'].length - 1 ? 'border-b border-slate-700/50' : ''}`}>
+                      <span className="flex-1 text-slate-400">{p.name}</span>
+                      <button onClick={() => handleRemovePlayer(p.id)} className="text-slate-600 hover:text-red-400 text-xs transition-colors px-1">✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {view === 'import' && (
+        <div>
+          {importDone ? (
+            <div className="text-center py-12"><div className="text-4xl mb-3">✅</div><div className="text-green-400 font-bold text-lg">Jogadores importados com sucesso!</div></div>
+          ) : !preview ? (
+            <div>
+              <div className="bg-slate-900 rounded-xl border border-slate-700 p-4 mb-4">
+                <div className="text-slate-300 text-sm font-semibold mb-2">📌 Formato aceito (um por linha):</div>
+                <div className="font-mono text-xs text-slate-400 space-y-1">
+                  <div><span className="text-green-400">João Silva, Leões</span><span className="text-slate-600"> — vírgula</span></div>
+                  <div><span className="text-green-400">Maria Santos; Tigres</span><span className="text-slate-600"> — ponto e vírgula</span></div>
+                  <div><span className="text-green-400">Pedro Alves | Falcões</span><span className="text-slate-600"> — pipe</span></div>
+                  <div><span className="text-green-400">10 Carlos Lima, Leões</span><span className="text-slate-600"> — com número da camisa</span></div>
+                  <div><span className="text-yellow-400">Ana Souza</span><span className="text-slate-600"> — sem time (aceito)</span></div>
+                  <div><span className="text-slate-600"># Esta linha é um comentário</span></div>
+                </div>
+              </div>
+              <textarea value={importText} onChange={e => setImportText(e.target.value)}
+                className="w-full h-48 bg-slate-900 border border-slate-600 rounded-xl p-4 text-white text-sm font-mono focus:outline-none focus:border-indigo-500 resize-none placeholder-slate-600"
+                placeholder={"João Silva, Leões\nMaria Santos, Tigres\n7 Pedro Alves, Leões\nCarlos Lima, Falcões"}
+              />
+              <div className="flex items-center justify-between mt-3">
+                <span className="text-slate-500 text-xs">{importText.split('\n').filter(l => l.trim() && !l.startsWith('#')).length} linha(s) detectada(s)</span>
+                <button onClick={handleProcess} disabled={!importText.trim()}
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold transition-colors">
+                  Processar Lista →
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div className="text-white font-semibold mb-3">Prévia da importação</div>
+              {preview.found.length > 0 && (
+                <div className="bg-green-900/20 border border-green-700/40 rounded-xl p-4 mb-3">
+                  <div className="text-green-400 text-xs font-bold uppercase tracking-wider mb-2">✅ Times encontrados ({preview.found.length})</div>
+                  <div className="flex flex-wrap gap-2">
+                    {preview.found.map(n => { const t = tourn.teams.find(t => t.name.toLowerCase() === n.toLowerCase()); return (
+                      <span key={n} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-900/40 text-green-300 text-xs">
+                        <span className="w-2 h-2 rounded-full inline-block" style={{ background: t?.color ?? '#22C55E' }} />{n}
+                      </span>);
+                    })}
+                  </div>
+                </div>
+              )}
+              {preview.notFound.length > 0 && (
+                <div className="bg-yellow-900/20 border border-yellow-700/40 rounded-xl p-4 mb-3">
+                  <div className="text-yellow-400 text-xs font-bold uppercase tracking-wider mb-2">⚠️ Times não encontrados ({preview.notFound.length})</div>
+                  <div className="space-y-2">
+                    {preview.notFound.map(n => (
+                      <label key={n} className="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" checked={createMissing[n] ?? true}
+                          onChange={e => setCreateMissing(prev => ({ ...prev, [n]: e.target.checked }))}
+                          className="w-4 h-4 accent-indigo-500 cursor-pointer" />
+                        <span className="text-yellow-200 text-sm">{n}</span>
+                        <span className="text-yellow-600 text-xs">{createMissing[n] ? '→ será criado automaticamente' : '→ jogadores ficarão sem time'}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {preview.noTeam.length > 0 && (
+                <div className="bg-slate-800 border border-slate-600 rounded-xl p-4 mb-3">
+                  <div className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">👤 Sem time ({preview.noTeam.length})</div>
+                  <div className="text-slate-300 text-sm">{preview.noTeam.map(p => p.name).join(', ')}</div>
+                </div>
+              )}
+              <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden mb-4">
+                <div className="px-4 py-2.5 bg-slate-900/50 text-slate-400 text-xs font-bold uppercase tracking-wider border-b border-slate-700">
+                  {preview.parsed.length} jogadores a importar
+                </div>
+                {(() => {
+                  const grouped: Record<string, ParsedPlayer[]> = {};
+                  preview.parsed.forEach(p => { const k = p.teamName ?? '__noTeam__'; if (!grouped[k]) grouped[k] = []; grouped[k].push(p); });
+                  return Object.entries(grouped).map(([key, players]) => {
+                    const teamName = key === '__noTeam__' ? 'Sem time' : key;
+                    const exists = key !== '__noTeam__' && tourn.teams.some(t => t.name.toLowerCase() === key.toLowerCase());
+                    const willCreate = key !== '__noTeam__' && !exists && createMissing[key];
+                    return (
+                      <div key={key} className="border-b border-slate-700 last:border-0">
+                        <div className="px-4 py-2 flex items-center gap-2">
+                          <span className="text-sm font-medium text-white">{teamName}</span>
+                          {exists && <span className="text-[10px] text-green-400 bg-green-900/30 px-1.5 py-0.5 rounded">existente</span>}
+                          {willCreate && <span className="text-[10px] text-yellow-400 bg-yellow-900/30 px-1.5 py-0.5 rounded">novo</span>}
+                          <span className="ml-auto text-slate-500 text-xs">{players.length} jog.</span>
+                        </div>
+                        <div className="px-4 pb-2 flex flex-wrap gap-1">
+                          {players.map((p, i) => <span key={i} className="text-xs text-slate-400 bg-slate-700 px-2 py-0.5 rounded-full">{p.number ? `#${p.number} ` : ''}{p.name}</span>)}
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setPreview(null)} className="flex-1 py-2.5 rounded-xl border border-slate-600 text-slate-300 text-sm hover:bg-slate-800 transition-colors">← Editar lista</button>
+                <button onClick={handleConfirm} className="flex-1 py-2.5 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-bold transition-colors">✅ Confirmar importação</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── SUB-COMPONENTES ─────────────────────────────────────────────────────────
