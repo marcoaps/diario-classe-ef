@@ -210,6 +210,13 @@ export default function Torneio() {
   const [editMatchId, setEditMatchId] = useState<string | null>(null);
   const [scoreA, setScoreA] = useState('');
   const [scoreB, setScoreB] = useState('');
+  // Estados do passo 4 (importação no setup)
+  const [setupImportText, setSetupImportText] = useState('');
+  const [setupPreview, setSetupPreview] = useState<{
+    parsed: ParsedPlayer[]; found: string[]; notFound: string[]; noTeam: ParsedPlayer[];
+  } | null>(null);
+  const [setupCreateMissing, setSetupCreateMissing] = useState<Record<string, boolean>>({});
+  const [setupPlayers, setSetupPlayers] = useState<Player[]>([]);
 
   const getTeam = useCallback((id: string | null) => tourn?.teams.find(t => t.id === id), [tourn]);
 
@@ -238,7 +245,7 @@ export default function Torneio() {
       if (sh.length % 2 !== 0) matches.push({ id: 'sw_r1_bye', teamA: sh[sh.length-1].id, teamB: null, sA: 3, sB: 0, played: true, round: 1, phase: 'swiss', group: null, isBye: true });
       phase = 'swiss';
     }
-    setTourn({ name: tournName || 'Torneio', teams, players: [], format, groups, matches, phase, swissRound: 1, playoffsN, champion: null });
+    setTourn({ name: tournName || 'Torneio', teams, players: setupPlayers, format, groups, matches, phase, swissRound: 1, playoffsN, champion: null });
     setScreen('tournament'); setActiveTab('matches');
   };
 
@@ -299,7 +306,7 @@ export default function Torneio() {
 
   // ── SETUP ───────────────────────────────────────────────────────────────────
   if (screen === 'setup') {
-    const stepLabels = ['Nome', 'Times', 'Formato'];
+    const stepLabels = ['Nome', 'Times', 'Formato', 'Jogadores'];
     return (
       <div className="min-h-screen bg-[#0f172a] p-4 flex flex-col items-center justify-start pt-8">
         <div className="text-center mb-6">
@@ -317,14 +324,14 @@ export default function Torneio() {
                 {step > i+1 ? '✓' : i+1}
               </div>
               <span className={`text-sm ${step >= i+1 ? 'text-white' : 'text-slate-500'}`}>{s}</span>
-              {i < 2 && <div className={`w-8 h-px ${step > i+1 ? 'bg-green-600' : 'bg-slate-700'}`} />}
+              {i < 3 && <div className={`w-5 h-px ${step > i+1 ? 'bg-green-600' : 'bg-slate-700'}`} />}
             </div>
           ))}
         </div>
 
         <div className="w-full max-w-lg bg-slate-800 rounded-2xl border border-slate-700 p-5 mb-4">
           <h2 className="text-white font-semibold text-base mb-4 pb-3 border-b border-slate-700">
-            {step === 1 ? '📝 Nome' : step === 2 ? '👥 Times' : '🎮 Formato'}
+            {step === 1 ? '📝 Nome' : step === 2 ? '👥 Times' : step === 3 ? '🎮 Formato' : '👤 Jogadores'}
           </h2>
 
           {/* Passo 1 */}
@@ -397,15 +404,165 @@ export default function Torneio() {
               )}
             </div>
           )}
+
+          {/* Passo 4 — Importação em lote (opcional) */}
+          {step === 4 && (
+            <div>
+              {!setupPreview ? (
+                <div>
+                  <div className="bg-slate-900 rounded-xl border border-slate-700 p-4 mb-4">
+                    <div className="text-slate-300 text-sm font-semibold mb-2">📌 Formato aceito (um jogador por linha):</div>
+                    <div className="font-mono text-xs text-slate-400 space-y-1">
+                      <div><span className="text-green-400">João Silva, Leões</span><span className="text-slate-600"> — nome, time</span></div>
+                      <div><span className="text-green-400">7 Maria Santos, Tigres</span><span className="text-slate-600"> — com número de camisa</span></div>
+                      <div><span className="text-green-400">Pedro Alves; Falcões</span><span className="text-slate-600"> — ponto e vírgula também funciona</span></div>
+                      <div><span className="text-yellow-400">Carlos Lima</span><span className="text-slate-600"> — sem time (aceito)</span></div>
+                      <div><span className="text-slate-600"># Comentários são ignorados</span></div>
+                    </div>
+                  </div>
+                  {setupPlayers.length > 0 && (
+                    <div className="bg-green-900/20 border border-green-700/40 rounded-xl px-4 py-2.5 mb-3 flex items-center justify-between">
+                      <span className="text-green-400 text-sm">✅ {setupPlayers.length} jogadores já importados</span>
+                      <button onClick={() => setSetupPlayers([])} className="text-red-400 text-xs hover:text-red-300">Limpar</button>
+                    </div>
+                  )}
+                  <textarea
+                    value={setupImportText}
+                    onChange={e => setSetupImportText(e.target.value)}
+                    className="w-full h-44 bg-slate-900 border border-slate-600 rounded-xl p-4 text-white text-sm font-mono focus:outline-none focus:border-indigo-500 resize-none placeholder-slate-600"
+                    placeholder={"João Silva, Leões
+7 Maria Santos, Leões
+Pedro Alves, Tigres
+Carlos Lima, Tigres
+Ana Souza, Falcões"}
+                  />
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-slate-500 text-xs">
+                      {setupImportText.split('
+').filter(l => l.trim() && !l.startsWith('#')).length} linha(s)
+                    </span>
+                    <button
+                      onClick={() => {
+                        if (!setupImportText.trim()) return;
+                        const currentTeams = teamNames.slice(0, teamCount).map((name, i) => ({
+                          id: `t${i}`, name: name || `Time ${i+1}`, color: TEAM_COLORS[i % TEAM_COLORS.length]
+                        }));
+                        const parsed = parseImportText(setupImportText);
+                        const teamNms = [...new Set(parsed.map(p => p.teamName).filter(Boolean))] as string[];
+                        const found = teamNms.filter(n => currentTeams.some(t => t.name.toLowerCase() === n.toLowerCase()));
+                        const notFound = teamNms.filter(n => !currentTeams.some(t => t.name.toLowerCase() === n.toLowerCase()));
+                        const noTeam = parsed.filter(p => !p.teamName);
+                        setSetupPreview({ parsed, found, notFound, noTeam });
+                        const init: Record<string, boolean> = {};
+                        notFound.forEach(n => { init[n] = true; });
+                        setSetupCreateMissing(init);
+                      }}
+                      disabled={!setupImportText.trim()}
+                      className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-sm font-bold transition-colors">
+                      Processar →
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  {setupPreview.found.length > 0 && (
+                    <div className="bg-green-900/20 border border-green-700/40 rounded-xl p-3 mb-3">
+                      <div className="text-green-400 text-xs font-bold uppercase tracking-wider mb-2">✅ Times reconhecidos ({setupPreview.found.length})</div>
+                      <div className="flex flex-wrap gap-2">
+                        {setupPreview.found.map(n => {
+                          const idx = teamNames.findIndex(t => t.toLowerCase() === n.toLowerCase());
+                          return (
+                            <span key={n} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-900/40 text-green-300 text-xs">
+                              <span className="w-2 h-2 rounded-full inline-block" style={{ background: idx >= 0 ? TEAM_COLORS[idx % TEAM_COLORS.length] : '#22C55E' }} />{n}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {setupPreview.notFound.length > 0 && (
+                    <div className="bg-yellow-900/20 border border-yellow-700/40 rounded-xl p-3 mb-3">
+                      <div className="text-yellow-400 text-xs font-bold uppercase tracking-wider mb-2">⚠️ Não encontrados nos seus times ({setupPreview.notFound.length})</div>
+                      <div className="space-y-2">
+                        {setupPreview.notFound.map(n => (
+                          <label key={n} className="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" checked={setupCreateMissing[n] ?? true}
+                              onChange={e => setSetupCreateMissing(prev => ({ ...prev, [n]: e.target.checked }))}
+                              className="w-4 h-4 accent-indigo-500" />
+                            <span className="text-yellow-200 text-sm">{n}</span>
+                            <span className="text-yellow-600 text-xs">{setupCreateMissing[n] ? '→ será criado' : '→ jogadores sem time'}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {setupPreview.noTeam.length > 0 && (
+                    <div className="bg-slate-900 border border-slate-700 rounded-xl p-3 mb-3">
+                      <div className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">👤 Sem time ({setupPreview.noTeam.length})</div>
+                      <div className="text-slate-400 text-xs">{setupPreview.noTeam.map(p => p.name).join(', ')}</div>
+                    </div>
+                  )}
+                  <div className="bg-slate-900 rounded-xl border border-slate-700 p-3 mb-4">
+                    <div className="text-slate-400 text-xs mb-1">{setupPreview.parsed.length} jogadores · {[...new Set(setupPreview.parsed.map(p => p.teamName).filter(Boolean))].length} times</div>
+                    <div className="flex flex-wrap gap-1">
+                      {setupPreview.parsed.map((p, i) => (
+                        <span key={i} className="text-xs text-slate-300 bg-slate-800 px-2 py-0.5 rounded-full">{p.number ? `#${p.number} ` : ''}{p.name}</span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => setSetupPreview(null)} className="flex-1 py-2 rounded-xl border border-slate-600 text-slate-300 text-sm hover:bg-slate-700 transition-colors">← Editar</button>
+                    <button
+                      onClick={() => {
+                        const currentTeams = teamNames.slice(0, teamCount).map((name, i) => ({
+                          id: `t${i}`, name: name || `Time ${i+1}`, color: TEAM_COLORS[i % TEAM_COLORS.length]
+                        }));
+                        const extraTeams: Team[] = [];
+                        setupPreview.notFound.forEach(name => {
+                          if (setupCreateMissing[name]) {
+                            extraTeams.push({ id: `t${currentTeams.length + extraTeams.length}`, name, color: TEAM_COLORS[(currentTeams.length + extraTeams.length) % TEAM_COLORS.length] });
+                          }
+                        });
+                        const allTeams = [...currentTeams, ...extraTeams];
+                        const players: Player[] = setupPreview.parsed.map(p => ({
+                          id: `pl_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                          name: p.name,
+                          teamId: p.teamName ? allTeams.find(t => t.name.toLowerCase() === p.teamName!.toLowerCase())?.id ?? null : null,
+                          number: p.number ?? undefined,
+                        }));
+                        if (extraTeams.length > 0) {
+                          const newNames = [...teamNames];
+                          extraTeams.forEach(t => { if (!newNames.includes(t.name)) newNames.push(t.name); });
+                          setTeamNames(newNames);
+                          setTeamCount(allTeams.length);
+                        }
+                        setSetupPlayers(prev => [...prev, ...players]);
+                        setSetupImportText('');
+                        setSetupPreview(null);
+                      }}
+                      className="flex-1 py-2 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-bold transition-colors">
+                      ✅ Confirmar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex justify-between w-full max-w-lg">
           {step > 1
-            ? <button onClick={() => setStep(s => s - 1)} className="px-4 py-2 rounded-xl border border-slate-600 bg-slate-800 text-slate-300 text-sm hover:bg-slate-700 transition-colors">← Voltar</button>
+            ? <button onClick={() => { setStep(s => s - 1); setSetupPreview(null); }} className="px-4 py-2 rounded-xl border border-slate-600 bg-slate-800 text-slate-300 text-sm hover:bg-slate-700 transition-colors">← Voltar</button>
             : <div />}
-          {step < 3
+          {step < 4
             ? <button onClick={() => setStep(s => s + 1)} className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">Próximo →</button>
-            : <button onClick={handleStart} className="px-5 py-2 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-bold transition-colors">🚀 Iniciar Torneio</button>}
+            : (
+              <div className="flex gap-2">
+                <button onClick={handleStart} className="px-4 py-2 rounded-xl border border-slate-600 bg-slate-800 text-slate-400 text-sm hover:bg-slate-700 transition-colors">
+                  {setupPlayers.length > 0 ? `Iniciar com ${setupPlayers.length} jogadores` : 'Pular e Iniciar'}
+                </button>
+              </div>
+            )}
         </div>
       </div>
     );
