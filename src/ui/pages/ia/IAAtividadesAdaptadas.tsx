@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Sparkles, Copy, CheckCircle, Loader2, RefreshCw, FileDown } from 'lucide-react';
 import {
-  Document, Packer, Paragraph, Table, TableRow, TableCell,
+  Document, Packer, Paragraph, Table, TableRow, TableCell, ImageRun,
   TextRun, AlignmentType, WidthType, BorderStyle, ShadingType,
   VerticalAlign, PageBreak,
 } from 'docx';
@@ -26,6 +26,7 @@ const ETAPAS = [
   { texto: 'Finalizando...', icone: '✨', duracao: 99999 },
 ];
 
+// ── PROGRESSO ────────────────────────────────────────────────────────────────
 function ProgressoGerando() {
   const [etapaIdx, setEtapaIdx] = useState(0);
   const [progresso, setProgresso] = useState(0);
@@ -87,6 +88,7 @@ function ProgressoGerando() {
   );
 }
 
+// ── PROMPT ────────────────────────────────────────────────────────────────────
 function gerarPrompt(v: Record<string, string>) {
   return `Você é professor especialista em Educação Física do Ensino Fundamental.
 NÃO use markdown. NÃO use **, ##, *, _. Escreva SOMENTE texto puro.
@@ -107,7 +109,7 @@ REGRAS IMPORTANTES:
 - Varie os tipos: algumas questões sobre história, algumas sobre fundamentos, algumas sobre regras
 - A imagem sugerida deve ajudar a entender o conteúdo da questão
 
-SIGA EXATAMENTE este formato:
+SIGA EXATAMENTE este formato (sem acentos nos cabeçalhos de seção):
 
 INSTRUCOES
 Leia cada questão com atenção e marque a alternativa correta: (A) ou (B).
@@ -173,7 +175,7 @@ GABARITO
 8: [A ou B]`;
 }
 
-// ── LIMPEZA ───────────────────────────────────────────────────────────────────
+// ── LIMPEZA / PARSE ───────────────────────────────────────────────────────────
 function limpar(t: string): string {
   return t
     .replace(/\r\n/g, '\n').replace(/\r/g, '\n')
@@ -181,6 +183,15 @@ function limpar(t: string): string {
     .replace(/^#{1,6}\s*/gm, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+// FIX 1: normalizar variações com acento que o Claude pode retornar
+function normalizarSecoes(t: string): string {
+  return t
+    .replace(/INSTRUÇÕES/gi, 'INSTRUCOES')
+    .replace(/INSTRUÇÃO/gi, 'INSTRUCOES')
+    .replace(/QUESTÕES/gi, 'QUESTOES')
+    .replace(/QUESTÃO\s+(\d)/gi, 'Questão $1'); // manter Questão com acento para o regex
 }
 
 function extrairBloco(texto: string, inicio: string, fim: string): string {
@@ -198,13 +209,20 @@ interface QuestaoAtiv {
   alternativas: { letra: string; texto: string }[];
 }
 
-function parsearAtividade(textoOriginal: string) {
-  const t = limpar(textoOriginal);
+interface DadosAtividade {
+  instrucoes: string;
+  questoes: QuestaoAtiv[];
+  gabarito: { numero: number; resposta: string }[];
+  textoLimpo: string;
+}
+
+function parsearAtividade(textoOriginal: string): DadosAtividade {
+  const t = normalizarSecoes(limpar(textoOriginal)); // FIX 1 aplicado aqui
+
   const instrucoes = extrairBloco(t, 'INSTRUCOES', 'QUESTOES');
   const blocoQ = extrairBloco(t, 'QUESTOES', 'GABARITO');
   const blocoGab = extrairBloco(t, 'GABARITO', '');
 
-  // Normalizar linhas em branco duplas para o regex funcionar
   const blocoNorm = blocoQ.replace(/\n{2,}/g, '\n');
 
   const questoes: QuestaoAtiv[] = [];
@@ -214,14 +232,12 @@ function parsearAtividade(textoOriginal: string) {
     const corpo = m[2].trim();
     const linhas = corpo.split('\n').map(l => l.trim()).filter(Boolean);
 
-    // Extrair imagem [IMAGEM: ...]
-    const imgLinha = linhas.find(l => l.startsWith('[IMAGEM:') || l.startsWith('[Imagem:'));
-    const imagem = imgLinha ? imgLinha.replace(/^\[IMAGEM:\s*/i, '').replace(/\]$/, '').trim() : '';
+    const imgLinha = linhas.find(l => /^\[imagem:/i.test(l));
+    const imagem = imgLinha ? imgLinha.replace(/^\[imagem:\s*/i, '').replace(/\]$/, '').trim() : '';
 
-    // Alternativas
     const isAlt = (l: string) => /^\([AB]\)/i.test(l);
     const enunciado = linhas
-      .filter(l => !isAlt(l) && !l.startsWith('[IMAGEM:') && !l.startsWith('[Imagem:'))
+      .filter(l => !isAlt(l) && !/^\[imagem:/i.test(l))
       .join(' ');
     const alternativas = linhas.filter(isAlt).map(l => ({
       letra: l[1].toUpperCase(),
@@ -233,14 +249,36 @@ function parsearAtividade(textoOriginal: string) {
     }
   }
 
-  // Gabarito
   const gabarito: { numero: number; resposta: string }[] = [];
   for (const l of blocoGab.split('\n')) {
-    const m = l.match(/(\d+)\s*:\s*([AB])/i);
+    const m = l.match(/(\d+)\s*[:.]\s*\[?([AB])\]?/i);
     if (m) gabarito.push({ numero: parseInt(m[1]), resposta: m[2].toUpperCase() });
   }
 
   return { instrucoes, questoes, gabarito, textoLimpo: t };
+}
+
+// ── PEXELS ───────────────────────────────────────────────────────────────────
+// FIX 2: buscar imagens reais via /api/pexels
+async function buscarFotoPexels(descricao: string): Promise<string | null> {
+  try {
+    // Usar apenas as primeiras palavras-chave para query mais eficiente
+    const query = descricao.split(/[,;]/)[0].trim().slice(0, 60);
+    const resp = await fetch(`/api/pexels?query=${encodeURIComponent(query)}&per_page=1`);
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    // Pexels retorna medium (~350px) ideal para preview e Word
+    return data.photos?.[0]?.src?.medium ?? data.photos?.[0]?.src?.small ?? null;
+  } catch { return null; }
+}
+
+// Converte URL de imagem para ArrayBuffer (para inserir no Word)
+async function urlParaBuffer(url: string): Promise<ArrayBuffer | null> {
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+    return await resp.arrayBuffer();
+  } catch { return null; }
 }
 
 // ── WORD ──────────────────────────────────────────────────────────────────────
@@ -268,6 +306,25 @@ const cel = (children: Paragraph[], cor?: string, cols?: number): TableCell =>
 const hCel = (txt: string, cols?: number, corFundo = AZ) =>
   cel([par([run(txt, { bold: true, cor: BR, sz: 22 })], AlignmentType.CENTER, 80, 80)], corFundo, cols);
 
+async function buscarImagemPexels(query: string, index = 0): Promise<{ url: string } | null> {
+  try {
+    const page = (index % 3) + 1;
+    const res = await fetch(`/api/pexels?query=${encodeURIComponent(query)}&page=${page}`);
+    const data = await res.json();
+    if (data.photos?.length > 0) return { url: data.photos[0].src.medium };
+  } catch (_) {}
+  return null;
+}
+
+async function baixarImagemBase64Ativ(url: string): Promise<{ base64: string; contentType: string } | null> {
+  try {
+    const res = await fetch(`/api/pexels?imageUrl=${encodeURIComponent(url)}`);
+    const data = await res.json();
+    if (data.base64) return { base64: data.base64, contentType: data.contentType };
+  } catch (_) {}
+  return null;
+}
+
 async function carregarLogoBase64(): Promise<string | null> {
   try {
     const resp = await fetch('/Logo_IOP.png');
@@ -282,14 +339,27 @@ async function carregarLogoBase64(): Promise<string | null> {
   } catch { return null; }
 }
 
-async function exportarWord(textoOriginal: string, valores: Record<string, string>) {
+// FIX 3: exportarWord recebe imagensPexels e insere imagens reais
+async function exportarWord(
+  textoOriginal: string,
+  valores: Record<string, string>,
+  imagensPexels: Record<number, string> = {}
+) {
   const d = parsearAtividade(textoOriginal);
   const logoB64 = await carregarLogoBase64();
   const esp = (n = 80) => new Paragraph({ children: [], spacing: { before: n, after: 0 } });
   const quebraPage = new Paragraph({ children: [new PageBreak()], spacing: { before: 0, after: 0 } });
 
+  // FIX 3a: pré-carregar buffers das imagens do Pexels
+  const imageBuffers: Record<number, ArrayBuffer> = {};
+  await Promise.all(
+    Object.entries(imagensPexels).map(async ([numStr, url]) => {
+      const buf = await urlParaBuffer(url);
+      if (buf) imageBuffers[parseInt(numStr)] = buf;
+    })
+  );
+
   // ── CABEÇALHO ────────────────────────────────────────────────────────────
-  const { ImageRun } = await import('docx');
   const celulaInfo = cel([
     par([run(`${valores.tipo || 'Atividade de Fixação'} — ${valores.bimestre} — 2026`, { bold: true, sz: 22, cor: AZ })], AlignmentType.LEFT, 40, 8),
     par([run('Disciplina: Educação Física', { bold: true, sz: 20 })], AlignmentType.LEFT, 6, 6),
@@ -331,25 +401,35 @@ async function exportarWord(textoOriginal: string, valores: Record<string, strin
     ])] })],
   });
 
-  // ── QUESTÕES em 2 colunas ─────────────────────────────────────────────────
+  // ── TÍTULO QUESTÕES ───────────────────────────────────────────────────────
   const tituloQ = new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
     borders: bd(),
     rows: [new TableRow({ children: [hCel(`QUESTÕES  (cada questão vale 1,25 ponto — total 10,0)`, 1)] })],
   });
 
-  const renderQ = (q: QuestaoAtiv, idx: number): Paragraph[] => {
-    const bg = idx % 2 === 0 ? BR : CZ;
+  // FIX 3b: renderQ agora insere imagem real se buffer disponível
+  const renderQ = (q: QuestaoAtiv): Paragraph[] => {
     const pars: Paragraph[] = [];
 
-    // Número + enunciado
     pars.push(par([
       run(`${q.numero}. `, { bold: true, sz: 20, cor: AZ }),
       run(q.enunciado, { sz: 20 }),
     ], AlignmentType.LEFT, 80, 20));
 
-    // Caixa de imagem
-    if (q.imagem) {
+    if (imageBuffers[q.numero]) {
+      // Imagem real do Pexels
+      pars.push(new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [new ImageRun({
+          data: imageBuffers[q.numero],
+          transformation: { width: 200, height: 130 },
+          type: 'jpg',
+        })],
+        spacing: { before: 20, after: 20 },
+      }));
+    } else if (q.imagem) {
+      // Placeholder com legenda + espaço para colar imagem manualmente
       pars.push(new Paragraph({
         children: [run(`[ IMAGEM: ${q.imagem} ]`, { sz: 18, cor: '777777', it: true })],
         alignment: AlignmentType.CENTER,
@@ -361,11 +441,9 @@ async function exportarWord(textoOriginal: string, valores: Record<string, strin
           right: { style: BorderStyle.DASHED, size: 4, color: 'AAAAAA' },
         },
       }));
-      // Espaço vazio para colar a imagem
       pars.push(par([run('', { sz: 20 })], AlignmentType.LEFT, 5, 50));
     }
 
-    // Alternativas
     q.alternativas.forEach(alt => {
       pars.push(par([
         run(`(${alt.letra})  `, { bold: true, sz: 20 }),
@@ -373,9 +451,7 @@ async function exportarWord(textoOriginal: string, valores: Record<string, strin
       ], AlignmentType.LEFT, 20, 20));
     });
 
-    // Linha de resposta
     pars.push(par([run('Resposta: (    )', { bold: true, sz: 20, cor: AZ })], AlignmentType.LEFT, 30, 60));
-
     return pars;
   };
 
@@ -383,11 +459,11 @@ async function exportarWord(textoOriginal: string, valores: Record<string, strin
   const col2 = d.questoes.slice(4, 8);
 
   const col1Pars = col1.length > 0
-    ? col1.flatMap((q, i) => renderQ(q, i))
+    ? col1.flatMap(q => renderQ(q))
     : [par([run(extrairBloco(d.textoLimpo, 'QUESTOES', 'GABARITO'), { sz: 20 })])];
 
   const col2Pars = col2.length > 0
-    ? col2.flatMap((q, i) => renderQ(q, i))
+    ? col2.flatMap(q => renderQ(q))
     : [par([run('')])];
 
   const tabelaQ = new Table({
@@ -447,12 +523,66 @@ async function exportarWord(textoOriginal: string, valores: Record<string, strin
   saveAs(blob, `atividade_ef_${turma}_${bim}.docx`);
 }
 
-// ── COMPONENTE ────────────────────────────────────────────────────────────────
+// ── PREVIEW DE QUESTÃO COM IMAGEM ─────────────────────────────────────────────
+function PreviewQuestao({
+  q,
+  imgUrl,
+  carregando,
+  gabResposta,
+}: {
+  q: QuestaoAtiv;
+  imgUrl?: string;
+  carregando: boolean;
+  gabResposta?: string;
+}) {
+  return (
+    <div className="mb-5 pb-5 border-b border-gray-100 last:border-0">
+      <p className="text-sm text-gray-800 mb-2 leading-snug">
+        <span className="text-teal-700 font-black">Questão {q.numero}.&nbsp;</span>
+        {q.enunciado}
+      </p>
+
+      {/* Área de imagem */}
+      {carregando && (
+        <div className="w-full h-24 rounded-xl bg-gray-50 border border-dashed border-gray-200 flex items-center justify-center mb-2">
+          <Loader2 className="w-4 h-4 text-teal-400 animate-spin mr-1" />
+          <span className="text-xs text-gray-400">Buscando imagem...</span>
+        </div>
+      )}
+      {!carregando && imgUrl && (
+        <img
+          src={imgUrl}
+          alt={q.imagem}
+          className="w-full max-h-36 object-cover rounded-xl mb-2 border border-gray-100"
+        />
+      )}
+      {!carregando && !imgUrl && q.imagem && (
+        <div className="w-full rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-2 mb-2 flex items-start gap-2">
+          <span className="text-base">🖼️</span>
+          <span className="text-xs text-gray-400 leading-snug">{q.imagem}</span>
+        </div>
+      )}
+
+      {/* Alternativas */}
+      {q.alternativas.map(alt => (
+        <p key={alt.letra} className={`text-sm ml-1 mb-0.5 ${gabResposta === alt.letra ? 'text-teal-700 font-semibold' : 'text-gray-600'}`}>
+          <span className="font-black">({alt.letra})</span> {alt.texto}
+          {gabResposta === alt.letra && <span className="ml-1 text-teal-500 text-xs">✓</span>}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+// ── COMPONENTE PRINCIPAL ───────────────────────────────────────────────────────
 export function IAAtividadesAdaptadas() {
   const navigate = useNavigate();
   const [valores, setValores] = useState<Record<string, string>>({});
   const [resultado, setResultado] = useState('');
+  const [dadosAtividade, setDadosAtividade] = useState<DadosAtividade | null>(null);
+  const [imagensPexels, setImagensPexels] = useState<Record<number, string>>({});
   const [gerando, setGerando] = useState(false);
+  const [buscandoImagens, setBuscandoImagens] = useState(false);
   const [exportando, setExportando] = useState(false);
   const [copiado, setCopiado] = useState(false);
   const [erro, setErro] = useState('');
@@ -462,22 +592,53 @@ export function IAAtividadesAdaptadas() {
   const gerar = async () => {
     const faltando = CAMPOS.filter(c => c.required !== false && !valores[c.id]?.trim());
     if (faltando.length > 0) { setErro(`Preencha: ${faltando.map(c => c.label).join(', ')}`); return; }
-    setErro(''); setGerando(true); setResultado('');
+    setErro('');
+    setGerando(true);
+    setResultado('');
+    setDadosAtividade(null);
+    setImagensPexels({});
+
     try {
+      // FIX 4: modelo corrigido para claude-sonnet-4-6
       const resp = await fetch('/api/claude', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-sonnet-4-6',
           max_tokens: 3000,
           messages: [{ role: 'user', content: gerarPrompt(valores) }],
         }),
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error?.message || 'Erro na API');
-      setResultado(data.content?.[0]?.text || '');
-    } catch (e: any) { setErro('Erro ao gerar: ' + e.message); }
-    finally { setGerando(false); }
+
+      const texto = data.content?.[0]?.text || '';
+      setResultado(texto);
+
+      // Parsear e buscar imagens em paralelo
+      const dados = parsearAtividade(texto);
+      setDadosAtividade(dados);
+
+      // FIX 2: buscar imagens do Pexels após gerar
+      if (dados.questoes.length > 0) {
+        setBuscandoImagens(true);
+        const imgs: Record<number, string> = {};
+        await Promise.all(
+          dados.questoes
+            .filter(q => q.imagem)
+            .map(async q => {
+              const url = await buscarFotoPexels(q.imagem);
+              if (url) imgs[q.numero] = url;
+            })
+        );
+        setImagensPexels(imgs);
+        setBuscandoImagens(false);
+      }
+    } catch (e: any) {
+      setErro('Erro ao gerar: ' + e.message);
+    } finally {
+      setGerando(false);
+    }
   };
 
   const copiar = () => {
@@ -487,24 +648,34 @@ export function IAAtividadesAdaptadas() {
   };
 
   const baixarWord = async () => {
+    if (!resultado) return;
     setExportando(true);
-    try { await exportarWord(resultado, valores); }
-    catch (e: any) { alert('Erro ao gerar Word: ' + e.message); }
-    finally { setExportando(false); }
+    try {
+      // FIX 3: passa imagensPexels para inserir imagens reais no Word
+      await exportarWord(resultado, valores, imagensPexels);
+    } catch (e: any) {
+      alert('Erro ao gerar Word: ' + e.message);
+    } finally {
+      setExportando(false);
+    }
   };
+
+  const temImagens = Object.keys(imagensPexels).length > 0;
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 pb-36">
+      {/* Header */}
       <div className="p-5 text-white relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #0f766e, #0d9488)' }}>
         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10" />
         <button onClick={() => navigate('/ia')} className="flex items-center gap-1.5 text-white/70 text-sm font-semibold mb-3 relative z-10 hover:text-white">
           <ArrowLeft className="w-4 h-4" /> Ferramentas IA
         </button>
         <h1 className="text-lg font-black relative z-10">Gerador de Atividades</h1>
-        <p className="text-sm text-white/70 mt-1 relative z-10">8 questões · 2 alternativas · Espaço para imagens · Word</p>
+        <p className="text-sm text-white/70 mt-1 relative z-10">8 questões · 2 alternativas · Imagens reais · Word</p>
       </div>
 
       <div className="p-4 flex flex-col gap-4">
+        {/* Formulário */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col gap-3">
           {CAMPOS.map(campo => (
             <div key={campo.id}>
@@ -536,14 +707,27 @@ export function IAAtividadesAdaptadas() {
           </button>
         </div>
 
+        {/* Progresso */}
         {gerando && <ProgressoGerando />}
 
-        {resultado && !gerando && (
+        {/* Preview rico com imagens */}
+        {dadosAtividade && !gerando && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            {/* Barra de ações */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-teal-50 flex-wrap gap-2">
               <div className="flex items-center gap-2">
                 <CheckCircle className="w-4 h-4 text-teal-600" />
                 <span className="text-sm font-black text-teal-700">Atividade gerada!</span>
+                {buscandoImagens && (
+                  <span className="flex items-center gap-1 text-xs text-teal-500">
+                    <Loader2 className="w-3 h-3 animate-spin" /> buscando imagens...
+                  </span>
+                )}
+                {!buscandoImagens && temImagens && (
+                  <span className="text-xs text-teal-500 font-semibold">
+                    📸 {Object.keys(imagensPexels).length}/8 imagens
+                  </span>
+                )}
               </div>
               <div className="flex gap-2 flex-wrap">
                 <button onClick={gerar} className="flex items-center gap-1 text-xs text-gray-500 hover:text-teal-600 font-semibold">
@@ -553,15 +737,49 @@ export function IAAtividadesAdaptadas() {
                   className={`flex items-center gap-1 text-xs font-black px-3 py-1.5 rounded-lg transition-all ${copiado ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-700'}`}>
                   {copiado ? <><CheckCircle className="w-3.5 h-3.5" /> Copiado!</> : <><Copy className="w-3.5 h-3.5" /> Copiar</>}
                 </button>
-                <button onClick={baixarWord} disabled={exportando}
+                <button onClick={baixarWord} disabled={exportando || buscandoImagens}
                   className="flex items-center gap-1 text-xs font-black px-3 py-1.5 rounded-lg text-white disabled:opacity-60"
                   style={{ background: 'linear-gradient(135deg, #0f766e, #0d9488)' }}>
-                  {exportando ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Gerando...</> : <><FileDown className="w-3.5 h-3.5" /> Baixar Word</>}
+                  {exportando
+                    ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Gerando...</>
+                    : <><FileDown className="w-3.5 h-3.5" /> Baixar Word</>}
                 </button>
               </div>
             </div>
+
+            {/* Preview das questões */}
             <div className="p-4">
-              <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">{limpar(resultado)}</pre>
+              {dadosAtividade.questoes.length > 0 ? (
+                <>
+                  {dadosAtividade.questoes.map(q => (
+                    <PreviewQuestao
+                      key={q.numero}
+                      q={q}
+                      imgUrl={imagensPexels[q.numero]}
+                      carregando={buscandoImagens}
+                      gabResposta={dadosAtividade.gabarito.find(g => g.numero === q.numero)?.resposta}
+                    />
+                  ))}
+
+                  {/* Gabarito resumido */}
+                  {dadosAtividade.gabarito.length > 0 && (
+                    <div className="mt-2 p-3 bg-teal-50 rounded-xl border border-teal-100">
+                      <p className="text-xs font-black text-teal-700 mb-2 uppercase tracking-widest">Gabarito</p>
+                      <div className="grid grid-cols-4 gap-2">
+                        {dadosAtividade.gabarito.map(g => (
+                          <div key={g.numero} className="text-center bg-white rounded-lg py-1 border border-teal-100">
+                            <span className="text-xs text-gray-400">{g.numero}.</span>
+                            <span className="text-sm font-black text-teal-600 ml-1">{g.resposta}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                // Fallback: texto puro se o parse falhou
+                <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">{limpar(resultado)}</pre>
+              )}
             </div>
           </div>
         )}

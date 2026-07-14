@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
+import { chamarClaudeProxy } from "../../../utils/claudeProxy";
 
 interface SituacaoAprendizagem {
   numero: number;
@@ -60,17 +61,6 @@ async function baixarImagemBase64(url: string): Promise<{ base64: string; conten
     if (data.base64) return { base64: data.base64, contentType: data.contentType };
   } catch (_) {}
   return null;
-}
-
-async function chamarClaudeProxy(prompt: string): Promise<string> {
-  const res = await fetch("/api/claude", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 8000, messages: [{ role: "user", content: prompt }] }),
-  });
-  if (!res.ok) throw new Error(`Erro HTTP ${res.status}`);
-  const data = await res.json();
-  return data.content.map((i: { text?: string }) => i.text ?? "").join("");
 }
 
 function base64ToUint8Array(base64: string): Uint8Array {

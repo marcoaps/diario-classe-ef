@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { BookOpen, Download, Loader2, Calendar } from 'lucide-react';
 import { supabase } from '../../data/supabase';
 import ExcelJS from 'exceljs';
+import { chamarClaudeProxy } from '../../utils/claudeProxy';
+import { getCurriculumData, formatCurriculumForPrompt, getAnoFromTurma } from '../../data/curriculumData';
 
 // ─── Calendário 2026 ─────────────────────────────────────────────────────────
 interface DiaTipo {
@@ -10,6 +12,15 @@ interface DiaTipo {
   ano: number;
   feriado: string | null;
   label: string;
+}
+
+interface ConteudoAula {
+  id?: string;
+  turma: string;
+  data: string; // YYYY-MM-DD
+  bimestre: number;
+  tema: string;
+  titulo: string;
 }
 
 // Feriados e não-letivos
@@ -48,15 +59,20 @@ function emRecessoOuFerias(d: Date): boolean {
   const dia = d.getDate();
   if (mes < 3) return true;                              // antes do início
   if (mes === 3 && dia < 9) return true;                 // planejamento inicial março
-  if (mes === 7 && dia >= 1 && dia <= 3) return true;    // recesso 1-3 julho
-  if (mes === 7 && dia >= 8 && dia <= 10) return true;   // recesso 8-10 julho
-  if (mes === 7 && dia >= 13 && dia <= 17) return true;  // planejamento 13-17 julho
-  if (mes === 7 && dia >= 18 && dia <= 31) return true;  // férias professores
   if (mes === 12 && dia > 16) return true;               // fim do ano
   return false;
 }
 
 function pad(n: number) { return String(n).padStart(2, '0'); }
+
+function dataParaChave(dt: DiaTipo): string {
+  return `${dt.ano}-${pad(dt.mes)}-${pad(dt.dia)}`;
+}
+
+function chaveParaBR(chave: string): string {
+  const [ano, mes, dia] = chave.split('-');
+  return `${dia}/${mes}/${ano}`;
+}
 
 function gerarDatas(diaSemana: number): DiaTipo[] {
   const resultado: DiaTipo[] = [];
@@ -486,6 +502,21 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
 export function DiarioAulas() {
   const [gerando, setGerando] = useState<DiaKey | null>(null);
 
+  // ── Conteúdo das Aulas (novo recurso) ──
+  const [diaExpandido, setDiaExpandido] = useState<DiaKey | null>(null);
+  const [turmaAtiva, setTurmaAtiva] = useState<Partial<Record<DiaKey, string>>>({});
+  const [conteudosPorTurma, setConteudosPorTurma] = useState<Record<string, ConteudoAula[]>>({});
+  const [carregandoConteudo, setCarregandoConteudo] = useState<string | null>(null);
+
+  const [formTema, setFormTema] = useState('');
+  const [formBimestre, setFormBimestre] = useState('1');
+  const [formDataInicio, setFormDataInicio] = useState('');
+  const [formDataFim, setFormDataFim] = useState('');
+  const [gerandoIA, setGerandoIA] = useState(false);
+  const [erroIA, setErroIA] = useState('');
+  const [previewTitulos, setPreviewTitulos] = useState<{ data: string; titulo: string }[] | null>(null);
+  const [salvandoConteudo, setSalvandoConteudo] = useState(false);
+
   async function handleGerar(dia: DiaKey) {
     setGerando(dia);
     try {
@@ -495,6 +526,136 @@ export function DiarioAulas() {
     } finally {
       setGerando(null);
     }
+  }
+
+  async function carregarConteudos(turma: string) {
+    setCarregandoConteudo(turma);
+    try {
+      const { data, error } = await supabase
+        .from('conteudo_aulas')
+        .select('id, turma, data, bimestre, tema, titulo')
+        .eq('turma', turma)
+        .order('data');
+      if (!error) {
+        setConteudosPorTurma(prev => ({ ...prev, [turma]: (data as ConteudoAula[]) || [] }));
+      }
+    } finally {
+      setCarregandoConteudo(null);
+    }
+  }
+
+  function abrirTurma(dia: DiaKey, turma: string) {
+    setTurmaAtiva(prev => ({ ...prev, [dia]: turma }));
+    setPreviewTitulos(null);
+    setErroIA('');
+    if (!conteudosPorTurma[turma]) carregarConteudos(turma);
+  }
+
+  function toggleDia(dia: DiaKey) {
+    if (diaExpandido === dia) {
+      setDiaExpandido(null);
+      return;
+    }
+    setDiaExpandido(dia);
+    const cfg = GRUPOS[dia];
+    const turmaPadrao = turmaAtiva[dia] || cfg.turmas[0];
+    abrirTurma(dia, turmaPadrao);
+  }
+
+  async function handleGerarIA(dia: DiaKey) {
+    const turma = turmaAtiva[dia];
+    if (!turma) return;
+    if (!formTema.trim()) { setErroIA('Informe o tema.'); return; }
+    if (!formDataInicio || !formDataFim) { setErroIA('Informe data início e data fim.'); return; }
+
+    const cfg = GRUPOS[dia];
+    const todasDatas = gerarDatas(cfg.diaSemana);
+    const letivas = todasDatas.filter(dt => {
+      if (dt.feriado || dt.label === 'Planejamento') return false;
+      const dk = dataParaChave(dt);
+      return dk >= formDataInicio && dk <= formDataFim;
+    });
+
+    if (letivas.length === 0) {
+      setErroIA('Nenhuma aula letiva encontrada nesse intervalo de datas para essa turma.');
+      return;
+    }
+
+    setGerandoIA(true);
+    setErroIA('');
+    setPreviewTitulos(null);
+
+    try {
+      const ano = getAnoFromTurma(turma);
+      const curriculo = getCurriculumData(turma, formBimestre);
+      const contexto = curriculo ? formatCurriculumForPrompt(curriculo, ano, formBimestre) : '';
+
+      const prompt = `Você é um professor de Educação Física do estado do Acre, Brasil.
+
+Tema da(s) aula(s): ${formTema}
+Turma: ${turma} (${ano}º Ano) — ${formBimestre}º Bimestre
+
+${contexto}
+
+Gere exatamente ${letivas.length} títulos curtos (3 a 8 palavras cada) para o campo "Conteúdos Desenvolvidos" do diário de classe, um para cada uma das ${letivas.length} aulas consecutivas sobre o tema "${formTema}", em ordem pedagógica lógica (ex: história/origem → características gerais → regras → fundamentos técnicos → prática/aplicação).
+Sempre que possível, relacione os títulos com os itens de "Objetos de Conhecimento" do plano de curso oficial acima. Se o plano de curso não tiver nada relacionado ao tema, gere títulos coerentes mesmo assim.
+
+Responda SOMENTE com um array JSON de ${letivas.length} strings, sem markdown, sem texto antes ou depois. Exemplo de formato:
+["História e origem do(a) ${formTema}", "Características gerais da modalidade", "Regras básicas e adaptações do jogo", "Fundamentos técnicos"]`;
+
+      const texto = await chamarClaudeProxy(prompt);
+      const start = texto.indexOf('[');
+      const end = texto.lastIndexOf(']');
+      if (start === -1) throw new Error('Resposta inesperada da IA');
+      const titulos: string[] = JSON.parse(texto.slice(start, end + 1));
+
+      const pares = letivas.map((dt, i) => ({
+        data: dataParaChave(dt),
+        titulo: titulos[i] || '',
+      }));
+      setPreviewTitulos(pares);
+    } catch (e: any) {
+      setErroIA('Erro ao gerar: ' + e.message);
+    } finally {
+      setGerandoIA(false);
+    }
+  }
+
+  function editarPreviewTitulo(idx: number, novoTitulo: string) {
+    setPreviewTitulos(prev => prev ? prev.map((p, i) => (i === idx ? { ...p, titulo: novoTitulo } : p)) : prev);
+  }
+
+  async function handleSalvarConteudo(dia: DiaKey) {
+    const turma = turmaAtiva[dia];
+    if (!turma || !previewTitulos) return;
+    setSalvandoConteudo(true);
+    try {
+      const rows = previewTitulos.map(p => ({
+        turma,
+        data: p.data,
+        bimestre: parseInt(formBimestre, 10),
+        tema: formTema,
+        titulo: p.titulo,
+      }));
+      const { error } = await supabase
+        .from('conteudo_aulas')
+        .upsert(rows, { onConflict: 'turma,data' });
+      if (error) throw error;
+      setPreviewTitulos(null);
+      setFormTema('');
+      await carregarConteudos(turma);
+    } catch (e: any) {
+      setErroIA('Erro ao salvar: ' + e.message);
+    } finally {
+      setSalvandoConteudo(false);
+    }
+  }
+
+  async function handleRemoverConteudo(turma: string, id?: string) {
+    if (!id) return;
+    if (!confirm('Remover este conteúdo?')) return;
+    await supabase.from('conteudo_aulas').delete().eq('id', id);
+    await carregarConteudos(turma);
   }
 
   const cards = [
@@ -558,6 +719,8 @@ export function DiarioAulas() {
           const datas = gerarDatas(cfg.diaSemana);
           const letivas = datas.filter(d => !d.feriado && d.label !== 'Planejamento').length;
           const estaGerando = gerando === dia;
+          const expandido = diaExpandido === dia;
+          const turmaSelecionada = turmaAtiva[dia];
 
           return (
             <div key={dia}
@@ -607,6 +770,145 @@ export function DiarioAulas() {
                   }
                 </button>
               </div>
+
+              {/* Toggle Conteúdo das Aulas */}
+              <div className="px-4 pb-3">
+                <button
+                  onClick={() => toggleDia(dia)}
+                  className="text-xs font-semibold text-blue-700 hover:underline"
+                >
+                  {expandido ? '▲ Ocultar conteúdo das aulas' : '▼ Conteúdo das aulas (tema por data)'}
+                </button>
+              </div>
+
+              {expandido && (
+                <div className="border-t border-gray-200 bg-white px-4 py-4 space-y-4">
+                  {/* abas de turma */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {cfg.turmas.map(t => (
+                      <button
+                        key={t}
+                        onClick={() => abrirTurma(dia, t)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${
+                          turmaSelecionada === t ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+
+                  {turmaSelecionada && (
+                    <>
+                      {/* formulário de geração */}
+                      <div className="bg-gray-50 rounded-xl p-3 space-y-2">
+                        <p className="text-xs font-semibold text-gray-600">
+                          Aplicar tema num intervalo de datas — Turma {turmaSelecionada}
+                        </p>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          <input
+                            className="col-span-2 sm:col-span-1 border border-gray-200 rounded-lg px-2 py-1.5 text-xs"
+                            placeholder="Tema (ex: Voleibol)"
+                            value={formTema}
+                            onChange={e => setFormTema(e.target.value)}
+                          />
+                          <select
+                            className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs"
+                            value={formBimestre}
+                            onChange={e => setFormBimestre(e.target.value)}
+                          >
+                            <option value="1">1º Bimestre</option>
+                            <option value="2">2º Bimestre</option>
+                            <option value="3">3º Bimestre</option>
+                            <option value="4">4º Bimestre</option>
+                          </select>
+                          <input
+                            type="date"
+                            className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs"
+                            value={formDataInicio}
+                            onChange={e => setFormDataInicio(e.target.value)}
+                          />
+                          <input
+                            type="date"
+                            className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs"
+                            value={formDataFim}
+                            onChange={e => setFormDataFim(e.target.value)}
+                          />
+                        </div>
+                        <button
+                          onClick={() => handleGerarIA(dia)}
+                          disabled={gerandoIA}
+                          className="w-full py-2 rounded-lg bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white text-xs font-semibold"
+                        >
+                          {gerandoIA ? 'Gerando com IA...' : '✨ Gerar títulos com IA'}
+                        </button>
+                        {erroIA && <p className="text-xs text-red-600">{erroIA}</p>}
+                      </div>
+
+                      {/* preview antes de salvar */}
+                      {previewTitulos && (
+                        <div className="border border-blue-200 bg-blue-50 rounded-xl p-3 space-y-2">
+                          <p className="text-xs font-semibold text-blue-800">Prévia — revise antes de salvar</p>
+                          {previewTitulos.map((p, i) => (
+                            <div key={p.data} className="flex items-center gap-2">
+                              <span className="text-xs text-gray-500 w-20 shrink-0">{chaveParaBR(p.data)}</span>
+                              <input
+                                className="flex-1 border border-gray-200 rounded-lg px-2 py-1 text-xs"
+                                value={p.titulo}
+                                onChange={e => editarPreviewTitulo(i, e.target.value)}
+                              />
+                            </div>
+                          ))}
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleSalvarConteudo(dia)}
+                              disabled={salvandoConteudo}
+                              className="flex-1 py-2 rounded-lg bg-green-700 hover:bg-green-800 disabled:opacity-50 text-white text-xs font-semibold"
+                            >
+                              {salvandoConteudo ? 'Salvando...' : 'Salvar no Diário'}
+                            </button>
+                            <button
+                              onClick={() => setPreviewTitulos(null)}
+                              className="px-4 py-2 rounded-lg border border-gray-200 text-xs text-gray-500"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* lista já salva */}
+                      <div className="space-y-1">
+                        <p className="text-xs font-semibold text-gray-600">
+                          Conteúdo já registrado — Turma {turmaSelecionada}
+                        </p>
+                        {carregandoConteudo === turmaSelecionada ? (
+                          <p className="text-xs text-gray-400">Carregando...</p>
+                        ) : (conteudosPorTurma[turmaSelecionada]?.length ?? 0) === 0 ? (
+                          <p className="text-xs text-gray-400">Nenhum conteúdo registrado ainda para essa turma.</p>
+                        ) : (
+                          <div className="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
+                            {conteudosPorTurma[turmaSelecionada].map(c => (
+                              <div key={c.id} className="flex items-center justify-between px-3 py-2 text-xs">
+                                <div>
+                                  <span className="font-semibold text-gray-700">{chaveParaBR(c.data)}</span>
+                                  <span className="text-gray-500"> — {c.titulo}</span>
+                                </div>
+                                <button
+                                  onClick={() => handleRemoverConteudo(turmaSelecionada, c.id)}
+                                  className="text-red-500 hover:underline"
+                                >
+                                  remover
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}

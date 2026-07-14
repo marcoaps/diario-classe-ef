@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+﻿import React, { useMemo, useState } from 'react';
 import { useStore } from '../../store';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../data/supabase';
@@ -18,6 +18,16 @@ function normalizarTurma(turmaId: string) {
   return turmaId.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
 }
 
+const LETRAS = ['A', 'B', 'C', 'D'];
+const GABARITO_INICIAL: Record<string, string> = {'1':'A','2':'A','3':'A','4':'A','5':'A','6':'A','7':'A','8':'A'};
+
+
+const PARTICULAS = new Set(['de','da','das','do','dos','e','em','no','na','nos','nas']);
+function formatarNome(nome: string): string {
+  return nome.toLowerCase().split(' ').map((p, i) =>
+    i > 0 && PARTICULAS.has(p) ? p : p.charAt(0).toUpperCase() + p.slice(1)
+  ).join(' ');
+}
 export function AttendanceReport() {
   const { classRooms } = useStore();
   const [deleting, setDeleting] = useState(false);
@@ -25,33 +35,33 @@ export function AttendanceReport() {
   const [exportandoDiario, setExportandoDiario] = useState(false);
   const [exportandoDiarioOficial, setExportandoDiarioOficial] = useState(false);
   const [criandoAvaliacao, setCriandoAvaliacao] = useState(false);
+  const [calculandoNota, setCalculandoNota] = useState(false);
+  const [notasCalculadas, setNotasCalculadas] = useState(false);
   const [nomesExcluidos, setNomesExcluidos] = useState<Set<string>>(new Set());
+  const [nomesAEE, setNomesAEE] = useState<Set<string>>(new Set());
+  const [nomesTransferidos, setNomesTransferidos] = useState<Set<string>>(new Set());
+  const [showGabarito, setShowGabarito] = useState(false);
+  const [temaProva, setTemaProva] = useState('');
+  const [gabaritoInput, setGabaritoInput] = useState<Record<string, string>>({...GABARITO_INICIAL});
   const navigate = useNavigate();
 
-  // Carregar nomes excluídos (especiais + transferidos) ao montar
   React.useEffect(() => {
     async function carregarExcluidos() {
-      // Especiais
       const { data: aee } = await supabase.from('alunos_especiais').select('nome');
-      // Transferidos
-      const { data: transf } = await supabase
-        .from('notas')
-        .select('nome')
-        .ilike('situacao', '%transferi%');
-      const nomes = new Set<string>([
-        ...(aee || []).map((e: any) => e.nome.toLowerCase().trim()),
-        ...(transf || []).map((e: any) => e.nome.toLowerCase().trim()),
-      ]);
-      setNomesExcluidos(nomes);
+      const { data: transf } = await supabase.from('notas').select('nome').ilike('situacao', '%transferi%');
+      const aeeSet = new Set<string>((aee || []).map((e: any) => (e.nome as string).toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'')));
+      const transfSet = new Set<string>((transf || []).map((e: any) => (e.nome as string).toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'')));
+      setNomesAEE(aeeSet);
+      setNomesTransferidos(transfSet);
+      setNomesExcluidos(new Set<string>([...aeeSet, ...transfSet]));
     }
     carregarExcluidos();
   }, []);
 
   const uniqueClassRooms = useMemo(
-    () =>
-      Array.from(new Map(classRooms.map((cr) => [cr.name, cr])).values()).sort(
-        (a: any, b: any) => a.name.localeCompare(b.name, 'pt-BR', { numeric: true }),
-      ),
+    () => Array.from(new Map(classRooms.map((cr) => [cr.name, cr])).values()).sort(
+      (a: any, b: any) => a.name.localeCompare(b.name, 'pt-BR', { numeric: true }),
+    ),
     [classRooms],
   );
 
@@ -63,30 +73,16 @@ export function AttendanceReport() {
   }, [uniqueClassRooms, turmaId]);
 
   const { alunos, resumo, loading, erro, periodo, periodoEfetivo, recarregar } = useRelatorioFrequencia(
-    turmaId || null,
-    bimestre,
-    undefined,
-    dataFiltro || null,
+    turmaId || null, bimestre, undefined, dataFiltro || null,
   );
 
   const emRisco = alunos.filter((a) => a.em_risco || a.critico);
   const alunosCriticos = alunos.filter((a) =>
-    a.critico &&
-    a.percentual <= 33 &&
-    !nomesExcluidos.has(a.nome.toLowerCase().trim())
+    a.registros_total > 0 && a.percentual === 0 && !nomesExcluidos.has(a.nome.toLowerCase().trim())
   );
 
-  const handleExcel = () => exportarExcel({
-    turma: turmaId, bimestre, periodo,
-    periodoEfetivo, dataFiltro: dataFiltro || null,
-    alunos, resumo,
-  });
-
-  const handlePDF = () => exportarPDF({
-    turma: turmaId, bimestre, periodo,
-    periodoEfetivo, dataFiltro: dataFiltro || null,
-    alunos, resumo,
-  });
+  const handleExcel = () => exportarExcel({ turma: turmaId, bimestre, periodo, periodoEfetivo, dataFiltro: dataFiltro || null, alunos, resumo, nomesAEE, nomesTransferidos });
+  const handlePDF   = () => exportarPDF({ turma: turmaId, bimestre, periodo, periodoEfetivo, dataFiltro: dataFiltro || null, alunos, resumo });
 
   const handleDiario = async () => {
     if (alunos.length === 0) return;
@@ -95,36 +91,14 @@ export function AttendanceReport() {
       const turmaNorm = normalizarTurma(turmaId);
       const ano = new Date().getFullYear();
       const p = getPeriodoBimestre(bimestre, ano);
-
       const alunoIds = alunos.map(a => a.id);
-
-      const { data: freqData, error: freqErr } = await supabase
-        .from('frequencia')
-        .select('aluno_id, data, presente')
-        .in('aluno_id', alunoIds)
-        .gte('data', p.inicio)
-        .lte('data', p.fim);
-
+      const { data: freqData, error: freqErr } = await supabase.from('frequencia').select('aluno_id, data, presente').in('aluno_id', alunoIds).gte('data', p.inicio).lte('data', p.fim);
       if (freqErr) throw freqErr;
-
-      // Agrupa por data -> alunoId -> presente
       const frequenciaPorDia: Record<string, Record<string, boolean>> = {};
-      (freqData || []).forEach((r: any) => {
-        if (!frequenciaPorDia[r.data]) frequenciaPorDia[r.data] = {};
-        frequenciaPorDia[r.data][r.aluno_id] = r.presente;
-      });
-
-      await exportarDiario({
-        turma: turmaNorm,
-        bimestre,
-        alunos,
-        frequenciaPorDia,
-      });
-    } catch (e: any) {
-      alert('Erro ao gerar diário: ' + e.message);
-    } finally {
-      setExportandoDiario(false);
-    }
+      (freqData || []).forEach((r: any) => { if (!frequenciaPorDia[r.data]) frequenciaPorDia[r.data] = {}; frequenciaPorDia[r.data][r.aluno_id] = r.presente; });
+      await exportarDiario({ turma: turmaNorm, bimestre, alunos, frequenciaPorDia });
+    } catch (e: any) { alert('Erro ao gerar diário: ' + e.message); }
+    finally { setExportandoDiario(false); }
   };
 
   const handleDiarioOficial = async () => {
@@ -135,101 +109,94 @@ export function AttendanceReport() {
       const ano = new Date().getFullYear();
       const p = getPeriodoBimestre(bimestre, ano);
       const alunoIds = alunos.map(a => a.id);
-
-      const { data: freqData, error: freqErr } = await supabase
-        .from('frequencia')
-        .select('aluno_id, data, presente')
-        .in('aluno_id', alunoIds)
-        .gte('data', p.inicio)
-        .lte('data', p.fim);
-
+      const { data: freqData, error: freqErr } = await supabase.from('frequencia').select('aluno_id, data, presente').in('aluno_id', alunoIds).gte('data', p.inicio).lte('data', p.fim);
       if (freqErr) throw freqErr;
-
       const frequenciaPorDia: Record<string, Record<string, boolean>> = {};
-      (freqData || []).forEach((r: any) => {
-        if (!frequenciaPorDia[r.data]) frequenciaPorDia[r.data] = {};
-        frequenciaPorDia[r.data][r.aluno_id] = r.presente;
-      });
-
-      await exportarDiarioOficial({
-        turma: turmaNorm,
-        bimestre,
-        alunos,
-        frequenciaPorDia,
-      });
-    } catch (e: any) {
-      alert('Erro ao gerar diário oficial: ' + e.message);
-    } finally {
-      setExportandoDiarioOficial(false);
-    }
+      (freqData || []).forEach((r: any) => { if (!frequenciaPorDia[r.data]) frequenciaPorDia[r.data] = {}; frequenciaPorDia[r.data][r.aluno_id] = r.presente; });
+      await exportarDiarioOficial({ turma: turmaNorm, bimestre, alunos, frequenciaPorDia });
+    } catch (e: any) { alert('Erro ao gerar diário oficial: ' + e.message); }
+    finally { setExportandoDiarioOficial(false); }
   };
 
   const handleExcluir = async () => {
-    const label = dataFiltro
-      ? `do dia ${formatarBR(dataFiltro)}`
-      : `do ${bimestre}º Bimestre`;
-    const confirmado = window.confirm(
-      `Excluir TODOS os registros de frequência da turma ${turmaId} ${label}?\n\nEsta ação não pode ser desfeita.`
-    );
-    if (!confirmado) return;
-
+    const label = dataFiltro ? `do dia ${formatarBR(dataFiltro)}` : `do ${bimestre}º Bimestre`;
+    if (!window.confirm(`Excluir TODOS os registros de frequência da turma ${turmaId} ${label}?\n\nEsta ação não pode ser desfeita.`)) return;
     setDeleting(true);
     try {
       const turmaNorm = normalizarTurma(turmaId);
       const ano = new Date().getFullYear();
-      const p = dataFiltro
-        ? { inicio: dataFiltro, fim: dataFiltro }
-        : getPeriodoBimestre(bimestre, ano);
-
-      const { data: alunosData, error: errAlunos } = await supabase
-        .from('alunos').select('id').eq('turma_id', turmaNorm);
+      const p = dataFiltro ? { inicio: dataFiltro, fim: dataFiltro } : getPeriodoBimestre(bimestre, ano);
+      const { data: alunosData, error: errAlunos } = await supabase.from('alunos').select('id').eq('turma_id', turmaNorm);
       if (errAlunos) throw errAlunos;
-
       const alunoIds = (alunosData || []).map((a: any) => a.id);
       if (alunoIds.length === 0) { alert('Nenhum aluno encontrado.'); return; }
-
-      const { error } = await supabase
-        .from('frequencia').delete()
-        .in('aluno_id', alunoIds)
-        .gte('data', p.inicio)
-        .lte('data', p.fim);
+      const { error } = await supabase.from('frequencia').delete().in('aluno_id', alunoIds).gte('data', p.inicio).lte('data', p.fim);
       if (error) throw error;
-
       alert(`Frequência ${label} da turma ${turmaId} excluída!`);
       if (recarregar) recarregar();
-    } catch (err: any) {
-      alert('Erro ao excluir. Tente novamente.');
-    } finally {
-      setDeleting(false);
-    }
+    } catch (err: any) { alert('Erro ao excluir. Tente novamente.'); }
+    finally { setDeleting(false); }
   };
 
   async function criarAvaliacaoRecuperacao() {
     if (alunosCriticos.length === 0) return;
     setCriandoAvaliacao(true);
+    setShowGabarito(false);
     try {
-      const gabarito: Record<string, string> = {};
-      for (let i = 1; i <= 8; i++) gabarito[String(i)] = 'A';
       const turmaNormalizada = normalizarTurma(turmaId);
-      const { data: avaliacao, error } = await supabase
-        .from('avaliacoes')
-        .insert({
-          titulo: `Avaliação — ${turmaNormalizada} — ${bimestre}ºBimestre — ${new Date().getFullYear()}`,
-          descricao: `Alunos críticos (frequência baixa) — ${alunosCriticos.length} alunos`,
-          turma_id: turmaNormalizada,
-          num_questoes: 10,
-          gabarito,
-          valor_questao: 1.0,
-        })
-        .select()
-        .single();
+      const { data: avaliacao, error } = await supabase.from('avaliacoes').insert({
+        titulo: `${temaProva.trim() || 'Avaliação'} – ${turmaNormalizada} – ${bimestre}ºBimestre – ${new Date().getFullYear()}`,
+        descricao: `Alunos críticos (sem presença) – ${alunosCriticos.length} alunos`,
+        turma_id: turmaNormalizada,
+        num_questoes: 10,
+        gabarito: gabaritoInput,
+        valor_questao: 1.0,
+      }).select().single();
       if (error) throw error;
       const ids = alunosCriticos.map((a: any) => a.id).join(',');
       navigate(`/avaliacoes/folha/${avaliacao.id}?criticos=${ids}`);
+    } catch (e: any) { alert('Erro ao criar avaliação: ' + e.message); }
+    finally { setCriandoAvaliacao(false); }
+  }
+
+  function calcularNotaEf(percentual: number): number | null {
+    if (percentual <= 0) return null;
+    if (percentual <= 20) return 8.0;
+    if (percentual <= 40) return 8.5;
+    if (percentual <= 64) return 9.0;
+    if (percentual <= 88) return 9.5;
+    return 10.0;
+  }
+
+  function normNome(s: string) { return s.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+
+  async function calcularESalvarNotasEf() {
+    if (alunos.length === 0) return;
+    if (!window.confirm(`Calcular e salvar nota_ef para ${alunos.length} alunos da turma ${turmaId} (2º Bimestre)?\n\nIsso irá atualizar o campo nota_ef de cada aluno com base na frequência atual.`)) return;
+    setCalculandoNota(true);
+    setNotasCalculadas(false);
+    try {
+      const turmaNorm = normalizarTurma(turmaId);
+      const updates = alunos
+        .filter(a => a.registros_total > 0)
+        .map(a => ({
+          turma: turmaNorm,
+          bimestre: 2,
+          nome: a.nome,
+          numero: a.numero_chamada ?? 0,
+          nota_ef: calcularNotaEf(Math.round(a.percentual)),
+        }));
+      if (updates.length === 0) { alert('Nenhum aluno com registros de frequência.'); return; }
+      const { error } = await supabase
+        .from('notas')
+        .upsert(updates, { onConflict: 'turma,bimestre,nome' });
+      if (error) throw error;
+      setNotasCalculadas(true);
+      setTimeout(() => setNotasCalculadas(false), 4000);
     } catch (e: any) {
-      alert('Erro ao criar avaliação: ' + e.message);
+      alert('Erro ao salvar notas: ' + e.message);
     } finally {
-      setCriandoAvaliacao(false);
+      setCalculandoNota(false);
     }
   }
 
@@ -241,28 +208,23 @@ export function AttendanceReport() {
           Relatório de Frequência
         </h2>
         <div className="flex items-center gap-2 flex-wrap">
-          <button type="button" onClick={handleExcel} disabled={loading || alunos.length === 0}
-            className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 transition-all disabled:opacity-50 shadow-sm">
-            <FileSpreadsheet className="w-4 h-4" /> Excel
-          </button>
-          <button type="button" onClick={handlePDF} disabled={loading || alunos.length === 0}
-            className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-rose-600 text-white hover:bg-rose-700 active:scale-95 transition-all disabled:opacity-50 shadow-sm">
-            <FileText className="w-4 h-4" /> PDF
-          </button>
-          <button type="button" onClick={handleDiario} disabled={loading || exportandoDiario || alunos.length === 0}
-            className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-blue-700 text-white hover:bg-blue-800 active:scale-95 transition-all disabled:opacity-50 shadow-sm">
+          <button type="button" onClick={handleExcel} disabled={loading || alunos.length === 0} className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 transition-all disabled:opacity-50 shadow-sm"><FileSpreadsheet className="w-4 h-4" /> Nota 2BIM-2026</button>
+          <button type="button" onClick={handlePDF} disabled={loading || alunos.length === 0} className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-rose-600 text-white hover:bg-rose-700 active:scale-95 transition-all disabled:opacity-50 shadow-sm"><FileText className="w-4 h-4" /> PDF</button>
+          <button type="button" onClick={handleDiario} disabled={loading || exportandoDiario || alunos.length === 0} className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-blue-700 text-white hover:bg-blue-800 active:scale-95 transition-all disabled:opacity-50 shadow-sm">
             {exportandoDiario ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
-            {exportandoDiario ? 'Gerando...' : 'Di\u00e1rio'}
+            {exportandoDiario ? 'Gerando...' : 'Diário'}
           </button>
-          <button type="button" onClick={handleDiarioOficial} disabled={loading || exportandoDiarioOficial || alunos.length === 0}
-            className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-indigo-700 text-white hover:bg-indigo-800 active:scale-95 transition-all disabled:opacity-50 shadow-sm">
+          <button type="button" onClick={handleDiarioOficial} disabled={loading || exportandoDiarioOficial || alunos.length === 0} className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-indigo-700 text-white hover:bg-indigo-800 active:scale-95 transition-all disabled:opacity-50 shadow-sm">
             {exportandoDiarioOficial ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
             {exportandoDiarioOficial ? 'Gerando...' : 'Oficial'}
           </button>
-          <button type="button" onClick={handleExcluir} disabled={loading || deleting || alunos.length === 0}
-            className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-gray-800 text-white hover:bg-gray-900 active:scale-95 transition-all disabled:opacity-50 shadow-sm">
+          <button type="button" onClick={handleExcluir} disabled={loading || deleting || alunos.length === 0} className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-gray-800 text-white hover:bg-gray-900 active:scale-95 transition-all disabled:opacity-50 shadow-sm">
             {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
             {deleting ? 'Excluindo...' : 'Limpar'}
+          </button>
+          <button type="button" onClick={calcularESalvarNotasEf} disabled={loading || calculandoNota || alunos.length === 0} className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-violet-600 text-white hover:bg-violet-700 active:scale-95 transition-all disabled:opacity-50 shadow-sm">
+            {calculandoNota ? <Loader2 className="w-4 h-4 animate-spin" /> : <span className="text-sm">📊</span>}
+            {calculandoNota ? 'Calculando...' : notasCalculadas ? '✅ Notas salvas!' : 'Nota EF'}
           </button>
         </div>
       </div>
@@ -271,13 +233,11 @@ export function AttendanceReport() {
         <div className="grid md:grid-cols-3 gap-4">
           <div>
             <label className="text-xs font-semibold text-gray-500 mb-1 block">Turma</label>
-            <select value={turmaId} onChange={(e) => setTurmaId(e.target.value)}
-              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none">
+            <select value={turmaId} onChange={(e) => setTurmaId(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none">
               {uniqueClassRooms.length === 0 ? <option value="">Nenhuma turma</option> : null}
               {uniqueClassRooms.map((cr: any) => <option key={cr.id} value={cr.name}>{cr.name}</option>)}
             </select>
           </div>
-
           <div className="md:col-span-2">
             <label className="text-xs font-semibold text-gray-500 mb-1 block">Bimestre</label>
             <div className="grid grid-cols-4 gap-2">
@@ -291,21 +251,17 @@ export function AttendanceReport() {
             </div>
           </div>
         </div>
-
-        {/* Filtro de data específica */}
         <div className="mt-4 pt-4 border-t border-gray-100">
           <div className="flex items-center gap-3">
             <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
             <div className="flex-1">
               <label className="text-xs font-semibold text-gray-500 block mb-1">
-                Filtrar por data específica <span className="text-gray-400 font-normal">(opcional — não afeta o Diário)</span>
+                Filtrar por data específica <span className="text-gray-400 font-normal">(opcional – não afeta o Diário)</span>
               </label>
               <div className="flex items-center gap-2">
-                <input type="date" value={dataFiltro} onChange={(e) => setDataFiltro(e.target.value)}
-                  className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none" />
+                <input type="date" value={dataFiltro} onChange={(e) => setDataFiltro(e.target.value)} className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none" />
                 {dataFiltro && (
-                  <button onClick={() => setDataFiltro('')}
-                    className="flex items-center gap-1 px-3 py-2 rounded-xl bg-red-50 text-red-600 text-xs font-bold hover:bg-red-100 border border-red-200">
+                  <button onClick={() => setDataFiltro('')} className="flex items-center gap-1 px-3 py-2 rounded-xl bg-red-50 text-red-600 text-xs font-bold hover:bg-red-100 border border-red-200">
                     <X className="w-3.5 h-3.5" /> Limpar filtro
                   </button>
                 )}
@@ -315,17 +271,12 @@ export function AttendanceReport() {
           {dataFiltro && (
             <div className="mt-2 flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2">
               <Calendar className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-              <p className="text-xs text-blue-700 font-medium">
-                Mostrando apenas a chamada do dia <strong>{formatarBR(dataFiltro)}</strong>
-              </p>
+              <p className="text-xs text-blue-700 font-medium">Mostrando apenas a chamada do dia <strong>{formatarBR(dataFiltro)}</strong></p>
             </div>
           )}
         </div>
-
         <p className="text-[11px] text-gray-400 mt-3">
-          {dataFiltro
-            ? `Data: ${formatarBR(dataFiltro)}`
-            : `Período: ${formatarBR(periodo.inicio)} a ${formatarBR(periodo.fim)} • ${PONTOS_MAXIMOS} aulas • ${PONTOS_MAXIMOS * 0.5} pts máx`}
+          {dataFiltro ? `Data: ${formatarBR(dataFiltro)}` : `Período: ${formatarBR(periodo.inicio)} a ${formatarBR(periodo.fim)} • ${PONTOS_MAXIMOS} aulas • ${PONTOS_MAXIMOS * 0.5} pts máx`}
         </p>
       </div>
 
@@ -337,9 +288,7 @@ export function AttendanceReport() {
           <span className="text-sm font-medium">Analisando dados...</span>
         </div>
       ) : alunos.length === 0 ? (
-        <div className="text-center text-gray-500 py-10 font-medium bg-white rounded-2xl border border-gray-100 shadow-sm">
-          Nenhum aluno encontrado para essa turma.
-        </div>
+        <div className="text-center text-gray-500 py-10 font-medium bg-white rounded-2xl border border-gray-100 shadow-sm">Nenhum aluno encontrado para essa turma.</div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -359,7 +308,7 @@ export function AttendanceReport() {
                 </div>
                 {alunosCriticos.length > 0 && (
                   <button
-                    onClick={criarAvaliacaoRecuperacao}
+                    onClick={() => { setShowGabarito(g => !g); setGabaritoInput({...GABARITO_INICIAL}); setTemaProva(''); }}
                     disabled={criandoAvaliacao}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 text-white rounded-xl text-xs font-bold disabled:opacity-60"
                   >
@@ -372,9 +321,9 @@ export function AttendanceReport() {
                 {emRisco.map((a) => (
                   <span key={a.id}
                     className={cn('inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border',
-                      a.critico ? 'bg-red-100 text-red-800 border-red-200' : 'bg-amber-100 text-amber-800 border-amber-200')}
+                      a.percentual === 0 && a.registros_total > 0 ? 'bg-red-100 text-red-800 border-red-200' : 'bg-amber-100 text-amber-800 border-amber-200')}
                     title={`${a.percentual}% de presença`}>
-                    {a.numero_chamada ? `${a.numero_chamada} ` : ''}{a.nome}
+                    {a.numero_chamada ? `${a.numero_chamada} ` : ''}{formatarNome(a.nome)}
                     <span className="font-mono opacity-80">{a.percentual.toFixed(0)}%</span>
                   </span>
                 ))}
@@ -382,8 +331,69 @@ export function AttendanceReport() {
             </div>
           )}
 
+          {/* Painel de gabarito manual */}
+          {showGabarito && (
+            <div className="bg-white rounded-3xl border border-rose-200 shadow-sm p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="font-bold text-gray-900 text-sm">Gabarito da prova</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">Selecione a alternativa correta para cada questão</p>
+                </div>
+                <button onClick={() => setShowGabarito(false)} className="text-gray-400 hover:text-gray-600 p-1"><X className="w-4 h-4" /></button>
+              </div>
+              <div className="mb-4">
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Tema da prova <span className="text-gray-400 font-normal">(usado pela IA para gerar enunciados e texto de apoio)</span>
+                </label>
+                <input
+                  type="text"
+                  value={temaProva}
+                  onChange={e => setTemaProva(e.target.value)}
+                  placeholder="Ex: Voleibol, Futsal, Atletismo, Saúde e Qualidade de Vida..."
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-gray-50"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3 mb-5">
+                {[1,2,3,4,5,6,7,8].map(n => (
+                  <div key={n} className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-gray-500 w-5 shrink-0">Q{n}</span>
+                    {LETRAS.map(l => (
+                      <button key={l}
+                        type="button"
+                        onClick={() => setGabaritoInput(prev => ({...prev, [String(n)]: l}))}
+                        className={cn(
+                          'w-9 h-9 rounded-full text-xs font-bold border transition-all active:scale-95',
+                          gabaritoInput[String(n)] === l
+                            ? 'bg-primary text-white border-primary shadow-sm'
+                            : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'
+                        )}
+                      >{l}</button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
+                {[1,2,3,4,5,6,7,8].map(n => (
+                  <span key={n} className="inline-flex items-center gap-1 bg-gray-100 rounded-lg px-2 py-1 text-xs font-mono">
+                    <span className="text-gray-500">Q{n}:</span>
+                    <span className="font-bold text-primary">{gabaritoInput[String(n)]}</span>
+                  </span>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={criarAvaliacaoRecuperacao}
+                disabled={criandoAvaliacao}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-rose-600 text-white font-bold text-sm disabled:opacity-60 hover:bg-rose-700 active:scale-95 transition-all"
+              >
+                <ClipboardList className="w-4 h-4" />
+                {criandoAvaliacao ? 'Criando...' : `Confirmar e criar prova (${alunosCriticos.length} alunos)`}
+              </button>
+            </div>
+          )}
+
           <div className="hidden md:block w-full overflow-x-auto rounded-3xl border border-gray-100 shadow-sm bg-white">
-            <table className="w-full text-sm text-left">
+            <table className="w-full text-sm text-left" style={{minWidth:"900px"}}>
               <thead className="bg-gray-100 text-gray-600 text-xs uppercase font-bold tracking-wider">
                 <tr>
                   <th className="px-5 py-4 min-w-[220px]">Aluno</th>
@@ -392,16 +402,19 @@ export function AttendanceReport() {
                   <th className="px-4 py-4 text-center">Pontos</th>
                   <th className="px-4 py-4 min-w-[200px]">Frequência</th>
                   <th className="px-4 py-4 text-center">Situação</th>
+                  <th className="px-4 py-4 text-center">Nota EF</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {alunos.map((a) => (
                   <tr key={a.id} className={cn('transition-colors',
-                    a.critico ? 'bg-red-50/60 hover:bg-red-100/50' : a.em_risco ? 'bg-amber-50/60 hover:bg-amber-100/50' : 'hover:bg-cyan-50/40 odd:bg-white even:bg-gray-50/30')}>
+                    a.percentual === 0 && a.registros_total > 0 ? 'bg-red-50/60 hover:bg-red-100/50'
+                    : a.em_risco || a.critico ? 'bg-amber-50/60 hover:bg-amber-100/50'
+                    : 'hover:bg-cyan-50/40 odd:bg-white even:bg-gray-50/30')}>
                     <td className="px-5 py-3 font-semibold text-gray-900">
                       <div className="flex items-center gap-2">
                         {a.numero_chamada ? <span className="font-mono text-gray-400 text-xs w-6 text-right">{a.numero_chamada}</span> : <span className="w-6" />}
-                        <span>{a.nome}</span>
+                        <span>{formatarNome(a.nome)}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-center text-gray-700 font-semibold">{a.registros_total}</td>
@@ -409,6 +422,7 @@ export function AttendanceReport() {
                     <td className="px-4 py-3 text-center font-bold text-gray-900">{a.pontos.toFixed(1).replace('.', ',')}</td>
                     <td className="px-4 py-3"><BarraProgresso percentual={a.percentual} critico={a.critico} emRisco={a.em_risco} /></td>
                     <td className="px-4 py-3 text-center"><BadgeSituacao aluno={a} /></td>
+                    <td className="px-4 py-3 text-center font-bold text-violet-700">{calcularNotaEf(Math.round(a.percentual)) !== null ? calcularNotaEf(Math.round(a.percentual))?.toFixed(1).replace('.',',') : '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -418,9 +432,11 @@ export function AttendanceReport() {
           <div className="md:hidden flex flex-col gap-3">
             {alunos.map((a) => (
               <div key={a.id} className={cn('p-4 rounded-2xl shadow-sm border flex flex-col gap-3',
-                a.critico ? 'bg-red-50 border-red-200' : a.em_risco ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-100')}>
+                a.percentual === 0 && a.registros_total > 0 ? 'bg-red-50 border-red-200'
+                : a.em_risco || a.critico ? 'bg-amber-50 border-amber-200'
+                : 'bg-white border-gray-100')}>
                 <div className="flex justify-between items-start gap-2">
-                  <span className="font-bold text-gray-900 text-sm">{a.numero_chamada ? `${a.numero_chamada} - ` : ''}{a.nome}</span>
+                  <span className="font-bold text-gray-900 text-sm">{a.numero_chamada ? `${a.numero_chamada} - ` : ''}{formatarNome(a.nome)}</span>
                   <BadgeSituacao aluno={a} />
                 </div>
                 <div className="flex justify-between text-xs font-medium text-gray-600">
@@ -445,35 +461,6 @@ function formatarBR(iso: string) {
 
 function ResumoCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: React.ReactNode; tone: 'neutral' | 'primary' | 'success' | 'warning' | 'danger' }) {
   const tones = { neutral: 'text-gray-700', primary: 'text-primary', success: 'text-emerald-600', warning: 'text-amber-600', danger: 'text-rose-600' };
-  async function criarAvaliacaoRecuperacao() {
-    if (alunosCriticos.length === 0) return;
-    setCriandoAvaliacao(true);
-    try {
-      const gabarito: Record<string, string> = {};
-      for (let i = 1; i <= 8; i++) gabarito[String(i)] = 'A';
-      const turmaNormalizada = normalizarTurma(turmaId);
-      const { data: avaliacao, error } = await supabase
-        .from('avaliacoes')
-        .insert({
-          titulo: `Avaliação — ${turmaNormalizada} — ${bimestre}ºBimestre — ${new Date().getFullYear()}`,
-          descricao: `Alunos críticos (frequência baixa) — ${alunosCriticos.length} alunos`,
-          turma_id: turmaNormalizada,
-          num_questoes: 10,
-          gabarito,
-          valor_questao: 1.0,
-        })
-        .select()
-        .single();
-      if (error) throw error;
-      const ids = alunosCriticos.map((a: any) => a.id).join(',');
-      navigate(`/avaliacoes/folha/${avaliacao.id}?criticos=${ids}`);
-    } catch (e: any) {
-      alert('Erro ao criar avaliação: ' + e.message);
-    } finally {
-      setCriandoAvaliacao(false);
-    }
-  }
-
   return (
     <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
       <div className={cn('flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide', tones[tone])}>{icon}{label}</div>
@@ -485,35 +472,6 @@ function ResumoCard({ icon, label, value, tone }: { icon: React.ReactNode; label
 function BarraProgresso({ percentual, critico, emRisco }: { percentual: number; critico: boolean; emRisco: boolean }) {
   const cor = critico ? 'bg-rose-500' : emRisco ? 'bg-amber-500' : 'bg-emerald-500';
   const fundo = critico ? 'bg-rose-100' : emRisco ? 'bg-amber-100' : 'bg-emerald-100';
-  async function criarAvaliacaoRecuperacao() {
-    if (alunosCriticos.length === 0) return;
-    setCriandoAvaliacao(true);
-    try {
-      const gabarito: Record<string, string> = {};
-      for (let i = 1; i <= 8; i++) gabarito[String(i)] = 'A';
-      const turmaNormalizada = normalizarTurma(turmaId);
-      const { data: avaliacao, error } = await supabase
-        .from('avaliacoes')
-        .insert({
-          titulo: `Avaliação — ${turmaNormalizada} — ${bimestre}ºBimestre — ${new Date().getFullYear()}`,
-          descricao: `Alunos críticos (frequência baixa) — ${alunosCriticos.length} alunos`,
-          turma_id: turmaNormalizada,
-          num_questoes: 10,
-          gabarito,
-          valor_questao: 1.0,
-        })
-        .select()
-        .single();
-      if (error) throw error;
-      const ids = alunosCriticos.map((a: any) => a.id).join(',');
-      navigate(`/avaliacoes/folha/${avaliacao.id}?criticos=${ids}`);
-    } catch (e: any) {
-      alert('Erro ao criar avaliação: ' + e.message);
-    } finally {
-      setCriandoAvaliacao(false);
-    }
-  }
-
   return (
     <div className="flex items-center gap-2">
       <div className={cn('flex-1 h-2.5 rounded-full overflow-hidden', fundo)}>
@@ -524,9 +482,9 @@ function BarraProgresso({ percentual, critico, emRisco }: { percentual: number; 
   );
 }
 
-function BadgeSituacao({ aluno }: { aluno: { critico: boolean; em_risco: boolean; registros_total: number } }) {
+function BadgeSituacao({ aluno }: { aluno: { critico: boolean; em_risco: boolean; registros_total: number; percentual: number } }) {
   if (aluno.registros_total === 0) return <span className="px-2 py-1 rounded-full text-[10px] font-bold text-gray-600 bg-gray-200">Sem dados</span>;
-  if (aluno.critico) return <span className="px-2 py-1 rounded-full text-[10px] font-bold text-white bg-rose-500">Crítico</span>;
-  if (aluno.em_risco) return <span className="px-2 py-1 rounded-full text-[10px] font-bold text-white bg-amber-500">Em risco</span>;
+  if (aluno.percentual === 0) return <span className="px-2 py-1 rounded-full text-[10px] font-bold text-white bg-rose-500">Crítico</span>;
+  if (aluno.em_risco || aluno.critico) return <span className="px-2 py-1 rounded-full text-[10px] font-bold text-white bg-amber-500">Em risco</span>;
   return <span className="px-2 py-1 rounded-full text-[10px] font-bold text-white bg-emerald-500">OK</span>;
 }

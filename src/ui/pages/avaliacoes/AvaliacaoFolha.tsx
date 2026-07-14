@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
 import { ArrowLeft, Printer, FileText, Download, Sparkles } from 'lucide-react';
@@ -27,28 +27,28 @@ const NUM_OBJETIVAS = 8;
 const NUM_SUBJETIVAS = 2;
 const LETRAS = ['A', 'B', 'C', 'D'];
 
-// Questões para 6º e 7º anos — linguagem simples e direta
+// Questões para 6º e 7º anos — nível intermediário com contexto e exemplos práticos de EF
 const QUESTOES_SIMPLES: Record<number, { texto: string; alts: string[] }> = {
-  1: { texto: 'Durante uma partida de voleibol, um aluno tocou a bola duas vezes seguidas. O que acontece?', alts: ['O jogo continua normalmente', 'A equipe adversária ganha o ponto', 'O aluno é expulso da quadra', 'O set é reiniciado'] },
-  2: { texto: 'Quem criou o voleibol e em que ano?', alts: ['James Naismith, em 1891', 'William Morgan, em 1895', 'Pierre de Coubertin, em 1900', 'Charles Football, em 1880'] },
-  3: { texto: 'Qual é o tamanho correto da quadra de voleibol?', alts: ['20m x 10m', '18m x 9m', '16m x 8m', '22m x 11m'] },
-  4: { texto: 'Quantas vezes uma equipe pode tocar a bola antes de mandá-la para o outro lado?', alts: ['1 vez', '2 vezes', '3 vezes', '4 vezes'] },
-  5: { texto: 'No voleibol, quantos pontos são necessários para vencer um set?', alts: ['21 pontos', '15 pontos', '25 pontos', '30 pontos'] },
-  6: { texto: 'O que é o bloqueio no voleibol?', alts: ['Um saque especial', 'Uma ação de defesa próxima à rede para barrar o ataque', 'Um tipo de passe entre jogadores', 'Uma falta cometida pelo libero'] },
-  7: { texto: 'O que é o líbero no voleibol?', alts: ['O jogador que saca sempre', 'Um jogador especialista em defesa com uniforme diferente', 'O capitão da equipe', 'O jogador que só pode atacar'] },
-  8: { texto: 'No voleibol, quando a equipe conquista o direito de sacar, o que os jogadores devem fazer?', alts: ['Parar o jogo', 'Rodar no sentido horário', 'Trocar de time', 'Descansar por 1 minuto'] },
+  1: { texto: 'Durante uma partida de voleibol escolar, observou-se que um atleta tocou a bola duas vezes consecutivas antes de passá-la para um companheiro. Considerando as regras oficiais do voleibol, qual deve ser a decisão correta do árbitro nessa situação?', alts: ['Permitir a continuidade, pois no voleibol escolar as regras são mais flexíveis', 'Marcar falta e conceder ponto para a equipe adversária, pois o toque duplo é proibido', 'Advertir verbalmente o jogador e reiniciar a jogada sem punição', 'Conceder mais uma tentativa, considerando que é uma partida de aprendizado'] },
+  2: { texto: 'O voleibol foi desenvolvido em 1895 por William George Morgan, com o objetivo de criar um esporte menos intenso que o basquete. Qual era o nome original dado por Morgan ao esporte e qual foi a principal motivação para sua criação?', alts: ['Mintonette, criado para oferecer atividade física a homens de negócios mais velhos', 'Volleyball, desenvolvido especificamente para treinar jogadores de basquete no inverno', 'Netball, inventado para competir diretamente com o futebol americano nas escolas', 'Handvolley, criado para substituir o tênis em ambientes fechados sem quadra adequada'] },
+  3: { texto: 'Em competições oficiais de voleibol, as dimensões da quadra e a altura da rede variam conforme a categoria. Em relação às medidas oficiais para a categoria adulta, qual alternativa apresenta os valores corretos tanto para a quadra quanto para a rede?', alts: ['Quadra: 16m x 8m, Rede: 2,24m (feminino) e 2,43m (masculino)', 'Quadra: 18m x 9m, Rede: 2,24m (feminino) e 2,43m (masculino)', 'Quadra: 20m x 10m, Rede: 2,20m (feminino) e 2,40m (masculino)', 'Quadra: 18m x 9m, Rede: 2,20m (feminino) e 2,40m (masculino)'] },
+  4: { texto: 'No voleibol, a sequência tática de jogo envolve a utilização dos três toques permitidos por equipe de forma estratégica. Qual é a sequência clássica utilizada pelas equipes para organizar o ataque após receber o saque adversário?', alts: ['Quatro toques: recepção, levantamento, ataque e bloqueio, todos obrigatórios', 'Dois toques: passe direto ao atacante e finalização, priorizando a velocidade', 'Três toques: recepção (manchete), levantamento e ataque finalização', 'Cinco toques: recepção, passe, levantamento, ataque e defesa do bloqueio'] },
+  5: { texto: 'O sistema de pontuação do voleibol moderno, denominado rally point system, foi adotado pela FIVB em 1999. Com base nesse sistema, como ocorre a contagem de pontos e qual é o critério para vencer um set regular?', alts: ['Somente a equipe que está sacando pode marcar pontos, vencendo quem chegar primeiro a 21', 'Qualquer equipe marca ponto a cada rally, vencendo o set quem chegar primeiro a 25 com vantagem mínima de 2', 'Apenas a equipe receptora pode pontuar, vencendo quem atingir 15 pontos primeiro', 'Pontos são marcados apenas em ataques diretos, vencendo quem chegar a 30 pontos'] },
+  6: { texto: 'O bloqueio é um dos fundamentos mais complexos do voleibol e exige coordenação, timing e posicionamento adequado. Qual alternativa descreve corretamente as características e restrições do bloqueio nas regras oficiais?', alts: ['Pode ser executado por qualquer jogador da quadra, incluindo os da linha de defesa', 'É realizado exclusivamente pelos jogadores da linha de frente, com salto e mãos ultrapassando o plano da rede', 'Somente o líbero pode executar o bloqueio, pois é especialista em ações defensivas próximas à rede', 'É permitido apenas após o terceiro toque da equipe adversária, como forma de defesa antecipada'] },
+  7: { texto: 'A figura do líbero foi introduzida no voleibol internacional em 1998 pela FIVB, com o objetivo de especializar as funções dentro da equipe. Quais são suas principais características e limitações durante uma partida?', alts: ['Pode atacar de qualquer posição em quadra e utiliza uniforme da mesma cor dos companheiros', 'Atua exclusivamente na linha de defesa, não pode atacar acima da borda superior da rede e usa uniforme de cor contrastante', 'Pode executar saque, ataque e bloqueio, sendo restrito apenas ao levantamento de bola', 'Substitui apenas o levantador titular e tem permissão para atacar a partir da linha de 3 metros'] },
+  8: { texto: 'A rotação é um elemento fundamental do voleibol que garante que todos os jogadores participem de diferentes posições. Nas aulas de Educação Física, o professor observou que uma equipe não realizou a rotação ao ganhar o direito ao saque. Qual é a regra correta e qual consequência essa infração gera?', alts: ['A rotação é opcional, cada equipe pode manter seus jogadores nas posições que preferirem durante todo o set', 'Os jogadores devem rodar no sentido horário toda vez que sua equipe conquista o direito de efetuar o saque, sob pena de falta', 'A rotação ocorre apenas no início de cada novo set, mantendo as posições fixas durante todo o set', 'Somente os atletas da linha de frente realizam rotação, enquanto os da linha de defesa permanecem fixos'] },
 };
 
-// Questões para 8º e 9º anos — contexto maior, linguagem mais elaborada
+// Questões para 8º e 9º anos — nível Ensino Médio, análise tática e prática de quadra
 const QUESTOES_ELABORADAS: Record<number, { texto: string; alts: string[] }> = {
-  1: { texto: 'Durante uma partida de voleibol escolar, observou-se que um atleta tocou a bola duas vezes consecutivas antes de passá-la para um companheiro. Considerando as regras oficiais do voleibol, qual deve ser a decisão correta do árbitro nessa situação?', alts: ['Permitir a continuidade, pois no voleibol escolar as regras são mais flexíveis', 'Marcar falta e conceder ponto para a equipe adversária, pois o toque duplo é proibido', 'Advertir verbalmente o jogador e reiniciar a jogada sem punição', 'Conceder mais uma tentativa, considerando que é uma partida de aprendizado'] },
-  2: { texto: 'O voleibol foi desenvolvido em 1895 por William George Morgan, diretor de Educação Física da YMCA, com o objetivo de criar um esporte menos intenso que o basquete. Qual era o nome original dado por Morgan ao esporte e qual foi a principal motivação para sua criação?', alts: ['Mintonette, criado para oferecer atividade física a homens de negócios mais velhos', 'Volleyball, desenvolvido especificamente para treinar jogadores de basquete no inverno', 'Netball, inventado para competir diretamente com o futebol americano nas escolas', 'Handvolley, criado para substituir o tênis em ambientes fechados sem quadra adequada'] },
-  3: { texto: 'Em competições oficiais de voleibol, as dimensões da quadra e a altura da rede variam conforme a categoria. Em relação às medidas oficiais para a categoria adulta, qual alternativa apresenta os valores corretos tanto para a quadra quanto para a rede?', alts: ['Quadra: 16m x 8m, Rede: 2,24m (feminino) e 2,43m (masculino)', 'Quadra: 18m x 9m, Rede: 2,24m (feminino) e 2,43m (masculino)', 'Quadra: 20m x 10m, Rede: 2,20m (feminino) e 2,40m (masculino)', 'Quadra: 18m x 9m, Rede: 2,20m (feminino) e 2,40m (masculino)'] },
-  4: { texto: 'No voleibol, a sequência tática de jogo envolve a utilização dos três toques permitidos por equipe de forma estratégica. Considerando os fundamentos técnicos da modalidade, qual é a sequência clássica utilizada pelas equipes para organizar o ataque após receber o saque adversário?', alts: ['Quatro toques: recepção, levantamento, ataque e bloqueio, todos obrigatórios', 'Dois toques: passe direto ao atacante e finalização, priorizando a velocidade', 'Três toques: manchete ou toque na recepção, levantamento e ataque finalização', 'Cinco toques: recepção, passe, levantamento, ataque e defesa do bloqueio'] },
-  5: { texto: 'O sistema de pontuação do voleibol moderno, denominado rally point system, foi adotado pela FIVB em 1999 para tornar as partidas mais dinâmicas e previsíveis em termos de duração. Com base nesse sistema, como ocorre a contagem de pontos e qual é o critério para vencer um set regular?', alts: ['Somente a equipe que está sacando pode marcar pontos, vencendo quem chegar primeiro a 21', 'Qualquer equipe marca ponto a cada rally, vencendo o set quem chegar primeiro a 25 com vantagem mínima de 2', 'Apenas a equipe receptora pode pontuar, vencendo quem atingir 15 pontos primeiro', 'Pontos são marcados apenas em ataques diretos, vencendo quem chegar a 30 pontos'] },
-  6: { texto: 'O bloqueio é um dos fundamentos mais complexos do voleibol e exige coordenação, timing e posicionamento adequado. Analisando as regras oficiais e os aspectos técnicos desta ação, qual alternativa descreve corretamente as características e restrições do bloqueio?', alts: ['Pode ser executado por qualquer jogador da quadra, incluindo os jogadores da linha de defesa', 'É realizado exclusivamente pelos jogadores da linha de frente, com salto e mãos ultrapassando o plano da rede', 'Somente o líbero pode executar o bloqueio, pois é especialista em ações defensivas próximas à rede', 'É permitido apenas após o terceiro toque da equipe adversária, como forma de defesa antecipada'] },
-  7: { texto: 'A figura do líbero foi introduzida no voleibol internacional em 1998 pela FIVB, com o objetivo de especializar ainda mais as funções dentro da equipe. Considerando as regras específicas que regem a atuação desse jogador, quais são suas principais características e limitações durante uma partida?', alts: ['Pode atacar de qualquer posição em quadra e utiliza uniforme da mesma cor dos companheiros', 'Atua exclusivamente na linha de defesa, não pode atacar acima da borda superior da rede e usa uniforme de cor contrastante', 'Pode executar saque, ataque e bloqueio, sendo restrito apenas ao levantamento de bola', 'Substitui apenas o levantador titular e tem permissão para atacar a partir da linha de 3 metros'] },
-  8: { texto: 'A rotação é um elemento fundamental do voleibol que garante que todos os jogadores participem de diferentes posições durante a partida. Ela influencia diretamente na estratégia de jogo e na distribuição das funções em quadra. Qual é a regra correta sobre a rotação que as equipes devem seguir?', alts: ['A rotação é opcional, cada equipe pode manter seus jogadores nas posições que preferirem durante todo o set', 'Os jogadores devem rodar no sentido horário toda vez que sua equipe conquista o direito de efetuar o saque', 'A rotação ocorre apenas no início de cada novo set, mantendo as posições fixas durante todo o set', 'Somente os atletas da linha de frente realizam rotação, enquanto os da linha de defesa permanecem fixos'] },
+  1: { texto: 'Durante uma aula prática de Educação Física, a equipe A realizou quatro toques consecutivos — o quarto executado pelo mesmo atleta que fez o primeiro — antes de mandar a bola ao campo adversário. O árbitro não apitou. Analisando as regras da FIVB e os fundamentos pedagógicos da arbitragem escolar, qual deveria ter sido a conduta correta e qual princípio regimental foi violado?', alts: ['A jogada é válida pois na Educação Física escolar o limite é quatro toques para favorecer o aprendizado dos fundamentos', 'Deveriam ser marcadas duas faltas simultâneas: quatro toques e toque duplo, concedendo ponto à equipe adversária', 'Apenas o toque duplo deveria ser marcado, pois a infração do mesmo atleta tocar duas vezes é mais grave que exceder o número de toques', 'A jogada é inválida por exceder três toques, com ponto concedido ao adversário, independentemente de quem realizou os toques'] },
+  2: { texto: 'Ao analisar a trajetória histórica do voleibol, desde sua criação por Morgan (1895) como "Mintonette" até as modalidades contemporâneas como vôlei de praia e voleibol sentado paralímpico, percebe-se uma tensão entre a proposta pedagógica original e a especialização esportiva atual. Qual aspecto da concepção original foi mais transformado e qual representa maior continuidade no contexto da Educação Física escolar?', alts: ['O caráter recreativo foi mantido integralmente, enquanto as regras foram completamente reformuladas para atender ao alto rendimento', 'A proposta de inclusão e participação foi preservada nas práticas escolares, enquanto a dimensão competitiva e técnica se intensificou no esporte de alto rendimento', 'As regras originais permanecem inalteradas, sendo a principal transformação a introdução de tecnologia nas arbitragens profissionais', 'O voleibol perdeu completamente seu caráter pedagógico original ao se profissionalizar, sendo inadequado para uso na Educação Física escolar'] },
+  3: { texto: 'Num jogo-treino de Educação Física, um atacante da equipe A salta e impulsiona a bola com força em direção ao campo adversário. No mesmo instante, um bloqueador da equipe B ultrapassa o plano da rede com as mãos, tocando a bola ainda no espaço de ataque da equipe A. A bola cai no chão da equipe A. Como deve ser interpretada essa jogada e qual fundamento técnico-regulamentar sustenta essa decisão?', alts: ['Ponto para a equipe B, pois a bola caiu no campo da equipe A, independentemente de qualquer infração de bloqueio', 'Falta da equipe B por invasão antecipada do espaço de ataque da equipe A antes de concluída a ação ofensiva, com ponto para a equipe A', 'A jogada é válida pois o bloqueador apenas tocou a bola sem segurar, não configurando falta segundo as regras vigentes', 'Replay da jogada, pois o contato simultâneo de bloqueio e ataque anula a jogada conforme regulamento da FIVB'] },
+  4: { texto: 'Numa aula de Educação Física, o professor observou que metade da turma apresentava dificuldade no fundamento da manchete, com os antebraços desalinhados e os cotovelos flexionados no momento do contato com a bola. Sob a perspectiva biomecânica e da progressão pedagógica do ensino dos fundamentos, qual sequência de intervenção o professor deveria adotar para corrigir o gesto técnico de forma eficaz?', alts: ['Interromper as partidas imediatamente e exigir exercícios de repetição da manchete até a correção completa do gesto técnico', 'Iniciar por exercícios analíticos de alinhamento postural e contato com a bola parada, evoluindo progressivamente para situações de jogo reduzido com feedback imediato', 'Substituir o ensino da manchete pelo toque por cima, pois é tecnicamente mais fácil e adequado para iniciantes no contexto escolar', 'Manter as partidas sem intervenção, pois o erro técnico se corrige naturalmente com a prática livre e a experiência de jogo'] },
+  5: { texto: 'Numa partida de cinco sets, os quatro primeiros terminaram com os placares 25x22, 20x25, 25x23 e 23x25. No quinto set, a equipe A lidera por 14x13. Analisando as regras do rally point system e considerando o cenário de tie-break, qual é a pontuação mínima necessária para a equipe A vencer o set e o jogo, e em que condição a partida se prolonga além de 15 pontos?', alts: ['A equipe A vence com 15 pontos independentemente da vantagem, pois no quinto set não se aplica a regra de dois pontos de diferença', 'A equipe A precisa de pelo menos 15 pontos com vantagem mínima de 2 sobre o adversário; se o placar chegar a 14x14, o jogo continua até alguém abrir 2 pontos de diferença', 'A equipe A vence o próximo ponto por já ter 14, pois no quinto set basta chegar primeiro a 15 quando o adversário tem 13 ou menos', 'O quinto set é decidido pela soma total de pontos dos sets anteriores, não havendo necessidade de atingir 15 pontos'] },
+  6: { texto: 'Analisando o bloqueio sob a perspectiva tática e regulamentar do voleibol de alto nível, um técnico instruiu seus bloqueadores a realizarem penetração ativa acima da rede para cortar o espaço de ataque adversário antes da finalização. Considerando as regras vigentes da FIVB e a distinção entre bloqueio ativo e passivo, qual é a validade dessa instrução tática e quais são os limites regulamentares dessa ação?', alts: ['A instrução é totalmente válida pois no voleibol moderno não existem restrições à penetração ativa dos bloqueadores acima da rede', 'A penetração acima da rede é permitida desde que o bloqueador não toque a bola antes que o atacante conclua sua ação, caracterizando bloqueio passivo válido', 'Os bloqueadores podem penetrar acima da rede com as mãos e tocar a bola no espaço adversário antes da finalização do ataque, pois o bloqueio ativo é regulamentado pela FIVB', 'A instrução é inválida pois qualquer contato dos bloqueadores com a bola acima da rede antes da conclusão do ataque adversário configura falta, independentemente do contexto tático'] },
+  7: { texto: 'Numa partida escolar com sistema de substituição simplificado, o professor-árbitro percebeu que o líbero, ao receber uma bola alta próxima à rede na zona 3, optou por realizar um toque por cima com os dedos para o levantador, que por sua vez armou o ataque com sucesso. Em seguida, o técnico solicitou a retirada do líbero por substituição. Considerando as restrições específicas da função do líbero e o impacto estratégico dessa posição, qual infração ocorreu e como essa situação reflete a complexidade tática do voleibol moderno?', alts: ['Nenhuma infração, pois o líbero pode realizar qualquer fundamento quando a bola está acima da altura da rede, incluindo levantamento com os dedos', 'O toque por cima do líbero na zona de ataque (zona 3) para o levantador que finalizou com ataque acima da rede configura infração, pois o líbero não pode levantar bolas que resultem em ataques acima da borda superior da rede', 'A infração ocorreu na substituição, pois o líbero só pode ser retirado de quadra no intervalo entre sets, sendo vedada a substituição durante o set em andamento', 'A situação é completamente regular, pois as restrições do líbero se aplicam apenas a competições profissionais, não às partidas escolares e de iniciação esportiva'] },
+  8: { texto: 'Durante uma aula de Educação Física sobre voleibol, o professor propôs uma situação-problema: após a equipe B conquistar o direito ao saque vencendo um rally, os jogadores não realizaram a rotação corretamente — o jogador da posição 1 (zona de saque) não era o atleta que deveria ocupar aquela posição segundo a ordem de rotação registrada na súmula. O árbitro sinalizou falta. Analisando os princípios táticos e regulamentares da rotação no voleibol, qual é o fundamento técnico-regulamentar dessa marcação e como a gestão incorreta da rotação pode comprometer a estratégia de uma equipe?', alts: ['A falta é indevida, pois a rotação é realizada apenas uma vez por set, no início, sendo livre o posicionamento dos atletas durante o restante da partida', 'A marcação é correta: a rotação deve ser realizada no sentido horário toda vez que a equipe conquista o saque, e o não cumprimento dessa ordem resulta em falta e ponto para o adversário, comprometendo também a estratégia de servir com o jogador mais habilidoso', 'O árbitro errou ao marcar a falta, pois a rotação dos jogadores é obrigatória apenas em competições profissionais, sendo opcional nas categorias escolares e de formação', 'A rotação incorreta gera apenas advertência na primeira vez, sendo a falta aplicada somente na reincidência, conforme regras adaptadas para o voleibol escolar'] },
 };
 
 function getNivelQuestoes(turmaId: string): Record<number, { texto: string; alts: string[] }> {
@@ -215,6 +215,8 @@ async function desenharFolhaQR(
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d')!;
+  const _serie = parseInt(turmaId.replace(/\D/g, '').charAt(0));
+  const grupoLabel = _serie <= 7 ? '6º/7º Ano' : '8º/9º Ano';
 
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, W, H);
@@ -232,34 +234,79 @@ async function desenharFolhaQR(
   ctx.fillRect(W - PAD - MARK, H - PAD - MARK, MARK, MARK);
 
   // Cabeçalho
-  ctx.fillStyle = '#1e293b';
+  ctx.fillStyle = '#e8edf2';
   ctx.fillRect(CX, PAD, CW, 60);
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = '#1e293b';
   ctx.font = 'bold 14px Arial';
   ctx.textAlign = 'center';
   ctx.fillText('E.E. INSTITUTO ODILON PRATAGI', W / 2, PAD + 22);
   ctx.font = '11px Arial';
-  ctx.fillText('Educa\u00e7\u00e3o F\u00edsica \u2014 ' + avaliacao.titulo.replace(/Recupera\u00e7\u00e3o/gi, 'Avalia\u00e7\u00e3o'), W / 2, PAD + 40);
+  // Remove o turma_id específico do título (ex: "8A") pois cada folha já mostra sua série no TURMA abaixo
+  const tituloCanvas = avaliacao.titulo
+    .split(/\s*[-\u2014]\s*/)
+    .filter(part => part.trim().toUpperCase() !== avaliacao.turma_id.toUpperCase())
+    .join(' \u2014 ')
+    .replace(/Recupera\u00e7\u00e3o/gi, 'Avalia\u00e7\u00e3o')
+    .trim();
+  ctx.fillText('Educa\u00e7\u00e3o F\u00edsica \u2014 ' + tituloCanvas, W / 2, PAD + 40);
   ctx.font = 'bold 12px Arial';
-  ctx.fillText('TURMA: ' + turmaId, W / 2, PAD + 56);
+  ctx.fillText(grupoLabel, W / 2, PAD + 56);
   ctx.textAlign = 'left';
 
-  // Linha do aluno
+  // Área do aluno com 3 campos
   const alunoY = PAD + 70;
-  ctx.fillStyle = '#f1f5f9';
-  ctx.fillRect(CX, alunoY, CW, 28);
+  const FIELDS_H = 58;
+  const turmLetra = turmaId.replace(/\d/g, '');
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillRect(CX, alunoY, CW, FIELDS_H);
   ctx.strokeStyle = '#cbd5e1';
   ctx.lineWidth = 1;
-  ctx.strokeRect(CX, alunoY, CW, 28);
-  ctx.fillStyle = '#64748b';
-  ctx.font = '10px Arial';
-  ctx.fillText('ALUNO(A):', CX + 8, alunoY + 18);
-  // Linha em branco para o aluno preencher
+  ctx.strokeRect(CX, alunoY, CW, FIELDS_H);
+  // Campo NOME
+  ctx.fillStyle = '#334155';
+  ctx.font = 'bold 10px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText('NOME:', CX + 8, alunoY + 15);
   ctx.strokeStyle = '#334155';
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 0.8;
   ctx.beginPath();
-  ctx.moveTo(CX + 72, alunoY + 20);
-  ctx.lineTo(CX + CW - 8, alunoY + 20);
+  ctx.moveTo(CX + 54, alunoY + 16);
+  ctx.lineTo(CX + CW - 8, alunoY + 16);
+  ctx.stroke();
+  // Campo TURMA
+  ctx.fillStyle = '#334155';
+  ctx.font = 'bold 10px Arial';
+  ctx.fillText('TURMA:', CX + 8, alunoY + 35);
+  ctx.strokeStyle = '#334155';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(CX + 58, alunoY + 36);
+  ctx.lineTo(CX + 130, alunoY + 36);
+  ctx.stroke();
+  ctx.fillStyle = '#1e293b';
+  ctx.font = 'bold 11px Arial';
+  ctx.fillText(turmLetra, CX + 62, alunoY + 35);
+  // Campo Nº CHAMADA
+  ctx.fillStyle = '#334155';
+  ctx.font = 'bold 10px Arial';
+  const ncLabel = 'Nº CHAMADA:';
+  const ncX = CX + Math.floor(CW / 2);
+  ctx.fillText(ncLabel, ncX, alunoY + 35);
+  ctx.strokeStyle = '#334155';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(ncX + 84, alunoY + 36);
+  ctx.lineTo(CX + CW - 8, alunoY + 36);
+  ctx.stroke();
+  // Campo DATA
+  ctx.fillStyle = '#334155';
+  ctx.font = 'bold 10px Arial';
+  ctx.fillText('DATA:', CX + 8, alunoY + 53);
+  ctx.strokeStyle = '#334155';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(CX + 46, alunoY + 54);
+  ctx.lineTo(CX + 220, alunoY + 54);
   ctx.stroke();
 
   // QR Code
@@ -277,7 +324,7 @@ async function desenharFolhaQR(
   ctx.textAlign = 'left';
 
   // Instruções
-  const instrY = alunoY + 36;
+  const instrY = alunoY + FIELDS_H + 4;
   ctx.fillStyle = '#1e293b';
   ctx.font = 'bold 11px Arial';
   ctx.fillText('INSTRU\u00c7\u00d5ES:', CX + 8, instrY + 16);
@@ -379,7 +426,7 @@ async function desenharFolhaQR(
   ctx.font = '9px Arial';
   ctx.fillText('Bras\u00edl\u00e9ia, Acre \u2014 2026', CX + 8, H - PAD - MARK - 6);
   ctx.textAlign = 'right';
-  ctx.fillText('TURMA: ' + turmaId, W - PAD - MARK - 16, H - PAD - MARK - 6);
+  ctx.fillText(grupoLabel, W - PAD - MARK - 16, H - PAD - MARK - 6);
   ctx.textAlign = 'left';
 }
 
@@ -399,6 +446,8 @@ export function AvaliacaoFolha() {
   const [geradoTodos, setGeradoTodos] = useState(false);
   const [gerandoIA, setGerandoIA] = useState(false);
   const [enunciadoGerado, setEnunciadoGerado] = useState(false);
+  const [gerandoTextoApoio, setGerandoTextoApoio] = useState(false);
+  const [textoApoioGerado, setTextoApoioGerado] = useState(false);
 
   async function gerarEnunciadosIA() {
     if (!avaliacao) return;
@@ -411,7 +460,13 @@ export function AvaliacaoFolha() {
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
           max_tokens: 1024,
-          messages: [{ role: 'user', content: 'Voce e professor de Educacao Fisica do Ensino Fundamental. Gere EXATAMENTE 2 questoes dissertativas sobre o tema: "' + avaliacao.titulo + '". Cada questao deve ser desafiadora, contextualizada para alunos do Fundamental II, pedir que o aluno explique ou justifique conceitos, e ter entre 2 e 4 linhas. Responda APENAS em JSON sem texto adicional: {"q9": "enunciado da questao 9", "q10": "enunciado da questao 10"}' }]
+          messages: [{ role: 'user', content: (() => {
+          const serie = parseInt((avaliacao.turma_id || '').replace(/\D/g, '').charAt(0));
+          const nivel = serie >= 8
+            ? 'nivel Ensino Medio: questoes complexas com analise tatica, raciocinio critico, exemplos avancados de pratica esportiva, terminologia tecnica e conexao com saude e cidadania'
+            : 'nivel intermediario (6 e 7 anos): questoes contextualizadas com exemplos praticos da quadra de Educacao Fisica, que exijam compreensao e aplicacao de regras e fundamentos, linguagem clara mas desafiadora';
+          return 'Voce e professor de Educacao Fisica do Ensino Fundamental. Gere EXATAMENTE 2 questoes dissertativas sobre o tema: "' + avaliacao.titulo + '". Nivel de dificuldade: ' + nivel + '. As questoes devem ter entre 3 e 5 linhas, pedir que o aluno explique, justifique ou analise situacoes praticas da quadra. Responda APENAS em JSON sem texto adicional: {"q9": "enunciado da questao 9", "q10": "enunciado da questao 10"}';
+        })() }]
         })
       });
       const data = await resp.json();
@@ -430,6 +485,72 @@ export function AvaliacaoFolha() {
       alert('Erro ao gerar enunciados. Tente novamente.');
     } finally {
       setGerandoIA(false);
+    }
+  }
+
+  async function gerarTextoApoioIA() {
+    if (!avaliacao) return;
+    setGerandoTextoApoio(true);
+    setTextoApoioGerado(false);
+    try {
+      const serie = parseInt((avaliacao.turma_id || '').replace(/\D/g, '').charAt(0));
+      const nivel = serie >= 8
+        ? 'nivel Ensino Medio, linguagem tecnica e analitica'
+        : 'nivel intermediario para 6 e 7 anos, linguagem clara e acessivel';
+
+      // Montar respostas corretas do gabarito
+      const questoes = serie >= 8 ? QUESTOES_ELABORADAS : QUESTOES_SIMPLES;
+      const gabarito = avaliacao.gabarito || {};
+      const respostasCorretas = [1,2,3,4,5,6,7,8].map(n => {
+        const q = questoes[n];
+        const letra = gabarito[String(n)] || 'A';
+        const idx = ['A','B','C','D'].indexOf(letra);
+        const textoAlt = q?.alts?.[idx >= 0 ? idx : 0] || '';
+        return `Q${n} (${letra}): ${textoAlt}`;
+      }).join('\n');
+
+      // Q9 e Q10 discursivas
+      const q9 = avaliacao.questoes_subjetivas?.['9'] || '';
+      const q10 = avaliacao.questoes_subjetivas?.['10'] || '';
+      const discursivas = q9
+        ? `\n\nQUESTOES DISCURSIVAS (o texto deve conter a resposta para estas):\nQ9: ${q9}\nQ10: ${q10}`
+        : '';
+
+      const prompt = `Voce e professor de Educacao Fisica do Ensino Fundamental. Crie um TEXTO DE APOIO CURTO E DENSO (1 paragrafo unico de 10 a 14 linhas) sobre o tema: "${avaliacao.titulo}". Nivel: ${nivel}.
+
+O texto DEVE conter, de forma COMPLETAMENTE NATURAL E CAMUFLADA, as informacoes corretas das 8 questoes objetivas abaixo. O aluno que ler com atencao deve conseguir responder todas as questoes sem que as respostas estejam obvias ou destacadas:
+
+${respostasCorretas}${discursivas}
+
+REGRAS:
+- Texto corrido, sem numeros de questao, sem marcacoes, sem sublinhados
+- Todas as 8 respostas devem estar embutidas naturalmente como informacoes do texto
+- Inclua tambem conteudo que permita responder as discursivas
+- Maximo de 14 linhas no total
+
+Responda APENAS com o texto puro.`;
+
+      const resp = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 700,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+      const data = await resp.json();
+      const texto = data.content?.[0]?.text || '';
+      if (texto) {
+        await supabase.from('avaliacoes').update({ texto_apoio: texto }).eq('id', avaliacao.id);
+        setAvaliacao(prev => prev ? { ...prev, texto_apoio: texto } : prev);
+        setTextoApoioGerado(true);
+        setGeradoTodos(false);
+      }
+    } catch (e) {
+      alert('Erro ao gerar texto de apoio. Tente novamente.');
+    } finally {
+      setGerandoTextoApoio(false);
     }
   }
 
@@ -484,23 +605,36 @@ export function AvaliacaoFolha() {
     if (!avaliacao) return;
     setGeradoTodos(false);
     setFolhasQR({});
-    // Gerar 1 folha QR por grupo de série: 6º, 7º, 8º, 9º
-    const grupos = [
-      { label: '6º Ano', serie: '6' },
-      { label: '7º Ano', serie: '7' },
-      { label: '8º Ano', serie: '8' },
-      { label: '9º Ano', serie: '9' },
-    ];
-    const novos: Record<string, string> = {};
-    for (let i = 0; i < grupos.length; i++) {
-      setGerandoIdx(i);
-      const canvas = document.createElement('canvas');
-      await desenharFolhaQR(canvas, avaliacao, grupos[i].label);
-      novos[grupos[i].label] = canvas.toDataURL('image/png');
-    }
-    setFolhasQR(novos);
+    // Detecta o nível pela série da avaliação:
+    // 6º/7º → 2 folhas: "6º Ano" + "7º Ano"  (QUESTOES_SIMPLES)
+    // 8º/9º → 2 folhas: "8º Ano" + "9º Ano"  (QUESTOES_ELABORADAS)
+    const _s = parseInt(avaliacao.turma_id.replace(/\D/g, '').charAt(0));
+    const grupoLabel = _s <= 7 ? '6º/7º Ano' : '8º/9º Ano';
+    setGerandoIdx(0);
+    const canvas = document.createElement('canvas');
+    await desenharFolhaQR(canvas, avaliacao, avaliacao.turma_id);
+    setFolhasQR({ [avaliacao.turma_id]: canvas.toDataURL('image/png') });
     setGerandoIdx(null);
     setGeradoTodos(true);
+  }
+
+  // Imprime UMA folha QR individual (abre janela separada por série)
+  function imprimirFolha(turma: string, src: string) {
+    if (!avaliacao) return;
+    const html = `<!DOCTYPE html><html><head>
+      <meta charset="utf-8">
+      <title>Folha QR \u2014 ${turma}</title>
+      <style>* { margin:0; padding:0; box-sizing:border-box; } @page { margin:0; size: A4 portrait; } body { background:white; }</style>
+    </head><body>
+      <div style="text-align:center;">
+        <img src="${src}" style="width:100%;max-width:794px;display:block;margin:0 auto;" />
+      </div>
+      <script>setTimeout(function(){ window.print(); }, 600);<\/script>
+    </body></html>`;
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank');
+    if (win) win.onafterprint = () => URL.revokeObjectURL(url);
   }
 
   function imprimirProva() {
@@ -513,7 +647,7 @@ export function AvaliacaoFolha() {
       : '';
     const html = `<!DOCTYPE html><html><head>
       <meta charset="utf-8">
-      <title>E.E.E. Fundamental — Instituto Odilon Pratagi — 2026</title>
+      <title>${avaliacao.titulo} -- ${avaliacao.turma_id} -- 2026</title>
       <style>${CSS_PROVA} @page { margin: 10mm; size: A4 portrait; }</style>
     </head><body>
       ${paginaTexto}
@@ -565,7 +699,7 @@ export function AvaliacaoFolha() {
             xmlns="http://www.w3.org/TR/REC-html40">
       <head>
         <meta charset="utf-8">
-        <title>${avaliacao.titulo}</title>
+        <title>${avaliacao.titulo} -- ${avaliacao.turma_id} -- 2026</title>
         <!--[if gte mso 9]>
         <xml>
           <w:WordDocument>
@@ -657,6 +791,39 @@ export function AvaliacaoFolha() {
         {enunciadoGerado && (
           <p className="text-xs text-green-700 font-semibold">✅ Enunciados gerados e salvos! Clique em "Gerar folhas QR" para aplicar.</p>
         )}
+
+        {/* Texto de apoio */}
+        <div className="pt-2 border-t border-black/10 space-y-2">
+          {avaliacao.texto_apoio ? (
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-on-secondary-container">✅ Texto de apoio cadastrado</p>
+              <p className="text-xs text-on-secondary-container line-clamp-3">{avaliacao.texto_apoio.slice(0, 200)}...</p>
+              <button
+                onClick={gerarTextoApoioIA}
+                disabled={gerandoTextoApoio}
+                className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-teal-700 text-white text-xs font-semibold disabled:opacity-60"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                {gerandoTextoApoio ? 'Gerando...' : 'Regenerar texto de apoio com IA'}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs text-on-secondary-container">⚠️ Sem texto de apoio (opcional — aparece na pág. 1 antes das questões).</p>
+              <button
+                onClick={gerarTextoApoioIA}
+                disabled={gerandoTextoApoio}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-semibold disabled:opacity-60"
+              >
+                <Sparkles className="w-4 h-4" />
+                {gerandoTextoApoio ? 'Gerando texto de apoio com IA...' : 'Gerar texto de apoio com IA'}
+              </button>
+            </div>
+          )}
+          {textoApoioGerado && (
+            <p className="text-xs text-green-700 font-semibold">✅ Texto de apoio gerado e salvo!</p>
+          )}
+        </div>
       </div>
 
       {/* Botões */}
@@ -667,7 +834,7 @@ export function AvaliacaoFolha() {
           className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-on-primary font-semibold text-sm disabled:opacity-60"
         >
           {gerandoIdx !== null
-            ? `Gerando ${gerandoIdx + 1}/4...`
+            ? `Gerando ${gerandoIdx + 1}/2...`
             : 'Gerar folhas QR'}
         </button>
         <button
@@ -677,15 +844,6 @@ export function AvaliacaoFolha() {
           <Printer className="w-4 h-4" />
           Prova
         </button>
-        {geradoTodos && (
-          <button
-            onClick={imprimirQR}
-            className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-teal-600 text-white font-semibold text-sm"
-          >
-            <Printer className="w-4 h-4" />
-            QR
-          </button>
-        )}
         <button
           onClick={exportarWord}
           className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-blue-600 text-white font-semibold text-sm"
@@ -705,18 +863,27 @@ export function AvaliacaoFolha() {
             <div key={turma} className="border border-outline-variant rounded-xl overflow-hidden">
               <div className="px-3 py-1.5 bg-surface flex items-center justify-between">
                 <span className="text-xs font-semibold text-on-surface-variant">
-                  Turma {turma}
+                  {turma}
                 </span>
-                <a
-                  href={src}
-                  download={`folha_qr_turma_${turma}.png`}
-                  className="flex items-center gap-1 text-xs text-primary"
-                >
-                  <Download className="w-3 h-3" />
-                  Baixar
-                </a>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => imprimirFolha(turma, src)}
+                    className="flex items-center gap-1 text-xs text-teal-600 font-semibold"
+                  >
+                    <Printer className="w-3 h-3" />
+                    Imprimir
+                  </button>
+                  <a
+                    href={src}
+                    download={`folha_qr_${turma.replace(/\s/g, '_')}.png`}
+                    className="flex items-center gap-1 text-xs text-primary"
+                  >
+                    <Download className="w-3 h-3" />
+                    Baixar
+                  </a>
+                </div>
               </div>
-              <img src={src} alt={`Turma ${turma}`} className="w-full" />
+              <img src={src} alt={turma} className="w-full" />
             </div>
           ))}
         </div>

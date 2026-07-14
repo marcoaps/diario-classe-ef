@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+﻿import { useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '../data/supabase';
 
 export type Bimestre = 1 | 2 | 3 | 4;
@@ -46,6 +46,13 @@ function normalizarTurma(turmaId: string) {
   const match = turmaId.match(/(\d+).*?([A-Z])$/i);
   if (match) return `${match[1]}${match[2].toUpperCase()}`;
   return turmaId.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+}
+
+const _PART = new Set(['de','da','das','do','dos','e','em','no','na','nos','nas']);
+function fmtNome(n: string): string {
+  return n.toLowerCase().split(' ').map((p,i) =>
+    i>0 && _PART.has(p) ? p : p.charAt(0).toUpperCase()+p.slice(1)
+  ).join(' ');
 }
 
 export function useRelatorioFrequencia(
@@ -119,7 +126,7 @@ export function useRelatorioFrequencia(
         const critico = registros_total > 0 && percentual < 50;
         const em_risco = registros_total > 0 && percentual < 75 && !critico;
         return {
-          id: a.id, nome: a.nome, turma_id: a.turma_id,
+          id: a.id, nome: fmtNome(a.nome), turma_id: a.turma_id,
           numero_chamada: a.numero_chamada ?? null,
           registros_total, presentes: m.presentes, ausentes: m.ausentes,
           pontos, percentual, em_risco, critico,

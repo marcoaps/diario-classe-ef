@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useState, useMemo } from 'react';
 import { useStore } from '../../store';
 import { MIN_PASSING_GRADE, MAX_ABSENCES_TOTAL, ClassRoom, Student } from '../../domain/types';
+import { AgendaDia } from './AgendaDia';
 import { ChevronRight, UserX, Users, Download, X, CheckSquare, BarChart3, CalendarSearch, Edit, Trash2, Star, ChevronDown, GraduationCap, ChevronUp, Share2, Copy, CheckCircle } from 'lucide-react';
 import { cn } from '../AppLayout';
 import { buscarAlunos, supabase } from '../../data/supabase';
@@ -236,7 +237,7 @@ export function Dashboard() {
         <button
           onClick={() => navigate('/alunos')}
           className="w-full flex items-center gap-4 p-4 rounded-2xl text-left transition-all active:scale-95"
-          style={{ background: '#1a2e6e' }}
+          style={{ background: '#1a2e6e', display: 'none' }}
         >
           <div className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.12)' }}>
             <GraduationCap className="w-7 h-7 text-white" />
@@ -267,6 +268,7 @@ export function Dashboard() {
           </span>
         </button>
 
+        <AgendaDia onTurmaClick={(t) => { const cr = sortedClassRooms.find((x) => x.name.replace(/[^0-9A-Za-z]/g,'').toUpperCase() === t); if (cr) handleClassClick(cr); }} />
         {/* Grid de botões */}
         <div className="grid grid-cols-2 gap-3">
           {MENU_ITEMS.map((item) => (

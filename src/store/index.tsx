@@ -31,7 +31,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [grades, setGrades] = useState<GradeRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+  const [selectedClassId, setSelectedClassIdRaw] = useState<string | null>(() => {
+    try { return localStorage.getItem('selectedClassId') || null; } catch { return null; }
+  });
+
+  const setSelectedClassId = (id: string | null) => {
+    setSelectedClassIdRaw(id);
+    try {
+      if (id) localStorage.setItem('selectedClassId', id);
+      else localStorage.removeItem('selectedClassId');
+    } catch {}
+  };
   const [isSynced, setIsSynced] = useState(true);
 
   const fetchDb = async () => {

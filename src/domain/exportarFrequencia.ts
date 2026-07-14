@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+﻿import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { AlunoFrequencia, Bimestre, ResumoFrequencia } from './useRelatorioFrequencia';
@@ -13,7 +13,9 @@ interface ExportContext {
   resumo: ResumoFrequencia;
   professor?: string;
   escola?: string;
-  transferidos?: Set<string>; // ids dos transferidos
+  transferidos?: Set<string>;
+  nomesAEE?: Set<string>;
+  nomesTransferidos?: Set<string>; // ids dos transferidos
 }
 
 function formatarDataBR(iso: string) {
@@ -34,6 +36,22 @@ function getLabelPeriodo(ctx: ExportContext): string {
   const pe = ctx.periodoEfetivo || ctx.periodo;
   return `Periodo: ${formatarDataBR(pe.inicio)} a ${formatarDataBR(pe.fim)}`;
 }
+
+function calcularNotaEf(percentual: number, nome?: string, nomesAEE?: Set<string>, nomesTransferidos?: Set<string>): string {
+  if (nome) {
+    const nomeLower = nome.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    if (nomesTransferidos?.has(nomeLower)) return 'Transf.';
+    if (nomesAEE?.has(nomeLower)) return 'AEE';
+  }
+  const p = Math.round(percentual);
+  if (p <= 0) return '-';
+  if (p <= 20) return '8,0';
+  if (p <= 40) return '8,5';
+  if (p <= 64) return '9,0';
+  if (p <= 88) return '9,5';
+  return '10,0';
+}
+
 
 export function exportarExcel(ctx: ExportContext) {
   const wb = XLSX.utils.book_new();
@@ -57,7 +75,7 @@ export function exportarExcel(ctx: ExportContext) {
       ctx.resumo.total_criticos,
     ],
     [],
-    ['No', 'Nome', 'Aulas', 'Presencas', 'Faltas', 'Pontos', 'Frequencia %', 'Situacao'],
+    ['No', 'Nome', 'Aulas', 'Presencas', 'Faltas', 'Pontos', 'Frequencia %', 'Situacao', 'Nota EF'],
   ];
 
   const linhas = ctx.alunos.map((a) => [
@@ -69,17 +87,18 @@ export function exportarExcel(ctx: ExportContext) {
     ctx.transferidos?.has(a.id) ? '-' : a.pontos,
     ctx.transferidos?.has(a.id) ? '-' : a.percentual,
     situacao(a, ctx.transferidos),
+    ctx.transferidos?.has(a.id) ? '-' : calcularNotaEf(a.percentual, a.nome, ctx.nomesAEE, ctx.nomesTransferidos),
   ]);
 
   const ws = XLSX.utils.aoa_to_sheet([...cabecalho, ...linhas]);
   ws['!cols'] = [
     { wch: 5 }, { wch: 38 }, { wch: 8 }, { wch: 11 },
-    { wch: 8 }, { wch: 9 }, { wch: 13 }, { wch: 12 },
+    { wch: 8 }, { wch: 9 }, { wch: 13 }, { wch: 12 }, { wch: 10 },
   ];
-  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
+  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 8 } }];
 
   const sufixo = ctx.dataFiltro ? `_${ctx.dataFiltro}` : `_bim${ctx.bimestre}`;
-  const nome = `frequencia_${ctx.turma.replace(/\s/g, '')}${sufixo}.xlsx`;
+  const nome = `Notas-${ctx.bimestre}BM-${ctx.turma}.xlsx`;
   XLSX.utils.book_append_sheet(wb, ws, ctx.dataFiltro ? 'Dia' : `Bimestre ${ctx.bimestre}`);
   XLSX.writeFile(wb, nome);
 }

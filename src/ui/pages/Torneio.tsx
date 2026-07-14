@@ -1,4 +1,6 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { TorneioAdmin } from './TorneioAdmin';
+import { supabase } from '../../data/supabase';
 
 // ─── TIPOS ───────────────────────────────────────────────────────────────────
 
@@ -110,11 +112,33 @@ function calcSt(teams:Team[],matches:Match[],gf:string|null=null):Standing[]{
 }
 
 function parseImportText(text:string):ParsedPlayer[]{
-  return text.split('\n').map(l=>l.trim()).filter(l=>l&&!l.startsWith('#')).map(raw=>{
+  // Expand lines: if a line has 2+ commas and each segment looks like a name, split into multiple players
+  const rawLines = text.split('\n').map(l=>l.trim()).filter(l=>l&&!l.startsWith('#'));
+  const expandedLines:string[]=[];
+  rawLines.forEach(line=>{
+    const parts = line.split(',').map(p=>p.trim()).filter(Boolean);
+    const commas = parts.length - 1;
+    if(commas>=2){
+      // Check if all parts look like names (2+ words avg or 3+ commas = definitely a list)
+      const avgWords = parts.reduce((s,p)=>s+p.split(' ').length,0)/parts.length;
+      if(commas>=3 || avgWords>=2){
+        // It's a list of names — split and add each as its own line
+        expandedLines.push(...parts);
+        return;
+      }
+    }
+    expandedLines.push(line);
+  });
+  return expandedLines.map(raw=>{
     const nm=raw.match(/^#?(\d{1,2})\s+(.+)$/);let rest=raw;let number:string|null=null;
     if(nm){number=nm[1];rest=nm[2];}
-    const sep=rest.match(/^(.+?)(?:\s*[,;|]\s*|\s+-\s+)(.+)$/);
-    if(sep)return{rawLine:raw,name:sep[1].trim(),teamName:sep[2].trim()||null,number};
+    const sep=rest.match(/^(.+?)(?:\s*[;|]\s*|\s+-\s+|\s*,\s*)(.+)$/);
+    if(sep){
+      // Only treat as "Name, Team" if team part looks short enough (likely a team name)
+      const possibleTeam=sep[2].trim();
+      if(possibleTeam.split(' ').length<=4&&possibleTeam.length<=40)
+        return{rawLine:raw,name:sep[1].trim(),teamName:possibleTeam||null,number};
+    }
     return{rawLine:raw,name:rest.trim(),teamName:null,number};
   });
 }
@@ -239,10 +263,15 @@ function SetupWizard({onDone,onCancel}:SetupWizardProps){
           <div>
             <p className="text-slate-400 text-sm mb-3">Como esta categoria será disputada?</p>
             <div className="space-y-2">
-              {FORMATS.filter(f=>f.min<=teamCount).map(f=>(
-                <div key={f.id} onClick={()=>setFormat(f.id)} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${format===f.id?'bg-indigo-900/50 border-indigo-500':'bg-slate-900 border-slate-700 hover:border-slate-500'}`}>
+              {FORMATS.map(f=>(
+                <div key={f.id} onClick={()=>setFormat(f.id)}
+                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all
+                    ${format===f.id?'bg-indigo-900/50 border-indigo-500':'bg-slate-900 border-slate-700 hover:border-slate-500'}`}>
                   <span className="text-xl">{f.icon}</span>
-                  <div className="flex-1"><div className={`text-sm font-medium ${format===f.id?'text-indigo-300':'text-white'}`}>{f.name}</div><div className="text-xs text-slate-400">{f.desc}</div></div>
+                  <div className="flex-1">
+                    <div className={`text-sm font-medium ${format===f.id?'text-indigo-300':'text-white'}`}>{f.name}</div>
+                    <div className="text-xs text-slate-400">{f.desc}</div>
+                  </div>
                   {format===f.id&&<div className="w-4 h-4 rounded-full bg-indigo-500 flex items-center justify-center text-white text-xs">✓</div>}
                 </div>
               ))}
@@ -279,7 +308,7 @@ function SetupWizard({onDone,onCancel}:SetupWizardProps){
                 </div>
                 <textarea value={importText} onChange={e=>setImportText(e.target.value)}
                   className="w-full h-36 bg-slate-900 border border-slate-600 rounded-xl p-3 text-white text-sm font-mono focus:outline-none focus:border-indigo-500 resize-none placeholder-slate-600"
-                  placeholder={"João Silva, Leões\n7 Maria Santos, Leões\nPedro Alves, Tigres"}/>
+                  placeholder="João Silva, Leões | 7 Maria Santos, Leões | Pedro Alves, Tigres"/>
                 <div className="flex justify-between items-center mt-2">
                   <span className="text-slate-500 text-xs">{importText.split('\n').filter(l=>l.trim()&&!l.startsWith('#')).length} linha(s)</span>
                   <button onClick={handleProcess} disabled={!importText.trim()} className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-sm font-bold transition-colors">Processar →</button>
@@ -337,11 +366,88 @@ function SetupWizard({onDone,onCancel}:SetupWizardProps){
 
 // ─── HOME SCREEN ─────────────────────────────────────────────────────────────
 
-interface HomeScreenProps { tournament:Tournament; onSelectCategory:(id:string)=>void; onAddCategory:()=>void; onRename:(name:string)=>void; onDeleteCategory:(id:string)=>void; }
+interface RegistroTime { id:string; nome_time:string; cor:string; token:string; count:number; pronto:boolean; }
+interface HomeScreenProps { tournament:Tournament; onSelectCategory:(id:string)=>void; onAddCategory:()=>void; onRename:(name:string)=>void; onDeleteCategory:(id:string)=>void; onDeleteTournament:()=>void; onGoAdmin:()=>void; }
 
-function HomeScreen({tournament,onSelectCategory,onAddCategory,onRename,onDeleteCategory}:HomeScreenProps){
+function HomeScreen({tournament,onSelectCategory,onAddCategory,onRename,onDeleteCategory,onDeleteTournament,onGoAdmin}:HomeScreenProps){
   const [editingName,setEditingName]=useState(false);
   const [nameVal,setNameVal]=useState(tournament.name);
+  const [showInscricoes,setShowInscricoes]=useState(false);
+  const [timesRegistro,setTimesRegistro]=useState<RegistroTime[]>([]);
+  const [gerandoLinks,setGerandoLinks]=useState(false);
+  const [copiado,setCopiado]=useState<string|null>(null);
+  const MIN_JOG=6; const MAX_JOG=10;
+
+  const baseUrl = window.location.origin;
+
+  const atualizarContagens = useCallback(async (times: RegistroTime[]) => {
+    if (!times.length) return;
+    const ids = times.map(t => t.id);
+    const { data } = await supabase
+      .from('torneio_jogadores')
+      .select('time_id')
+      .in('time_id', ids);
+    const counts: Record<string,number> = {};
+    (data||[]).forEach((r:any) => { counts[r.time_id] = (counts[r.time_id]||0) + 1; });
+    setTimesRegistro(prev => prev.map(t => ({
+      ...t,
+      count: counts[t.id] || 0,
+      pronto: (counts[t.id] || 0) >= MIN_JOG
+    })));
+  }, []);
+
+  useEffect(() => {
+    if (!showInscricoes || !timesRegistro.length) return;
+    const interval = setInterval(() => atualizarContagens(timesRegistro), 5000);
+    return () => clearInterval(interval);
+  }, [showInscricoes, timesRegistro, atualizarContagens]);
+
+  async function limparJogadores(timeId: string, nomeTime: string) {
+    if (!window.confirm(`Remover todos os jogadores de "${nomeTime}"?`)) return;
+    await supabase.from('torneio_jogadores').delete().eq('time_id', timeId);
+    setTimesRegistro(prev => prev.map(t =>
+      t.id === timeId ? { ...t, count: 0, pronto: false } : t
+    ));
+  }
+
+  async function gerarLinksInscricao() {
+    setGerandoLinks(true);
+    try {
+      // Deletar registros antigos deste torneio
+      await supabase.from('torneio_times').delete().eq('torneio_nome', tournament.name);
+      // Inserir todos os times de todas as categorias
+      const rows = tournament.categories.flatMap(cat =>
+        cat.teams.map(team => ({
+          torneio_nome: tournament.name,
+          categoria_nome: cat.name,
+          nome_time: team.name,
+          cor: team.color,
+          min_jogadores: MIN_JOG,
+          max_jogadores: MAX_JOG,
+        }))
+      );
+      const { data, error } = await supabase.from('torneio_times').insert(rows).select();
+      if (error) throw error;
+      const novosRegistros: RegistroTime[] = (data||[]).map((t:any) => ({
+        id: t.id, nome_time: t.nome_time, cor: t.cor, token: t.token, count: 0, pronto: false
+      }));
+      setTimesRegistro(novosRegistros);
+      setShowInscricoes(true);
+    } catch (e:any) {
+      alert('Erro ao gerar links: ' + e.message);
+    } finally {
+      setGerandoLinks(false);
+    }
+  }
+
+  function copiarLink(token:string) {
+    navigator.clipboard.writeText(`${baseUrl}/torneio/inscricao/${token}`);
+    setCopiado(token);
+    setTimeout(() => setCopiado(null), 2000);
+  }
+
+  const todosPronte = timesRegistro.length > 0 && timesRegistro.every(t => t.pronto);
+  const totalTimes  = tournament.categories.reduce((s,c) => s + c.teams.length, 0);
 
   return(
     <div className="min-h-screen bg-[#0f172a] p-4">
@@ -363,6 +469,18 @@ function HomeScreen({tournament,onSelectCategory,onAddCategory,onRename,onDelete
             </div>
           )}
           <div className="text-slate-400 text-xs mt-0.5">{tournament.categories.length} categoria{tournament.categories.length!==1?'s':''}</div>
+        </div>
+        <div className="flex gap-2 flex-shrink-0">
+          <button
+            onClick={onGoAdmin}
+            className="px-3 py-1.5 rounded-lg bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 text-xs font-medium hover:bg-indigo-600/30 transition-colors">
+            ⚙ Admin
+          </button>
+          <button
+            onClick={()=>{if(window.confirm(`Excluir o torneio "${tournament.name}" e todas as suas categorias?`))onDeleteTournament();}}
+            className="px-3 py-1.5 rounded-lg border border-red-500/40 text-red-400 text-xs font-medium hover:bg-red-500/10 transition-colors">
+            🗑 Excluir
+          </button>
         </div>
       </div>
 
@@ -416,6 +534,72 @@ function HomeScreen({tournament,onSelectCategory,onAddCategory,onRename,onDelete
           <button onClick={onAddCategory} className="w-full py-3 rounded-2xl border border-dashed border-slate-600 text-slate-400 hover:text-white hover:border-slate-400 text-sm font-medium transition-colors flex items-center justify-center gap-2">
             <span className="text-lg">+</span> Adicionar Categoria
           </button>
+
+          {/* Painel de inscrições */}
+          {totalTimes > 0 && (
+            <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden">
+              <button
+                onClick={() => showInscricoes ? setShowInscricoes(false) : gerarLinksInscricao()}
+                disabled={gerandoLinks}
+                className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-indigo-300 hover:bg-slate-700/50 transition-colors"
+              >
+                <span>📋 Inscrições de jogadores</span>
+                <span className="text-slate-500 text-xs">
+                  {gerandoLinks ? 'Gerando...' : showInscricoes ? `${timesRegistro.filter(t=>t.pronto).length}/${timesRegistro.length} prontos ▲` : 'Gerar links ▼'}
+                </span>
+              </button>
+
+              {showInscricoes && (
+                <div className="border-t border-slate-700 p-4 space-y-3">
+                  {/* Status geral */}
+                  <div className={`flex items-center justify-between rounded-xl px-4 py-2.5 ${todosPronte ? 'bg-green-900/30 border border-green-700/40' : 'bg-amber-900/20 border border-amber-700/30'}`}>
+                    <span className={`text-sm font-semibold ${todosPronte ? 'text-green-400' : 'text-amber-400'}`}>
+                      {todosPronte ? '✅ Todos os times prontos! Pode iniciar.' : `⏳ Aguardando inscrições (mín. ${MIN_JOG} por time)`}
+                    </span>
+                    <button onClick={() => atualizarContagens(timesRegistro)} className="text-slate-500 hover:text-slate-300 text-xs">↻</button>
+                  </div>
+
+                  {/* Lista de times */}
+                  {timesRegistro.map(t => (
+                    <div key={t.id} className="bg-slate-900 rounded-xl border border-slate-700 p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-3 h-3 rounded-full flex-shrink-0" style={{background:t.cor}}/>
+                        <span className="text-white text-sm font-medium flex-1">{t.nome_time}</span>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${t.pronto ? 'bg-green-900/40 text-green-400' : 'bg-amber-900/30 text-amber-400'}`}>
+                          {t.count}/{MAX_JOG} {t.pronto ? '✅' : '⏳'}
+                        </span>
+                      </div>
+                      <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden mb-2">
+                        <div className={`h-full rounded-full transition-all ${t.pronto ? 'bg-green-500' : 'bg-amber-500'}`} style={{width:`${Math.min(100,(t.count/MAX_JOG)*100)}%`}}/>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => copiarLink(t.token)}
+                          className="flex-1 py-2 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-600/30 text-indigo-300 text-xs font-semibold transition-colors"
+                        >
+                          {copiado === t.token ? '✅ Copiado!' : '🔗 Copiar link'}
+                        </button>
+                        {t.count > 0 && (
+                          <button
+                            onClick={() => limparJogadores(t.id, t.nome_time)}
+                            className="px-3 py-2 rounded-lg bg-red-900/20 hover:bg-red-900/40 border border-red-700/30 text-red-400 text-xs font-semibold transition-colors"
+                            title="Limpar jogadores"
+                          >
+                            🗑
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  <p className="text-slate-600 text-xs text-center">
+                    Compartilhe o link com o capitão de cada time.<br/>
+                    A página abre no celular sem precisar de login.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -712,7 +896,7 @@ function PlayersTab({cat,onUpdate}:{cat:Category;onUpdate:(c:Category)=>void}){
           <div className="bg-slate-900 rounded-xl border border-slate-700 p-3 mb-3 text-xs font-mono text-slate-400 space-y-0.5">
             <div><span className="text-green-400">João Silva, Leões</span></div><div><span className="text-green-400">7 Maria, Tigres</span></div><div><span className="text-yellow-400">Carlos Lima</span><span className="text-slate-600"> — sem time</span></div>
           </div>
-          <textarea value={importText} onChange={e=>setImportText(e.target.value)} className="w-full h-40 bg-slate-900 border border-slate-600 rounded-xl p-3 text-white text-sm font-mono focus:outline-none focus:border-indigo-500 resize-none placeholder-slate-600" placeholder="João Silva, Leões\nMaria Santos, Tigres"/>
+          <textarea value={importText} onChange={e=>setImportText(e.target.value)} className="w-full h-40 bg-slate-900 border border-slate-600 rounded-xl p-3 text-white text-sm font-mono focus:outline-none focus:border-indigo-500 resize-none placeholder-slate-600" placeholder="João Silva, Leões | Maria Santos, Tigres | Pedro Alves, Falcões"/>
           <div className="flex justify-between items-center mt-2">
             <span className="text-slate-500 text-xs">{importText.split('\n').filter(l=>l.trim()&&!l.startsWith('#')).length} linhas</span>
             <button onClick={handleProcess} disabled={!importText.trim()} className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-sm font-bold transition-colors">Processar →</button>
@@ -734,7 +918,7 @@ function PlayersTab({cat,onUpdate}:{cat:Category;onUpdate:(c:Category)=>void}){
 
 export default function Torneio(){
   const [tournament,setTournament]=useState<Tournament|null>(null);
-  const [screen,setScreen]=useState<'start'|'home'|'setup_category'|'category'>('start');
+  const [screen,setScreen]=useState<'start'|'home'|'setup_category'|'category'|'admin'>('start');
   const [activeCatId,setActiveCatId]=useState<string|null>(null);
   const [tournNameInput,setTournNameInput]=useState('Interclasses 2026');
 
@@ -783,6 +967,17 @@ export default function Torneio(){
       onAddCategory={()=>setScreen('setup_category')}
       onRename={name=>setTournament(prev=>prev?{...prev,name}:prev)}
       onDeleteCategory={id=>setTournament(prev=>prev?{...prev,categories:prev.categories.filter(c=>c.id!==id)}:prev)}
+      onDeleteTournament={()=>{setTournament(null);setScreen('start');}}
+      onGoAdmin={()=>setScreen('admin')}
+    />;
+  }
+
+  if(screen==='admin'&&tournament){
+    return<TorneioAdmin
+      tournament={tournament}
+      onBack={()=>setScreen('home')}
+      onStartCategory={(catId)=>{setActiveCatId(catId);setScreen('category');}}
+      onDeletePlayers={()=>{}}
     />;
   }
 

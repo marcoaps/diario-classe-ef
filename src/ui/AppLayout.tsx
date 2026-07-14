@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import {
   Users, CheckSquare, GraduationCap, CloudOff, Cloud,
-  CalendarSearch, BarChart3, QrCode, ClipboardList,
+  CalendarSearch, BarChart3, QrCode, ClipboardList, CalendarDays,
   Sparkles, MoreHorizontal, X, BookOpen, Trophy
 } from 'lucide-react';
 import { useStore } from '../store';
@@ -173,3 +173,4 @@ function PopupItem({ to, icon, label, onClick }: { to: string; icon: React.React
     </NavLink>
   );
 }
+          

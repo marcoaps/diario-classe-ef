@@ -34,6 +34,8 @@ import { AvaliacaoFolha } from './ui/pages/avaliacoes/AvaliacaoFolha';
 import { AvaliacaoCorrigir } from './ui/pages/avaliacoes/AvaliacaoCorrigir';
 import { AvaliacaoResultados } from './ui/pages/avaliacoes/AvaliacaoResultados';
 import Torneio from './ui/pages/Torneio';
+import { InscricaoTime } from './ui/pages/InscricaoTime';
+import { AgendaHoje } from './ui/pages/AgendaHoje';
 import { supabase } from './data/supabase';
 
 export function useAuth() {
@@ -76,6 +78,8 @@ export default function App() {
         <Route path="/aluno/:token" element={<PortalAluno />} />
         <Route path="/responder" element={<ResponderProva />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/torneio/inscricao/:token" element={<InscricaoTime />} />
+        <Route path="/agenda" element={<AgendaHoje />} />
 
         <Route element={<LayoutProtegido />}>
           <Route path="/" element={<Dashboard />} />
