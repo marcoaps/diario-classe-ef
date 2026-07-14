@@ -172,6 +172,17 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
     }
   }
 
+  // Buscar conteúdo das aulas (tema/título por data) de todas as turmas
+  const conteudosPorTurmaExcel: Record<string, { data: string; tema: string; titulo: string }[]> = {};
+  for (const turma of cfg.turmas) {
+    const { data: conteudoData } = await supabase
+      .from('conteudo_aulas')
+      .select('data, tema, titulo')
+      .eq('turma', turma)
+      .order('data');
+    conteudosPorTurmaExcel[turma] = conteudoData || [];
+  }
+
   function dataKey(dt: DiaTipo): string {
     return `${dt.ano}-${String(dt.mes).padStart(2,'0')}-${String(dt.dia).padStart(2,'0')}`;
   }
@@ -479,6 +490,35 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
         value: txt, size: 8, fill: branco, hAlign: 'left',
       });
       legCol += 3;
+    }
+
+    // ── Conteúdo das Aulas (tema/título por data) ──
+    const conteudos = conteudosPorTurmaExcel[turma] || [];
+    if (conteudos.length > 0) {
+      const ctTituloRow = legRow + 2;
+      ws.mergeCells(ctTituloRow, 1, ctTituloRow, lastCol);
+      fmtCell(ws.getCell(ctTituloRow, 1), {
+        value: 'CONTEÚDO DAS AULAS', bold: true, size: 10, color: 'FFFFFF', fill: azulEsc, hAlign: 'left',
+      });
+
+      const ctHeaderRow = ctTituloRow + 1;
+      const ctFimTexto = Math.min(8, lastCol);
+      fmtCell(ws.getCell(ctHeaderRow, 1), {
+        value: 'Data', bold: true, size: 8, color: 'FFFFFF', fill: corPrinc,
+      });
+      if (ctFimTexto > 2) ws.mergeCells(ctHeaderRow, 2, ctHeaderRow, ctFimTexto);
+      fmtCell(ws.getCell(ctHeaderRow, 2), {
+        value: 'Conteúdo Desenvolvido', bold: true, size: 8, color: 'FFFFFF', fill: corPrinc, hAlign: 'left',
+      });
+
+      conteudos.forEach((c, idx) => {
+        const row = ctHeaderRow + 1 + idx;
+        const [anoC, mesC, diaC] = c.data.split('-');
+        const bgC = idx % 2 === 0 ? cinza : cinzaClar;
+        fmtCell(ws.getCell(row, 1), { value: `${diaC}/${mesC}`, size: 8, fill: bgC });
+        if (ctFimTexto > 2) ws.mergeCells(row, 2, row, ctFimTexto);
+        fmtCell(ws.getCell(row, 2), { value: c.titulo, size: 8, fill: bgC, hAlign: 'left' });
+      });
     }
 
     // Congelar painéis
