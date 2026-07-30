@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   BookOpen, Calendar, ClipboardList, Route,
   CalendarDays, FileQuestion, Gamepad2, Accessibility,
-  Lightbulb, ChevronRight, ClipboardCheck,
+  Lightbulb, ChevronRight, ClipboardCheck, Presentation,
 } from 'lucide-react';
 
 const FERRAMENTAS = [
@@ -22,6 +22,15 @@ const FERRAMENTAS = [
     icon: ClipboardList,
     cor: 'from-emerald-600 to-emerald-500',
     tag: 'PLANEJAMENTO',
+  },
+  {
+    rota: '/ia/oficina',
+    titulo: 'Gerador de Oficina Pedagógica',
+    descricao: 'Crie planos de oficinas e formações com acolhida, momentos e distribuição de grupos, no formato oficial das Jornadas Pedagógicas.',
+    icon: Presentation,
+    cor: 'from-fuchsia-600 to-fuchsia-500',
+    tag: 'FORMAÇÃO',
+    novo: true,
   },
   {
     rota: '/ia/planejamento-anual',

@@ -1,4 +1,5 @@
 ﻿import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { chamarClaudeProxy } from "../../../utils/claudeProxy";
 
 interface SituacaoAprendizagem {
@@ -465,6 +466,7 @@ function AnimacaoBaixando() {
 // ── Componente principal ──────────────────────────────────────────────────────
 
 export function IASequencia() {
+  const navigate = useNavigate();
   const [professor, setProfessor] = useState("Marco Pedro");
   const [coordenador, setCoordenador] = useState("Jair Fiesca e Amarildo Saady");
   const [serie, setSerie] = useState("6º e 7º");
@@ -658,6 +660,12 @@ Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
           <div className="flex gap-3 mb-4">
             <button onClick={handleBaixarWord} disabled={baixando} className="flex-1 py-3 rounded-xl bg-green-700 hover:bg-green-800 disabled:opacity-50 text-white font-medium text-sm transition-colors">
               📄 Baixar Word (.docx) — {ordinal(numeroAtual)} Sequência
+            </button>
+            <button
+              onClick={() => navigate("/ia/oficina", { state: { fromSequencia: { tema, serie, habilidades: sequencia.habilidades, objetivos: sequencia.objetivos } } })}
+              className="py-3 px-5 rounded-xl bg-fuchsia-700 hover:bg-fuchsia-800 text-white text-sm font-medium transition-colors"
+            >
+              🏫 Gerar Oficina com este tema
             </button>
             <button onClick={resetar} className="py-3 px-5 rounded-xl border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 transition-colors">↩ Nova sequência</button>
           </div>
