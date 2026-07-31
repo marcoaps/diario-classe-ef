@@ -33,6 +33,7 @@ import { Avaliacoes } from './ui/pages/avaliacoes/Avaliacoes';
 import { AvaliacaoFolha } from './ui/pages/avaliacoes/AvaliacaoFolha';
 import { AvaliacaoCorrigir } from './ui/pages/avaliacoes/AvaliacaoCorrigir';
 import { AvaliacaoResultados } from './ui/pages/avaliacoes/AvaliacaoResultados';
+import { GeradorQuestoes } from './ui/pages/avaliacoes/GeradorQuestoes';
 import Torneio from './ui/pages/Torneio';
 import { InscricaoTime } from './ui/pages/InscricaoTime';
 import { AgendaHoje } from './ui/pages/AgendaHoje';
@@ -100,6 +101,7 @@ export default function App() {
           <Route path="/avaliacoes/folha/:id" element={<AvaliacaoFolha />} />
           <Route path="/avaliacoes/corrigir/:id" element={<AvaliacaoCorrigir />} />
           <Route path="/avaliacoes/resultados/:id" element={<AvaliacaoResultados />} />
+          <Route path="/avaliacoes/gerador" element={<GeradorQuestoes />} />
 
           {/* Rotas IA */}
           <Route path="/ia" element={<IAHub />} />

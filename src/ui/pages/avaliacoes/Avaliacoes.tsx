@@ -158,13 +158,22 @@ export function Avaliacoes() {
           <ClipboardList className="w-5 h-5 text-primary" />
           <h1 className="text-lg font-bold text-on-surface">Avaliações</h1>
         </div>
-        <button
-          onClick={() => { setCriando(!criando); setErro(''); }}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-on-primary text-sm font-semibold"
-        >
-          <Plus className="w-4 h-4" />
-          Nova
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate('/avaliacoes/gerador')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary-container text-on-secondary-container text-sm font-semibold"
+          >
+            <Sparkles className="w-4 h-4" />
+            Gerador de Questões
+          </button>
+          <button
+            onClick={() => { setCriando(!criando); setErro(''); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-on-primary text-sm font-semibold"
+          >
+            <Plus className="w-4 h-4" />
+            Nova
+          </button>
+        </div>
       </div>
 
       {/* Formulario de criacao */}
