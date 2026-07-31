@@ -124,8 +124,17 @@ Gere ${quantidadeNesteLote} questão(ões) de avaliação com estes parâmetros:
 === AUTORREVISÃO OBRIGATÓRIA (5º Passo do guia) ===
 Antes de finalizar CADA questão, "resolva" o item mentalmente como se fosse um estudante do ${params.anoEscolar}º ano, e preencha o campo "autorrevisaoIA" com o resultado honesto dessa checagem. Se algum critério falhar, corrija a questão internamente ANTES de incluí-la na resposta — só inclua na resposta questões que você mesmo aprovaria. Ainda assim, preencha os critérios com sinceridade (não force todos para "true" sem checar de verdade).
 
-=== SOBRE O CAMPO "imagemQuery" ===
-Se o enunciado ou o contexto mencionar algo que só faz sentido com uma imagem real (ex: "observe a imagem", "observe o esquema da quadra", "observe a foto"), preencha "imagemQuery" com uma frase curta EM INGLÊS descrevendo a cena, adequada para buscar uma foto de banco de imagens (ex: "handball players passing indoor court", "handball court diagram positions"). NÃO invente que existe uma imagem/gráfico/linha do tempo/placar "apresentado pelo professor" se você não puder descrever exatamente o que essa imagem deveria mostrar em "imagemQuery" — nesse caso, prefira reescrever o enunciado sem depender de suporte visual e deixar "imagemQuery" como null. Se a contextualização pedida for "Tabela" ou "Gráfico" com dados específicos, monte a tabela/gráfico como texto dentro de "contexto" em vez de pedir uma imagem.
+=== SOBRE IMAGENS — LEIA COM MUITA ATENÇÃO, ISSO JÁ CAUSOU ERRO ANTES ===
+Existe um sistema automático que busca uma foto REAL e a insere no documento final — você NUNCA precisa (e NUNCA deve) avisar o professor para providenciar imagem, nem descrever "a imagem que seria mostrada". Isso é proibido.
+
+PROIBIDO, em "contexto" e em "enunciado":
+- Qualquer variação de "[IMAGEM DE APOIO — professor providenciará]", "(imagem a ser inserida)", "professor irá providenciar/anexar/mostrar uma imagem" ou frases equivalentes.
+- Descrever em texto o conteúdo que uma imagem "mostraria", como se fosse uma legenda substituta da imagem.
+
+O QUE FAZER EM VEZ DISSO:
+1. Se o enunciado precisar de um apoio visual real (foto/cena), escreva o enunciado normalmente fazendo referência a "a imagem a seguir" (sem descrever o que ela contém) e preencha "imagemQuery" com uma frase curta EM INGLÊS para busca em banco de fotos (ex: "handball players passing indoor court", "handball goalkeeper action"). O sistema busca a foto de verdade e a insere automaticamente logo abaixo do texto — você não faz mais nada além de preencher "imagemQuery".
+2. Se não for possível descrever uma cena fotografável real em poucas palavras (ex: seria necessário um diagrama técnico específico, uma linha do tempo com datas exatas, um placar com números exatos, um gráfico com dados específicos), NÃO peça imagem nenhuma: escreva o enunciado e o "contexto" de forma totalmente autossuficientes em texto (contando a informação necessária diretamente no enunciado/contexto), e deixe "imagemQuery" como null.
+3. Nunca deixe o enunciado dependente de uma imagem que não existe. Se "imagemQuery" for null, o enunciado e o contexto têm que fazer sentido sozinhos, sem nenhuma referência a "observe a imagem/esquema/linha do tempo/placar apresentado".
 
 === IMPORTANTE SOBRE AS ALTERNATIVAS ===
 Para "multipla_escolha": exatamente 4 alternativas (A, B, C, D), exatamente 1 com "correta": true, ordenadas de forma lógica, todas com comprimento/estrutura equivalentes.

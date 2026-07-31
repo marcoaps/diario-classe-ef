@@ -113,6 +113,26 @@ export function checarPontuacaoAlternativas(questao: QuestaoGerada, _params: Par
   });
 }
 
+/**
+ * A IA já foi flagrada inventando placeholders de imagem em vez de usar o
+ * campo "imagemQuery" (ex: "[IMAGEM DE APOIO — professor providenciará]").
+ * Isso quebra o documento final, então checamos aqui como segunda camada de
+ * proteção, além da instrução no prompt.
+ */
+const PADROES_PLACEHOLDER_IMAGEM = [
+  /imagem\s+de\s+apoio/i,
+  /professor\s+(ir[áa]\s+)?providenciar/i,
+  /imagem\s+a\s+ser\s+inserida/i,
+  /\[\s*imagem/i,
+  /\(\s*imagem/i,
+  /imagem\s+ilustrativa\s+mostrando/i,
+];
+
+export function checarSemPlaceholderDeImagem(questao: QuestaoGerada): boolean {
+  const textos = [questao.enunciado, questao.contexto ?? ''].join(' ');
+  return !PADROES_PLACEHOLDER_IMAGEM.some(padrao => padrao.test(textos));
+}
+
 /** Campos obrigatórios de metadados não podem ficar vazios. */
 export function checarCamposObrigatoriosPreenchidos(questao: QuestaoGerada): boolean {
   return Boolean(
@@ -171,6 +191,11 @@ export function validarQuestaoDeterministico(
       id: 'campos_obrigatorios',
       descricao: 'Conteúdo, enunciado, objetivo da questão e justificativa pedagógica não podem ficar vazios.',
       passou: checarCamposObrigatoriosPreenchidos(questao),
+    },
+    {
+      id: 'sem_placeholder_imagem',
+      descricao: 'O enunciado/contexto não pode conter texto de placeholder tipo "[IMAGEM DE APOIO — professor providenciará]" — o suporte visual deve vir só pelo campo imagemQuery.',
+      passou: checarSemPlaceholderDeImagem(questao),
     },
   ];
 
