@@ -10,8 +10,9 @@ import { revisarEAprovarQuestao, revisarLote } from './revisaoAutomaticaQuestoes
 import { OPCOES_EXPORTACAO_PADRAO, exportarQuestoesPDF, exportarQuestoesWord } from './exportarQuestoesGerador';
 import type { OpcoesExportacao } from './exportarQuestoesGerador';
 import { salvarQuestoesNoBanco } from './bancoQuestoesData';
+import { preencherImagensDasQuestoes } from './buscarImagensGerador';
 
-type Etapa = 'formulario' | 'gerando' | 'revisando' | 'resultado';
+type Etapa = 'formulario' | 'gerando' | 'revisando' | 'buscando_imagens' | 'resultado';
 
 /** Barra de progresso simples, orientada a um contador real (lotes gerados / questões revisadas), diferente da simulação por tempo usada em outras telas de IA — aqui sabemos exatamente quantas unidades faltam. */
 function BarraProgresso({ titulo, concluidas, total }: { titulo: string; concluidas: number; total: number }) {
@@ -64,7 +65,16 @@ export function GeradorQuestoes() {
       setEtapa('revisando');
       setProgresso({ concluidas: 0, total: geradas.length });
       const revisadas = await revisarLote(geradas, params, (concluidas, total) => setProgresso({ concluidas, total }));
-      setQuestoes(revisadas);
+
+      const precisamDeImagem = revisadas.filter(q => q.imagemQuery).length;
+      if (precisamDeImagem > 0) {
+        setEtapa('buscando_imagens');
+        setProgresso({ concluidas: 0, total: precisamDeImagem });
+        const comImagens = await preencherImagensDasQuestoes(revisadas, (concluidas, total) => setProgresso({ concluidas, total }));
+        setQuestoes(comImagens);
+      } else {
+        setQuestoes(revisadas);
+      }
       setEtapa('resultado');
     } catch (e) {
       setErro(`Erro ao gerar questões: ${(e as Error).message}`);
@@ -94,8 +104,12 @@ export function GeradorQuestoes() {
     return { ...OPCOES_EXPORTACAO_PADRAO, incluirNaoConformesOficial: incluirNaoConformes };
   }
 
-  function handleExportarPDF() {
-    exportarQuestoesPDF(questoes, params, opcoesExportacaoAtuais());
+  async function handleExportarPDF() {
+    try {
+      await exportarQuestoesPDF(questoes, params, opcoesExportacaoAtuais());
+    } catch (e) {
+      setErro(`Erro ao exportar PDF: ${(e as Error).message}`);
+    }
   }
 
   async function handleExportarWord() {
@@ -164,6 +178,10 @@ export function GeradorQuestoes() {
 
       {etapa === 'revisando' && (
         <BarraProgresso titulo="Revisando questões (validador + autorrevisão da IA)..." concluidas={progresso.concluidas} total={progresso.total} />
+      )}
+
+      {etapa === 'buscando_imagens' && (
+        <BarraProgresso titulo="Buscando imagens reais para as questões com suporte visual..." concluidas={progresso.concluidas} total={progresso.total} />
       )}
 
       {etapa === 'resultado' && (

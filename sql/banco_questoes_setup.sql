@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS banco_questoes (
   titulo_interno              text,
   objetivo_questao            text,
   contexto_suporte            text,
+  imagem_query                text,           -- palavra-chave (em inglês) usada para buscar a foto no Pexels
+  imagem_url                  text,           -- URL da foto encontrada no Pexels, se houver
   enunciado                   text NOT NULL,
   alternativas                jsonb,          -- [{letra,texto,correta,comentarioDistrator}] ou null (dissertativa/resposta_curta)
   resposta_correta            text,           -- usado quando "alternativas" é null, ou para registrar gabarito de V/F, associação, completar

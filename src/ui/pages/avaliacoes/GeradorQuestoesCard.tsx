@@ -79,6 +79,18 @@ export function GeradorQuestoesCard({ questao, onEditar, onRevisarNovamente, rev
             <p className="text-xs italic text-on-surface-variant border-l-2 border-outline-variant pl-2">{questao.contexto}</p>
           )}
 
+          {questao.imagemQuery && (
+            questao.imagemUrl ? (
+              <img
+                src={questao.imagemUrl}
+                alt={questao.imagemQuery}
+                className="w-full max-w-sm rounded-xl border border-outline-variant"
+              />
+            ) : (
+              <p className="text-[11px] text-on-surface-variant italic">Nenhuma foto encontrada para "{questao.imagemQuery}" — a questão será exportada sem imagem.</p>
+            )
+          )}
+
           {editando ? (
             <div className="space-y-2">
               <textarea

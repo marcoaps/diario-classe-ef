@@ -166,6 +166,10 @@ export interface QuestaoGerada {
   tipoQuestao: TipoQuestao;
   /** Texto de apoio (suporte) — null quando contextualizacao === 'sem_contexto'. */
   contexto: string | null;
+  /** Palavra-chave em inglês sugerida pela IA para buscar uma foto de banco de imagens (Pexels) que ilustre o contexto — null quando o suporte não é visual. */
+  imagemQuery: string | null;
+  /** URL da foto encontrada no Pexels para este item — preenchida depois da geração, por `buscarImagensGerador.ts`. */
+  imagemUrl: string | null;
   enunciado: string;
   /** null para dissertativa/resposta_curta, preenchido para os demais tipos. */
   alternativas: Alternativa[] | null;

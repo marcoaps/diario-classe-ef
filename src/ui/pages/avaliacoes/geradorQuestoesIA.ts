@@ -73,6 +73,7 @@ const ESQUEMA_JSON_QUESTAO = `
   "dificuldade": "muito_facil" | "facil" | "medio" | "dificil",
   "contexto": string | null,
   "enunciado": string,
+  "imagemQuery": string | null,
   "alternativas": [
     { "letra": "A", "texto": string, "correta": boolean, "comentarioDistrator": string | null },
     { "letra": "B", "texto": string, "correta": boolean, "comentarioDistrator": string | null },
@@ -122,6 +123,9 @@ Gere ${quantidadeNesteLote} questão(ões) de avaliação com estes parâmetros:
 
 === AUTORREVISÃO OBRIGATÓRIA (5º Passo do guia) ===
 Antes de finalizar CADA questão, "resolva" o item mentalmente como se fosse um estudante do ${params.anoEscolar}º ano, e preencha o campo "autorrevisaoIA" com o resultado honesto dessa checagem. Se algum critério falhar, corrija a questão internamente ANTES de incluí-la na resposta — só inclua na resposta questões que você mesmo aprovaria. Ainda assim, preencha os critérios com sinceridade (não force todos para "true" sem checar de verdade).
+
+=== SOBRE O CAMPO "imagemQuery" ===
+Se o enunciado ou o contexto mencionar algo que só faz sentido com uma imagem real (ex: "observe a imagem", "observe o esquema da quadra", "observe a foto"), preencha "imagemQuery" com uma frase curta EM INGLÊS descrevendo a cena, adequada para buscar uma foto de banco de imagens (ex: "handball players passing indoor court", "handball court diagram positions"). NÃO invente que existe uma imagem/gráfico/linha do tempo/placar "apresentado pelo professor" se você não puder descrever exatamente o que essa imagem deveria mostrar em "imagemQuery" — nesse caso, prefira reescrever o enunciado sem depender de suporte visual e deixar "imagemQuery" como null. Se a contextualização pedida for "Tabela" ou "Gráfico" com dados específicos, monte a tabela/gráfico como texto dentro de "contexto" em vez de pedir uma imagem.
 
 === IMPORTANTE SOBRE AS ALTERNATIVAS ===
 Para "multipla_escolha": exatamente 4 alternativas (A, B, C, D), exatamente 1 com "correta": true, ordenadas de forma lógica, todas com comprimento/estrutura equivalentes.
@@ -211,6 +215,8 @@ function completarQuestao(
     dificuldade: (bruta.dificuldade as QuestaoGerada['dificuldade']) ?? params.dificuldade,
     tipoQuestao: params.tipoQuestao,
     contexto: (bruta.contexto as string | null) ?? null,
+    imagemQuery: (bruta.imagemQuery as string | null) ?? null,
+    imagemUrl: null,
     enunciado: String(bruta.enunciado ?? ''),
     alternativas: (bruta.alternativas as QuestaoGerada['alternativas']) ?? null,
     respostaCorreta: (bruta.respostaCorreta as string | null) ?? null,

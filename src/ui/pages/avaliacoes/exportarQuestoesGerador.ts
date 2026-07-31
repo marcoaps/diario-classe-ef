@@ -3,17 +3,22 @@
 // file-saver) a partir das questões geradas. Segue os mesmos padrões visuais
 // já usados em `exportarFrequencia.ts` (PDF) e `IAProvaOficial.tsx` (Word),
 // para o documento final ficar consistente com o resto do app.
+//
+// Quando a questão tem uma foto real encontrada no Pexels (`imagemUrl`,
+// preenchida por `buscarImagensGerador.ts`), ela é embutida no documento —
+// tanto no PDF quanto no Word.
 // ============================================================================
 
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import {
   Document, Packer, Paragraph, Table, TableRow, TableCell,
-  TextRun, AlignmentType, WidthType, BorderStyle, ShadingType, VerticalAlign,
+  TextRun, AlignmentType, WidthType, BorderStyle, ShadingType, VerticalAlign, ImageRun,
 } from 'docx';
 import { saveAs } from 'file-saver';
 import { DIFICULDADES, TIPOS_QUESTAO } from './tiposGeradorQuestoes';
 import type { ParametrosGeracao, QuestaoGerada } from './tiposGeradorQuestoes';
+import { imagemUrlParaBase64, imagemUrlParaBuffer } from './buscarImagensGerador';
 
 export interface OpcoesExportacao {
   incluirGabarito: boolean;
@@ -53,17 +58,36 @@ function nomeArquivoBase(params: ParametrosGeracao): string {
   return `questoes_${componente}_${params.anoEscolar}ano${conteudo ? `_${conteudo}` : ''}`;
 }
 
+/** Pré-carrega, em paralelo, as imagens (base64 para PDF, buffer para Word) das questões que têm `imagemUrl`. */
+async function preCarregarImagens<T>(
+  questoes: QuestaoGerada[],
+  converter: (url: string) => Promise<T | null>
+): Promise<Record<string, T>> {
+  const comImagem = questoes.filter(q => q.imagemUrl);
+  const entradas = await Promise.all(
+    comImagem.map(async q => [q.idTemporario, await converter(q.imagemUrl as string)] as const)
+  );
+  const mapa: Record<string, T> = {};
+  for (const [id, valor] of entradas) {
+    if (valor) mapa[id] = valor;
+  }
+  return mapa;
+}
+
 // ── PDF ──────────────────────────────────────────────────────────────────
 
-export function exportarQuestoesPDF(
+export async function exportarQuestoesPDF(
   questoes: QuestaoGerada[],
   params: ParametrosGeracao,
   opcoes: OpcoesExportacao = OPCOES_EXPORTACAO_PADRAO
-): void {
+): Promise<void> {
   const selecionadas = filtrarParaExportacao(questoes, opcoes);
+  const imagensBase64 = await preCarregarImagens(selecionadas, imagemUrlParaBase64);
+
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 14;
+  const larguraUtil = pageWidth - margin * 2;
 
   // Cabeçalho, no mesmo estilo de exportarFrequencia.ts
   doc.setFillColor(15, 50, 100);
@@ -80,12 +104,14 @@ export function exportarQuestoesPDF(
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   let y = 30;
-  doc.text(`Componente: ${params.componenteCurricular}`, margin, y);
-  doc.text(`Ano: ${params.anoEscolar}º ano`, margin + 90, y);
-  y += 6;
-  doc.text(`Conteúdo: ${params.conteudo}`, margin, y);
+  const linhaComponenteAno = doc.splitTextToSize(`Componente: ${params.componenteCurricular}    Ano: ${params.anoEscolar}º ano`, larguraUtil);
+  doc.text(linhaComponenteAno, margin, y);
+  y += linhaComponenteAno.length * 5 + 1;
+  const linhaConteudo = doc.splitTextToSize(`Conteúdo: ${params.conteudo}`, larguraUtil);
+  doc.text(linhaConteudo, margin, y);
+  y += linhaConteudo.length * 5;
   doc.setFont('helvetica', 'normal');
-  y += 8;
+  y += 6;
 
   selecionadas.forEach((questao, idx) => {
     if (y > 260) { doc.addPage(); y = 20; }
@@ -96,15 +122,38 @@ export function exportarQuestoesPDF(
     doc.text(`${idx + 1}. (${labelDificuldade(questao.dificuldade)} — ${labelTipoQuestao(questao.tipoQuestao)})${avisoNaoOficial}`, margin, y);
     y += 5;
 
+    if (questao.contexto) {
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(9);
+      const linhaContexto = doc.splitTextToSize(questao.contexto, larguraUtil);
+      if (y + linhaContexto.length * 4.5 > 275) { doc.addPage(); y = 20; }
+      doc.text(linhaContexto, margin, y);
+      y += linhaContexto.length * 4.5 + 3;
+    }
+
+    const imagemBase64 = imagensBase64[questao.idTemporario];
+    if (imagemBase64) {
+      const larguraImagem = 90;
+      const alturaImagem = 56; // proporção ~16:10, igual às fotos "medium" do Pexels
+      if (y + alturaImagem > 275) { doc.addPage(); y = 20; }
+      try {
+        doc.addImage(imagemBase64, 'JPEG', margin, y, larguraImagem, alturaImagem);
+        y += alturaImagem + 4;
+      } catch {
+        // Se a imagem vier num formato que o jsPDF não reconheça, seguimos sem travar a exportação.
+      }
+    }
+
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    const enunciadoLinhas = doc.splitTextToSize(questao.enunciado, pageWidth - margin * 2);
+    const enunciadoLinhas = doc.splitTextToSize(questao.enunciado, larguraUtil);
+    if (y + enunciadoLinhas.length * 5 > 280) { doc.addPage(); y = 20; }
     doc.text(enunciadoLinhas, margin, y);
     y += enunciadoLinhas.length * 5 + 2;
 
     if (questao.alternativas) {
       questao.alternativas.forEach(alt => {
-        const linhaAlt = doc.splitTextToSize(`(${alt.letra}) ${alt.texto}`, pageWidth - margin * 2 - 4);
+        const linhaAlt = doc.splitTextToSize(`(${alt.letra}) ${alt.texto}`, larguraUtil - 4);
         if (y > 275) { doc.addPage(); y = 20; }
         doc.text(linhaAlt, margin + 4, y);
         y += linhaAlt.length * 5;
@@ -144,13 +193,19 @@ export function exportarQuestoesPDF(
     });
 
     if (opcoes.incluirComentariosDistratores) {
+      // IMPORTANTE: yComentario precisa ser uma posição ÚNICA que avança a
+      // cada questão — reiniciar a partir de lastAutoTable.finalY a cada
+      // iteração (como numa versão anterior deste arquivo) fazia os blocos de
+      // comentário de todas as questões se sobreporem no mesmo ponto da página.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let yComentario = (doc as any).lastAutoTable?.finalY ?? y;
+      yComentario += 10;
+
       selecionadas.forEach((q, idx) => {
         if (!q.alternativas) return;
         const distratores = q.alternativas.filter(a => !a.correta && a.comentarioDistrator);
         if (distratores.length === 0) return;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const finalY = (doc as any).lastAutoTable?.finalY ?? y;
-        let yComentario = finalY + 10;
+
         if (yComentario > 270) { doc.addPage(); yComentario = 20; }
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
@@ -158,10 +213,12 @@ export function exportarQuestoesPDF(
         yComentario += 5;
         doc.setFont('helvetica', 'normal');
         distratores.forEach(d => {
-          const linha = doc.splitTextToSize(`(${d.letra}) ${d.comentarioDistrator}`, pageWidth - margin * 2 - 4);
+          const linha = doc.splitTextToSize(`(${d.letra}) ${d.comentarioDistrator}`, larguraUtil - 4);
+          if (yComentario + linha.length * 5 > 280) { doc.addPage(); yComentario = 20; }
           doc.text(linha, margin + 4, yComentario);
           yComentario += linha.length * 5;
         });
+        yComentario += 4;
       });
     }
   }
@@ -198,12 +255,20 @@ const celulaTitulo = (texto: string) =>
 const linhasResposta = (n: number) =>
   Array.from({ length: n }, () => par([run('_'.repeat(95), { sz: 18, cor: 'BBBBBB' })], AlignmentType.LEFT, 25, 8));
 
+const paragrafoImagem = (buffer: ArrayBuffer) =>
+  new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 40, after: 40 },
+    children: [new ImageRun({ data: buffer, transformation: { width: 260, height: 160 }, type: 'jpg' })],
+  });
+
 export async function exportarQuestoesWord(
   questoes: QuestaoGerada[],
   params: ParametrosGeracao,
   opcoes: OpcoesExportacao = OPCOES_EXPORTACAO_PADRAO
 ): Promise<void> {
   const selecionadas = filtrarParaExportacao(questoes, opcoes);
+  const imagensBuffer = await preCarregarImagens(selecionadas, imagemUrlParaBuffer);
 
   const cabecalho = new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
@@ -218,6 +283,11 @@ export async function exportarQuestoesWord(
 
     if (questao.contexto) {
       paragrafos.push(par([run(questao.contexto, { it: true, sz: 19 })], AlignmentType.LEFT, 40, 60));
+    }
+
+    const bufferImagem = imagensBuffer[questao.idTemporario];
+    if (bufferImagem) {
+      paragrafos.push(paragrafoImagem(bufferImagem));
     }
 
     paragrafos.push(par([run(questao.enunciado, { sz: 21 })], AlignmentType.LEFT, 20, 60));

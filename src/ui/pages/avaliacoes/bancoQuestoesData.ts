@@ -31,6 +31,8 @@ interface LinhaBancoQuestoes {
   titulo_interno: string | null;
   objetivo_questao: string | null;
   contexto_suporte: string | null;
+  imagem_query: string | null;
+  imagem_url: string | null;
   enunciado: string;
   alternativas: QuestaoGerada['alternativas'];
   resposta_correta: string | null;
@@ -62,6 +64,8 @@ function questaoParaLinha(
     titulo_interno: questao.tituloInterno || null,
     objetivo_questao: questao.objetivoQuestao || null,
     contexto_suporte: questao.contexto,
+    imagem_query: questao.imagemQuery,
+    imagem_url: questao.imagemUrl,
     enunciado: questao.enunciado,
     alternativas: questao.alternativas,
     resposta_correta: questao.respostaCorreta,
@@ -84,6 +88,8 @@ function linhaParaQuestao(linha: LinhaBancoQuestoes): QuestaoGerada {
     dificuldade: linha.dificuldade,
     tipoQuestao: linha.tipo_questao,
     contexto: linha.contexto_suporte,
+    imagemQuery: linha.imagem_query,
+    imagemUrl: linha.imagem_url,
     enunciado: linha.enunciado,
     alternativas: linha.alternativas,
     respostaCorreta: linha.resposta_correta,
