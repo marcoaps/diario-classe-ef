@@ -112,7 +112,7 @@ ${blocoRegras}
 Gere ${quantidadeNesteLote} questão(ões) de avaliação com estes parâmetros:
 - Componente curricular: ${params.componenteCurricular}
 - Ano escolar: ${params.anoEscolar}º ano
-- Unidade temática: ${params.unidadeTematica || '(não especificada — infira a partir do conteúdo)'}
+- Bimestre (Plano de Curso oficial): ${params.bimestre}º bimestre
 - Objeto de conhecimento: ${params.objetoConhecimento || '(não especificado — infira a partir do conteúdo)'}
 - Habilidade BNCC/referência: ${params.habilidadeBncc || '(não especificada — descreva a habilidade avaliada no campo "objetivoQuestao")'}
 - Conteúdo: ${params.conteudo}

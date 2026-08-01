@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import {
   ANOS_ESCOLARES,
+  BIMESTRES,
   COMPONENTES_CURRICULARES,
   CONTEXTUALIZACOES,
   DIFICULDADES,
@@ -11,7 +12,7 @@ import {
 } from './tiposGeradorQuestoes';
 import type { ParametrosGeracao, TipoQuestao } from './tiposGeradorQuestoes';
 import { POLITICA_TIPOS_QUESTAO } from './regrasElaboracaoItens';
-import { getCurriculumData } from '../../../data/curriculumData';
+import { curriculumData } from '../../../data/curriculumData';
 
 const CLASSE_INPUT = 'w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface';
 const CLASSE_LABEL = 'text-xs text-on-surface-variant mb-1 block';
@@ -22,22 +23,45 @@ export interface GeradorQuestoesFormularioProps {
   desabilitado: boolean;
 }
 
-/** Sugestões de conteúdo, só para Educação Física, tiradas do plano de curso oficial já existente. */
-function sugestoesObjetoConhecimento(anoEscolar: number): string[] {
-  // curriculumData usa bimestres 1-4; juntamos os objetos de conhecimento dos 4 para sugerir o ano inteiro.
-  const bimestres = ['1', '2', '3', '4'];
-  const sugestoes = new Set<string>();
-  for (const bim of bimestres) {
-    const dados = getCurriculumData(String(anoEscolar), bim);
-    dados?.objetosConhecimento.forEach(o => sugestoes.add(o));
-  }
-  return Array.from(sugestoes);
+/**
+ * O Plano de Curso oficial (`curriculumData.ts`) só existe para Educação
+ * Física, organizado por ano + bimestre — não tem um campo "Unidade
+ * Temática" separado, nem vínculo direto entre cada habilidade e cada objeto
+ * de conhecimento (são listas paralelas). Por isso os dropdowns em cascata
+ * (Objeto de Conhecimento → Habilidade → Conteúdo) só se aplicam quando o
+ * componente curricular é Educação Física; para os demais componentes,
+ * mantemos os campos de texto livre, já que não há base de dados para eles.
+ */
+function dadosDoPlanoDeCurso(anoEscolar: number, bimestre: string) {
+  return curriculumData[String(anoEscolar)]?.bimestres?.[bimestre] ?? null;
 }
 
 export function GeradorQuestoesFormulario({ valores, onChange, desabilitado }: GeradorQuestoesFormularioProps) {
   const politicaTipo = POLITICA_TIPOS_QUESTAO[valores.tipoQuestao];
   const ehEducacaoFisica = valores.componenteCurricular === 'Educação Física';
-  const sugestoesConhecimento = ehEducacaoFisica ? sugestoesObjetoConhecimento(valores.anoEscolar) : [];
+  const dadosPlano = ehEducacaoFisica ? dadosDoPlanoDeCurso(valores.anoEscolar, valores.bimestre) : null;
+
+  // Sempre que Ano Escolar ou Bimestre mudarem (ou o componente deixar de ser
+  // Educação Física), garante que Objeto de Conhecimento, Habilidade e
+  // Conteúdo fiquem sincronizados com o Plano de Curso daquele ano/bimestre,
+  // selecionando automaticamente o primeiro item de cada lista.
+  useEffect(() => {
+    if (!ehEducacaoFisica || !dadosPlano) return;
+    if (!dadosPlano.objetosConhecimento.includes(valores.objetoConhecimento)) {
+      const primeiroObjeto = dadosPlano.objetosConhecimento[0] ?? '';
+      onChange('objetoConhecimento', primeiroObjeto);
+      onChange('conteudo', primeiroObjeto);
+    }
+    if (!dadosPlano.habilidades.includes(valores.habilidadeBncc)) {
+      onChange('habilidadeBncc', dadosPlano.habilidades[0] ?? '');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ehEducacaoFisica, valores.anoEscolar, valores.bimestre]);
+
+  function selecionarObjetoConhecimento(valor: string) {
+    onChange('objetoConhecimento', valor);
+    onChange('conteudo', valor); // Conteúdo acompanha o Objeto de Conhecimento escolhido, mas continua editável logo abaixo.
+  }
 
   return (
     <div className="space-y-3">
@@ -67,42 +91,59 @@ export function GeradorQuestoesFormulario({ valores, onChange, desabilitado }: G
       </div>
 
       <div>
-        <label className={CLASSE_LABEL}>Unidade Temática</label>
-        <input
-          value={valores.unidadeTematica}
-          onChange={e => onChange('unidadeTematica', e.target.value)}
+        <label className={CLASSE_LABEL}>Bimestre (Plano de Curso oficial)</label>
+        <select
+          value={valores.bimestre}
+          onChange={e => onChange('bimestre', e.target.value as ParametrosGeracao['bimestre'])}
           disabled={desabilitado}
-          placeholder="Campo livre — ex: Esportes de invasão"
           className={CLASSE_INPUT}
-        />
+        >
+          {BIMESTRES.map(b => <option key={b.valor} value={b.valor}>{b.label}</option>)}
+        </select>
       </div>
 
       <div>
         <label className={CLASSE_LABEL}>Objeto de Conhecimento</label>
-        <input
-          value={valores.objetoConhecimento}
-          onChange={e => onChange('objetoConhecimento', e.target.value)}
-          disabled={desabilitado}
-          placeholder="Campo livre — ex: Handebol"
-          list="sugestoes-objeto-conhecimento"
-          className={CLASSE_INPUT}
-        />
-        {sugestoesConhecimento.length > 0 && (
-          <datalist id="sugestoes-objeto-conhecimento">
-            {sugestoesConhecimento.map(s => <option key={s} value={s} />)}
-          </datalist>
+        {ehEducacaoFisica && dadosPlano ? (
+          <select
+            value={valores.objetoConhecimento}
+            onChange={e => selecionarObjetoConhecimento(e.target.value)}
+            disabled={desabilitado}
+            className={CLASSE_INPUT}
+          >
+            {dadosPlano.objetosConhecimento.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+        ) : (
+          <input
+            value={valores.objetoConhecimento}
+            onChange={e => onChange('objetoConhecimento', e.target.value)}
+            disabled={desabilitado}
+            placeholder="Campo livre — ex: Verbos no presente do indicativo"
+            className={CLASSE_INPUT}
+          />
         )}
       </div>
 
       <div>
-        <label className={CLASSE_LABEL}>Habilidade BNCC (ou referência da Matriz)</label>
-        <input
-          value={valores.habilidadeBncc}
-          onChange={e => onChange('habilidadeBncc', e.target.value)}
-          disabled={desabilitado}
-          placeholder="Ex: EF67EF01"
-          className={CLASSE_INPUT}
-        />
+        <label className={CLASSE_LABEL}>Habilidade (Plano de Curso / BNCC)</label>
+        {ehEducacaoFisica && dadosPlano ? (
+          <select
+            value={valores.habilidadeBncc}
+            onChange={e => onChange('habilidadeBncc', e.target.value)}
+            disabled={desabilitado}
+            className={CLASSE_INPUT}
+          >
+            {dadosPlano.habilidades.map(h => <option key={h} value={h}>{h}</option>)}
+          </select>
+        ) : (
+          <input
+            value={valores.habilidadeBncc}
+            onChange={e => onChange('habilidadeBncc', e.target.value)}
+            disabled={desabilitado}
+            placeholder="Ex: EF67EF01"
+            className={CLASSE_INPUT}
+          />
+        )}
       </div>
 
       <div>
@@ -114,6 +155,9 @@ export function GeradorQuestoesFormulario({ valores, onChange, desabilitado }: G
           placeholder="Ex: Futsal, Jogos Cooperativos, Handebol, Atletismo, Voleibol..."
           className={CLASSE_INPUT}
         />
+        {ehEducacaoFisica && (
+          <p className="text-[11px] text-on-surface-variant mt-1">Carregado a partir do Objeto de Conhecimento selecionado — pode editar/resumir antes de gerar.</p>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3">

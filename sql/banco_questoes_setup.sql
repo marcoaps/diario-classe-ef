@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS banco_questoes (
   -- Parâmetros de geração / classificação curricular
   componente_curricular       text NOT NULL,
   ano_escolar                 smallint NOT NULL CHECK (ano_escolar BETWEEN 6 AND 9),
-  unidade_tematica            text,
+  bimestre                    text,           -- '1'..'4' — usado junto com ano_escolar para localizar o Plano de Curso oficial
   objeto_conhecimento         text,
   habilidade_bncc             text,
   conteudo                    text NOT NULL,

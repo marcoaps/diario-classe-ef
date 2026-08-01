@@ -20,7 +20,7 @@ interface LinhaBancoQuestoes {
   id: string;
   componente_curricular: ComponenteCurricular;
   ano_escolar: AnoEscolar;
-  unidade_tematica: string | null;
+  bimestre: string | null;
   objeto_conhecimento: string | null;
   habilidade_bncc: string | null;
   conteudo: string;
@@ -53,7 +53,7 @@ function questaoParaLinha(
   return {
     componente_curricular: params.componenteCurricular,
     ano_escolar: params.anoEscolar,
-    unidade_tematica: params.unidadeTematica || null,
+    bimestre: params.bimestre,
     objeto_conhecimento: params.objetoConhecimento || null,
     habilidade_bncc: questao.habilidadeBncc || null,
     conteudo: questao.conteudo,

@@ -90,11 +90,20 @@ export const ESTILOS_QUESTAO: { valor: EstiloQuestao; label: string }[] = [
 export const QUANTIDADES_PERMITIDAS = [1, 5, 10, 15, 20, 30] as const;
 export type QuantidadeQuestoes = typeof QUANTIDADES_PERMITIDAS[number];
 
+export type Bimestre = '1' | '2' | '3' | '4';
+export const BIMESTRES: { valor: Bimestre; label: string }[] = [
+  { valor: '1', label: '1º Bimestre' },
+  { valor: '2', label: '2º Bimestre' },
+  { valor: '3', label: '3º Bimestre' },
+  { valor: '4', label: '4º Bimestre' },
+];
+
 /** Parâmetros preenchidos pelo professor no formulário do Gerador de Questões. */
 export interface ParametrosGeracao {
   componenteCurricular: ComponenteCurricular;
   anoEscolar: AnoEscolar;
-  unidadeTematica: string;
+  /** Usado para localizar Objeto de Conhecimento e Habilidade no Plano de Curso oficial (curriculumData.ts), que é organizado por ano + bimestre — não existe um campo "Unidade Temática" separado nessa base. */
+  bimestre: Bimestre;
   objetoConhecimento: string;
   habilidadeBncc: string;
   conteudo: string;
@@ -109,7 +118,7 @@ export function criarParametrosPadrao(): ParametrosGeracao {
   return {
     componenteCurricular: 'Educação Física',
     anoEscolar: 6,
-    unidadeTematica: '',
+    bimestre: '1',
     objetoConhecimento: '',
     habilidadeBncc: '',
     conteudo: '',
