@@ -103,6 +103,15 @@ export function GeradorQuestoes() {
     setParams(prev => ({ ...prev, [campo]: valor }));
   }
 
+  /** Traduz/complementa mensagens de erro conhecidas da API da Claude para o professor entender e saber o que fazer. */
+  function mensagemErroAmigavel(erro: unknown): string {
+    const mensagem = (erro as Error).message ?? String(erro);
+    if (mensagem.toLowerCase().includes('credit balance is too low')) {
+      return 'Saldo insuficiente na conta da API da Claude. Peça ao responsável para adicionar créditos em console.anthropic.com/settings/billing.';
+    }
+    return mensagem;
+  }
+
   async function handleGerarQuestoes() {
     if (!params.conteudo.trim()) {
       setErro('Preencha o campo "Conteúdo" antes de gerar as questões.');
@@ -129,7 +138,7 @@ export function GeradorQuestoes() {
       }
       setEtapa('resultado');
     } catch (e) {
-      setErro(`Erro ao gerar questões: ${(e as Error).message}`);
+      setErro(`Erro ao gerar questões: ${mensagemErroAmigavel(e)}`);
       setEtapa('formulario');
     }
   }
@@ -146,7 +155,7 @@ export function GeradorQuestoes() {
       const revisada = await revisarEAprovarQuestao({ ...questaoAtual, tentativasRevisao: 0, historicoRevisao: [] }, params);
       setQuestoes(prev => prev.map(q => (q.idTemporario === idTemporario ? { ...revisada, idTemporario } : q)));
     } catch (e) {
-      setErro(`Erro ao revisar novamente: ${(e as Error).message}`);
+      setErro(`Erro ao revisar novamente: ${mensagemErroAmigavel(e)}`);
     } finally {
       setRevisandoIdIndividual(null);
     }

@@ -12,7 +12,20 @@ export async function chamarClaudeProxy(prompt: string): Promise<string> {
       messages: [{ role: "user", content: prompt }],
     }),
   });
-  if (!res.ok) throw new Error(`Erro HTTP ${res.status}`);
+  if (!res.ok) {
+    // Tenta extrair a mensagem real da API (ex: "Your credit balance is too
+    // low...") em vez de só o código HTTP genérico, para o erro exibido ao
+    // professor já dizer o que de fato aconteceu.
+    let mensagem = `Erro HTTP ${res.status}`;
+    try {
+      const corpo = await res.json();
+      const mensagemApi: string | undefined = corpo?.error?.message ?? corpo?.message;
+      if (mensagemApi) mensagem = mensagemApi;
+    } catch {
+      // Corpo não era JSON válido (ex: página de erro HTML) — mantém a mensagem genérica.
+    }
+    throw new Error(mensagem);
+  }
   const data = await res.json();
   return data.content.map((i: { text?: string }) => i.text ?? "").join("");
 }
