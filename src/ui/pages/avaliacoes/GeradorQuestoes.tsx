@@ -291,6 +291,12 @@ export function GeradorQuestoes() {
               />
             ))}
           </div>
+
+          {/* Espaço extra além do padding do layout: os textos de "Resposta esperada"
+              gerados pela IA às vezes são longos o bastante para que, em alguns
+              navegadores/celulares, o fim do último card acabe encoberto pela barra
+              de navegação fixa mesmo já rolado até o fim. */}
+          <div className="h-28" aria-hidden="true" />
         </div>
       )}
     </div>
