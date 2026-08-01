@@ -90,15 +90,15 @@ export async function exportarQuestoesPDF(
   doc.text('Gerador de Questões — Banco de Itens de Avaliação', margin, 16);
 
   doc.setTextColor(20, 20, 20);
-  doc.setFontSize(10);
+  doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   let y = 30;
   const linhaComponenteAno = doc.splitTextToSize(`Componente: ${params.componenteCurricular}    Ano: ${params.anoEscolar}º ano`, larguraUtil);
   doc.text(linhaComponenteAno, margin, y);
-  y += linhaComponenteAno.length * 5 + 1;
+  y += linhaComponenteAno.length * 5.5 + 1;
   const linhaConteudo = doc.splitTextToSize(`Conteúdo: ${params.conteudo}`, larguraUtil);
   doc.text(linhaConteudo, margin, y);
-  y += linhaConteudo.length * 5;
+  y += linhaConteudo.length * 5.5;
   doc.setFont('helvetica', 'normal');
   y += 6;
 
@@ -106,20 +106,20 @@ export async function exportarQuestoesPDF(
     if (y > 260) { doc.addPage(); y = 20; }
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
+    doc.setFontSize(13);
     const avisoNaoOficial = !questao.conformeReferenciaOficial ? '  [FORA DO PADRÃO OFICIAL SEE/AC]' : '';
     doc.text(`QUESTÃO ${idx + 1}${avisoNaoOficial}`, margin, y);
-    y += 6;
+    y += 7;
 
     if (questao.contexto) {
       doc.setFont('helvetica', 'italic');
-      doc.setFontSize(9);
+      doc.setFontSize(11);
       const linhaContexto = doc.splitTextToSize(questao.contexto, larguraUtil - 6);
-      const alturaCaixa = linhaContexto.length * 4.5 + 6;
+      const alturaCaixa = linhaContexto.length * 5.5 + 6;
       if (y + alturaCaixa > 275) { doc.addPage(); y = 20; }
       doc.setDrawColor(120, 120, 120);
       doc.rect(margin, y, larguraUtil, alturaCaixa);
-      doc.text(linhaContexto, margin + 3, y + 5);
+      doc.text(linhaContexto, margin + 3, y + 6);
       y += alturaCaixa + 4;
     }
 
@@ -137,18 +137,18 @@ export async function exportarQuestoesPDF(
     }
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
+    doc.setFontSize(12);
     const enunciadoLinhas = doc.splitTextToSize(questao.enunciado, larguraUtil);
-    if (y + enunciadoLinhas.length * 5 > 280) { doc.addPage(); y = 20; }
+    if (y + enunciadoLinhas.length * 6 > 280) { doc.addPage(); y = 20; }
     doc.text(enunciadoLinhas, margin, y);
-    y += enunciadoLinhas.length * 5 + 2;
+    y += enunciadoLinhas.length * 6 + 2;
 
     if (questao.alternativas) {
       questao.alternativas.forEach(alt => {
         const linhaAlt = doc.splitTextToSize(`(${alt.letra}) ${alt.texto}`, larguraUtil - 4);
         if (y > 275) { doc.addPage(); y = 20; }
         doc.text(linhaAlt, margin + 4, y);
-        y += linhaAlt.length * 5;
+        y += linhaAlt.length * 6;
       });
     } else if (questao.tipoQuestao === 'dissertativa' || questao.tipoQuestao === 'resposta_curta') {
       const numLinhas = questao.tipoQuestao === 'dissertativa' ? 5 : 2;
@@ -166,7 +166,7 @@ export async function exportarQuestoesPDF(
     doc.addPage();
     y = 20;
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
+    doc.setFontSize(14);
     doc.text('GABARITO', margin, y);
     y += 8;
 
@@ -179,7 +179,7 @@ export async function exportarQuestoesPDF(
       startY: y,
       head: [['Nº', 'Resposta']],
       body: linhasGabarito,
-      styles: { fontSize: 8, cellPadding: 2 },
+      styles: { fontSize: 10, cellPadding: 2.5 },
       headStyles: { fillColor: [15, 50, 100] },
     });
 
@@ -199,15 +199,15 @@ export async function exportarQuestoesPDF(
 
         if (yComentario > 270) { doc.addPage(); yComentario = 20; }
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(9);
+        doc.setFontSize(11);
         doc.text(`Questão ${idx + 1} — por que os distratores estão errados:`, margin, yComentario);
-        yComentario += 5;
+        yComentario += 6;
         doc.setFont('helvetica', 'normal');
         distratores.forEach(d => {
           const linha = doc.splitTextToSize(`(${d.letra}) ${d.comentarioDistrator}`, larguraUtil - 4);
-          if (yComentario + linha.length * 5 > 280) { doc.addPage(); yComentario = 20; }
+          if (yComentario + linha.length * 6 > 280) { doc.addPage(); yComentario = 20; }
           doc.text(linha, margin + 4, yComentario);
-          yComentario += linha.length * 5;
+          yComentario += linha.length * 6;
         });
         yComentario += 4;
       });
@@ -222,8 +222,9 @@ export async function exportarQuestoesPDF(
 const AZ = '1F3864';
 const BR = 'FFFFFF';
 
+// Tamanhos em "half-points" do docx (sz: 24 = 12pt). Fonte Arial, tamanho 12 é o padrão do documento.
 const run = (t: string, o: { bold?: boolean; cor?: string; sz?: number; it?: boolean } = {}): TextRun =>
-  new TextRun({ text: t, font: 'Arial', size: o.sz ?? 20, bold: o.bold, color: o.cor ?? '000000', italics: o.it });
+  new TextRun({ text: t, font: 'Arial', size: o.sz ?? 24, bold: o.bold, color: o.cor ?? '000000', italics: o.it });
 
 const par = (
   runs: TextRun[],
@@ -241,10 +242,10 @@ const celula = (children: Paragraph[], cor?: string): TableCell =>
   new TableCell({ ...(cor ? { shading: { type: ShadingType.SOLID, color: cor } } : {}), verticalAlign: VerticalAlign.CENTER, children });
 
 const celulaTitulo = (texto: string) =>
-  celula([par([run(texto, { bold: true, cor: BR, sz: 22 })], AlignmentType.CENTER, 80, 80)], AZ);
+  celula([par([run(texto, { bold: true, cor: BR, sz: 26 })], AlignmentType.CENTER, 80, 80)], AZ);
 
 const linhasResposta = (n: number) =>
-  Array.from({ length: n }, () => par([run('_'.repeat(95), { sz: 18, cor: 'BBBBBB' })], AlignmentType.LEFT, 25, 8));
+  Array.from({ length: n }, () => par([run('_'.repeat(95), { sz: 20, cor: 'BBBBBB' })], AlignmentType.LEFT, 25, 8));
 
 const paragrafoImagem = (buffer: ArrayBuffer) =>
   new Paragraph({
@@ -258,7 +259,7 @@ const bordaFinaCinza = { style: BorderStyle.SINGLE, size: 4, color: '777777' };
 /** Contexto de apoio dentro de uma caixa com borda, como no restante do texto do enunciado. */
 const paragrafoContexto = (texto: string) =>
   new Paragraph({
-    children: [run(texto, { it: true, sz: 19 })],
+    children: [run(texto, { it: true, sz: 24 })],
     alignment: AlignmentType.LEFT,
     spacing: { before: 40, after: 40 },
     border: { top: bordaFinaCinza, bottom: bordaFinaCinza, left: bordaFinaCinza, right: bordaFinaCinza },
@@ -281,7 +282,7 @@ export async function exportarQuestoesWord(
   const corpoQuestoes = selecionadas.flatMap((questao, idx) => {
     const paragrafos: Paragraph[] = [];
     const avisoNaoOficial = !questao.conformeReferenciaOficial ? '  [FORA DO PADRÃO OFICIAL SEE/AC]' : '';
-    paragrafos.push(par([run(`QUESTÃO ${idx + 1}${avisoNaoOficial}`, { bold: true, sz: 22 })], AlignmentType.LEFT, 160, 40));
+    paragrafos.push(par([run(`QUESTÃO ${idx + 1}${avisoNaoOficial}`, { bold: true, sz: 26 })], AlignmentType.LEFT, 160, 40));
 
     if (questao.contexto) {
       paragrafos.push(paragrafoContexto(questao.contexto));
@@ -292,11 +293,11 @@ export async function exportarQuestoesWord(
       paragrafos.push(paragrafoImagem(bufferImagem));
     }
 
-    paragrafos.push(par([run(questao.enunciado, { sz: 21 })], AlignmentType.LEFT, 20, 60));
+    paragrafos.push(par([run(questao.enunciado, { sz: 24 })], AlignmentType.LEFT, 20, 60));
 
     if (questao.alternativas) {
       questao.alternativas.forEach(alt => {
-        paragrafos.push(par([run(`(${alt.letra}) ${alt.texto}`, { sz: 20 })], AlignmentType.LEFT, 10, 10));
+        paragrafos.push(par([run(`(${alt.letra}) ${alt.texto}`, { sz: 24 })], AlignmentType.LEFT, 10, 10));
       });
     } else if (questao.tipoQuestao === 'dissertativa') {
       paragrafos.push(...linhasResposta(5));
@@ -310,14 +311,14 @@ export async function exportarQuestoesWord(
   const secoes: Paragraph[] = [];
 
   if (opcoes.incluirGabarito) {
-    secoes.push(par([run('GABARITO', { bold: true, cor: BR, sz: 22 })], AlignmentType.CENTER, 200, 100));
+    secoes.push(par([run('GABARITO', { bold: true, cor: BR, sz: 26 })], AlignmentType.CENTER, 200, 100));
     selecionadas.forEach((q, idx) => {
       const resposta = q.alternativas ? (q.alternativas.find(a => a.correta)?.letra ?? '-') : (q.respostaCorreta ?? '-');
-      secoes.push(par([run(`${idx + 1}. ${resposta}`, { bold: true, sz: 20 })], AlignmentType.LEFT, 20, 20));
+      secoes.push(par([run(`${idx + 1}. ${resposta}`, { bold: true, sz: 24 })], AlignmentType.LEFT, 20, 20));
 
       if (opcoes.incluirComentariosDistratores && q.alternativas) {
         q.alternativas.filter(a => !a.correta && a.comentarioDistrator).forEach(a => {
-          secoes.push(par([run(`  (${a.letra}) incorreta — ${a.comentarioDistrator}`, { sz: 18 })], AlignmentType.LEFT, 0, 10));
+          secoes.push(par([run(`  (${a.letra}) incorreta — ${a.comentarioDistrator}`, { sz: 22 })], AlignmentType.LEFT, 0, 10));
         });
       }
     });

@@ -99,13 +99,38 @@ const ESQUEMA_JSON_QUESTAO = `
 }
 `.trim();
 
+/**
+ * O nível de dificuldade ("Fácil", "Médio", etc.) é relativo ao ano escolar,
+ * não absoluto — uma questão "Médio" para o 6º ano precisa ser bem mais
+ * simples do que uma questão "Médio" para o 9º ano. Isso não vem do guia
+ * SEE/AC (que não trata de calibração por idade), então fica centralizado
+ * aqui, junto do restante da montagem do prompt.
+ */
+function calibracaoLinguagemPorAno(anoEscolar: ParametrosGeracao['anoEscolar']): string {
+  const perfis: Record<ParametrosGeracao['anoEscolar'], string> = {
+    6: `6º ano (11-12 anos, início dos Anos Finais): frases curtas e diretas, uma ideia por frase. Vocabulário do dia a dia — EVITE termos abstratos/acadêmicos como "ressignificar", "patrimônio cultural imaterial", "midiático", "processo de transformação histórica e social", "identidade cultural". Pergunte sobre FATOS CONCRETOS (o que é, como funciona, quais são as regras/características, o que aconteceu), NUNCA sobre interpretação crítica, análise sociológica ou "o que esse processo revela sobre...". O suporte/contexto deve ser uma cena simples e concreta (uma regra do jogo, uma curiosidade, uma situação do dia a dia) — nunca um trecho de texto jornalístico ou acadêmico sofisticado.`,
+    7: `7º ano (12-13 anos): frases objetivas e diretas, vocabulário ainda simples. Pode incluir comparações simples entre duas práticas/situações e uma introdução bem leve a causa/consequência, mas sem jargão técnico ou abstrato. Evite ainda perguntas que peçam opinião, análise crítica ou reflexão sobre "significados culturais".`,
+    8: `8º ano (13-14 anos): pode incluir um texto de apoio um pouco mais elaborado (uma notícia curta, um dado numérico simples) e perguntas que exijam relacionar duas informações do texto entre si. Vocabulário pode ser um pouco mais variado, mas ainda evitando jargão acadêmico.`,
+    9: `9º ano (14-15 anos): pode incluir vocabulário mais técnico do componente curricular, textos de apoio um pouco mais longos, e perguntas que exijam comparar, relacionar ou justificar com base no texto. Ainda assim, o enunciado deve ser direto — evite frases com mais de uma oração subordinada.`,
+  };
+
+  return `
+=== CALIBRAÇÃO DE LINGUAGEM E COMPLEXIDADE PARA O ${anoEscolar}º ANO (MUITO IMPORTANTE, JÁ CAUSOU PROBLEMA ANTES) ===
+${perfis[anoEscolar]}
+Se o ano escolar for 6º ou 7º, é ESPECIALMENTE PROIBIDO: jargão sociológico, referências institucionais complexas (ex: Unesco, patrimônio cultural imaterial), frases com múltiplas orações subordinadas, e perguntas do tipo "o que esse processo revela sobre..." ou "considerando essa trajetória, é correto afirmar que...". Prefira sempre perguntas diretas sobre fatos, regras e características concretas.
+`.trim();
+}
+
 export function construirPromptGeracao(params: ParametrosGeracao, quantidadeNesteLote: number): string {
   const blocoRegras = montarBlocoRegrasPDF(params.tipoQuestao, params.componenteCurricular);
+  const blocoCalibracao = calibracaoLinguagemPorAno(params.anoEscolar);
 
   return `
 Você é um especialista em elaboração de itens de avaliação para o Ensino Fundamental II (Anos Finais) no Brasil.
 
 ${blocoRegras}
+
+${blocoCalibracao}
 
 === TAREFA ===
 Gere ${quantidadeNesteLote} questão(ões) de avaliação com estes parâmetros:
@@ -154,11 +179,14 @@ export function construirPromptRegeneracao(
   motivosFalha: string[]
 ): string {
   const blocoRegras = montarBlocoRegrasPDF(params.tipoQuestao, params.componenteCurricular);
+  const blocoCalibracao = calibracaoLinguagemPorAno(params.anoEscolar);
 
   return `
 Você é um especialista em elaboração de itens de avaliação para o Ensino Fundamental II (Anos Finais) no Brasil.
 
 ${blocoRegras}
+
+${blocoCalibracao}
 
 === TAREFA: CORRIGIR UMA QUESTÃO REPROVADA NA REVISÃO ===
 A questão abaixo foi gerada, mas REPROVOU na revisão automática pelos seguintes motivos:
