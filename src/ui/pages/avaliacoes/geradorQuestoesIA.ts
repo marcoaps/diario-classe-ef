@@ -156,9 +156,15 @@ PROIBIDO, em "contexto" e em "enunciado":
 - Descrever em texto o conteúdo que uma imagem "mostraria", como se fosse uma legenda substituta da imagem.
 
 O QUE FAZER EM VEZ DISSO:
-1. Se o enunciado precisar de um apoio visual real (foto/cena), escreva o enunciado normalmente fazendo referência a "a imagem a seguir" (sem descrever o que ela contém) e preencha "imagemQuery" com uma frase curta EM INGLÊS para busca em banco de fotos (ex: "handball players passing indoor court", "handball goalkeeper action"). O sistema busca a foto de verdade e a insere automaticamente logo abaixo do texto — você não faz mais nada além de preencher "imagemQuery".
+1. Se o enunciado precisar de um apoio visual real (foto/cena), escreva o enunciado normalmente fazendo referência a "a imagem a seguir" (sem descrever o que ela contém) e preencha "imagemQuery" com uma frase curta EM INGLÊS para busca em banco de fotos. O sistema busca a foto de verdade e a insere automaticamente logo abaixo do texto — você não faz mais nada além de preencher "imagemQuery".
 2. Se não for possível descrever uma cena fotografável real em poucas palavras (ex: seria necessário um diagrama técnico específico, uma linha do tempo com datas exatas, um placar com números exatos, um gráfico com dados específicos), NÃO peça imagem nenhuma: escreva o enunciado e o "contexto" de forma totalmente autossuficientes em texto (contando a informação necessária diretamente no enunciado/contexto), e deixe "imagemQuery" como null.
 3. Nunca deixe o enunciado dependente de uma imagem que não existe. Se "imagemQuery" for null, o enunciado e o contexto têm que fazer sentido sozinhos, sem nenhuma referência a "observe a imagem/esquema/linha do tempo/placar apresentado".
+
+REGRAS PARA A QUALIDADE DE "imagemQuery" (evita fotos confusas/impróprias já vistas antes):
+- A foto encontrada precisa ser IMEDIATAMENTE compreensível para uma criança de ${params.anoEscolar === 6 ? '11-12' : params.anoEscolar === 7 ? '12-13' : params.anoEscolar === 8 ? '13-14' : '14-15'} anos: uma cena clara, parada ou de técnica bem definida — NUNCA uma ação caótica/borrada onde não dá pra entender o que está acontecendo.
+- Para práticas de luta/combate (judô, capoeira, MMA, boxe, etc.): prefira termos que descrevam TREINO/DEMONSTRAÇÃO DE TÉCNICA em ambiente calmo (ex: "two judo athletes training technique on tatami", "capoeira practice demonstration") em vez de "fight", "competition" ou "MMA" isolados, que tendem a trazer fotos de competição real, violentas, com plateia, sangue ou marcas comerciais de academias — inadequadas para uma avaliação escolar.
+- Evite termos genéricos de uma palavra só (ex: apenas "fight", "sport", "combat"); use frases descritivas de pelo menos 4-5 palavras, especificando a modalidade e a ação (ex: "handball player throwing ball indoor court", não apenas "handball").
+- Se não existir uma forma de descrever uma cena clara, calma e sem risco de sair confusa/imprópria, prefira deixar "imagemQuery" como null e tornar o enunciado autossuficiente em texto.
 
 === IMPORTANTE SOBRE AS ALTERNATIVAS ===
 Para "multipla_escolha": exatamente 4 alternativas (A, B, C, D), exatamente 1 com "correta": true, ordenadas de forma lógica, todas com comprimento/estrutura equivalentes.
