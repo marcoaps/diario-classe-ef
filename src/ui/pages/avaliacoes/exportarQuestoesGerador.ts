@@ -16,7 +16,6 @@ import {
   TextRun, AlignmentType, WidthType, BorderStyle, ShadingType, VerticalAlign, ImageRun,
 } from 'docx';
 import { saveAs } from 'file-saver';
-import { DIFICULDADES, TIPOS_QUESTAO } from './tiposGeradorQuestoes';
 import type { ParametrosGeracao, QuestaoGerada } from './tiposGeradorQuestoes';
 import { imagemUrlParaBase64, imagemUrlParaBuffer } from './buscarImagensGerador';
 
@@ -32,14 +31,6 @@ export const OPCOES_EXPORTACAO_PADRAO: OpcoesExportacao = {
   incluirComentariosDistratores: true,
   incluirNaoConformesOficial: false,
 };
-
-function labelDificuldade(valor: QuestaoGerada['dificuldade']): string {
-  return DIFICULDADES.find(d => d.valor === valor)?.label ?? valor;
-}
-
-function labelTipoQuestao(valor: QuestaoGerada['tipoQuestao']): string {
-  return TIPOS_QUESTAO.find(t => t.valor === valor)?.label ?? valor;
-}
 
 /** Filtra as questões conforme as opções de exportação (ex: excluir não-oficiais e excluir pendentes de revisão manual). */
 function filtrarParaExportacao(questoes: QuestaoGerada[], opcoes: OpcoesExportacao): QuestaoGerada[] {
@@ -115,18 +106,21 @@ export async function exportarQuestoesPDF(
     if (y > 260) { doc.addPage(); y = 20; }
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
+    doc.setFontSize(11);
     const avisoNaoOficial = !questao.conformeReferenciaOficial ? '  [FORA DO PADRÃO OFICIAL SEE/AC]' : '';
-    doc.text(`${idx + 1}. (${labelDificuldade(questao.dificuldade)} — ${labelTipoQuestao(questao.tipoQuestao)})${avisoNaoOficial}`, margin, y);
-    y += 5;
+    doc.text(`QUESTÃO ${idx + 1}${avisoNaoOficial}`, margin, y);
+    y += 6;
 
     if (questao.contexto) {
       doc.setFont('helvetica', 'italic');
       doc.setFontSize(9);
-      const linhaContexto = doc.splitTextToSize(questao.contexto, larguraUtil);
-      if (y + linhaContexto.length * 4.5 > 275) { doc.addPage(); y = 20; }
-      doc.text(linhaContexto, margin, y);
-      y += linhaContexto.length * 4.5 + 3;
+      const linhaContexto = doc.splitTextToSize(questao.contexto, larguraUtil - 6);
+      const alturaCaixa = linhaContexto.length * 4.5 + 6;
+      if (y + alturaCaixa > 275) { doc.addPage(); y = 20; }
+      doc.setDrawColor(120, 120, 120);
+      doc.rect(margin, y, larguraUtil, alturaCaixa);
+      doc.text(linhaContexto, margin + 3, y + 5);
+      y += alturaCaixa + 4;
     }
 
     const imagemBase64 = imagensBase64[questao.idTemporario];
@@ -259,6 +253,17 @@ const paragrafoImagem = (buffer: ArrayBuffer) =>
     children: [new ImageRun({ data: buffer, transformation: { width: 260, height: 160 }, type: 'jpg' })],
   });
 
+const bordaFinaCinza = { style: BorderStyle.SINGLE, size: 4, color: '777777' };
+
+/** Contexto de apoio dentro de uma caixa com borda, como no restante do texto do enunciado. */
+const paragrafoContexto = (texto: string) =>
+  new Paragraph({
+    children: [run(texto, { it: true, sz: 19 })],
+    alignment: AlignmentType.LEFT,
+    spacing: { before: 40, after: 40 },
+    border: { top: bordaFinaCinza, bottom: bordaFinaCinza, left: bordaFinaCinza, right: bordaFinaCinza },
+  });
+
 export async function exportarQuestoesWord(
   questoes: QuestaoGerada[],
   params: ParametrosGeracao,
@@ -276,10 +281,10 @@ export async function exportarQuestoesWord(
   const corpoQuestoes = selecionadas.flatMap((questao, idx) => {
     const paragrafos: Paragraph[] = [];
     const avisoNaoOficial = !questao.conformeReferenciaOficial ? '  [FORA DO PADRÃO OFICIAL SEE/AC]' : '';
-    paragrafos.push(par([run(`${idx + 1}. (${labelDificuldade(questao.dificuldade)} — ${labelTipoQuestao(questao.tipoQuestao)})${avisoNaoOficial}`, { bold: true, sz: 21 })], AlignmentType.LEFT, 160, 40));
+    paragrafos.push(par([run(`QUESTÃO ${idx + 1}${avisoNaoOficial}`, { bold: true, sz: 22 })], AlignmentType.LEFT, 160, 40));
 
     if (questao.contexto) {
-      paragrafos.push(par([run(questao.contexto, { it: true, sz: 19 })], AlignmentType.LEFT, 40, 60));
+      paragrafos.push(paragrafoContexto(questao.contexto));
     }
 
     const bufferImagem = imagensBuffer[questao.idTemporario];
