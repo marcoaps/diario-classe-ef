@@ -94,7 +94,7 @@ export function AppLayout() {
           <PopupItem
             to="/avaliacoes"
             icon={<ClipboardList className="w-5 h-5" />}
-            label="Avalia&#231;&#245;es QR"
+            label="Avalia&#231;&#227;o"
             onClick={() => setMaisAberto(false)}
           />
           <PopupItem
