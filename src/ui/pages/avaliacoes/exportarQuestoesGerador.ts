@@ -22,7 +22,6 @@ import { imagemUrlParaBase64, imagemUrlParaBuffer } from './buscarImagensGerador
 
 export interface OpcoesExportacao {
   incluirGabarito: boolean;
-  incluirJustificativas: boolean;
   incluirComentariosDistratores: boolean;
   /** Se false (padrão), remove da exportação questões de tipos fora do padrão oficial SEE/AC (V/F, Associação, Completar). */
   incluirNaoConformesOficial: boolean;
@@ -30,7 +29,6 @@ export interface OpcoesExportacao {
 
 export const OPCOES_EXPORTACAO_PADRAO: OpcoesExportacao = {
   incluirGabarito: true,
-  incluirJustificativas: true,
   incluirComentariosDistratores: true,
   incluirNaoConformesOficial: false,
 };
@@ -181,12 +179,11 @@ export async function exportarQuestoesPDF(
     const linhasGabarito = selecionadas.map((q, idx) => [
       String(idx + 1),
       q.alternativas ? (q.alternativas.find(a => a.correta)?.letra ?? '-') : (q.respostaCorreta ?? '-'),
-      opcoes.incluirJustificativas ? q.justificativaPedagogica : '',
     ]);
 
     autoTable(doc, {
       startY: y,
-      head: [['Nº', 'Resposta', opcoes.incluirJustificativas ? 'Justificativa pedagógica' : '']],
+      head: [['Nº', 'Resposta']],
       body: linhasGabarito,
       styles: { fontSize: 8, cellPadding: 2 },
       headStyles: { fillColor: [15, 50, 100] },
@@ -312,10 +309,6 @@ export async function exportarQuestoesWord(
     selecionadas.forEach((q, idx) => {
       const resposta = q.alternativas ? (q.alternativas.find(a => a.correta)?.letra ?? '-') : (q.respostaCorreta ?? '-');
       secoes.push(par([run(`${idx + 1}. ${resposta}`, { bold: true, sz: 20 })], AlignmentType.LEFT, 20, 20));
-
-      if (opcoes.incluirJustificativas && q.justificativaPedagogica) {
-        secoes.push(par([run(`Justificativa: ${q.justificativaPedagogica}`, { sz: 18, it: true })], AlignmentType.LEFT, 0, 20));
-      }
 
       if (opcoes.incluirComentariosDistratores && q.alternativas) {
         q.alternativas.filter(a => !a.correta && a.comentarioDistrator).forEach(a => {

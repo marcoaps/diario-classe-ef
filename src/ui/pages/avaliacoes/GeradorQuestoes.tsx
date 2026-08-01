@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Database, FileDown, FileText, Sparkles } from 'lucide-react';
 import { GeradorQuestoesFormulario } from './GeradorQuestoesFormulario';
@@ -14,21 +14,73 @@ import { preencherImagensDasQuestoes } from './buscarImagensGerador';
 
 type Etapa = 'formulario' | 'gerando' | 'revisando' | 'buscando_imagens' | 'resultado';
 
-/** Barra de progresso simples, orientada a um contador real (lotes gerados / questões revisadas), diferente da simulação por tempo usada em outras telas de IA — aqui sabemos exatamente quantas unidades faltam. */
-function BarraProgresso({ titulo, concluidas, total }: { titulo: string; concluidas: number; total: number }) {
-  const percentual = total > 0 ? Math.round((concluidas / total) * 100) : 0;
+const RAIO_ANEL = 34;
+const CIRCUNFERENCIA_ANEL = 2 * Math.PI * RAIO_ANEL;
+
+/** Frases decorativas que se revezam durante a espera — puramente cosméticas, não têm relação com o progresso real (que vem de `concluidas`/`total`). */
+const FRASES_POR_ETAPA: Record<Etapa, string[]> = {
+  formulario: [],
+  gerando: [
+    'Consultando as regras do guia SEE/AC...',
+    'Elaborando enunciados claros e objetivos...',
+    'Criando alternativas e distratores plausíveis...',
+    'Verificando a habilidade e o nível de dificuldade...',
+  ],
+  revisando: [
+    'Rodando o validador determinístico...',
+    'Conferindo autorrevisão da IA...',
+    'Checando ambiguidades e pistas de resposta...',
+  ],
+  buscando_imagens: [
+    'Procurando fotos reais no banco de imagens...',
+    'Selecionando a imagem mais adequada a cada questão...',
+  ],
+  resultado: [],
+};
+
+/**
+ * Tela de progresso com anel circular animado (baseado no percentual REAL de
+ * `concluidas`/`total`) e frases decorativas que se revezam a cada ~2,5s,
+ * no mesmo espírito visual do "ProgressoGerando" usado em outras telas de IA
+ * do app — só que aqui o progresso não é simulado por tempo.
+ */
+function BarraProgresso({ etapa, titulo, concluidas, total }: { etapa: Etapa; titulo: string; concluidas: number; total: number }) {
+  const percentual = total > 0 ? Math.min(100, Math.round((concluidas / total) * 100)) : 0;
+  const frases = FRASES_POR_ETAPA[etapa];
+  const [fraseIdx, setFraseIdx] = useState(0);
+
+  useEffect(() => {
+    if (frases.length === 0) return;
+    setFraseIdx(0);
+    const intervalo = setInterval(() => setFraseIdx(i => (i + 1) % frases.length), 2500);
+    return () => clearInterval(intervalo);
+  }, [etapa, frases.length]);
+
   return (
     <div className="bg-surface border border-outline-variant rounded-2xl p-6 flex flex-col gap-4 items-center">
-      <div className="w-16 h-16 rounded-full bg-primary/10 border-4 border-primary/30 flex items-center justify-center">
-        <Sparkles className="w-7 h-7 text-primary animate-pulse" />
+      <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center relative">
+        <Sparkles className="w-8 h-8 text-primary animate-bounce" />
+        <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 80 80">
+          <circle cx="40" cy="40" r={RAIO_ANEL} fill="none" stroke="currentColor" className="text-outline-variant" strokeWidth="5" />
+          <circle
+            cx="40" cy="40" r={RAIO_ANEL} fill="none" stroke="currentColor" className="text-primary" strokeWidth="5"
+            strokeDasharray={CIRCUNFERENCIA_ANEL}
+            strokeDashoffset={CIRCUNFERENCIA_ANEL * (1 - percentual / 100)}
+            strokeLinecap="round"
+            style={{ transition: 'stroke-dashoffset 0.5s ease' }}
+          />
+        </svg>
       </div>
       <div className="text-center">
         <p className="font-bold text-on-surface text-sm">{titulo}</p>
-        <p className="text-xs text-on-surface-variant mt-1">{concluidas} de {total}</p>
+        <p className="text-xs text-on-surface-variant mt-1">{concluidas} de {total} · {percentual}%</p>
       </div>
       <div className="w-full h-2.5 bg-background rounded-full overflow-hidden">
         <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${percentual}%` }} />
       </div>
+      {frases.length > 0 && (
+        <p className="text-center text-xs text-on-surface-variant italic min-h-[1.5em] transition-opacity duration-300">{frases[fraseIdx]}</p>
+      )}
       <p className="text-center text-[11px] text-on-surface-variant">Isso pode levar alguns segundos por lote de {TAMANHO_LOTE} questões — aguarde 😊</p>
     </div>
   );
@@ -173,15 +225,15 @@ export function GeradorQuestoes() {
       )}
 
       {etapa === 'gerando' && (
-        <BarraProgresso titulo="Gerando questões com a IA..." concluidas={progresso.concluidas} total={progresso.total} />
+        <BarraProgresso etapa={etapa} titulo="Gerando questões com a IA..." concluidas={progresso.concluidas} total={progresso.total} />
       )}
 
       {etapa === 'revisando' && (
-        <BarraProgresso titulo="Revisando questões (validador + autorrevisão da IA)..." concluidas={progresso.concluidas} total={progresso.total} />
+        <BarraProgresso etapa={etapa} titulo="Revisando questões (validador + autorrevisão da IA)..." concluidas={progresso.concluidas} total={progresso.total} />
       )}
 
       {etapa === 'buscando_imagens' && (
-        <BarraProgresso titulo="Buscando imagens reais para as questões com suporte visual..." concluidas={progresso.concluidas} total={progresso.total} />
+        <BarraProgresso etapa={etapa} titulo="Buscando imagens reais para as questões com suporte visual..." concluidas={progresso.concluidas} total={progresso.total} />
       )}
 
       {etapa === 'resultado' && (

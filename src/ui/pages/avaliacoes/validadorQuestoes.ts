@@ -138,8 +138,7 @@ export function checarCamposObrigatoriosPreenchidos(questao: QuestaoGerada): boo
   return Boolean(
     questao.conteudo?.trim() &&
     questao.enunciado?.trim() &&
-    questao.objetivoQuestao?.trim() &&
-    questao.justificativaPedagogica?.trim()
+    questao.objetivoQuestao?.trim()
   );
 }
 

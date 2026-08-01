@@ -36,7 +36,6 @@ interface LinhaBancoQuestoes {
   enunciado: string;
   alternativas: QuestaoGerada['alternativas'];
   resposta_correta: string | null;
-  justificativa_pedagogica: string | null;
   conforme_referencia_oficial: boolean;
   status_revisao: StatusRevisao;
   tentativas_revisao: number;
@@ -69,7 +68,6 @@ function questaoParaLinha(
     enunciado: questao.enunciado,
     alternativas: questao.alternativas,
     resposta_correta: questao.respostaCorreta,
-    justificativa_pedagogica: questao.justificativaPedagogica || null,
     conforme_referencia_oficial: questao.conformeReferenciaOficial,
     status_revisao: questao.statusRevisao,
     tentativas_revisao: questao.tentativasRevisao,
@@ -93,7 +91,6 @@ function linhaParaQuestao(linha: LinhaBancoQuestoes): QuestaoGerada {
     enunciado: linha.enunciado,
     alternativas: linha.alternativas,
     respostaCorreta: linha.resposta_correta,
-    justificativaPedagogica: linha.justificativa_pedagogica ?? '',
     autorrevisaoIA: {
       criterios: {
         unicaRespostaCorreta: true, distratoresPlausiveis: true, semPistaParaResposta: true,
@@ -149,7 +146,6 @@ export async function atualizarQuestaoBanco(id: string, alteracoes: Partial<Ques
   if (alteracoes.enunciado !== undefined) camposParciais.enunciado = alteracoes.enunciado;
   if (alteracoes.alternativas !== undefined) camposParciais.alternativas = alteracoes.alternativas;
   if (alteracoes.respostaCorreta !== undefined) camposParciais.resposta_correta = alteracoes.respostaCorreta;
-  if (alteracoes.justificativaPedagogica !== undefined) camposParciais.justificativa_pedagogica = alteracoes.justificativaPedagogica;
   if (alteracoes.statusRevisao !== undefined) camposParciais.status_revisao = alteracoes.statusRevisao;
   if (alteracoes.tituloInterno !== undefined) camposParciais.titulo_interno = alteracoes.tituloInterno;
 

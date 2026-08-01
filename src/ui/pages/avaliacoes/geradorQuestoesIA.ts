@@ -81,7 +81,6 @@ const ESQUEMA_JSON_QUESTAO = `
     { "letra": "D", "texto": string, "correta": boolean, "comentarioDistrator": string | null }
   ] | null,
   "respostaCorreta": string | null,
-  "justificativaPedagogica": string,
   "autorrevisaoIA": {
     "criterios": {
       "unicaRespostaCorreta": boolean,
@@ -229,7 +228,6 @@ function completarQuestao(
     enunciado: String(bruta.enunciado ?? ''),
     alternativas: (bruta.alternativas as QuestaoGerada['alternativas']) ?? null,
     respostaCorreta: (bruta.respostaCorreta as string | null) ?? null,
-    justificativaPedagogica: String(bruta.justificativaPedagogica ?? ''),
     autorrevisaoIA: (bruta.autorrevisaoIA as QuestaoGerada['autorrevisaoIA']) ?? {
       criterios: {
         unicaRespostaCorreta: false, distratoresPlausiveis: false, semPistaParaResposta: false,
@@ -261,30 +259,74 @@ export async function regenerarQuestao(
   questaoOriginal: QuestaoGerada,
   motivosFalha: string[]
 ): Promise<QuestaoGerada> {
-  const prompt = construirPromptRegeneracao(params, questaoOriginal, motivosFalha);
+  // Usa o tipo da PRÓPRIA questão (não o do formulário) — importante porque,
+  // com a mistura automática 80/20 (ver gerarQuestoesCompletas), uma questão
+  // dissertativa pode precisar ser regenerada mesmo com o formulário
+  // configurado para "Múltipla Escolha".
+  const parametrosEfetivos: ParametrosGeracao = { ...params, tipoQuestao: questaoOriginal.tipoQuestao };
+  const prompt = construirPromptRegeneracao(parametrosEfetivos, questaoOriginal, motivosFalha);
   const texto = await chamarClaudeProxy(prompt);
   const bruta = parseJSONTolerante<Record<string, unknown>>(texto);
-  return completarQuestao(bruta, params);
+  return completarQuestao(bruta, parametrosEfetivos);
 }
+
+/** Gera `quantidade` questões de um único tipo, em lotes de `TAMANHO_LOTE`, notificando progresso. */
+async function gerarQuestoesDeUmTipo(
+  params: ParametrosGeracao,
+  tipoQuestao: ParametrosGeracao['tipoQuestao'],
+  quantidade: number,
+  onProgresso?: (geradasDesteTipo: number, totalDesteTipo: number) => void
+): Promise<QuestaoGerada[]> {
+  const parametrosDoTipo: ParametrosGeracao = { ...params, tipoQuestao };
+  const questoes: QuestaoGerada[] = [];
+
+  while (questoes.length < quantidade) {
+    const restante = quantidade - questoes.length;
+    const tamanhoDoLote = Math.min(TAMANHO_LOTE, restante);
+    const lote = await gerarLoteDeQuestoes(parametrosDoTipo, tamanhoDoLote);
+    questoes.push(...lote);
+    onProgresso?.(questoes.length, quantidade);
+  }
+
+  return questoes;
+}
+
+/** Proporção de questões dissertativas misturadas automaticamente quando o tipo escolhido é "Múltipla Escolha". */
+const PROPORCAO_DISSERTATIVAS_NA_MISTURA = 0.2;
 
 /**
  * Orquestra quantas chamadas forem necessárias (em lotes de `TAMANHO_LOTE`)
  * até atingir `params.quantidade`, notificando o progresso para a UI.
+ *
+ * Quando o tipo escolhido é "Múltipla Escolha", gera automaticamente uma
+ * mistura de ~80% múltipla escolha + ~20% dissertativas, em vez de 100%
+ * objetivas — as dissertativas passam pelo mesmo mecanismo de busca de
+ * imagem (imagemQuery) que as objetivas, sem nenhuma diferença de tratamento.
+ * Para os demais tipos escolhidos no formulário, gera 100% do tipo pedido,
+ * como antes.
  */
 export async function gerarQuestoesCompletas(
   params: ParametrosGeracao,
   onProgresso?: (geradas: number, total: number) => void
 ): Promise<QuestaoGerada[]> {
   const total = params.quantidade;
-  const questoes: QuestaoGerada[] = [];
 
-  while (questoes.length < total) {
-    const restante = total - questoes.length;
-    const tamanhoDoLote = Math.min(TAMANHO_LOTE, restante);
-    const lote = await gerarLoteDeQuestoes(params, tamanhoDoLote);
-    questoes.push(...lote);
-    onProgresso?.(questoes.length, total);
+  if (params.tipoQuestao !== 'multipla_escolha' || total < 2) {
+    return gerarQuestoesDeUmTipo(params, params.tipoQuestao, total, (geradas) => onProgresso?.(geradas, total));
   }
+
+  const qtdDissertativas = Math.round(total * PROPORCAO_DISSERTATIVAS_NA_MISTURA);
+  const qtdObjetivas = total - qtdDissertativas;
+
+  const objetivas = qtdObjetivas > 0
+    ? await gerarQuestoesDeUmTipo(params, 'multipla_escolha', qtdObjetivas, (geradas) => onProgresso?.(geradas, total))
+    : [];
+
+  const dissertativas = qtdDissertativas > 0
+    ? await gerarQuestoesDeUmTipo(params, 'dissertativa', qtdDissertativas, (geradas) => onProgresso?.(objetivas.length + geradas, total))
+    : [];
+
+  const questoes = [...objetivas, ...dissertativas];
 
   return questoes;
 }

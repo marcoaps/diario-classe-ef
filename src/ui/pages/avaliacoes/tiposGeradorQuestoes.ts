@@ -184,7 +184,6 @@ export interface QuestaoGerada {
   alternativas: Alternativa[] | null;
   /** usado quando não há alternativas (dissertativa, resposta_curta) ou para registrar a letra do gabarito de V/F, associação, completar. */
   respostaCorreta: string | null;
-  justificativaPedagogica: string;
   autorrevisaoIA: AutorrevisaoIA;
   /** false para tipos fora do escopo do PDF SEE/AC: verdadeiro_falso, associacao, completar. */
   conformeReferenciaOficial: boolean;

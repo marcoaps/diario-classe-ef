@@ -195,6 +195,11 @@ export function GeradorQuestoesFormulario({ valores, onChange, desabilitado }: G
         >
           {TIPOS_QUESTAO.map(t => <option key={t.valor} value={t.valor}>{t.label}</option>)}
         </select>
+        {valores.tipoQuestao === 'multipla_escolha' && valores.quantidade >= 2 && (
+          <p className="text-[11px] text-on-surface-variant mt-1">
+            Gera automaticamente uma mistura: ~80% múltipla escolha e ~20% dissertativas (ambas elegíveis a foto de apoio).
+          </p>
+        )}
         {politicaTipo.nivelAlerta !== 'nenhum' && (
           <div className={[
             'mt-2 flex items-start gap-2 px-3 py-2 rounded-xl text-xs',

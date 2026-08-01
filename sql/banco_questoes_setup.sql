@@ -36,7 +36,6 @@ CREATE TABLE IF NOT EXISTS banco_questoes (
   enunciado                   text NOT NULL,
   alternativas                jsonb,          -- [{letra,texto,correta,comentarioDistrator}] ou null (dissertativa/resposta_curta)
   resposta_correta            text,           -- usado quando "alternativas" é null, ou para registrar gabarito de V/F, associação, completar
-  justificativa_pedagogica    text,
 
   -- Conformidade e revisão (ver regrasElaboracaoItens.ts / revisaoAutomaticaQuestoes.ts)
   conforme_referencia_oficial boolean NOT NULL DEFAULT true,   -- false para verdadeiro_falso, associacao, completar (fora do escopo do PDF SEE/AC)

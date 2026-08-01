@@ -142,10 +142,6 @@ export function GeradorQuestoesCard({ questao, onEditar, onRevisarNovamente, rev
             </div>
           )}
 
-          {questao.justificativaPedagogica && (
-            <p className="text-[11px] text-on-surface-variant"><span className="font-semibold">Justificativa: </span>{questao.justificativaPedagogica}</p>
-          )}
-
           {questao.statusRevisao === 'requer_revisao_manual' && (
             <div className="space-y-2">
               <div className="text-[11px] text-on-error-container bg-error-container rounded-xl p-2">
