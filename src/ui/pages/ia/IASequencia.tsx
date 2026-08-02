@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect } from "react";
 import { chamarClaudeProxy } from "../../../utils/claudeProxy";
+import { curriculumData } from "../../../data/curriculumData";
 
 interface SituacaoAprendizagem {
   numero: number;
@@ -37,6 +38,46 @@ const TURMAS_POR_SERIE: Record<string, string> = {
   "6º ano": "", "7º ano": "", "8º ano": "", "9º ano": "",
   "1º EM": "", "2º EM": "", "3º EM": "", "1º e 2º EM": "",
 };
+
+/**
+ * O Plano de Curso oficial (`curriculumData.ts`) é organizado por ano único
+ * (6, 7, 8, 9), mas esta tela permite escolher grupos de séries ("6º e 7º",
+ * "8º e 9º"). Para as combinações, usamos o primeiro ano do par como
+ * referência de sugestão — os dois anos do par tratam objetos de
+ * conhecimento equivalentes em cada bimestre. Ensino Médio não tem Plano de
+ * Curso cadastrado, então essas séries continuam com o campo de texto livre.
+ */
+const ANO_CURRICULO_POR_SERIE: Record<string, string> = {
+  "6º ano": "6", "7º ano": "7", "8º ano": "8", "9º ano": "9",
+  "6º e 7º": "6", "8º e 9º": "8",
+};
+
+const BIMESTRES = [
+  { valor: "1", label: "1º Bimestre" },
+  { valor: "2", label: "2º Bimestre" },
+  { valor: "3", label: "3º Bimestre" },
+  { valor: "4", label: "4º Bimestre" },
+];
+
+/**
+ * O Plano de Curso não tem uma lista de "recursos/materiais" por objeto de
+ * conhecimento, então sugerimos os materiais típicos por palavra-chave
+ * detectada no tema/objeto escolhido — mesma lógica de "pré-preencher, mas
+ * deixar editável" usada no Gerador de Questões para o campo Conteúdo.
+ */
+function sugerirRecursos(texto: string): string {
+  const t = texto.toLowerCase();
+  if (t.includes("futsal")) return "Quadra coberta, bolas de futsal, cones, coletes, traves";
+  if (t.includes("handebol")) return "Quadra, bolas de handebol, coletes, traves/metas";
+  if (t.includes("vôlei") || t.includes("volei")) return "Quadra, rede de voleibol, bolas de voleibol";
+  if (t.includes("basquete")) return "Quadra, bolas de basquete, coletes, cesta";
+  if (t.includes("atletismo")) return "Pista ou quadra, cronômetro, fita métrica, cones, bastões de revezamento";
+  if (t.includes("dança")) return "Aparelho de som/caixa de som, espaço livre, fitas ou tecidos (se houver coreografia)";
+  if (t.includes("luta") || t.includes("capoeira") || t.includes("judô") || t.includes("judo")) return "Colchonetes/tatame, espaço amplo e seguro, apito";
+  if (t.includes("ginástica") || t.includes("ginastica")) return "Colchonetes, arcos, cordas, bolas de ginástica, espaço amplo";
+  if (t.includes("jogo") || t.includes("brincadeira")) return "Cones, bambolês, cordas, bolas variadas, giz ou fita para marcação";
+  return "Quadra coberta, cones, coletes, apito";
+}
 
 function ordinal(n: number): string {
   return n === 1 ? "1ª" : n === 2 ? "2ª" : n === 3 ? "3ª" :
@@ -469,11 +510,33 @@ export function IASequencia() {
   const [coordenador, setCoordenador] = useState("Jair Fiesca e Amarildo Saady");
   const [serie, setSerie] = useState("6º e 7º");
   const [turmas, setTurmas] = useState(TURMAS_POR_SERIE["6º e 7º"]);
+  const [bimestre, setBimestre] = useState("1");
   const [aulasPrevistas, setAulasPrevistas] = useState("5");
   const [periodo, setPeriodo] = useState("");
   const [tema, setTema] = useState("");
   const [recursos, setRecursos] = useState("");
   const [numSituacoes, setNumSituacoes] = useState("3");
+
+  const anoCurriculo = ANO_CURRICULO_POR_SERIE[serie];
+  const dadosPlano = anoCurriculo ? curriculumData[anoCurriculo]?.bimestres?.[bimestre] ?? null : null;
+
+  // Sempre que Ano/Série ou Bimestre mudarem, sincroniza Tema e Recursos com
+  // o primeiro objeto de conhecimento do Plano de Curso daquele ano/bimestre
+  // (mesmo padrão do Gerador de Questões: auto-seleciona, mas continua editável).
+  useEffect(() => {
+    if (!dadosPlano) return;
+    if (!dadosPlano.objetosConhecimento.includes(tema)) {
+      const primeiroObjeto = dadosPlano.objetosConhecimento[0] ?? "";
+      setTema(primeiroObjeto);
+      setRecursos(sugerirRecursos(primeiroObjeto));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anoCurriculo, bimestre]);
+
+  function selecionarObjetoConhecimento(valor: string) {
+    setTema(valor);
+    setRecursos(sugerirRecursos(valor));
+  }
 
   const [status, setStatus] = useState<"idle" | "gerando" | "imagens" | "pronto" | "erro">("idle");
   const [baixando, setBaixando] = useState(false);
@@ -603,9 +666,20 @@ Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {dadosPlano && (
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-500">Objeto de Conhecimento (Plano de Curso oficial)</label>
+              <select className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" value={tema} onChange={(e) => selecionarObjetoConhecimento(e.target.value)}>
+                {dadosPlano.objetosConhecimento.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+          )}
           <div className="sm:col-span-2 flex flex-col gap-1">
             <label className="text-xs font-medium text-gray-500">Tema / Conteúdo *</label>
             <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" placeholder="Ex: Futsal — Fundamentos técnico-táticos e regras" value={tema} onChange={(e) => setTema(e.target.value)} />
+            {dadosPlano && (
+              <p className="text-[11px] text-gray-400">Carregado a partir do Objeto de Conhecimento selecionado acima — pode editar/resumir antes de gerar.</p>
+            )}
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-gray-500">Professor(a)</label>
@@ -626,6 +700,12 @@ Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
             <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" placeholder="Ex: 6ºF, 7ºB, 7ºC..." value={turmas} onChange={(e) => setTurmas(e.target.value)} />
           </div>
           <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-gray-500">Bimestre (Plano de Curso oficial)</label>
+            <select className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" value={bimestre} onChange={(e) => setBimestre(e.target.value)}>
+              {BIMESTRES.map((b) => <option key={b.valor} value={b.valor}>{b.label}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-gray-500">Aulas previstas</label>
             <select className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" value={aulasPrevistas} onChange={(e) => setAulasPrevistas(e.target.value)}>
               {["2","3","4","5","6","8","10"].map((n) => <option key={n}>{n}</option>)}
@@ -644,6 +724,9 @@ Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
           <div className="sm:col-span-2 flex flex-col gap-1">
             <label className="text-xs font-medium text-gray-500">Recursos disponíveis</label>
             <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" placeholder="Ex: quadra coberta, bolas de futsal, cones, coletes..." value={recursos} onChange={(e) => setRecursos(e.target.value)} />
+            {dadosPlano && (
+              <p className="text-[11px] text-gray-400">Sugestão automática com base no Objeto de Conhecimento selecionado — pode editar antes de gerar.</p>
+            )}
           </div>
         </div>
 
