@@ -109,6 +109,9 @@ export function GeradorQuestoes() {
     if (mensagem.toLowerCase().includes('credit balance is too low')) {
       return 'Saldo insuficiente na conta da API da Claude. Peça ao responsável para adicionar créditos em console.anthropic.com/settings/billing.';
     }
+    if (mensagem.toLowerCase().includes('json malformado')) {
+      return 'A IA devolveu uma resposta malformada mais de uma vez. Tente gerar novamente — geralmente é uma falha pontual.';
+    }
     return mensagem;
   }
 

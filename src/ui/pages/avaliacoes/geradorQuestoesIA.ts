@@ -176,6 +176,8 @@ Responda SOMENTE com um array JSON válido, sem markdown, sem \`\`\`, sem texto 
 ${ESQUEMA_JSON_QUESTAO}
 
 Gere exatamente ${quantidadeNesteLote} elemento(s) no array.
+
+ATENÇÃO AO JSON VÁLIDO: todo valor de texto deve ser uma string JSON corretamente escapada — aspas internas como \\", sem quebras de linha literais dentro do valor (use espaço ou \\n), sem vírgula sobrando antes de "]" ou "}". Uma única aspa ou quebra de linha mal escapada invalida a resposta inteira.
 `.trim();
 }
 
@@ -210,6 +212,8 @@ Reescreva esta questão do zero, corrigindo TODOS os motivos de reprovação lis
 
 Responda SOMENTE com um único objeto JSON válido (não um array), sem markdown, sem \`\`\`, seguindo exatamente este esquema:
 ${ESQUEMA_JSON_QUESTAO}
+
+ATENÇÃO AO JSON VÁLIDO: todo valor de texto deve ser uma string JSON corretamente escapada — aspas internas como \\", sem quebras de linha literais dentro do valor (use espaço ou \\n), sem vírgula sobrando antes de "]" ou "}". Uma única aspa ou quebra de linha mal escapada invalida a resposta inteira.
 `.trim();
 }
 
@@ -227,9 +231,15 @@ export function parseJSONTolerante<T>(textoBruto: string): T {
     const matchObjeto = limpo.match(/\{[\s\S]*\}/);
     const match = matchArray ?? matchObjeto;
     if (match) {
-      return JSON.parse(match[0]) as T;
+      try {
+        return JSON.parse(match[0]) as T;
+      } catch {
+        // Cai no erro genérico abaixo — não propaga o erro cru do JSON.parse
+        // (ex: "Expected ',' or '}' after property value..."), que não diz
+        // nada de útil para o professor.
+      }
     }
-    throw new Error('Não foi possível interpretar a resposta da IA como JSON.');
+    throw new Error('A IA retornou uma resposta com JSON malformado nesta tentativa.');
   }
 }
 
@@ -278,13 +288,35 @@ function completarQuestao(
   };
 }
 
+/**
+ * A IA ocasionalmente devolve um JSON malformado (ex: uma aspa ou quebra de
+ * linha mal escapada dentro de um texto longo) — costuma ser uma falha
+ * pontual da própria resposta, não do prompt, então repetir a mesma chamada
+ * já resolve na maioria das vezes. `tentativas` conta a chamada inicial.
+ */
+const MAX_TENTATIVAS_JSON_MALFORMADO = 2;
+
+async function chamarClaudeComRetryDeJSON<T>(prompt: string): Promise<T> {
+  let ultimoErro: unknown;
+  for (let tentativa = 1; tentativa <= MAX_TENTATIVAS_JSON_MALFORMADO; tentativa++) {
+    const texto = await chamarClaudeProxy(prompt);
+    try {
+      return parseJSONTolerante<T>(texto);
+    } catch (e) {
+      ultimoErro = e;
+    }
+  }
+  throw ultimoErro instanceof Error
+    ? ultimoErro
+    : new Error('A IA retornou uma resposta com JSON malformado.');
+}
+
 export async function gerarLoteDeQuestoes(
   params: ParametrosGeracao,
   quantidadeNesteLote: number
 ): Promise<QuestaoGerada[]> {
   const prompt = construirPromptGeracao(params, quantidadeNesteLote);
-  const texto = await chamarClaudeProxy(prompt);
-  const brutas = parseJSONTolerante<Record<string, unknown>[]>(texto);
+  const brutas = await chamarClaudeComRetryDeJSON<Record<string, unknown>[]>(prompt);
   return brutas.map(b => completarQuestao(b, params));
 }
 
@@ -299,8 +331,7 @@ export async function regenerarQuestao(
   // configurado para "Múltipla Escolha".
   const parametrosEfetivos: ParametrosGeracao = { ...params, tipoQuestao: questaoOriginal.tipoQuestao };
   const prompt = construirPromptRegeneracao(parametrosEfetivos, questaoOriginal, motivosFalha);
-  const texto = await chamarClaudeProxy(prompt);
-  const bruta = parseJSONTolerante<Record<string, unknown>>(texto);
+  const bruta = await chamarClaudeComRetryDeJSON<Record<string, unknown>>(prompt);
   return completarQuestao(bruta, parametrosEfetivos);
 }
 
