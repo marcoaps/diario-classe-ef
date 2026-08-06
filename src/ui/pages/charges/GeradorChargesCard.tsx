@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Copy, Pencil } from 'lucide-react';
-import type { AtividadeCharge, QuestaoChargeIA } from './tiposCharges';
+import React, { useRef, useState } from 'react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Copy, ImagePlus, Pencil, Trash2, Upload } from 'lucide-react';
+import { redimensionarImagemParaDataUrl } from './imagemQuadroUtils';
+import type { AtividadeCharge, ImagemQuadro, QuestaoChargeIA } from './tiposCharges';
 
 export interface GeradorChargesCardProps {
   atividade: AtividadeCharge;
   onEditarQuestao: (indice: number, alteracoes: Partial<QuestaoChargeIA>) => void;
+  onImagemQuadro: (quadro: number, imagem: ImagemQuadro | null) => void;
 }
 
 function QuestaoItem({ questao, indice, onEditar }: { questao: QuestaoChargeIA; indice: number; onEditar: (alteracoes: Partial<QuestaoChargeIA>) => void }) {
@@ -67,9 +69,22 @@ function QuestaoItem({ questao, indice, onEditar }: { questao: QuestaoChargeIA; 
   );
 }
 
-function QuadroItem({ quadro, prompt }: { quadro: AtividadeCharge['roteiro']['quadros'][number]; prompt: string | undefined }) {
+function QuadroItem({
+  quadro,
+  prompt,
+  imagem,
+  onImagem,
+}: {
+  quadro: AtividadeCharge['roteiro']['quadros'][number];
+  prompt: string | undefined;
+  imagem: ImagemQuadro | undefined;
+  onImagem: (imagem: ImagemQuadro | null) => void;
+}) {
   const [expandido, setExpandido] = useState(true);
   const [copiado, setCopiado] = useState(false);
+  const [processandoImagem, setProcessandoImagem] = useState(false);
+  const [erroImagem, setErroImagem] = useState('');
+  const inputArquivoRef = useRef<HTMLInputElement>(null);
 
   async function copiarPrompt() {
     if (!prompt) return;
@@ -79,6 +94,23 @@ function QuadroItem({ quadro, prompt }: { quadro: AtividadeCharge['roteiro']['qu
       setTimeout(() => setCopiado(false), 2000);
     } catch {
       // Clipboard indisponível (ex: contexto não seguro) — o professor pode selecionar o texto manualmente.
+    }
+  }
+
+  async function selecionarArquivo(e: React.ChangeEvent<HTMLInputElement>) {
+    const arquivo = e.target.files?.[0];
+    e.target.value = ''; // permite selecionar o mesmo arquivo de novo depois de remover
+    if (!arquivo) return;
+
+    setErroImagem('');
+    setProcessandoImagem(true);
+    try {
+      const { dataUrl, largura, altura } = await redimensionarImagemParaDataUrl(arquivo);
+      onImagem({ quadro: quadro.numero, dataUrl, larguraOriginal: largura, alturaOriginal: altura });
+    } catch (err) {
+      setErroImagem((err as Error).message);
+    } finally {
+      setProcessandoImagem(false);
     }
   }
 
@@ -113,6 +145,42 @@ function QuadroItem({ quadro, prompt }: { quadro: AtividadeCharge['roteiro']['qu
             </div>
           )}
 
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-semibold text-on-surface-variant">Imagem do quadro</p>
+              <input ref={inputArquivoRef} type="file" accept="image/*" onChange={selecionarArquivo} className="hidden" />
+              {!imagem && (
+                <button
+                  onClick={() => inputArquivoRef.current?.click()}
+                  disabled={processandoImagem}
+                  className="flex items-center gap-1 text-[11px] text-primary font-semibold disabled:opacity-60"
+                >
+                  <Upload className="w-3 h-3" /> {processandoImagem ? 'Processando...' : 'Enviar imagem'}
+                </button>
+              )}
+            </div>
+
+            {erroImagem && <p className="text-[11px] text-on-error-container bg-error-container rounded-lg px-2 py-1">{erroImagem}</p>}
+
+            {imagem ? (
+              <div className="space-y-1.5">
+                <img src={imagem.dataUrl} alt={`Ilustração do quadro ${quadro.numero}`} className="w-full max-w-sm rounded-xl border border-outline-variant" />
+                <div className="flex gap-2">
+                  <button onClick={() => inputArquivoRef.current?.click()} className="flex items-center gap-1 text-[11px] text-primary font-semibold">
+                    <ImagePlus className="w-3 h-3" /> Trocar imagem
+                  </button>
+                  <button onClick={() => onImagem(null)} className="flex items-center gap-1 text-[11px] text-on-error-container font-semibold">
+                    <Trash2 className="w-3 h-3" /> Remover
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-[11px] text-on-surface-variant italic">
+                Gere a imagem numa ferramenta externa (ChatGPT Images, Leonardo, etc.) usando o prompt abaixo, baixe o arquivo e envie aqui — ela será usada na exportação em vez do texto do prompt.
+              </p>
+            )}
+          </div>
+
           {prompt && (
             <div className="bg-background border border-outline-variant rounded-xl p-2 space-y-1.5">
               <div className="flex items-center justify-between">
@@ -130,8 +198,9 @@ function QuadroItem({ quadro, prompt }: { quadro: AtividadeCharge['roteiro']['qu
   );
 }
 
-export function GeradorChargesCard({ atividade, onEditarQuestao }: GeradorChargesCardProps) {
+export function GeradorChargesCard({ atividade, onEditarQuestao, onImagemQuadro }: GeradorChargesCardProps) {
   const promptsPorQuadro = new Map(atividade.promptsImagem.map(p => [p.quadro, p.prompt]));
+  const imagensPorQuadro = new Map(atividade.imagensQuadros.map(i => [i.quadro, i]));
 
   return (
     <div className="space-y-4">
@@ -165,7 +234,13 @@ export function GeradorChargesCard({ atividade, onEditarQuestao }: GeradorCharge
       <div className="space-y-3">
         <p className="text-sm font-semibold text-on-surface">Quadros</p>
         {atividade.roteiro.quadros.map(quadro => (
-          <QuadroItem key={quadro.numero} quadro={quadro} prompt={promptsPorQuadro.get(quadro.numero)} />
+          <QuadroItem
+            key={quadro.numero}
+            quadro={quadro}
+            prompt={promptsPorQuadro.get(quadro.numero)}
+            imagem={imagensPorQuadro.get(quadro.numero)}
+            onImagem={imagem => onImagemQuadro(quadro.numero, imagem)}
+          />
         ))}
       </div>
 

@@ -4,7 +4,7 @@ import { ArrowLeft, Database, FileDown, FileText, History, Sparkles } from 'luci
 import { GeradorChargesFormulario } from './GeradorChargesFormulario';
 import { GeradorChargesCard } from './GeradorChargesCard';
 import { criarParametrosPadraoCharges } from './tiposCharges';
-import type { AtividadeCharge, ParametrosGeracaoCharges, Personagem, QuestaoChargeIA } from './tiposCharges';
+import type { AtividadeCharge, ImagemQuadro, ParametrosGeracaoCharges, Personagem, QuestaoChargeIA } from './tiposCharges';
 import { listarPersonagensAtivos } from './personagensChargesData';
 import { gerarERevisarCharge } from './revisaoAutomaticaCharges';
 import { montarPromptImagemPorQuadro } from './promptImagemCharges';
@@ -143,6 +143,7 @@ export function GeradorCharges() {
         observacoesProfessor: resultado.questoesEMetadados.observacoesProfessor,
         personagensUsados: personagensSelecionados,
         promptsImagem,
+        imagensQuadros: [],
         statusRevisao: resultado.statusRevisao,
         tentativasRevisao: resultado.tentativasRevisao,
         historicoRevisao: resultado.historicoRevisao,
@@ -163,6 +164,15 @@ export function GeradorCharges() {
       if (!prev) return prev;
       const questoes = prev.questoes.map((q, i) => (i === indice ? { ...q, ...alteracoes } : q));
       return { ...prev, questoes, atualizadoEm: new Date().toISOString() };
+    });
+  }
+
+  function handleImagemQuadro(quadro: number, imagem: ImagemQuadro | null) {
+    setAtividade(prev => {
+      if (!prev) return prev;
+      const semEsteQuadro = prev.imagensQuadros.filter(i => i.quadro !== quadro);
+      const imagensQuadros = imagem ? [...semEsteQuadro, imagem] : semEsteQuadro;
+      return { ...prev, imagensQuadros, atualizadoEm: new Date().toISOString() };
     });
   }
 
@@ -296,7 +306,7 @@ export function GeradorCharges() {
             {mensagemHistorico && <p className="text-xs text-primary font-semibold">{mensagemHistorico}</p>}
           </div>
 
-          <GeradorChargesCard atividade={atividade} onEditarQuestao={handleEditarQuestao} />
+          <GeradorChargesCard atividade={atividade} onEditarQuestao={handleEditarQuestao} onImagemQuadro={handleImagemQuadro} />
 
           <div className="h-28" aria-hidden="true" />
         </div>

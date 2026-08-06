@@ -12,10 +12,31 @@
 import jsPDF from 'jspdf';
 import {
   Document, Packer, Paragraph, Table, TableRow, TableCell,
-  TextRun, AlignmentType, WidthType, BorderStyle, ShadingType, VerticalAlign,
+  TextRun, AlignmentType, WidthType, BorderStyle, ShadingType, VerticalAlign, ImageRun,
 } from 'docx';
 import { saveAs } from 'file-saver';
-import type { AtividadeCharge } from './tiposCharges';
+import { dataUrlParaArrayBuffer } from './imagemQuadroUtils';
+import type { AtividadeCharge, ImagemQuadro } from './tiposCharges';
+
+const LARGURA_MAX_IMAGEM_MM = 100;
+const ALTURA_MAX_IMAGEM_MM = 80;
+
+/** Calcula largura/altura (em mm) da imagem mantendo a proporção original, sem exceder os limites máximos. */
+function calcularDimensoesImagemMM(
+  larguraOriginal: number,
+  alturaOriginal: number,
+  larguraMax = LARGURA_MAX_IMAGEM_MM,
+  alturaMax = ALTURA_MAX_IMAGEM_MM
+): { largura: number; altura: number } {
+  const proporcao = larguraOriginal / alturaOriginal;
+  let largura = larguraMax;
+  let altura = largura / proporcao;
+  if (altura > alturaMax) {
+    altura = alturaMax;
+    largura = altura * proporcao;
+  }
+  return { largura, altura };
+}
 
 export interface OpcoesExportacaoCharges {
   modeloImpressao: 1 | 2 | 4;
@@ -113,7 +134,17 @@ function exportarModelo1(doc: jsPDF, atividade: AtividadeCharge, opcoes: OpcoesE
       y += 1;
     }
 
-    if (opcoes.incluirPromptsImagem) {
+    const imagemDoQuadro = atividade.imagensQuadros.find(i => i.quadro === quadro.numero);
+    if (imagemDoQuadro) {
+      const { largura, altura } = calcularDimensoesImagemMM(imagemDoQuadro.larguraOriginal, imagemDoQuadro.alturaOriginal);
+      if (y + altura > 280) { doc.addPage(); y = 20; }
+      try {
+        doc.addImage(imagemDoQuadro.dataUrl, 'JPEG', margin, y, largura, altura);
+        y += altura + 4;
+      } catch {
+        // Se a imagem vier num formato que o jsPDF não reconheça, segue sem travar a exportação.
+      }
+    } else if (opcoes.incluirPromptsImagem) {
       const promptDoQuadro = atividade.promptsImagem.find(p => p.quadro === quadro.numero)?.prompt;
       if (promptDoQuadro) {
         doc.setFont('helvetica', 'normal');
@@ -419,6 +450,25 @@ const celulaTitulo = (texto: string) =>
 const linhasResposta = (n: number) =>
   Array.from({ length: n }, () => par([run('_'.repeat(95), { sz: 20, cor: 'BBBBBB' })], AlignmentType.LEFT, 25, 8));
 
+const LARGURA_MAX_IMAGEM_WORD = 340;
+const ALTURA_MAX_IMAGEM_WORD = 260;
+
+/** Imagem do quadro, centralizada, mantendo a proporção original sem exceder o limite máximo (unidades docx, ~pixels a 96dpi). */
+function paragrafoImagemQuadro(imagem: ImagemQuadro): Paragraph {
+  const proporcao = imagem.larguraOriginal / imagem.alturaOriginal;
+  let largura = LARGURA_MAX_IMAGEM_WORD;
+  let altura = largura / proporcao;
+  if (altura > ALTURA_MAX_IMAGEM_WORD) {
+    altura = ALTURA_MAX_IMAGEM_WORD;
+    largura = altura * proporcao;
+  }
+  return new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 60, after: 100 },
+    children: [new ImageRun({ data: dataUrlParaArrayBuffer(imagem.dataUrl), transformation: { width: largura, height: altura }, type: 'jpg' })],
+  });
+}
+
 export async function exportarChargeWord(atividade: AtividadeCharge): Promise<void> {
   const cabecalho = new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
@@ -444,6 +494,10 @@ export async function exportarChargeWord(atividade: AtividadeCharge): Promise<vo
       quadro.textoBalao.forEach(balao => {
         paragrafos.push(par([run(`"${balao.fala}" — ${balao.personagem}`, { sz: 20, it: true })], AlignmentType.LEFT, 0, 10));
       });
+    }
+    const imagemDoQuadro = atividade.imagensQuadros.find(i => i.quadro === quadro.numero);
+    if (imagemDoQuadro) {
+      paragrafos.push(paragrafoImagemQuadro(imagemDoQuadro));
     }
   });
 
@@ -502,17 +556,23 @@ function escaparHTML(texto: string): string {
 }
 
 function montarHTMLAtividade(atividade: AtividadeCharge): string {
-  const quadrosHTML = atividade.roteiro.quadros.map(quadro => `
+  const quadrosHTML = atividade.roteiro.quadros.map(quadro => {
+    const imagemDoQuadro = atividade.imagensQuadros.find(i => i.quadro === quadro.numero);
+    const promptDoQuadro = atividade.promptsImagem.find(p => p.quadro === quadro.numero)?.prompt;
+    return `
     <div class="quadro">
       <h3>Quadro ${quadro.numero}</h3>
       <p>${escaparHTML(quadro.descricaoCena)}</p>
       <p class="meta">Personagens: ${escaparHTML(quadro.personagensPresentes.join(', '))} · Ângulo: ${escaparHTML(quadro.anguloCamera)}</p>
       ${quadro.textoBalao ? quadro.textoBalao.map(b => `<p class="balao">"${escaparHTML(b.fala)}" — ${escaparHTML(b.personagem)}</p>`).join('') : ''}
-      ${atividade.promptsImagem.find(p => p.quadro === quadro.numero)
-        ? `<details class="prompt"><summary>Prompt para gerar a imagem</summary><pre>${escaparHTML(atividade.promptsImagem.find(p => p.quadro === quadro.numero)!.prompt)}</pre></details>`
-        : ''}
+      ${imagemDoQuadro
+        ? `<img class="imagem-quadro" src="${imagemDoQuadro.dataUrl}" alt="Ilustração do quadro ${quadro.numero}">`
+        : promptDoQuadro
+          ? `<details class="prompt"><summary>Prompt para gerar a imagem</summary><pre>${escaparHTML(promptDoQuadro)}</pre></details>`
+          : ''}
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   const questoesHTML = atividade.questoes.map((questao, idx) => `
     <div class="questao">
@@ -544,6 +604,7 @@ function montarHTMLAtividade(atividade: AtividadeCharge): string {
   .quadro h3 { margin-bottom: 6px; }
   .meta { color: #777; font-size: 12px; }
   .balao { font-style: italic; margin-top: 6px; padding-left: 10px; border-left: 3px solid #ddd; }
+  .imagem-quadro { max-width: 100%; border-radius: 8px; margin-top: 8px; }
   .prompt summary { cursor: pointer; font-size: 12px; color: #4c1d95; margin-top: 8px; }
   .prompt pre { white-space: pre-wrap; font-size: 11px; color: #555; background: #f5f5f5; padding: 8px; border-radius: 6px; margin-top: 6px; }
   .questao { margin-bottom: 16px; }

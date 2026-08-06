@@ -207,6 +207,20 @@ export interface PromptImagemQuadro {
   prompt: string;
 }
 
+/**
+ * Imagem gerada externamente (ChatGPT Images, Leonardo, etc. — a partir do
+ * prompt de `PromptImagemQuadro`) e enviada de volta pelo professor. Guardamos
+ * a imagem já redimensionada como data URL (base64) — não depende de nenhum
+ * armazenamento externo, e permite embutir a imagem real (em vez do texto do
+ * prompt) nas exportações PDF/Word/HTML, respeitando o tamanho A4.
+ */
+export interface ImagemQuadro {
+  quadro: number;
+  dataUrl: string;
+  larguraOriginal: number;
+  alturaOriginal: number;
+}
+
 /** Uma atividade de charge completa, gerada (ou em edição/histórico). */
 export interface AtividadeCharge {
   /** id definitivo (charges_didaticas.id) quando carregada do histórico, ou um id temporário local enquanto ainda não foi salva. */
@@ -221,6 +235,8 @@ export interface AtividadeCharge {
   /** Snapshot dos personagens usados no momento da geração — não muda mesmo que o banco de personagens seja editado depois. */
   personagensUsados: Personagem[];
   promptsImagem: PromptImagemQuadro[];
+  /** Imagens enviadas pelo professor (uma por quadro, no máximo) depois de gerá-las externamente a partir dos prompts acima. */
+  imagensQuadros: ImagemQuadro[];
   statusRevisao: StatusRevisaoCharge;
   tentativasRevisao: number;
   historicoRevisao: HistoricoTentativaCharge[];

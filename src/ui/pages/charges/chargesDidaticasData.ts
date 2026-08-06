@@ -11,6 +11,7 @@ import { supabase } from '../../../data/supabase';
 import type {
   AtividadeCharge,
   HistoricoTentativaCharge,
+  ImagemQuadro,
   Personagem,
   PromptImagemQuadro,
   QuadroIA,
@@ -38,6 +39,7 @@ interface LinhaChargesDidaticas {
   quadros: QuadroIA[];
   texto_apoio: string | null;
   prompts_imagem: PromptImagemQuadro[] | null;
+  imagens_quadros: ImagemQuadro[] | null;
   questoes: QuestaoChargeIA[];
   competencias: string[] | null;
   habilidades: string[] | null;
@@ -72,6 +74,7 @@ function atividadeParaLinha(atividade: AtividadeCharge): Omit<LinhaChargesDidati
     quadros: atividade.roteiro.quadros,
     texto_apoio: atividade.roteiro.textoApoio,
     prompts_imagem: atividade.promptsImagem,
+    imagens_quadros: atividade.imagensQuadros,
     questoes: atividade.questoes,
     competencias: atividade.competencias,
     habilidades: atividade.habilidades,
@@ -116,6 +119,7 @@ function linhaParaAtividade(linha: LinhaChargesDidaticas): AtividadeCharge {
     observacoesProfessor: linha.observacoes_professor ?? '',
     personagensUsados: linha.personagens_usados,
     promptsImagem: linha.prompts_imagem ?? [],
+    imagensQuadros: linha.imagens_quadros ?? [],
     statusRevisao: linha.status_revisao,
     tentativasRevisao: linha.tentativas_revisao,
     historicoRevisao: linha.historico_revisao ?? [],
