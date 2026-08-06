@@ -12,6 +12,7 @@ import type {
   AtividadeCharge,
   HistoricoTentativaCharge,
   ImagemQuadro,
+  ImagemUnica,
   Personagem,
   PromptImagemQuadro,
   QuadroIA,
@@ -40,6 +41,7 @@ interface LinhaChargesDidaticas {
   texto_apoio: string | null;
   prompts_imagem: PromptImagemQuadro[] | null;
   imagens_quadros: ImagemQuadro[] | null;
+  imagem_unica: ImagemUnica | null;
   questoes: QuestaoChargeIA[];
   competencias: string[] | null;
   habilidades: string[] | null;
@@ -75,6 +77,7 @@ function atividadeParaLinha(atividade: AtividadeCharge): Omit<LinhaChargesDidati
     texto_apoio: atividade.roteiro.textoApoio,
     prompts_imagem: atividade.promptsImagem,
     imagens_quadros: atividade.imagensQuadros,
+    imagem_unica: atividade.imagemUnica,
     questoes: atividade.questoes,
     competencias: atividade.competencias,
     habilidades: atividade.habilidades,
@@ -120,6 +123,7 @@ function linhaParaAtividade(linha: LinhaChargesDidaticas): AtividadeCharge {
     personagensUsados: linha.personagens_usados,
     promptsImagem: linha.prompts_imagem ?? [],
     imagensQuadros: linha.imagens_quadros ?? [],
+    imagemUnica: linha.imagem_unica ?? null,
     statusRevisao: linha.status_revisao,
     tentativasRevisao: linha.tentativas_revisao,
     historicoRevisao: linha.historico_revisao ?? [],

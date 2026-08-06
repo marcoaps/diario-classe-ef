@@ -16,7 +16,7 @@ import {
 } from 'docx';
 import { saveAs } from 'file-saver';
 import { dataUrlParaArrayBuffer } from './imagemQuadroUtils';
-import type { AtividadeCharge, ImagemQuadro } from './tiposCharges';
+import type { AtividadeCharge, ImagemQuadro, ImagemUnica } from './tiposCharges';
 
 const LARGURA_MAX_IMAGEM_MM = 100;
 const ALTURA_MAX_IMAGEM_MM = 80;
@@ -101,6 +101,17 @@ function exportarModelo1(doc: jsPDF, atividade: AtividadeCharge, opcoes: OpcoesE
     y += linhaSinopse.length * 5 + 6;
   }
 
+  if (atividade.imagemUnica) {
+    const { largura, altura } = calcularDimensoesImagemMM(atividade.imagemUnica.larguraOriginal, atividade.imagemUnica.alturaOriginal, larguraUtil, 150);
+    if (y + altura > 280) { doc.addPage(); y = 20; }
+    try {
+      doc.addImage(atividade.imagemUnica.dataUrl, 'JPEG', margin, y, largura, altura);
+      y += altura + 6;
+    } catch {
+      // Se a imagem vier num formato que o jsPDF não reconheça, segue sem travar a exportação.
+    }
+  }
+
   atividade.roteiro.quadros.forEach(quadro => {
     if (y > 255) { doc.addPage(); y = 20; }
     doc.setFont('helvetica', 'bold');
@@ -134,30 +145,32 @@ function exportarModelo1(doc: jsPDF, atividade: AtividadeCharge, opcoes: OpcoesE
       y += 1;
     }
 
-    const imagemDoQuadro = atividade.imagensQuadros.find(i => i.quadro === quadro.numero);
-    if (imagemDoQuadro) {
-      const { largura, altura } = calcularDimensoesImagemMM(imagemDoQuadro.larguraOriginal, imagemDoQuadro.alturaOriginal);
-      if (y + altura > 280) { doc.addPage(); y = 20; }
-      try {
-        doc.addImage(imagemDoQuadro.dataUrl, 'JPEG', margin, y, largura, altura);
-        y += altura + 4;
-      } catch {
-        // Se a imagem vier num formato que o jsPDF não reconheça, segue sem travar a exportação.
-      }
-    } else if (opcoes.incluirPromptsImagem) {
-      const promptDoQuadro = atividade.promptsImagem.find(p => p.quadro === quadro.numero)?.prompt;
-      if (promptDoQuadro) {
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
-        doc.setTextColor(100, 100, 100);
-        const linhaPrompt = doc.splitTextToSize(`Prompt de imagem: ${promptDoQuadro}`, larguraUtil - 4);
-        const alturaCaixa = linhaPrompt.length * 3.6 + 4;
-        if (y + alturaCaixa > 280) { doc.addPage(); y = 20; }
-        doc.setDrawColor(180, 180, 180);
-        doc.rect(margin, y, larguraUtil, alturaCaixa);
-        doc.text(linhaPrompt, margin + 2, y + 4);
-        y += alturaCaixa + 3;
-        doc.setTextColor(20, 20, 20);
+    if (!atividade.imagemUnica) {
+      const imagemDoQuadro = atividade.imagensQuadros.find(i => i.quadro === quadro.numero);
+      if (imagemDoQuadro) {
+        const { largura, altura } = calcularDimensoesImagemMM(imagemDoQuadro.larguraOriginal, imagemDoQuadro.alturaOriginal);
+        if (y + altura > 280) { doc.addPage(); y = 20; }
+        try {
+          doc.addImage(imagemDoQuadro.dataUrl, 'JPEG', margin, y, largura, altura);
+          y += altura + 4;
+        } catch {
+          // Se a imagem vier num formato que o jsPDF não reconheça, segue sem travar a exportação.
+        }
+      } else if (opcoes.incluirPromptsImagem) {
+        const promptDoQuadro = atividade.promptsImagem.find(p => p.quadro === quadro.numero)?.prompt;
+        if (promptDoQuadro) {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(8);
+          doc.setTextColor(100, 100, 100);
+          const linhaPrompt = doc.splitTextToSize(`Prompt de imagem: ${promptDoQuadro}`, larguraUtil - 4);
+          const alturaCaixa = linhaPrompt.length * 3.6 + 4;
+          if (y + alturaCaixa > 280) { doc.addPage(); y = 20; }
+          doc.setDrawColor(180, 180, 180);
+          doc.rect(margin, y, larguraUtil, alturaCaixa);
+          doc.text(linhaPrompt, margin + 2, y + 4);
+          y += alturaCaixa + 3;
+          doc.setTextColor(20, 20, 20);
+        }
       }
     }
     y += 3;
@@ -452,14 +465,20 @@ const linhasResposta = (n: number) =>
 
 const LARGURA_MAX_IMAGEM_WORD = 340;
 const ALTURA_MAX_IMAGEM_WORD = 260;
+const LARGURA_MAX_IMAGEM_UNICA_WORD = 460;
+const ALTURA_MAX_IMAGEM_UNICA_WORD = 360;
 
-/** Imagem do quadro, centralizada, mantendo a proporção original sem exceder o limite máximo (unidades docx, ~pixels a 96dpi). */
-function paragrafoImagemQuadro(imagem: ImagemQuadro): Paragraph {
+/** Imagem do quadro (ou da tira completa), centralizada, mantendo a proporção original sem exceder o limite máximo (unidades docx, ~pixels a 96dpi). */
+function paragrafoImagemQuadro(
+  imagem: ImagemQuadro | ImagemUnica,
+  larguraMax = LARGURA_MAX_IMAGEM_WORD,
+  alturaMax = ALTURA_MAX_IMAGEM_WORD
+): Paragraph {
   const proporcao = imagem.larguraOriginal / imagem.alturaOriginal;
-  let largura = LARGURA_MAX_IMAGEM_WORD;
+  let largura = larguraMax;
   let altura = largura / proporcao;
-  if (altura > ALTURA_MAX_IMAGEM_WORD) {
-    altura = ALTURA_MAX_IMAGEM_WORD;
+  if (altura > alturaMax) {
+    altura = alturaMax;
     largura = altura * proporcao;
   }
   return new Paragraph({
@@ -486,6 +505,10 @@ export async function exportarChargeWord(atividade: AtividadeCharge): Promise<vo
     paragrafos.push(par([run(atividade.roteiro.sinopse, { sz: 22, it: true })], AlignmentType.LEFT, 20, 100));
   }
 
+  if (atividade.imagemUnica) {
+    paragrafos.push(paragrafoImagemQuadro(atividade.imagemUnica, LARGURA_MAX_IMAGEM_UNICA_WORD, ALTURA_MAX_IMAGEM_UNICA_WORD));
+  }
+
   atividade.roteiro.quadros.forEach(quadro => {
     paragrafos.push(par([run(`QUADRO ${quadro.numero}`, { bold: true, sz: 24 })], AlignmentType.LEFT, 120, 20));
     paragrafos.push(par([run(quadro.descricaoCena, { sz: 22 })], AlignmentType.LEFT, 0, 20));
@@ -495,9 +518,11 @@ export async function exportarChargeWord(atividade: AtividadeCharge): Promise<vo
         paragrafos.push(par([run(`"${balao.fala}" — ${balao.personagem}`, { sz: 20, it: true })], AlignmentType.LEFT, 0, 10));
       });
     }
-    const imagemDoQuadro = atividade.imagensQuadros.find(i => i.quadro === quadro.numero);
-    if (imagemDoQuadro) {
-      paragrafos.push(paragrafoImagemQuadro(imagemDoQuadro));
+    if (!atividade.imagemUnica) {
+      const imagemDoQuadro = atividade.imagensQuadros.find(i => i.quadro === quadro.numero);
+      if (imagemDoQuadro) {
+        paragrafos.push(paragrafoImagemQuadro(imagemDoQuadro));
+      }
     }
   });
 
@@ -556,6 +581,10 @@ function escaparHTML(texto: string): string {
 }
 
 function montarHTMLAtividade(atividade: AtividadeCharge): string {
+  const imagemUnicaHTML = atividade.imagemUnica
+    ? `<img class="imagem-unica" src="${atividade.imagemUnica.dataUrl}" alt="Tira completa com todos os quadros">`
+    : '';
+
   const quadrosHTML = atividade.roteiro.quadros.map(quadro => {
     const imagemDoQuadro = atividade.imagensQuadros.find(i => i.quadro === quadro.numero);
     const promptDoQuadro = atividade.promptsImagem.find(p => p.quadro === quadro.numero)?.prompt;
@@ -565,11 +594,13 @@ function montarHTMLAtividade(atividade: AtividadeCharge): string {
       <p>${escaparHTML(quadro.descricaoCena)}</p>
       <p class="meta">Personagens: ${escaparHTML(quadro.personagensPresentes.join(', '))} · Ângulo: ${escaparHTML(quadro.anguloCamera)}</p>
       ${quadro.textoBalao ? quadro.textoBalao.map(b => `<p class="balao">"${escaparHTML(b.fala)}" — ${escaparHTML(b.personagem)}</p>`).join('') : ''}
-      ${imagemDoQuadro
-        ? `<img class="imagem-quadro" src="${imagemDoQuadro.dataUrl}" alt="Ilustração do quadro ${quadro.numero}">`
-        : promptDoQuadro
-          ? `<details class="prompt"><summary>Prompt para gerar a imagem</summary><pre>${escaparHTML(promptDoQuadro)}</pre></details>`
-          : ''}
+      ${atividade.imagemUnica
+        ? ''
+        : imagemDoQuadro
+          ? `<img class="imagem-quadro" src="${imagemDoQuadro.dataUrl}" alt="Ilustração do quadro ${quadro.numero}">`
+          : promptDoQuadro
+            ? `<details class="prompt"><summary>Prompt para gerar a imagem</summary><pre>${escaparHTML(promptDoQuadro)}</pre></details>`
+            : ''}
     </div>
   `;
   }).join('');
@@ -605,6 +636,7 @@ function montarHTMLAtividade(atividade: AtividadeCharge): string {
   .meta { color: #777; font-size: 12px; }
   .balao { font-style: italic; margin-top: 6px; padding-left: 10px; border-left: 3px solid #ddd; }
   .imagem-quadro { max-width: 100%; border-radius: 8px; margin-top: 8px; }
+  .imagem-unica { max-width: 100%; border-radius: 8px; margin: 12px 0; display: block; }
   .prompt summary { cursor: pointer; font-size: 12px; color: #4c1d95; margin-top: 8px; }
   .prompt pre { white-space: pre-wrap; font-size: 11px; color: #555; background: #f5f5f5; padding: 8px; border-radius: 6px; margin-top: 6px; }
   .questao { margin-bottom: 16px; }
@@ -621,6 +653,7 @@ function montarHTMLAtividade(atividade: AtividadeCharge): string {
   <h1>${escaparHTML(atividade.roteiro.tituloRoteiro || 'Charge Didática')}</h1>
   <p class="meta-topo">Educação Física · ${atividade.parametros.anoEscolar}º ano · Conteúdo: ${escaparHTML(atividade.parametros.conteudo)}</p>
   ${atividade.roteiro.sinopse ? `<p class="sinopse">${escaparHTML(atividade.roteiro.sinopse)}</p>` : ''}
+  ${imagemUnicaHTML}
 
   <h2>Quadros</h2>
   ${quadrosHTML}

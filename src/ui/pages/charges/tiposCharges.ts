@@ -221,6 +221,18 @@ export interface ImagemQuadro {
   alturaOriginal: number;
 }
 
+/**
+ * Variante de `ImagemQuadro` para quando o professor gera a tira INTEIRA como
+ * uma única imagem (todos os quadros já combinados numa grade, num único
+ * prompt — ver `montarPromptImagemUnico`), em vez de uma imagem por quadro.
+ * Quando presente, tem prioridade sobre `imagensQuadros` nas exportações.
+ */
+export interface ImagemUnica {
+  dataUrl: string;
+  larguraOriginal: number;
+  alturaOriginal: number;
+}
+
 /** Uma atividade de charge completa, gerada (ou em edição/histórico). */
 export interface AtividadeCharge {
   /** id definitivo (charges_didaticas.id) quando carregada do histórico, ou um id temporário local enquanto ainda não foi salva. */
@@ -237,6 +249,8 @@ export interface AtividadeCharge {
   promptsImagem: PromptImagemQuadro[];
   /** Imagens enviadas pelo professor (uma por quadro, no máximo) depois de gerá-las externamente a partir dos prompts acima. */
   imagensQuadros: ImagemQuadro[];
+  /** Alternativa a `imagensQuadros`: a tira inteira gerada como uma única imagem combinada. Se presente, é usada nas exportações em vez das imagens por quadro. */
+  imagemUnica: ImagemUnica | null;
   statusRevisao: StatusRevisaoCharge;
   tentativasRevisao: number;
   historicoRevisao: HistoricoTentativaCharge[];

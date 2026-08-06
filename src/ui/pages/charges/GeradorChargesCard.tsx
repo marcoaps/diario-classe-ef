@@ -1,12 +1,92 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Copy, ImagePlus, Pencil, Trash2, Upload } from 'lucide-react';
-import { redimensionarImagemParaDataUrl } from './imagemQuadroUtils';
-import type { AtividadeCharge, ImagemQuadro, QuestaoChargeIA } from './tiposCharges';
+import { redimensionarImagemParaDataUrl, type ImagemRedimensionada } from './imagemQuadroUtils';
+import { montarPromptImagemUnico } from './promptImagemCharges';
+import type { AtividadeCharge, ImagemQuadro, ImagemUnica, QuestaoChargeIA } from './tiposCharges';
 
 export interface GeradorChargesCardProps {
   atividade: AtividadeCharge;
   onEditarQuestao: (indice: number, alteracoes: Partial<QuestaoChargeIA>) => void;
   onImagemQuadro: (quadro: number, imagem: ImagemQuadro | null) => void;
+  onImagemUnica: (imagem: ImagemUnica | null) => void;
+}
+
+/**
+ * Controle de upload/preview de imagem reutilizável — usado tanto para a
+ * imagem de um quadro individual quanto para a imagem única da tira
+ * completa. Cuida do redimensionamento (via `redimensionarImagemParaDataUrl`)
+ * e devolve o resultado bruto; quem chama decide como encaixar no tipo certo
+ * (`ImagemQuadro` ou `ImagemUnica`).
+ */
+function UploadImagemControle({
+  rotulo,
+  imagemDataUrl,
+  altTexto,
+  onImagem,
+}: {
+  rotulo: string;
+  imagemDataUrl: string | undefined | null;
+  altTexto: string;
+  onImagem: (resultado: ImagemRedimensionada | null) => void;
+}) {
+  const [processando, setProcessando] = useState(false);
+  const [erro, setErro] = useState('');
+  const inputArquivoRef = useRef<HTMLInputElement>(null);
+
+  async function selecionarArquivo(e: React.ChangeEvent<HTMLInputElement>) {
+    const arquivo = e.target.files?.[0];
+    e.target.value = ''; // permite selecionar o mesmo arquivo de novo depois de remover
+    if (!arquivo) return;
+
+    setErro('');
+    setProcessando(true);
+    try {
+      const resultado = await redimensionarImagemParaDataUrl(arquivo);
+      onImagem(resultado);
+    } catch (err) {
+      setErro((err as Error).message);
+    } finally {
+      setProcessando(false);
+    }
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-semibold text-on-surface-variant">{rotulo}</p>
+        <input ref={inputArquivoRef} type="file" accept="image/*" onChange={selecionarArquivo} className="hidden" />
+        {!imagemDataUrl && (
+          <button
+            onClick={() => inputArquivoRef.current?.click()}
+            disabled={processando}
+            className="flex items-center gap-1 text-[11px] text-primary font-semibold disabled:opacity-60"
+          >
+            <Upload className="w-3 h-3" /> {processando ? 'Processando...' : 'Enviar imagem'}
+          </button>
+        )}
+      </div>
+
+      {erro && <p className="text-[11px] text-on-error-container bg-error-container rounded-lg px-2 py-1">{erro}</p>}
+
+      {imagemDataUrl ? (
+        <div className="space-y-1.5">
+          <img src={imagemDataUrl} alt={altTexto} className="w-full max-w-sm rounded-xl border border-outline-variant" />
+          <div className="flex gap-2">
+            <button onClick={() => inputArquivoRef.current?.click()} className="flex items-center gap-1 text-[11px] text-primary font-semibold">
+              <ImagePlus className="w-3 h-3" /> Trocar imagem
+            </button>
+            <button onClick={() => onImagem(null)} className="flex items-center gap-1 text-[11px] text-on-error-container font-semibold">
+              <Trash2 className="w-3 h-3" /> Remover
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p className="text-[11px] text-on-surface-variant italic">
+          Gere a imagem numa ferramenta externa (ChatGPT Images, Leonardo, etc.) usando o prompt abaixo, baixe o arquivo e envie aqui — ela será usada na exportação em vez do texto do prompt.
+        </p>
+      )}
+    </div>
+  );
 }
 
 function QuestaoItem({ questao, indice, onEditar }: { questao: QuestaoChargeIA; indice: number; onEditar: (alteracoes: Partial<QuestaoChargeIA>) => void }) {
@@ -82,9 +162,6 @@ function QuadroItem({
 }) {
   const [expandido, setExpandido] = useState(true);
   const [copiado, setCopiado] = useState(false);
-  const [processandoImagem, setProcessandoImagem] = useState(false);
-  const [erroImagem, setErroImagem] = useState('');
-  const inputArquivoRef = useRef<HTMLInputElement>(null);
 
   async function copiarPrompt() {
     if (!prompt) return;
@@ -94,23 +171,6 @@ function QuadroItem({
       setTimeout(() => setCopiado(false), 2000);
     } catch {
       // Clipboard indisponível (ex: contexto não seguro) — o professor pode selecionar o texto manualmente.
-    }
-  }
-
-  async function selecionarArquivo(e: React.ChangeEvent<HTMLInputElement>) {
-    const arquivo = e.target.files?.[0];
-    e.target.value = ''; // permite selecionar o mesmo arquivo de novo depois de remover
-    if (!arquivo) return;
-
-    setErroImagem('');
-    setProcessandoImagem(true);
-    try {
-      const { dataUrl, largura, altura } = await redimensionarImagemParaDataUrl(arquivo);
-      onImagem({ quadro: quadro.numero, dataUrl, larguraOriginal: largura, alturaOriginal: altura });
-    } catch (err) {
-      setErroImagem((err as Error).message);
-    } finally {
-      setProcessandoImagem(false);
     }
   }
 
@@ -145,41 +205,14 @@ function QuadroItem({
             </div>
           )}
 
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] font-semibold text-on-surface-variant">Imagem do quadro</p>
-              <input ref={inputArquivoRef} type="file" accept="image/*" onChange={selecionarArquivo} className="hidden" />
-              {!imagem && (
-                <button
-                  onClick={() => inputArquivoRef.current?.click()}
-                  disabled={processandoImagem}
-                  className="flex items-center gap-1 text-[11px] text-primary font-semibold disabled:opacity-60"
-                >
-                  <Upload className="w-3 h-3" /> {processandoImagem ? 'Processando...' : 'Enviar imagem'}
-                </button>
-              )}
-            </div>
-
-            {erroImagem && <p className="text-[11px] text-on-error-container bg-error-container rounded-lg px-2 py-1">{erroImagem}</p>}
-
-            {imagem ? (
-              <div className="space-y-1.5">
-                <img src={imagem.dataUrl} alt={`Ilustração do quadro ${quadro.numero}`} className="w-full max-w-sm rounded-xl border border-outline-variant" />
-                <div className="flex gap-2">
-                  <button onClick={() => inputArquivoRef.current?.click()} className="flex items-center gap-1 text-[11px] text-primary font-semibold">
-                    <ImagePlus className="w-3 h-3" /> Trocar imagem
-                  </button>
-                  <button onClick={() => onImagem(null)} className="flex items-center gap-1 text-[11px] text-on-error-container font-semibold">
-                    <Trash2 className="w-3 h-3" /> Remover
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <p className="text-[11px] text-on-surface-variant italic">
-                Gere a imagem numa ferramenta externa (ChatGPT Images, Leonardo, etc.) usando o prompt abaixo, baixe o arquivo e envie aqui — ela será usada na exportação em vez do texto do prompt.
-              </p>
-            )}
-          </div>
+          <UploadImagemControle
+            rotulo="Imagem do quadro"
+            imagemDataUrl={imagem?.dataUrl}
+            altTexto={`Ilustração do quadro ${quadro.numero}`}
+            onImagem={resultado =>
+              onImagem(resultado ? { quadro: quadro.numero, dataUrl: resultado.dataUrl, larguraOriginal: resultado.largura, alturaOriginal: resultado.altura } : null)
+            }
+          />
 
           {prompt && (
             <div className="bg-background border border-outline-variant rounded-xl p-2 space-y-1.5">
@@ -198,9 +231,27 @@ function QuadroItem({
   );
 }
 
-export function GeradorChargesCard({ atividade, onEditarQuestao, onImagemQuadro }: GeradorChargesCardProps) {
+export function GeradorChargesCard({ atividade, onEditarQuestao, onImagemQuadro, onImagemUnica }: GeradorChargesCardProps) {
   const promptsPorQuadro = new Map(atividade.promptsImagem.map(p => [p.quadro, p.prompt]));
   const imagensPorQuadro = new Map(atividade.imagensQuadros.map(i => [i.quadro, i]));
+  const [copiadoUnico, setCopiadoUnico] = useState(false);
+
+  const promptUnico = useMemo(() => montarPromptImagemUnico({
+    roteiro: atividade.roteiro,
+    personagensUsados: atividade.personagensUsados,
+    tipoImagem: atividade.parametros.tipoImagem,
+    estiloIlustracao: atividade.parametros.estiloIlustracao,
+  }), [atividade.roteiro, atividade.personagensUsados, atividade.parametros.tipoImagem, atividade.parametros.estiloIlustracao]);
+
+  async function copiarPromptUnico() {
+    try {
+      await navigator.clipboard.writeText(promptUnico);
+      setCopiadoUnico(true);
+      setTimeout(() => setCopiadoUnico(false), 2000);
+    } catch {
+      // Clipboard indisponível — o professor pode selecionar o texto manualmente.
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -231,8 +282,32 @@ export function GeradorChargesCard({ atividade, onEditarQuestao, onImagemQuadro 
         )}
       </div>
 
+      <div className="bg-surface border border-outline-variant rounded-2xl p-4 space-y-2">
+        <p className="text-sm font-semibold text-on-surface">Imagem única da tira completa</p>
+        <p className="text-[11px] text-on-surface-variant">
+          Alternativa a enviar uma imagem por quadro: gere a tira INTEIRA (todos os quadros já combinados numa grade) numa única chamada de IA de imagem, usando o prompt abaixo, e envie o resultado aqui. Se enviada, ela tem prioridade sobre as imagens individuais dos quadros na exportação.
+        </p>
+        <UploadImagemControle
+          rotulo="Imagem da tira completa"
+          imagemDataUrl={atividade.imagemUnica?.dataUrl}
+          altTexto="Tira completa com todos os quadros"
+          onImagem={resultado =>
+            onImagemUnica(resultado ? { dataUrl: resultado.dataUrl, larguraOriginal: resultado.largura, alturaOriginal: resultado.altura } : null)
+          }
+        />
+        <div className="bg-background border border-outline-variant rounded-xl p-2 space-y-1.5">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-semibold text-on-surface-variant">Prompt para gerar a tira completa</p>
+            <button onClick={copiarPromptUnico} className="flex items-center gap-1 text-[11px] text-primary font-semibold">
+              <Copy className="w-3 h-3" /> {copiadoUnico ? 'Copiado!' : 'Copiar'}
+            </button>
+          </div>
+          <p className="text-[11px] text-on-surface-variant whitespace-pre-wrap">{promptUnico}</p>
+        </div>
+      </div>
+
       <div className="space-y-3">
-        <p className="text-sm font-semibold text-on-surface">Quadros</p>
+        <p className="text-sm font-semibold text-on-surface">Quadros{atividade.imagemUnica ? ' (a imagem única acima já ilustra todos)' : ''}</p>
         {atividade.roteiro.quadros.map(quadro => (
           <QuadroItem
             key={quadro.numero}

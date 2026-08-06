@@ -4,7 +4,7 @@ import { ArrowLeft, Database, FileDown, FileText, History, Sparkles } from 'luci
 import { GeradorChargesFormulario } from './GeradorChargesFormulario';
 import { GeradorChargesCard } from './GeradorChargesCard';
 import { criarParametrosPadraoCharges } from './tiposCharges';
-import type { AtividadeCharge, ImagemQuadro, ParametrosGeracaoCharges, Personagem, QuestaoChargeIA } from './tiposCharges';
+import type { AtividadeCharge, ImagemQuadro, ImagemUnica, ParametrosGeracaoCharges, Personagem, QuestaoChargeIA } from './tiposCharges';
 import { listarPersonagensAtivos } from './personagensChargesData';
 import { gerarERevisarCharge } from './revisaoAutomaticaCharges';
 import { montarPromptImagemPorQuadro } from './promptImagemCharges';
@@ -144,6 +144,7 @@ export function GeradorCharges() {
         personagensUsados: personagensSelecionados,
         promptsImagem,
         imagensQuadros: [],
+        imagemUnica: null,
         statusRevisao: resultado.statusRevisao,
         tentativasRevisao: resultado.tentativasRevisao,
         historicoRevisao: resultado.historicoRevisao,
@@ -174,6 +175,10 @@ export function GeradorCharges() {
       const imagensQuadros = imagem ? [...semEsteQuadro, imagem] : semEsteQuadro;
       return { ...prev, imagensQuadros, atualizadoEm: new Date().toISOString() };
     });
+  }
+
+  function handleImagemUnica(imagem: ImagemUnica | null) {
+    setAtividade(prev => (prev ? { ...prev, imagemUnica: imagem, atualizadoEm: new Date().toISOString() } : prev));
   }
 
   async function handleExportarPDF(modeloImpressao: 1 | 2 | 4) {
@@ -306,7 +311,12 @@ export function GeradorCharges() {
             {mensagemHistorico && <p className="text-xs text-primary font-semibold">{mensagemHistorico}</p>}
           </div>
 
-          <GeradorChargesCard atividade={atividade} onEditarQuestao={handleEditarQuestao} onImagemQuadro={handleImagemQuadro} />
+          <GeradorChargesCard
+            atividade={atividade}
+            onEditarQuestao={handleEditarQuestao}
+            onImagemQuadro={handleImagemQuadro}
+            onImagemUnica={handleImagemUnica}
+          />
 
           <div className="h-28" aria-hidden="true" />
         </div>
