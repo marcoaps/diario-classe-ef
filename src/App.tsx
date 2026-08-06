@@ -34,6 +34,8 @@ import { AvaliacaoFolha } from './ui/pages/avaliacoes/AvaliacaoFolha';
 import { AvaliacaoCorrigir } from './ui/pages/avaliacoes/AvaliacaoCorrigir';
 import { AvaliacaoResultados } from './ui/pages/avaliacoes/AvaliacaoResultados';
 import { GeradorQuestoes } from './ui/pages/avaliacoes/GeradorQuestoes';
+import { GeradorCharges } from './ui/pages/charges/GeradorCharges';
+import { ChargesHistorico } from './ui/pages/charges/ChargesHistorico';
 import Torneio from './ui/pages/Torneio';
 import { InscricaoTime } from './ui/pages/InscricaoTime';
 import { AgendaHoje } from './ui/pages/AgendaHoje';
@@ -115,6 +117,8 @@ export default function App() {
           <Route path="/ia/atividades-ludicas" element={<IAAtividadesLudicas />} />
           <Route path="/ia/atividades-adaptadas" element={<IAAtividadesAdaptadas />} />
           <Route path="/ia/ideias-avaliacoes" element={<IAIdeiasAvaliacoes />} />
+          <Route path="/ia/charges" element={<GeradorCharges />} />
+          <Route path="/ia/charges/historico" element={<ChargesHistorico />} />
           <Route path="/diario-aulas" element={<DiarioAulas />} />
         </Route>
 

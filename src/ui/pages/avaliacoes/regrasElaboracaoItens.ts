@@ -14,6 +14,7 @@
 // PDF, o PDF prevalece (instrução explícita do usuário).
 // ============================================================================
 
+import { contemTermoProibido } from '../../../utils/filtroPalavras';
 import type { ComponenteCurricular, TipoQuestao } from './tiposGeradorQuestoes';
 
 /**
@@ -44,18 +45,7 @@ export const PALAVRAS_PROIBIDAS_REGRA_12: string[] = [
 
 /** Retorna a primeira palavra/expressão proibida encontrada no texto, ou null se não houver nenhuma. */
 export function contemPalavraProibida(texto: string): string | null {
-  const normalizado = texto.toLowerCase();
-  for (const termo of PALAVRAS_PROIBIDAS_REGRA_12) {
-    // \b não cobre bem expressões com espaço/acentos, então usamos includes
-    // para termos compostos e um teste de fronteira simples para palavras únicas.
-    if (termo.includes(' ')) {
-      if (normalizado.includes(termo)) return termo;
-    } else {
-      const regex = new RegExp(`(^|[^a-zà-ú])${termo}([^a-zà-ú]|$)`, 'i');
-      if (regex.test(normalizado)) return termo;
-    }
-  }
-  return null;
+  return contemTermoProibido(texto, PALAVRAS_PROIBIDAS_REGRA_12);
 }
 
 /**
