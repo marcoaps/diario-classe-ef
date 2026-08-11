@@ -61,6 +61,7 @@ export function Dashboard() {
   const [showEditListModal, setShowEditListModal] = useState(false);
   const [editListText, setEditListText] = useState('');
   const [savingList, setSavingList] = useState(false);
+  const [editModalMode, setEditModalMode] = useState<'destructive' | 'sync'>('destructive');
   const [cardMessage, setCardMessage] = useState<string | null>(null);
   const [openYears, setOpenYears] = useState<Set<number>>(new Set<number>());
   const [showTurmas, setShowTurmas] = useState(false);
@@ -143,7 +144,67 @@ export function Dashboard() {
       return (isNaN(na) ? 999 : na) - (isNaN(nb) ? 999 : nb);
     });
     setEditListText(sorted.map(s => s.name).join('\n'));
+    setEditModalMode('destructive');
     setShowEditListModal(true);
+  };
+
+  const handleOpenSync = () => {
+    if (!classToConfirm || fetchedStudents.length === 0) return;
+    const sorted = [...fetchedStudents].sort((a, b) => {
+      const na = typeof a.numero_chamada === 'number' ? a.numero_chamada : parseInt(String(a.numero_chamada || '999'), 10);
+      const nb = typeof b.numero_chamada === 'number' ? b.numero_chamada : parseInt(String(b.numero_chamada || '999'), 10);
+      return (isNaN(na) ? 999 : na) - (isNaN(nb) ? 999 : nb);
+    });
+    setEditListText(sorted.map(s => s.name).join('\n'));
+    setEditModalMode('sync');
+    setShowEditListModal(true);
+  };
+
+  const handleSyncNomes = async () => {
+    if (!classToConfirm) return;
+    setSavingList(true);
+    const lines = editListText.split('\n').map(l => l.trim().replace(/\s+/g, ' ')).filter(l => l.length > 0);
+    const sorted = [...fetchedStudents].sort((a, b) => {
+      const na = typeof a.numero_chamada === 'number' ? a.numero_chamada : parseInt(String(a.numero_chamada || '999'), 10);
+      const nb = typeof b.numero_chamada === 'number' ? b.numero_chamada : parseInt(String(b.numero_chamada || '999'), 10);
+      return (isNaN(na) ? 999 : na) - (isNaN(nb) ? 999 : nb);
+    });
+    const n = Math.min(lines.length, sorted.length);
+    let changed = 0;
+    let failed = 0;
+    try {
+      for (let i = 0; i < n; i++) {
+        const aluno = sorted[i];
+        const novoNome = lines[i];
+        if (novoNome && novoNome !== aluno.name) {
+          const { data, error } = await supabase.from('alunos').update({ nome: novoNome }).eq('id', aluno.id).select('id');
+          if (error || !data || data.length === 0) { failed++; continue; }
+          aluno.name = novoNome;
+          changed++;
+        }
+      }
+      const atualizados = sorted.map(a => ({ ...a }));
+      setFetchedStudents(atualizados);
+      setStudents(prev => prev.map(s => {
+        const match = atualizados.find(a => a.id === s.id);
+        return match ? { ...s, name: match.name } : s;
+      }));
+      setShowEditListModal(false);
+      const obsContagem = lines.length !== sorted.length
+        ? ` (lista colada tinha ${lines.length} nomes, turma tem ${sorted.length} — comparei só os ${n} primeiros)`
+        : '';
+      setCardMessage(
+        failed > 0
+          ? `${changed} nome(s) corrigido(s), ${failed} falharam — faça login de novo`
+          : changed > 0
+            ? `${changed} nome(s) corrigido(s)${obsContagem}`
+            : `Nenhuma diferença encontrada${obsContagem}`
+      );
+      setTimeout(() => setCardMessage(null), 5000);
+    } catch (err: any) {
+      alert('Erro ao sincronizar: ' + err.message);
+    }
+    setSavingList(false);
   };
 
   const handleSaveList = async () => {
@@ -491,7 +552,10 @@ export function Dashboard() {
                       : <li className="text-gray-400">Nenhum aluno encontrado.</li>}
                   </ul>
                   {fetchedStudents.length > 0 && (
-                    <button onClick={handleEditList} className="w-full mt-3 py-2 rounded-xl font-bold bg-red-50 text-red-700 hover:bg-red-100 text-xs transition-colors border border-red-200">Editar Lista da Turma</button>
+                    <div className="flex gap-2 mt-3">
+                      <button onClick={handleOpenSync} className="flex-1 py-2 rounded-xl font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs transition-colors border border-blue-200">Sincronizar Nomes</button>
+                      <button onClick={handleEditList} className="flex-1 py-2 rounded-xl font-bold bg-red-50 text-red-700 hover:bg-red-100 text-xs transition-colors border border-red-200">Editar Lista da Turma</button>
+                    </div>
                   )}
                   {cardMessage && <p className="text-xs font-bold text-[#1a2e6e] text-center mt-1">{cardMessage}</p>}
                 </>
@@ -541,13 +605,22 @@ export function Dashboard() {
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-[2rem] p-6 w-full max-w-lg max-h-[90vh] flex flex-col gap-4 shadow-2xl relative">
             <button onClick={() => setShowEditListModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
-            <h3 className="text-xl font-black text-gray-900">Editar Lista da Turma</h3>
-            <p className="text-sm text-gray-500">Corrija nomes, altere a ordem ou adicione novos alunos.</p>
+            <h3 className="text-xl font-black text-gray-900">{editModalMode === 'sync' ? 'Sincronizar Nomes' : 'Editar Lista da Turma'}</h3>
+            <p className="text-sm text-gray-500">
+              {editModalMode === 'sync'
+                ? 'Cole a lista oficial (mesma ordem/número de chamada). Só os nomes diferentes são corrigidos — ninguém é apagado ou perde histórico.'
+                : 'Corrija nomes, altere a ordem ou adicione novos alunos.'}
+            </p>
             <div className="flex-1 overflow-y-auto min-h-[300px]">
               <textarea value={editListText} onChange={(e) => setEditListText(e.target.value)} className="w-full h-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-red-200 font-medium" placeholder="João&#10;Maria&#10;Pedro" spellCheck={false} />
             </div>
-            <button onClick={handleSaveList} disabled={savingList} className="w-full py-3 rounded-2xl font-black text-white transition-all active:scale-95 disabled:opacity-50" style={{ background: '#1a2e6e' }}>
-              {savingList ? 'Salvando...' : 'Salvar Lista'}
+            <button
+              onClick={editModalMode === 'sync' ? handleSyncNomes : handleSaveList}
+              disabled={savingList}
+              className="w-full py-3 rounded-2xl font-black text-white transition-all active:scale-95 disabled:opacity-50"
+              style={{ background: editModalMode === 'sync' ? '#1d4ed8' : '#1a2e6e' }}
+            >
+              {savingList ? 'Salvando...' : editModalMode === 'sync' ? 'Sincronizar' : 'Salvar Lista'}
             </button>
           </div>
         </div>
