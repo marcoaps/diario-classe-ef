@@ -3,12 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import {
   ArrowLeft, ClipboardCheck, X, Plus, History, Save, Loader2,
-  CheckCircle2, XCircle, Circle, Search, Sparkles,
+  CheckCircle2, XCircle, Circle, Search, Sparkles, Trash2,
 } from 'lucide-react';
 import { cn } from '../AppLayout';
 import {
   supabase, buscarTrabalhos, criarTrabalho, buscarRegistrosTrabalho,
-  salvarRegistrosTrabalho, buscarTrabalhosHistorico, Trabalho,
+  salvarRegistrosTrabalho, buscarTrabalhosHistorico, excluirTrabalho, Trabalho,
 } from '../../data/supabase';
 import { chamarClaudeProxy } from '../../utils/claudeProxy';
 
@@ -65,7 +65,8 @@ export function Trabalhos() {
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState(false);
   const [erroSalvar, setErroSalvar] = useState<string | null>(null);
-  const [avisoCriacao, setAvisoCriacao] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
+  const [excluindoTrabalho, setExcluindoTrabalho] = useState(false);
   const [mostrarPendentes, setMostrarPendentes] = useState(false);
 
   const [showNovoTrabalho, setShowNovoTrabalho] = useState(false);
@@ -181,6 +182,24 @@ export function Trabalhos() {
     if (id === trabalhoId) return;
     if (!confirmarDescarte('Existem alterações não salvas neste trabalho. Trocar de trabalho mesmo assim?')) return;
     setTrabalhoId(id || null);
+  };
+
+  const handleExcluirTrabalhoAtual = async () => {
+    if (!trabalhoAtual) return;
+    if (!window.confirm(`Excluir o trabalho "${trabalhoAtual.titulo}" (turma ${trabalhoAtual.turma})? Todos os registros de entrega dele também serão apagados. Essa ação não pode ser desfeita.`)) return;
+    setExcluindoTrabalho(true);
+    setErroSalvar(null);
+    try {
+      await excluirTrabalho(trabalhoAtual.id);
+      setTrabalhosLista(prev => prev.filter(t => t.id !== trabalhoAtual.id));
+      setTrabalhoId(null);
+      setAviso('Trabalho excluído.');
+      setTimeout(() => setAviso(null), 4000);
+    } catch (e: any) {
+      setErroSalvar('Erro ao excluir trabalho: ' + (e?.message || 'tente novamente.'));
+    } finally {
+      setExcluindoTrabalho(false);
+    }
   };
 
   const handleVoltar = () => {
@@ -340,6 +359,16 @@ export function Trabalhos() {
           >
             <Plus className="w-4 h-4" /> Novo
           </button>
+          {trabalhoId && (
+            <button
+              onClick={handleExcluirTrabalhoAtual}
+              disabled={excluindoTrabalho}
+              title="Excluir este trabalho"
+              className="py-2.5 px-3 bg-red-50 text-red-600 border border-red-200 rounded-xl font-bold shadow-sm hover:bg-red-100 transition-all flex items-center gap-1 shrink-0 disabled:opacity-50"
+            >
+              {excluindoTrabalho ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            </button>
+          )}
         </div>
       </div>
 
@@ -350,8 +379,8 @@ export function Trabalhos() {
         {erroSalvar && (
           <div className="bg-error-container text-on-error-container text-sm px-3 py-2 rounded-xl">{erroSalvar}</div>
         )}
-        {avisoCriacao && (
-          <div className="bg-green-50 text-green-700 border border-green-200 text-sm px-3 py-2 rounded-xl">{avisoCriacao}</div>
+        {aviso && (
+          <div className="bg-green-50 text-green-700 border border-green-200 text-sm px-3 py-2 rounded-xl">{aviso}</div>
         )}
 
         {loadingAlunos ? (
@@ -507,10 +536,10 @@ export function Trabalhos() {
             if (criados.length === 0) return;
 
             if (falhas.length > 0) {
-              setAvisoCriacao(`Trabalho criado em ${criados.length} turma(s), mas falhou em: ${falhas.join(', ')}.`);
+              setAviso(`Trabalho criado em ${criados.length} turma(s), mas falhou em: ${falhas.join(', ')}.`);
             } else if (criados.length > 1) {
-              setAvisoCriacao(`Trabalho criado em ${criados.length} turmas: ${criados.map(c => c.turma).join(', ')}.`);
-              setTimeout(() => setAvisoCriacao(null), 6000);
+              setAviso(`Trabalho criado em ${criados.length} turmas: ${criados.map(c => c.turma).join(', ')}.`);
+              setTimeout(() => setAviso(null), 6000);
             }
 
             const alvo = criados.find(c => c.turma === turma && c.bimestre === bimestre) ?? criados[0];
@@ -537,6 +566,10 @@ export function Trabalhos() {
             setShowHistorico(false);
             setTurma(t.turma);
             setBimestre(t.bimestre as 1 | 2 | 3 | 4);
+          }}
+          onExcluido={(id) => {
+            setTrabalhosLista(prev => prev.filter(t => t.id !== id));
+            if (trabalhoId === id) setTrabalhoId(null);
           }}
         />
       )}
@@ -737,11 +770,12 @@ function NovoTrabalhoModal({
 }
 
 function HistoricoModal({
-  turmaInicial, onClose, onAbrir,
+  turmaInicial, onClose, onAbrir, onExcluido,
 }: {
   turmaInicial: string;
   onClose: () => void;
   onAbrir: (t: Trabalho, somenteNaoFizeram: boolean) => void;
+  onExcluido: (id: string) => void;
 }) {
   const [turma, setTurma] = useState(turmaInicial);
   const [bimestre, setBimestre] = useState<number | ''>('');
@@ -752,6 +786,22 @@ function HistoricoModal({
   const [resultados, setResultados] = useState<Trabalho[]>([]);
   const [buscando, setBuscando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [excluindoId, setExcluindoId] = useState<string | null>(null);
+
+  const onExcluir = async (t: Trabalho) => {
+    if (!window.confirm(`Excluir o trabalho "${t.titulo}" (turma ${t.turma})? Todos os registros de entrega dele também serão apagados. Essa ação não pode ser desfeita.`)) return;
+    setExcluindoId(t.id);
+    setErro(null);
+    try {
+      await excluirTrabalho(t.id);
+      setResultados(prev => prev.filter(r => r.id !== t.id));
+      onExcluido(t.id);
+    } catch (e: any) {
+      setErro('Erro ao excluir trabalho: ' + (e?.message || 'tente novamente.'));
+    } finally {
+      setExcluindoId(null);
+    }
+  };
   const [buscou, setBuscou] = useState(false);
 
   const buscar = async () => {
@@ -817,13 +867,23 @@ function HistoricoModal({
             <div className="text-center text-gray-400 text-sm py-6">Nenhum trabalho encontrado.</div>
           )}
           {resultados.map(t => (
-            <button key={t.id} onClick={() => onAbrir(t, somenteNaoFizeram)}
-              className="text-left p-3 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors flex flex-col gap-0.5">
-              <span className="font-bold text-sm text-gray-900">{t.titulo}</span>
-              <span className="text-xs text-gray-500">
-                Turma {t.turma} · {t.bimestre}º Bim{t.data ? ` · ${format(new Date(t.data + 'T00:00:00'), 'dd/MM/yyyy')}` : ''}{t.valor ? ` · Valor ${t.valor}` : ''}
-              </span>
-            </button>
+            <div key={t.id} className="flex items-stretch gap-1.5">
+              <button onClick={() => onAbrir(t, somenteNaoFizeram)}
+                className="flex-1 text-left p-3 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors flex flex-col gap-0.5 min-w-0">
+                <span className="font-bold text-sm text-gray-900 truncate">{t.titulo}</span>
+                <span className="text-xs text-gray-500">
+                  Turma {t.turma} · {t.bimestre}º Bim{t.data ? ` · ${format(new Date(t.data + 'T00:00:00'), 'dd/MM/yyyy')}` : ''}{t.valor ? ` · Valor ${t.valor}` : ''}
+                </span>
+              </button>
+              <button
+                onClick={() => onExcluir(t)}
+                disabled={excluindoId === t.id}
+                title="Excluir este trabalho"
+                className="px-3 rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition-colors shrink-0 disabled:opacity-50"
+              >
+                {excluindoId === t.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              </button>
+            </div>
           ))}
         </div>
       </div>

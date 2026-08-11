@@ -310,6 +310,12 @@ export async function criarTrabalho(payload: {
   return data;
 }
 
+export async function excluirTrabalho(trabalhoId: string) {
+  // trabalhos_registros é apagado junto via ON DELETE CASCADE (ver sql/trabalhos_setup.sql)
+  const { error } = await supabase.from("trabalhos").delete().eq("id", trabalhoId);
+  if (error) throw error;
+}
+
 export async function buscarRegistrosTrabalho(trabalhoId: string): Promise<TrabalhoRegistro[]> {
   const { data, error } = await supabase
     .from("trabalhos_registros").select("*")
