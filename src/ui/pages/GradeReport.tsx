@@ -233,16 +233,14 @@ export function GradeReport() {
       await salvarNotas(
         turma,
         bimestre,
-        alunos
-          .filter(a => a.nota !== null && a.nota !== undefined)
-          .map(a => ({
-            numero: a.num,
-            nome: a.nome,
-            nota: a.nota,
-            situacao: a.situacao,
-            data_situacao: a.data_situacao,
-            faltas: a.faltas ?? 0,
-          }))
+        alunos.map(a => ({
+          numero: a.num,
+          nome: a.nome,
+          nota: a.nota,
+          situacao: a.situacao,
+          data_situacao: a.data_situacao,
+          faltas: a.faltas ?? 0,
+        }))
       );
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);

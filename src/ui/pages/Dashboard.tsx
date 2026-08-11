@@ -218,6 +218,23 @@ export function Dashboard() {
     }
   };
 
+  const handleRenameAluno = async (alunoId: string, nomeAtual: string) => {
+    const novoNome = prompt('Corrigir nome do aluno:', nomeAtual);
+    if (!novoNome || !novoNome.trim() || novoNome.trim() === nomeAtual) return;
+    const nomeCorrigido = novoNome.trim();
+    try {
+      const { data, error } = await supabase.from('alunos').update({ nome: nomeCorrigido }).eq('id', alunoId).select('id');
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error('Nada foi atualizado. Faça login novamente e tente de novo.');
+      }
+      setFetchedStudents(prev => prev.map(s => s.id === alunoId ? { ...s, name: nomeCorrigido } : s));
+      setStudents(prev => prev.map(s => s.id === alunoId ? { ...s, name: nomeCorrigido } : s));
+    } catch (err: any) {
+      alert('Erro ao renomear: ' + err.message);
+    }
+  };
+
   const totalStudents = Object.values(studentCounts).reduce((acc: number, count: number) => acc + count, 0);
   const totalByYear = (year: number) => (groupedByYear.get(year) || []).reduce((acc, cr) => acc + (studentCounts[cr.id] || 0), 0);
 
@@ -453,13 +470,22 @@ export function Dashboard() {
                       ? fetchedStudents.map(s => (
                           <li key={s.id} className="flex items-center justify-between gap-2 text-gray-700">
                             <span className="truncate">{s.numero_chamada ? <span className="font-mono text-gray-400 mr-2">{s.numero_chamada} -</span> : null}{s.name}</span>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleDeleteAluno(s.id, s.name); }}
-                              className="text-gray-300 hover:text-red-600 shrink-0 p-1"
-                              title="Excluir aluno"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            <span className="flex items-center gap-1 shrink-0">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleRenameAluno(s.id, s.name); }}
+                                className="text-gray-300 hover:text-blue-600 p-1"
+                                title="Corrigir nome"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleDeleteAluno(s.id, s.name); }}
+                                className="text-gray-300 hover:text-red-600 p-1"
+                                title="Excluir aluno"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </span>
                           </li>
                         ))
                       : <li className="text-gray-400">Nenhum aluno encontrado.</li>}
