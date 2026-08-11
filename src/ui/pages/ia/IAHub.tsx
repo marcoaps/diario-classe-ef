@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   BookOpen, Calendar, ClipboardList, Route,
   CalendarDays, FileQuestion, Gamepad2, Accessibility,
-  Lightbulb, ChevronRight, ClipboardCheck,
+  Lightbulb, ChevronRight, ClipboardCheck, BookImage,
 } from 'lucide-react';
 
 const FERRAMENTAS = [
@@ -89,6 +89,15 @@ const FERRAMENTAS = [
     icon: Lightbulb,
     cor: 'from-purple-600 to-indigo-500',
     tag: 'EDUCAÇÃO ESPECIAL',
+  },
+  {
+    rota: '/ia/charges',
+    titulo: 'Gerador de Charges Didáticas',
+    descricao: 'Crie tiras/charges pedagógicas com roteiro, personagens fixos, prompt de imagem e atividade completa.',
+    icon: BookImage,
+    cor: 'from-purple-600 to-indigo-500',
+    tag: 'ATIVIDADES',
+    novo: true,
   },
 ];
 

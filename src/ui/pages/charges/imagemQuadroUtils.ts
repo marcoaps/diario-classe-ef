@@ -1,0 +1,61 @@
+// ============================================================================
+// Utilitários para o upload de imagens de quadro (geradas externamente em
+// ChatGPT Images/Leonardo/etc. a partir do prompt de cada quadro, e enviadas
+// de volta pelo professor). Tudo roda no navegador, sem servidor/storage:
+// a imagem é redimensionada via <canvas>, normalizada para JPEG (controla o
+// tamanho final e simplifica o uso em jsPDF/docx, que aceitam JPEG sem
+// ambiguidade de formato) e guardada como data URL (base64).
+// ============================================================================
+
+export interface ImagemRedimensionada {
+  dataUrl: string;
+  largura: number;
+  altura: number;
+}
+
+/** Lê um arquivo de imagem, redimensiona (mantendo proporção) se exceder `larguraMaxima`, e devolve como JPEG em base64. */
+export function redimensionarImagemParaDataUrl(
+  file: File,
+  larguraMaxima = 1600,
+  qualidadeJpeg = 0.85
+): Promise<ImagemRedimensionada> {
+  return new Promise((resolve, reject) => {
+    const leitor = new FileReader();
+    leitor.onerror = () => reject(new Error('Não foi possível ler o arquivo de imagem.'));
+    leitor.onload = () => {
+      const imagem = new Image();
+      imagem.onerror = () => reject(new Error('Arquivo selecionado não é uma imagem válida.'));
+      imagem.onload = () => {
+        const escala = Math.min(1, larguraMaxima / imagem.naturalWidth);
+        const largura = Math.round(imagem.naturalWidth * escala);
+        const altura = Math.round(imagem.naturalHeight * escala);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = largura;
+        canvas.height = altura;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Não foi possível processar a imagem neste navegador.'));
+          return;
+        }
+        // Fundo branco antes de desenhar — evita que PNGs com transparência virem pretas ao converter para JPEG.
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, largura, altura);
+        ctx.drawImage(imagem, 0, 0, largura, altura);
+
+        resolve({ dataUrl: canvas.toDataURL('image/jpeg', qualidadeJpeg), largura, altura });
+      };
+      imagem.src = leitor.result as string;
+    };
+    leitor.readAsDataURL(file);
+  });
+}
+
+/** Converte uma data URL (ex: "data:image/jpeg;base64,...") em ArrayBuffer, para uso em `docx.ImageRun`. */
+export function dataUrlParaArrayBuffer(dataUrl: string): ArrayBuffer {
+  const base64 = dataUrl.split(',')[1] ?? '';
+  const binario = atob(base64);
+  const bytes = new Uint8Array(binario.length);
+  for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
+  return bytes.buffer;
+}
