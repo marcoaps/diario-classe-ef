@@ -588,7 +588,7 @@ export function GradeReport() {
                     return (
                       <div key={aluno.nome} className="p-2 pl-3 flex items-center justify-between hover:bg-gray-50/50 transition-colors gap-1">
                         <span className="font-mono text-gray-400 text-xs w-5 shrink-0">{aluno.num}</span>
-                        <span className="font-semibold text-textPrimary text-xs flex-1 truncate ml-1">{aluno.nome}</span>
+                        <span className={cn("font-semibold text-xs flex-1 truncate ml-1", transferido ? "text-gray-400 line-through" : "text-textPrimary")}>{aluno.nome}</span>
                         <span className={cn("font-bold text-sm w-10 text-center shrink-0", transferido ? "text-red-500" : "text-blue-600")}>
                           {transferido ? situacaoAbrev(aluno.situacao) : fmtNota(aluno.nota)}
                         </span>

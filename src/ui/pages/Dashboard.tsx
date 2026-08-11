@@ -4,7 +4,7 @@ import { MIN_PASSING_GRADE, MAX_ABSENCES_TOTAL, ClassRoom, Student } from '../..
 import { AgendaDia } from './AgendaDia';
 import { ChevronRight, UserX, Users, Download, X, CheckSquare, BarChart3, CalendarSearch, Edit, Trash2, Star, ChevronDown, GraduationCap, ChevronUp, Share2, Copy, CheckCircle } from 'lucide-react';
 import { cn } from '../AppLayout';
-import { buscarAlunos, supabase } from '../../data/supabase';
+import { buscarAlunos, salvarNotas, supabase } from '../../data/supabase';
 import { v4 as uuidv4 } from 'uuid';
 import { useNavigate } from 'react-router-dom';
 
@@ -296,6 +296,55 @@ export function Dashboard() {
     }
   };
 
+  const bimestreAtual = () => {
+    const mes = new Date().getMonth() + 1;
+    if (mes <= 4) return 1;
+    if (mes <= 7) return 2;
+    if (mes <= 10) return 3;
+    return 4;
+  };
+
+  const handleMarcarSituacao = async (aluno: Student) => {
+    if (!classToConfirm) return;
+    const bim = bimestreAtual();
+    const escolha = prompt(
+      `Situação de "${aluno.name}" no ${bim}º bimestre.\n\nDigite: transferido, remanejado ou em curso`,
+      'transferido'
+    );
+    if (!escolha) return;
+    const normalizado = escolha.trim().toLowerCase();
+    let situacao: string;
+    if (normalizado.includes('remanej')) situacao = 'Remanejado';
+    else if (normalizado.includes('transf')) situacao = 'Foi Transferido';
+    else if (normalizado.includes('curso')) situacao = 'Em Curso';
+    else { alert('Não entendi. Digite "transferido", "remanejado" ou "em curso".'); return; }
+
+    let dataSituacao = '';
+    if (situacao !== 'Em Curso') {
+      const hoje = new Date();
+      const sugestao = `${String(hoje.getDate()).padStart(2, '0')}/${String(hoje.getMonth() + 1).padStart(2, '0')}/${hoje.getFullYear()}`;
+      const dataInformada = prompt('Data da situação (DD/MM/AAAA):', sugestao);
+      if (!dataInformada) return;
+      dataSituacao = dataInformada.trim();
+    }
+
+    const turmaNormalizada = classToConfirm.name.replace(/º/g, '').replace(/\s/g, '').toUpperCase();
+    try {
+      await salvarNotas(turmaNormalizada, bim, [{
+        numero: typeof aluno.numero_chamada === 'number' ? aluno.numero_chamada : parseInt(String(aluno.numero_chamada || '0'), 10),
+        nome: aluno.name,
+        nota: null,
+        situacao,
+        data_situacao: dataSituacao,
+        faltas: 0,
+      }]);
+      setCardMessage(`Situação atualizada: ${aluno.name} — ${situacao}`);
+      setTimeout(() => setCardMessage(null), 4000);
+    } catch (err: any) {
+      alert('Erro ao salvar situação: ' + err.message);
+    }
+  };
+
   const totalStudents = Object.values(studentCounts).reduce((acc: number, count: number) => acc + count, 0);
   const totalByYear = (year: number) => (groupedByYear.get(year) || []).reduce((acc, cr) => acc + (studentCounts[cr.id] || 0), 0);
 
@@ -532,6 +581,13 @@ export function Dashboard() {
                           <li key={s.id} className="flex items-center justify-between gap-2 text-gray-700">
                             <span className="truncate">{s.numero_chamada ? <span className="font-mono text-gray-400 mr-2">{s.numero_chamada} -</span> : null}{s.name}</span>
                             <span className="flex items-center gap-1 shrink-0">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleMarcarSituacao(s); }}
+                                className="text-gray-300 hover:text-amber-600 p-1"
+                                title="Marcar situação (transferido/remanejado)"
+                              >
+                                <UserX className="w-3.5 h-3.5" />
+                              </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleRenameAluno(s.id, s.name); }}
                                 className="text-gray-300 hover:text-blue-600 p-1"

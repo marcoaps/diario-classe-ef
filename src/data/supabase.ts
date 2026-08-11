@@ -163,7 +163,7 @@ export async function salvarNotas(
     turma,
     bimestre,
     numero: a.numero,
-    nome: a.nome,
+    nome: limparAnotacaoDeSituacao(a.nome),
     nota: a.nota ?? null,
     nota_texto: a.nota_texto ?? null,
     situacao: a.situacao ?? 'Em Curso',
@@ -171,10 +171,14 @@ export async function salvarNotas(
     faltas: a.faltas ?? 0,
   }));
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("notas")
-    .upsert(upsertData, { onConflict: "turma,bimestre,nome" });
+    .upsert(upsertData, { onConflict: "turma,bimestre,nome" })
+    .select("nome");
   if (error) throw error;
+  if (!data || data.length !== upsertData.length) {
+    throw new Error("Nada foi salvo. Faça login novamente e tente de novo.");
+  }
 }
 
 export async function buscarNotas(turma: string, bimestre: number) {
@@ -191,6 +195,16 @@ export async function buscarNotas(turma: string, bimestre: number) {
 // ninguem, entao IDs e historico ficam intactos. Casa por posicao (nao pelo
 // valor de numero_chamada) para nao ser afetado por buracos na numeracao
 // (ex: quando um duplicado foi excluido e a numeracao ficou com um salto).
+// Remove anotacoes de situacao que a extracao por IA (ou uma edicao manual)
+// pode ter colado dentro do proprio nome, tipo "Fulano - Transf." ou
+// "Fulano Remanejado em 03/08/2026". O nome nunca deve carregar essa
+// informacao -- ela pertence ao campo situacao da tabela notas.
+function limparAnotacaoDeSituacao(nome: string): string {
+  return nome
+    .replace(/\s*[-–—]?\s*(foi\s+)?(transferid[oa]s?|transf\.?|remanejad[oa]s?)\.?(\s+em)?\s*(\d{2}\/\d{2}\/\d{4})?\s*$/i, '')
+    .trim();
+}
+
 export async function sincronizarNomesAlunos(
   turmaId: string,
   extraidos: { numero: number; nome: string }[]
@@ -213,7 +227,8 @@ export async function sincronizarNomesAlunos(
 
   for (let i = 0; i < n; i++) {
     const atual: any = ordenados[i];
-    const nomeNovo = extraidosOrdenados[i].nome?.trim();
+    const nomeExtraido = extraidosOrdenados[i].nome?.trim();
+    const nomeNovo = nomeExtraido ? limparAnotacaoDeSituacao(nomeExtraido) : '';
     if (!nomeNovo || nomeNovo === String(atual.nome).trim()) continue;
 
     const { data, error: updError } = await supabase
