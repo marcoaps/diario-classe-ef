@@ -132,6 +132,16 @@ export function Attendance() {
     setRecords(prev => ({ ...prev, [alunoId]: !prev[alunoId] }));
   };
 
+  const handleMarcarTodos = (presente: boolean) => {
+    setRecords(prev => {
+      const novos = { ...prev };
+      alunos.forEach(a => {
+        if (!transferidos.has(a.id)) novos[a.id] = presente;
+      });
+      return novos;
+    });
+  };
+
   const handleSave = async () => {
     if (!turmaNorm || alunos.length === 0) return;
     setSaving(true);
@@ -206,6 +216,22 @@ export function Attendance() {
                 onChange={e => setDate(e.target.value)}
                 className="bg-surface border border-gray-300 rounded-xl p-3 text-textPrimary text-base font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all flex-1"
               />
+            </div>
+            <div className="flex gap-2 items-center mt-3">
+              <button
+                onClick={() => handleMarcarTodos(true)}
+                disabled={loading || alunos.length === 0}
+                className="flex-1 h-11 rounded-xl font-bold text-sm bg-teal-600 text-white border border-teal-700 hover:bg-teal-700 active:scale-95 transition-all disabled:opacity-50"
+              >
+                Marcar Todos Presentes
+              </button>
+              <button
+                onClick={() => handleMarcarTodos(false)}
+                disabled={loading || alunos.length === 0}
+                className="flex-1 h-11 rounded-xl font-bold text-sm bg-red-600 text-white border border-red-700 hover:bg-red-700 active:scale-95 transition-all disabled:opacity-50"
+              >
+                Marcar Todas Faltas
+              </button>
             </div>
           </div>
 
