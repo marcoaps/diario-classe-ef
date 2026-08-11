@@ -28,7 +28,7 @@ export function Attendance() {
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [alunos, setAlunos] = useState<AlunoSupabase[]>([]);
   const [records, setRecords] = useState<Record<string, boolean>>({});
-  const [transferidos, setTransferidos] = useState<Set<string>>(new Set());
+  const [transferidos, setTransferidos] = useState<Map<string, string>>(new Map());
   const [especiais, setEspeciais] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -65,15 +65,14 @@ export function Attendance() {
             .eq('turma', turmaNorm)
             .or('situacao.ilike.%transferi%,situacao.ilike.%remanej%');
 
-          const nomesTransf = new Set<string>(
-            (notasData || []).map((n: any) => n.nome?.toUpperCase())
+          const situacaoPorNome = new Map<string, string>(
+            (notasData || []).map((n: any) => [n.nome?.toUpperCase(), n.situacao as string])
           );
 
-          const idsTransf = new Set<string>();
+          const idsTransf = new Map<string, string>();
           lista.forEach(a => {
-            if (nomesTransf.has(a.nome.toUpperCase())) {
-              idsTransf.add(a.id);
-            }
+            const situacao = situacaoPorNome.get(a.nome.toUpperCase());
+            if (situacao) idsTransf.set(a.id, situacao);
           });
           if (mounted) setTransferidos(idsTransf);
         }
@@ -243,11 +242,13 @@ export function Attendance() {
               </div>
             ) : (
               alunos.map(aluno => {
-                const isTransf = transferidos.has(aluno.id);
+                const situacaoAluno = transferidos.get(aluno.id);
+                const isTransf = !!situacaoAluno;
                 const isEspecial = especiais.has(aluno.id);
                 const isPresent = records[aluno.id] === true;
 
                 if (isTransf) {
+                  const rotulo = situacaoAluno!.toLowerCase().includes('remanej') ? 'Remanej.' : 'Transf.';
                   return (
                     <div
                       key={aluno.id}
@@ -258,7 +259,7 @@ export function Attendance() {
                         {aluno.nome}
                       </span>
                       <div className="w-10 h-10 rounded-lg flex justify-center items-center font-bold text-xs bg-gray-300 text-gray-600 border border-gray-400">
-                        Transf.
+                        {rotulo}
                       </div>
                     </div>
                   );
