@@ -2,9 +2,9 @@
 import { useStore } from '../../store';
 import { MIN_PASSING_GRADE, MAX_ABSENCES_TOTAL, ClassRoom, Student } from '../../domain/types';
 import { AgendaDia } from './AgendaDia';
-import { ChevronRight, UserX, Users, Download, X, CheckSquare, BarChart3, CalendarSearch, Edit, Trash2, Star, ChevronDown, GraduationCap, ChevronUp, Share2, Copy, CheckCircle } from 'lucide-react';
+import { ChevronRight, UserX, Users, Download, Upload, Loader2, X, CheckSquare, BarChart3, CalendarSearch, Edit, Trash2, Star, ChevronDown, GraduationCap, ChevronUp, Share2, Copy, CheckCircle } from 'lucide-react';
 import { cn } from '../AppLayout';
-import { buscarAlunos, salvarNotas, supabase } from '../../data/supabase';
+import { buscarAlunos, salvarNotas, sincronizarNomesAlunos, supabase } from '../../data/supabase';
 import { v4 as uuidv4 } from 'uuid';
 import { useNavigate } from 'react-router-dom';
 
@@ -55,9 +55,12 @@ export function Dashboard() {
   const [fetchedStudents, setFetchedStudents] = useState<Student[]>([]);
   const [studentCounts, setStudentCounts] = useState<Record<string, number>>({});
   const [showImportModal, setShowImportModal] = useState(false);
+  const [importMode, setImportMode] = useState<'lista' | 'pdf'>('lista');
   const [importText, setImportText] = useState('');
   const [importClassId, setImportClassId] = useState('ALL');
   const [importing, setImporting] = useState(false);
+  const [pdfProcessing, setPdfProcessing] = useState(false);
+  const [pdfResultMsg, setPdfResultMsg] = useState<string | null>(null);
   const [showEditListModal, setShowEditListModal] = useState(false);
   const [editListText, setEditListText] = useState('');
   const [savingList, setSavingList] = useState(false);
@@ -134,6 +137,102 @@ export function Dashboard() {
       await fetchCounts();
     } catch (err) { alert('Erro ao importar. ' + (err as Error).message); }
     finally { setImporting(false); }
+  };
+
+  const handlePdfImport = async (file: File) => {
+    if (importClassId === 'ALL') { alert('Selecione uma turma para importar.'); return; }
+    setPdfProcessing(true);
+    setPdfResultMsg(null);
+    try {
+      const toBase64 = (f: File): Promise<string> =>
+        new Promise((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res((r.result as string).split(',')[1]);
+          r.onerror = rej;
+          r.readAsDataURL(f);
+        });
+      const base64 = await toBase64(file);
+      const resp = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-5',
+          max_tokens: 8000,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
+              {
+                type: 'text',
+                text: 'Extraia os dados dos alunos deste PDF da RELACAO DE NOTAS E CONCEITOS. Retorne SOMENTE um array JSON valido, sem markdown, sem explicacoes, sem texto extra. Formato exato: [{"num":1,"nome":"NOME COMPLETO","situacao":"Em Curso","data_situacao":""}]. Para alunos transferidos use situacao "Foi Transferido". Para remanejados use "Remanejado". O campo nome deve conter APENAS o nome do aluno, nunca a situacao. Use aspas duplas. Se nao houver data da situacao deixe string vazia.',
+              },
+            ],
+          }],
+        }),
+      });
+      const json = await resp.json();
+      if (!resp.ok) throw new Error('API erro ' + resp.status);
+      let text = json.content[0].text;
+      let clean = text.replace(/```json|```/g, '').trim();
+      const lastBracket = clean.lastIndexOf('}');
+      if (lastBracket !== -1 && !clean.endsWith(']')) {
+        clean = clean.substring(0, lastBracket + 1) + ']';
+      }
+      const extraidos: { num: number; nome: string; situacao?: string; data_situacao?: string }[] = JSON.parse(clean);
+      if (!Array.isArray(extraidos) || extraidos.length === 0) throw new Error('Não consegui ler nenhum aluno neste PDF.');
+
+      const turmaNormalizada = importClassId.replace(/º/g, '').replace(/\s/g, '').toUpperCase();
+
+      const { data: existentesData, error: exErr } = await supabase
+        .from('alunos').select('id, nome, numero_chamada').eq('turma_id', turmaNormalizada);
+      if (exErr) throw exErr;
+      const existentes = existentesData || [];
+      const maxNumeroExistente = existentes.reduce((max, a: any) => Math.max(max, a.numero_chamada ?? 0), 0);
+      const nomesExistentesLower = new Set(existentes.map((a: any) => String(a.nome).toLowerCase().trim()));
+
+      // 1) Corrige nomes dos alunos que já existem (casa por posição/numero)
+      const { changed, failed } = await sincronizarNomesAlunos(
+        turmaNormalizada,
+        extraidos.map(e => ({ numero: e.num, nome: e.nome }))
+      );
+
+      // 2) Insere quem ainda não existe (numero maior que o maior já cadastrado e nome novo)
+      const novos = extraidos.filter(e =>
+        e.num > maxNumeroExistente && !nomesExistentesLower.has(String(e.nome).toLowerCase().trim())
+      );
+      let inseridos = 0;
+      if (novos.length > 0) {
+        const inserts = novos.map(e => ({
+          nome: e.nome,
+          turma_id: turmaNormalizada,
+          numero_chamada: e.num,
+          token_acesso: uuidv4(),
+        }));
+        const { data: insData, error: insErr } = await supabase.from('alunos').insert(inserts).select('id');
+        if (insErr) throw insErr;
+        inseridos = insData?.length ?? 0;
+      }
+
+      // 3) Grava a situação (transferido/remanejado/em curso) no bimestre atual
+      const bim = bimestreAtual();
+      await salvarNotas(turmaNormalizada, bim, extraidos.map(e => ({
+        numero: e.num,
+        nome: e.nome,
+        nota: null,
+        situacao: e.situacao || 'Em Curso',
+        data_situacao: e.data_situacao || '',
+        faltas: 0,
+      })));
+
+      setPdfResultMsg(
+        `${inseridos} aluno(s) novo(s) · ${changed} nome(s) corrigido(s)${failed > 0 ? ` (${failed} falharam)` : ''} · situações do ${bim}º bimestre gravadas`
+      );
+      await fetchCounts();
+    } catch (e: any) {
+      alert('Erro ao processar PDF: ' + (e?.message || JSON.stringify(e)));
+    } finally {
+      setPdfProcessing(false);
+    }
   };
 
   const handleEditList = () => {
@@ -634,24 +733,75 @@ export function Dashboard() {
       {showImportModal && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-[2rem] p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl relative">
-            <button onClick={() => setShowImportModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+            <button onClick={() => { setShowImportModal(false); setPdfResultMsg(null); }} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
             <h3 className="text-xl font-black text-gray-900">Importar Alunos</h3>
-            <div className="flex flex-col gap-3 text-sm">
-              <div>
-                <label className="font-bold text-gray-600 block mb-1">Turma de Destino</label>
-                <select value={importClassId} onChange={(e) => setImportClassId(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-red-200">
-                  <option value="ALL">Selecione uma turma</option>
-                  {sortedClassRooms.map(cr => <option key={cr.id} value={cr.name}>{cr.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="font-bold text-gray-600 block mb-1">Lista de Nomes (um por linha)</label>
-                <textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder="Maria Silva&#10;João Paulo" rows={6} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-red-200 resize-none font-medium" />
-              </div>
+
+            <div className="flex gap-1 p-1 bg-gray-100 rounded-xl">
+              <button
+                onClick={() => { setImportMode('lista'); setPdfResultMsg(null); }}
+                className={cn('flex-1 py-2 rounded-lg text-xs font-bold transition-all', importMode === 'lista' ? 'bg-white shadow-sm text-[#1a2e6e]' : 'text-gray-500')}
+              >
+                Colar Lista
+              </button>
+              <button
+                onClick={() => { setImportMode('pdf'); setPdfResultMsg(null); }}
+                className={cn('flex-1 py-2 rounded-lg text-xs font-bold transition-all', importMode === 'pdf' ? 'bg-white shadow-sm text-[#1a2e6e]' : 'text-gray-500')}
+              >
+                Carregar PDF do Simaed
+              </button>
             </div>
-            <button onClick={handleImport} disabled={importing} className="w-full py-3 rounded-2xl font-black text-white transition-all active:scale-95 disabled:opacity-50" style={{ background: '#1a2e6e' }}>
-              {importing ? 'Importando...' : 'Importar Alunos'}
-            </button>
+
+            <div>
+              <label className="font-bold text-gray-600 block mb-1 text-sm">Turma de Destino</label>
+              <select value={importClassId} onChange={(e) => setImportClassId(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-red-200 text-sm">
+                <option value="ALL">Selecione uma turma</option>
+                {sortedClassRooms.map(cr => <option key={cr.id} value={cr.name}>{cr.name}</option>)}
+              </select>
+            </div>
+
+            {importMode === 'lista' ? (
+              <>
+                <div>
+                  <label className="font-bold text-gray-600 block mb-1 text-sm">Lista de Nomes (um por linha)</label>
+                  <textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder="Maria Silva&#10;João Paulo" rows={6} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-red-200 resize-none font-medium text-sm" />
+                </div>
+                <button onClick={handleImport} disabled={importing} className="w-full py-3 rounded-2xl font-black text-white transition-all active:scale-95 disabled:opacity-50" style={{ background: '#1a2e6e' }}>
+                  {importing ? 'Importando...' : 'Importar Alunos'}
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-gray-500">
+                  Sobe o PDF "Relação de Notas e Conceitos" do Simaed: corrige nomes, adiciona alunos novos e grava a situação (Transferido/Remanejado) do bimestre atual — tudo de uma vez.
+                </p>
+                <label className={cn(
+                  'w-full py-6 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors',
+                  pdfProcessing ? 'border-gray-200 bg-gray-50' : 'border-blue-200 bg-blue-50 hover:bg-blue-100'
+                )}>
+                  {pdfProcessing ? (
+                    <>
+                      <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+                      <span className="text-xs font-bold text-blue-700">Analisando PDF...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-6 h-6 text-blue-600" />
+                      <span className="text-xs font-bold text-blue-700">Toque para escolher o PDF</span>
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    className="hidden"
+                    disabled={pdfProcessing}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePdfImport(f); e.target.value = ''; }}
+                  />
+                </label>
+                {pdfResultMsg && (
+                  <p className="text-xs font-bold text-[#1a2e6e] text-center bg-green-50 border border-green-200 rounded-xl py-2 px-3">{pdfResultMsg}</p>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}

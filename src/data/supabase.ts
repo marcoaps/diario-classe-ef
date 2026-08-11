@@ -163,7 +163,10 @@ export async function salvarNotas(
     turma,
     bimestre,
     numero: a.numero,
-    nome: limparAnotacaoDeSituacao(a.nome),
+    // Uppercase para o "onConflict" (turma,bimestre,nome) ser sempre o mesmo
+    // registro, nao importa se quem chamou mandou o nome em Title Case ou
+    // CAIXA ALTA -- sem isso, o mesmo aluno pode acabar duplicado na tabela.
+    nome: limparAnotacaoDeSituacao(a.nome).toUpperCase(),
     nota: a.nota ?? null,
     nota_texto: a.nota_texto ?? null,
     situacao: a.situacao ?? 'Em Curso',
