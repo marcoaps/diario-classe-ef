@@ -186,8 +186,11 @@ export async function buscarNotas(turma: string, bimestre: number) {
   return data || [];
 }
 
-// Corrige nomes/sobrenomes dos alunos da turma comparando por numero de chamada
-// (não apaga nem recria ninguém, então IDs e historico ficam intactos)
+// Corrige nomes/sobrenomes dos alunos da turma comparando por posição na lista
+// (mesma logica do "Sincronizar Nomes" do Dashboard) -- nao apaga nem recria
+// ninguem, entao IDs e historico ficam intactos. Casa por posicao (nao pelo
+// valor de numero_chamada) para nao ser afetado por buracos na numeracao
+// (ex: quando um duplicado foi excluido e a numeracao ficou com um salto).
 export async function sincronizarNomesAlunos(
   turmaId: string,
   extraidos: { numero: number; nome: string }[]
@@ -199,14 +202,18 @@ export async function sincronizarNomesAlunos(
   if (error) throw error;
   if (!existentes || existentes.length === 0) return { changed: 0, failed: 0 };
 
-  const porNumero = new Map(existentes.map((a: any) => [a.numero_chamada, a]));
+  const ordenados = [...existentes].sort((a: any, b: any) =>
+    (a.numero_chamada ?? Infinity) - (b.numero_chamada ?? Infinity)
+  );
+  const extraidosOrdenados = [...extraidos].sort((a, b) => a.numero - b.numero);
+  const n = Math.min(ordenados.length, extraidosOrdenados.length);
+
   let changed = 0;
   let failed = 0;
 
-  for (const item of extraidos) {
-    const atual = porNumero.get(item.numero);
-    if (!atual || !item.nome) continue;
-    const nomeNovo = item.nome.trim();
+  for (let i = 0; i < n; i++) {
+    const atual: any = ordenados[i];
+    const nomeNovo = extraidosOrdenados[i].nome?.trim();
     if (!nomeNovo || nomeNovo === String(atual.nome).trim()) continue;
 
     const { data, error: updError } = await supabase
