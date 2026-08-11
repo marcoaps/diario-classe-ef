@@ -192,7 +192,6 @@ export function Dashboard() {
   };
 
   const handleClassClick = async (cr: ClassRoom) => {
-    if (cr.id === selectedClassId) return;
     setClassToConfirm(cr); setFetching(true); setFetchedStudents([]);
     try {
       const alunos = await buscarAlunos(cr.name.replace("º", ""));
