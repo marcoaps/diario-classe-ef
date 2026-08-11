@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { cn } from "../AppLayout";
 import { X, FileDown, Save, Upload, Loader2 } from "lucide-react";
-import { salvarNotas, buscarNotas, supabase } from "../../data/supabase";
+import { salvarNotas, buscarNotas, sincronizarNomesAlunos, supabase } from "../../data/supabase";
 
 const TURMAS = ["6F", "7B", "7C", "7D", "7E", "7F", "8A", "8B", "8C", "8D", "8E", "8F", "9A", "9B", "9C", "9D", "9E", "9F"];
 
@@ -12,6 +12,13 @@ const MESES_BIMESTRE: Record<number, number[]> = {
   3: [8, 9, 10],   // ago, set, out
   4: [10, 11, 12], // out, nov, dez
 };
+
+function situacaoAbrev(situacao?: string | null): string {
+  const s = (situacao ?? '').toLowerCase();
+  if (s.includes('transferi')) return 'Transf.';
+  if (s.includes('remanej')) return 'Remanej.';
+  return 'Fora';
+}
 
 interface AlunoNota {
   num: number;
@@ -88,6 +95,7 @@ export function GradeReport() {
   const [showImport, setShowImport] = useState(false);
   const [saved, setSaved] = useState(false);
   const [gerandoPdf, setGerandoPdf] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (view === "notas") carregarNotas();
@@ -229,6 +237,7 @@ export function GradeReport() {
 
   const handleSalvar = async () => {
     setIsSaving(true);
+    setSyncMsg(null);
     try {
       await salvarNotas(
         turma,
@@ -242,6 +251,24 @@ export function GradeReport() {
           faltas: a.faltas ?? 0,
         }))
       );
+
+      // Corrige nomes/sobrenomes dos alunos da turma com base no PDF carregado
+      try {
+        const { changed, failed } = await sincronizarNomesAlunos(
+          turma,
+          alunos.map(a => ({ numero: a.num, nome: a.nome }))
+        );
+        if (changed > 0 || failed > 0) {
+          setSyncMsg(
+            failed > 0
+              ? `${changed} nome(s) corrigido(s) na turma, ${failed} falharam`
+              : `${changed} nome(s) corrigido(s) na turma`
+          );
+        }
+      } catch (syncErr: any) {
+        setSyncMsg('Notas salvas, mas erro ao corrigir nomes: ' + syncErr.message);
+      }
+
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e: any) {
@@ -405,7 +432,7 @@ export function GradeReport() {
           xc += w;
         });
 
-        const transferido = aluno.situacao?.toLowerCase().includes('transferi');
+        const transferido = /transferi|remanej/.test(aluno.situacao?.toLowerCase() ?? '');
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(8);
         doc.setTextColor(azulEscuro);
@@ -423,7 +450,7 @@ export function GradeReport() {
         if (transferido) {
           doc.setTextColor('#DC2626');
           doc.setFont('helvetica', 'bold');
-          doc.text('Transf.', xc + colNota / 2, pos.y + 4.8, { align: 'center' });
+          doc.text(situacaoAbrev(aluno.situacao), xc + colNota / 2, pos.y + 4.8, { align: 'center' });
           doc.setTextColor(azulEscuro);
           doc.setFont('helvetica', 'normal');
         } else {
@@ -544,6 +571,7 @@ export function GradeReport() {
           alunos.length > 0 ? (
             <>
               {saved && <div className="mb-2 text-xs text-center text-green-600 font-semibold">Dados salvos</div>}
+              {syncMsg && <div className="mb-2 text-xs text-center text-blue-600 font-semibold">{syncMsg}</div>}
               <div className="bg-surface rounded-3xl border border-gray-200 overflow-hidden shadow-sm">
                 {/* Header da lista */}
                 <div className="flex items-center px-3 py-2 bg-gray-100 border-b border-gray-200">
@@ -555,14 +583,14 @@ export function GradeReport() {
                 </div>
                 <div className="flex flex-col divide-y divide-gray-100">
                   {alunos.map(aluno => {
-                    const transferido = aluno.situacao?.toLowerCase().includes('transferi');
+                    const transferido = /transferi|remanej/.test(aluno.situacao?.toLowerCase() ?? '');
                     const status = !transferido && aluno.nota !== null ? getStatus(aluno.nota!) : null;
                     return (
                       <div key={aluno.nome} className="p-2 pl-3 flex items-center justify-between hover:bg-gray-50/50 transition-colors gap-1">
                         <span className="font-mono text-gray-400 text-xs w-5 shrink-0">{aluno.num}</span>
                         <span className="font-semibold text-textPrimary text-xs flex-1 truncate ml-1">{aluno.nome}</span>
                         <span className={cn("font-bold text-sm w-10 text-center shrink-0", transferido ? "text-red-500" : "text-blue-600")}>
-                          {transferido ? 'Transf.' : fmtNota(aluno.nota)}
+                          {transferido ? situacaoAbrev(aluno.situacao) : fmtNota(aluno.nota)}
                         </span>
                         <span className="text-xs text-gray-500 w-10 text-center shrink-0">
                           {transferido ? '-' : (aluno.faltas ?? 0)}
@@ -570,7 +598,7 @@ export function GradeReport() {
                         <div className="w-24 text-right shrink-0">
                           {transferido ? (
                             <div>
-                              <span className="text-xs font-bold text-red-500 block leading-tight">Transf.</span>
+                              <span className="text-xs font-bold text-red-500 block leading-tight">{situacaoAbrev(aluno.situacao)}</span>
                               {aluno.data_situacao && (
                                 <span className="text-xs text-red-400 block leading-tight">{aluno.data_situacao}</span>
                               )}

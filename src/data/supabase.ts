@@ -185,3 +185,38 @@ export async function buscarNotas(turma: string, bimestre: number) {
   if (error) throw error;
   return data || [];
 }
+
+// Corrige nomes/sobrenomes dos alunos da turma comparando por numero de chamada
+// (não apaga nem recria ninguém, então IDs e historico ficam intactos)
+export async function sincronizarNomesAlunos(
+  turmaId: string,
+  extraidos: { numero: number; nome: string }[]
+): Promise<{ changed: number; failed: number }> {
+  const { data: existentes, error } = await supabase
+    .from('alunos')
+    .select('id, nome, numero_chamada')
+    .eq('turma_id', turmaId);
+  if (error) throw error;
+  if (!existentes || existentes.length === 0) return { changed: 0, failed: 0 };
+
+  const porNumero = new Map(existentes.map((a: any) => [a.numero_chamada, a]));
+  let changed = 0;
+  let failed = 0;
+
+  for (const item of extraidos) {
+    const atual = porNumero.get(item.numero);
+    if (!atual || !item.nome) continue;
+    const nomeNovo = item.nome.trim();
+    if (!nomeNovo || nomeNovo === String(atual.nome).trim()) continue;
+
+    const { data, error: updError } = await supabase
+      .from('alunos')
+      .update({ nome: nomeNovo })
+      .eq('id', atual.id)
+      .select('id');
+    if (updError || !data || data.length === 0) { failed++; continue; }
+    changed++;
+  }
+
+  return { changed, failed };
+}

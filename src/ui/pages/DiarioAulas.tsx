@@ -141,7 +141,7 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
   // Buscar alunos E frequências de todas as turmas
   const alunosPorTurma: Record<string, { id: string; nome: string }[]> = {};
   const frequenciasPorTurma: Record<string, Record<string, Record<string, boolean>>> = {};
-  const transferidosPorTurma: Record<string, Set<string>> = {};
+  const transferidosPorTurma: Record<string, Map<string, string>> = {};
   // frequenciasPorTurma[turma][aluno_id][data] = presente
 
   for (const turma of cfg.turmas) {
@@ -172,20 +172,23 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
       frequenciasPorTurma[turma] = mapa;
     }
 
-    // Buscar alunos transferidos (tabela notas, qualquer bimestre)
-    const transfSet = new Set<string>();
+    // Buscar alunos transferidos/remanejados (tabela notas, qualquer bimestre)
+    const transfMap = new Map<string, string>();
     if ((alunosData || []).length > 0) {
       const { data: notasData } = await supabase
         .from('notas')
         .select('nome, situacao')
         .eq('turma', turma)
-        .ilike('situacao', '%transferi%');
-      const nomesTransf = new Set<string>((notasData || []).map((n: any) => n.nome?.toUpperCase()));
+        .or('situacao.ilike.%transferi%,situacao.ilike.%remanej%');
+      const situacaoPorNome = new Map<string, string>(
+        (notasData || []).map((n: any) => [n.nome?.toUpperCase(), n.situacao as string])
+      );
       (alunosData || []).forEach((a: any) => {
-        if (nomesTransf.has(String(a.nome).toUpperCase())) transfSet.add(a.id);
+        const situacao = situacaoPorNome.get(String(a.nome).toUpperCase());
+        if (situacao) transfMap.set(a.id, situacao);
       });
     }
-    transferidosPorTurma[turma] = transfSet;
+    transferidosPorTurma[turma] = transfMap;
   }
 
   // Buscar conteúdo das aulas (tema/título por data) de todas as turmas
@@ -363,7 +366,7 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
                        fgColor: { argb: 'FFFF4444' } }; // vermelho
 
     // ── Linhas de alunos ──
-    const transferidos = transferidosPorTurma[turma] || new Set<string>();
+    const transferidos = transferidosPorTurma[turma] || new Map<string, string>();
     const maxAlunos = Math.max(alunos.length, 35);
     for (let r = 0; r < maxAlunos; r++) {
       const row = 5 + r;
@@ -371,7 +374,9 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
       const alt = r % 2 === 0;
       const bgLinha = alt ? cinza : cinzaClar;
       const alunoObj = alunos[r];
-      const isTransferido = !!alunoObj && transferidos.has(alunoObj.id);
+      const situacaoAluno = alunoObj ? transferidos.get(alunoObj.id) : undefined;
+      const isTransferido = !!situacaoAluno;
+      const rotuloSituacao = situacaoAluno?.toLowerCase().includes('remanej') ? 'Remanej.' : 'Transf.';
 
       fmtCell(ws.getCell(row, 1), {
         value: r + 1, bold: true, size: 8, fill: bgLinha,
@@ -384,7 +389,7 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
       if (isTransferido) {
         ws.mergeCells(row, 3, row, lastCol);
         fmtCell(ws.getCell(row, 3), {
-          value: 'Transf.', bold: true, italic: true, size: 8, color: '999999', fill: cinza,
+          value: rotuloSituacao, bold: true, italic: true, size: 8, color: '999999', fill: cinza,
         });
         continue;
       }

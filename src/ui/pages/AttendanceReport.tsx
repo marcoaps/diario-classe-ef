@@ -48,7 +48,7 @@ export function AttendanceReport() {
   React.useEffect(() => {
     async function carregarExcluidos() {
       const { data: aee } = await supabase.from('alunos_especiais').select('nome');
-      const { data: transf } = await supabase.from('notas').select('nome').ilike('situacao', '%transferi%');
+      const { data: transf } = await supabase.from('notas').select('nome').or('situacao.ilike.%transferi%,situacao.ilike.%remanej%');
       const aeeSet = new Set<string>((aee || []).map((e: any) => (e.nome as string).toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'')));
       const transfSet = new Set<string>((transf || []).map((e: any) => (e.nome as string).toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'')));
       setNomesAEE(aeeSet);

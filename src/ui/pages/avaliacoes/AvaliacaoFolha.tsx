@@ -568,12 +568,12 @@ Responda APENAS com o texto puro.`;
           e.nome.toLowerCase().trim()
         );
 
-        // Buscar nomes dos transferidos
+        // Buscar nomes dos transferidos/remanejados
         const { data: transferidos } = await supabase
           .from('notas')
           .select('nome')
           .eq('turma', av.turma_id)
-          .ilike('situacao', '%transferi%');
+          .or('situacao.ilike.%transferi%,situacao.ilike.%remanej%');
         const nomesTransferidos = (transferidos || []).map((e: { nome: string }) =>
           e.nome.toLowerCase().trim()
         );

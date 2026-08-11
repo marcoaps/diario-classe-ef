@@ -56,14 +56,14 @@ export function Attendance() {
         const lista = (data || []) as AlunoSupabase[];
         setAlunos(lista);
 
-        // Busca transferidos da tabela notas (qualquer bimestre)
+        // Busca transferidos/remanejados da tabela notas (qualquer bimestre)
         const nomes = lista.map(a => a.nome.toUpperCase());
         if (nomes.length > 0) {
           const { data: notasData } = await supabase
             .from('notas')
             .select('nome, situacao')
             .eq('turma', turmaNorm)
-            .ilike('situacao', '%transferi%');
+            .or('situacao.ilike.%transferi%,situacao.ilike.%remanej%');
 
           const nomesTransf = new Set<string>(
             (notasData || []).map((n: any) => n.nome?.toUpperCase())
