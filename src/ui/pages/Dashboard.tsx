@@ -201,6 +201,24 @@ export function Dashboard() {
     setFetching(false);
   };
 
+  const handleDeleteAluno = async (alunoId: string, nome: string) => {
+    if (!confirm(`Excluir "${nome}" da turma?\n\nEssa ação não pode ser desfeita.`)) return;
+    try {
+      const { data, error } = await supabase.from('alunos').delete().eq('id', alunoId).select('id');
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error('Nada foi excluído. Faça login novamente e tente de novo.');
+      }
+      setFetchedStudents(prev => prev.filter(s => s.id !== alunoId));
+      setStudents(prev => prev.filter(s => s.id !== alunoId));
+      if (classToConfirm) {
+        setStudentCounts(prev => ({ ...prev, [classToConfirm.id]: Math.max(0, (prev[classToConfirm.id] || 1) - 1) }));
+      }
+    } catch (err: any) {
+      alert('Erro ao excluir: ' + err.message);
+    }
+  };
+
   const totalStudents = Object.values(studentCounts).reduce((acc: number, count: number) => acc + count, 0);
   const totalByYear = (year: number) => (groupedByYear.get(year) || []).reduce((acc, cr) => acc + (studentCounts[cr.id] || 0), 0);
 
@@ -433,7 +451,18 @@ export function Dashboard() {
                   <p className="text-[#1a2e6e] font-bold text-sm mb-2">{fetchedStudents.length} alunos matriculados</p>
                   <ul className="text-sm flex flex-col gap-1 max-h-40 overflow-y-auto">
                     {fetchedStudents.length > 0
-                      ? fetchedStudents.map(s => <li key={s.id} className="truncate text-gray-700">{s.numero_chamada ? <span className="font-mono text-gray-400 mr-2">{s.numero_chamada} -</span> : null}{s.name}</li>)
+                      ? fetchedStudents.map(s => (
+                          <li key={s.id} className="flex items-center justify-between gap-2 text-gray-700">
+                            <span className="truncate">{s.numero_chamada ? <span className="font-mono text-gray-400 mr-2">{s.numero_chamada} -</span> : null}{s.name}</span>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDeleteAluno(s.id, s.name); }}
+                              className="text-gray-300 hover:text-red-600 shrink-0 p-1"
+                              title="Excluir aluno"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </li>
+                        ))
                       : <li className="text-gray-400">Nenhum aluno encontrado.</li>}
                   </ul>
                   {fetchedStudents.length > 0 && (
