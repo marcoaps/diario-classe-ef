@@ -14,6 +14,12 @@ import { chamarClaudeProxy } from '../../utils/claudeProxy';
 
 const TURMAS = ["6F", "7B", "7C", "7D", "7E", "7F", "8A", "8B", "8C", "8D", "8E", "8F", "9A", "9B", "9C", "9D", "9E", "9F"];
 
+const TURMAS_POR_ANO: Record<string, string[]> = TURMAS.reduce((acc, t) => {
+  const ano = t[0];
+  (acc[ano] ??= []).push(t);
+  return acc;
+}, {} as Record<string, string[]>);
+
 interface AlunoSupabase {
   id: string;
   nome: string;
@@ -59,6 +65,7 @@ export function Trabalhos() {
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState(false);
   const [erroSalvar, setErroSalvar] = useState<string | null>(null);
+  const [avisoCriacao, setAvisoCriacao] = useState<string | null>(null);
   const [mostrarPendentes, setMostrarPendentes] = useState(false);
 
   const [showNovoTrabalho, setShowNovoTrabalho] = useState(false);
@@ -343,6 +350,9 @@ export function Trabalhos() {
         {erroSalvar && (
           <div className="bg-error-container text-on-error-container text-sm px-3 py-2 rounded-xl">{erroSalvar}</div>
         )}
+        {avisoCriacao && (
+          <div className="bg-green-50 text-green-700 border border-green-200 text-sm px-3 py-2 rounded-xl">{avisoCriacao}</div>
+        )}
 
         {loadingAlunos ? (
           <div className="flex gap-2 items-center justify-center p-8 text-gray-500">
@@ -492,14 +502,24 @@ export function Trabalhos() {
           turmaInicial={turma}
           bimestreInicial={bimestre}
           onClose={() => setShowNovoTrabalho(false)}
-          onCriado={(t) => {
-            trabalhoAlvoRef.current = t.id;
+          onCriado={(criados, falhas) => {
             setShowNovoTrabalho(false);
-            if (t.turma !== turma) setTurma(t.turma);
-            if (t.bimestre !== bimestre) setBimestre(t.bimestre as 1 | 2 | 3 | 4);
-            if (t.turma === turma && t.bimestre === bimestre) {
-              setTrabalhosLista(prev => [t, ...prev]);
-              setTrabalhoId(t.id);
+            if (criados.length === 0) return;
+
+            if (falhas.length > 0) {
+              setAvisoCriacao(`Trabalho criado em ${criados.length} turma(s), mas falhou em: ${falhas.join(', ')}.`);
+            } else if (criados.length > 1) {
+              setAvisoCriacao(`Trabalho criado em ${criados.length} turmas: ${criados.map(c => c.turma).join(', ')}.`);
+              setTimeout(() => setAvisoCriacao(null), 6000);
+            }
+
+            const alvo = criados.find(c => c.turma === turma && c.bimestre === bimestre) ?? criados[0];
+            trabalhoAlvoRef.current = alvo.id;
+            if (alvo.turma !== turma) setTurma(alvo.turma);
+            if (alvo.bimestre !== bimestre) setBimestre(alvo.bimestre as 1 | 2 | 3 | 4);
+            if (alvo.turma === turma && alvo.bimestre === bimestre) {
+              setTrabalhosLista(prev => [alvo, ...prev]);
+              setTrabalhoId(alvo.id);
               trabalhoAlvoRef.current = null;
             }
           }}
@@ -530,19 +550,37 @@ function NovoTrabalhoModal({
   turmaInicial: string;
   bimestreInicial: 1 | 2 | 3 | 4;
   onClose: () => void;
-  onCriado: (t: Trabalho) => void;
+  onCriado: (criados: Trabalho[], falhas: string[]) => void;
 }) {
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
   const [data, setData] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [bimestre, setBimestre] = useState<1 | 2 | 3 | 4>(bimestreInicial);
   const [valor, setValor] = useState('');
-  const [turma, setTurma] = useState(turmaInicial);
+  const [turmasSelecionadas, setTurmasSelecionadas] = useState<Set<string>>(new Set([turmaInicial]));
   const [observacoes, setObservacoes] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [gerandoDescricao, setGerandoDescricao] = useState(false);
   const [erroDescricao, setErroDescricao] = useState<string | null>(null);
+
+  const toggleTurma = (t: string) => {
+    setTurmasSelecionadas(prev => {
+      const novo = new Set(prev);
+      if (novo.has(t)) novo.delete(t); else novo.add(t);
+      return novo;
+    });
+  };
+
+  const toggleAno = (ano: string) => {
+    const turmasDoAno = TURMAS_POR_ANO[ano] || [];
+    setTurmasSelecionadas(prev => {
+      const todasMarcadas = turmasDoAno.every(t => prev.has(t));
+      const novo = new Set(prev);
+      turmasDoAno.forEach(t => todasMarcadas ? novo.delete(t) : novo.add(t));
+      return novo;
+    });
+  };
 
   const gerarDescricaoIA = async () => {
     if (!titulo.trim() || gerandoDescricao) return;
@@ -567,21 +605,33 @@ function NovoTrabalhoModal({
 
   const handleSalvar = async () => {
     if (!titulo.trim()) { setErro('Informe o título do trabalho.'); return; }
+    if (turmasSelecionadas.size === 0) { setErro('Selecione ao menos uma turma.'); return; }
     setSalvando(true);
     setErro(null);
     try {
-      const criado = await criarTrabalho({
+      const payloadBase = {
         titulo: titulo.trim(),
         descricao: descricao.trim() || null,
         data: data || null,
         bimestre,
         valor: valor.trim() ? Number(valor.replace(',', '.')) : null,
-        turma,
         observacoes: observacoes.trim() || null,
+      };
+      const turmasArray: string[] = Array.from(turmasSelecionadas);
+      const resultados = await Promise.allSettled(
+        turmasArray.map((t: string) => criarTrabalho({ ...payloadBase, turma: t }))
+      );
+      const criados: Trabalho[] = [];
+      const falhas: string[] = [];
+      resultados.forEach((r, i) => {
+        if (r.status === 'fulfilled') criados.push(r.value);
+        else falhas.push(turmasArray[i]);
       });
-      onCriado(criado);
-    } catch (e: any) {
-      setErro('Erro ao salvar trabalho: ' + (e?.message || 'tente novamente.'));
+      if (criados.length === 0) {
+        setErro('Erro ao salvar trabalho em todas as turmas selecionadas. Tente novamente.');
+        return;
+      }
+      onCriado(criados, falhas);
     } finally {
       setSalvando(false);
     }
@@ -633,19 +683,37 @@ function NovoTrabalhoModal({
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="font-bold text-gray-600 block mb-1">Turma</label>
-              <select value={turma} onChange={e => setTurma(e.target.value)}
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-primary/20">
-                {TURMAS.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="font-bold text-gray-600">Turmas * <span className="font-normal text-gray-400">({turmasSelecionadas.size} selecionada{turmasSelecionadas.size === 1 ? '' : 's'})</span></label>
             </div>
-            <div>
-              <label className="font-bold text-gray-600 block mb-1">Valor</label>
-              <input type="number" step="0.1" min={0} value={valor} onChange={e => setValor(e.target.value)} placeholder="Ex: 10"
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-primary/20" />
+            <div className="flex gap-1.5 mb-2">
+              {Object.keys(TURMAS_POR_ANO).map(ano => {
+                const turmasDoAno = TURMAS_POR_ANO[ano];
+                const todasMarcadas = turmasDoAno.every(t => turmasSelecionadas.has(t));
+                return (
+                  <button key={ano} type="button" onClick={() => toggleAno(ano)}
+                    className={cn("flex-1 py-1.5 rounded-lg text-xs font-bold transition-all",
+                      todasMarcadas ? "bg-primary text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200")}>
+                    Todos {ano}º
+                  </button>
+                );
+              })}
             </div>
+            <div className="grid grid-cols-6 gap-1">
+              {TURMAS.map(t => (
+                <button key={t} type="button" onClick={() => toggleTurma(t)}
+                  className={cn("py-1.5 rounded-lg text-xs font-bold transition-all",
+                    turmasSelecionadas.has(t) ? "bg-primary text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200")}>
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="font-bold text-gray-600 block mb-1">Valor</label>
+            <input type="number" step="0.1" min={0} value={valor} onChange={e => setValor(e.target.value)} placeholder="Ex: 10"
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-primary/20" />
           </div>
           <div>
             <label className="font-bold text-gray-600 block mb-1">Observações gerais</label>
@@ -655,9 +723,13 @@ function NovoTrabalhoModal({
           </div>
         </div>
 
-        <button onClick={handleSalvar} disabled={salvando}
+        <button onClick={handleSalvar} disabled={salvando || turmasSelecionadas.size === 0}
           className="w-full py-3 rounded-2xl font-black text-white transition-all active:scale-95 disabled:opacity-50 bg-primary hover:bg-primary-dark">
-          {salvando ? 'Salvando...' : 'Criar Trabalho'}
+          {salvando
+            ? 'Salvando...'
+            : turmasSelecionadas.size > 1
+              ? `Criar Trabalho em ${turmasSelecionadas.size} turmas`
+              : 'Criar Trabalho'}
         </button>
       </div>
     </div>
