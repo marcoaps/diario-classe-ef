@@ -2,7 +2,7 @@
 import { useStore } from '../../store';
 import { MIN_PASSING_GRADE, MAX_ABSENCES_TOTAL, ClassRoom, Student } from '../../domain/types';
 import { AgendaDia } from './AgendaDia';
-import { ChevronRight, UserX, Users, Download, Upload, Loader2, X, CheckSquare, BarChart3, CalendarSearch, Edit, Trash2, Star, ChevronDown, GraduationCap, ChevronUp, Share2, Copy, CheckCircle } from 'lucide-react';
+import { ChevronRight, UserX, Users, Download, Upload, Loader2, X, CheckSquare, BarChart3, CalendarSearch, Edit, Trash2, Star, ChevronDown, GraduationCap, ChevronUp, Share2, Copy, CheckCircle, ClipboardCheck } from 'lucide-react';
 import { cn } from '../AppLayout';
 import { buscarAlunos, salvarNotas, sincronizarNomesAlunos, supabase } from '../../data/supabase';
 import { v4 as uuidv4 } from 'uuid';
@@ -40,6 +40,7 @@ const MENU_ITEMS = [
   { Icon: BarChart3,      title: 'Relatórios',       sub: 'Frequência e notas',   color: '#7c3aed', bg: '#f5f3ff', action: 'route',  value: '/report',     destaque: false },
   { Icon: CalendarSearch, title: 'Histórico',        sub: 'Chamadas passadas',    color: '#059669', bg: '#ecfdf5', action: 'route',  value: '/history',    destaque: false },
   { Icon: Star,           title: 'Notas Bimestrais', sub: 'Lançar e consultar',   color: '#d97706', bg: '#fffbeb', action: 'route',  value: '/grades',     destaque: false },
+  { Icon: ClipboardCheck, title: 'Trabalhos',        sub: 'Registrar entregas',   color: '#0891b2', bg: '#ecfeff', action: 'route',  value: '/trabalhos',  destaque: false },
   { Icon: Download,       title: 'Importar Lista',   sub: 'Adicionar alunos',     color: '#0284c7', bg: '#f0f9ff', action: 'import', value: '',            destaque: false },
   { Icon: Edit,           title: 'Editar Turma',     sub: 'Gerenciar lista',      color: '#64748b', bg: '#f8fafc', action: 'turmas', value: '',            destaque: false },
   { Icon: Trash2,         title: 'Reset Histórico',  sub: 'Apagar registros',     color: '#dc2626', bg: '#fef2f2', action: 'route',  value: '/reset',      destaque: false },

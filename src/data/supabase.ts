@@ -245,3 +245,112 @@ export async function sincronizarNomesAlunos(
 
   return { changed, failed };
 }
+
+// ------------------------------------------------------------
+// Trabalhos (registro de entregas dos alunos)
+// ------------------------------------------------------------
+
+export interface Trabalho {
+  id: string;
+  titulo: string;
+  descricao: string | null;
+  data: string | null;
+  bimestre: number;
+  valor: number | null;
+  turma: string;
+  observacoes: string | null;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export interface TrabalhoRegistro {
+  id: string;
+  trabalho_id: string;
+  aluno_id: string;
+  situacao: 'fez' | 'nao_fez';
+  nota: number | null;
+  observacao: string | null;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export async function buscarTrabalhos(turma: string, bimestre: number): Promise<Trabalho[]> {
+  const { data, error } = await supabase
+    .from("trabalhos").select("*")
+    .eq("turma", turma).eq("bimestre", bimestre)
+    .order("data", { ascending: false, nullsFirst: false })
+    .order("criado_em", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function criarTrabalho(payload: {
+  titulo: string;
+  descricao?: string | null;
+  data?: string | null;
+  bimestre: number;
+  valor?: number | null;
+  turma: string;
+  observacoes?: string | null;
+}): Promise<Trabalho> {
+  const { data, error } = await supabase
+    .from("trabalhos")
+    .insert({
+      titulo: payload.titulo,
+      descricao: payload.descricao ?? null,
+      data: payload.data ?? null,
+      bimestre: payload.bimestre,
+      valor: payload.valor ?? null,
+      turma: payload.turma,
+      observacoes: payload.observacoes ?? null,
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function buscarRegistrosTrabalho(trabalhoId: string): Promise<TrabalhoRegistro[]> {
+  const { data, error } = await supabase
+    .from("trabalhos_registros").select("*")
+    .eq("trabalho_id", trabalhoId);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function salvarRegistrosTrabalho(
+  trabalhoId: string,
+  registros: { aluno_id: string; situacao: 'fez' | 'nao_fez'; nota: number | null; observacao: string | null }[]
+) {
+  if (registros.length === 0) return;
+  const upsertData = registros.map(r => ({
+    trabalho_id: trabalhoId,
+    aluno_id: r.aluno_id,
+    situacao: r.situacao,
+    nota: r.nota ?? null,
+    observacao: r.observacao ?? null,
+  }));
+  const { error } = await supabase
+    .from("trabalhos_registros")
+    .upsert(upsertData, { onConflict: "trabalho_id,aluno_id" });
+  if (error) throw error;
+}
+
+export async function buscarTrabalhosHistorico(filtros: {
+  turma?: string;
+  bimestre?: number;
+  dataInicio?: string;
+  dataFim?: string;
+  nome?: string;
+}): Promise<Trabalho[]> {
+  let query = supabase.from("trabalhos").select("*");
+  if (filtros.turma) query = query.eq("turma", filtros.turma);
+  if (filtros.bimestre) query = query.eq("bimestre", filtros.bimestre);
+  if (filtros.dataInicio) query = query.gte("data", filtros.dataInicio);
+  if (filtros.dataFim) query = query.lte("data", filtros.dataFim);
+  if (filtros.nome) query = query.ilike("titulo", `%${filtros.nome}%`);
+  query = query.order("data", { ascending: false, nullsFirst: false }).order("criado_em", { ascending: false });
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}

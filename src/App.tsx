@@ -8,6 +8,7 @@ import { AttendanceHistory } from './ui/pages/AttendanceHistory';
 import { AttendanceReport } from './ui/pages/AttendanceReport';
 import { Evaluations } from './ui/pages/Evaluations';
 import { GradeReport } from './ui/pages/GradeReport';
+import { Trabalhos } from './ui/pages/Trabalhos';
 import { SystemReset } from './ui/pages/SystemReset';
 import { Login } from './ui/pages/Login';
 import { PortalAluno } from './ui/pages/PortalAluno';
@@ -91,6 +92,7 @@ export default function App() {
           <Route path="/report" element={<AttendanceReport />} />
           <Route path="/evaluations" element={<Evaluations />} />
           <Route path="/grades" element={<GradeReport />} />
+          <Route path="/trabalhos" element={<Trabalhos />} />
           <Route path="/reset" element={<SystemReset />} />
           <Route path="/provas" element={<ProvasOnline />} />
           <Route path="/qrcodes" element={<GerarQRCodes />} />
