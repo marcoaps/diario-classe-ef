@@ -342,6 +342,16 @@ export async function salvarRegistrosTrabalho(
   if (error) throw error;
 }
 
+export async function removerRegistrosTrabalho(trabalhoId: string, alunoIds: string[]) {
+  if (alunoIds.length === 0) return;
+  const { error } = await supabase
+    .from("trabalhos_registros")
+    .delete()
+    .eq("trabalho_id", trabalhoId)
+    .in("aluno_id", alunoIds);
+  if (error) throw error;
+}
+
 export async function buscarTrabalhosHistorico(filtros: {
   turma?: string;
   bimestre?: number;

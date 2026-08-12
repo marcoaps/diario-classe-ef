@@ -8,7 +8,7 @@ import {
 import { cn } from '../AppLayout';
 import {
   supabase, buscarTrabalhos, criarTrabalho, buscarRegistrosTrabalho,
-  salvarRegistrosTrabalho, buscarTrabalhosHistorico, excluirTrabalho, Trabalho,
+  salvarRegistrosTrabalho, removerRegistrosTrabalho, buscarTrabalhosHistorico, excluirTrabalho, Trabalho,
 } from '../../data/supabase';
 import { chamarClaudeProxy } from '../../utils/claudeProxy';
 import { bimestreAtual } from '../../domain/useRelatorioFrequencia';
@@ -69,6 +69,7 @@ export function Trabalhos() {
   const [aviso, setAviso] = useState<string | null>(null);
   const [excluindoTrabalho, setExcluindoTrabalho] = useState(false);
   const [mostrarPendentes, setMostrarPendentes] = useState(false);
+  const [confirmAcao, setConfirmAcao] = useState<'fez' | 'nao_fez' | 'limpar' | null>(null);
 
   const [showNovoTrabalho, setShowNovoTrabalho] = useState(false);
   const [showHistorico, setShowHistorico] = useState(false);
@@ -218,24 +219,47 @@ export function Trabalhos() {
   const alternarSituacao = (alunoId: string, situacao: 'fez' | 'nao_fez') => {
     setRegistros(prev => {
       const atual = prev[alunoId] ?? registroVazio();
-      const novaSituacao = atual.situacao === situacao ? null : situacao;
-      return { ...prev, [alunoId]: { ...atual, situacao: novaSituacao } };
+      if (atual.situacao === situacao) return prev; // clicar na já selecionada não altera nada
+      return { ...prev, [alunoId]: { ...atual, situacao } };
     });
     setErroSalvar(null);
     setSalvo(false);
   };
 
-  const marcarTodosComoFez = () => {
+  const haAlgumRegistro = useMemo(
+    () => alunos.some(a => registros[a.id]?.situacao),
+    [alunos, registros]
+  );
+
+  const aplicarSituacaoTodos = (situacao: 'fez' | 'nao_fez') => {
     setRegistros(prev => {
       const novo = { ...prev };
       alunos.forEach(a => {
         const atual = novo[a.id] ?? registroVazio();
-        novo[a.id] = { ...atual, situacao: 'fez' };
+        novo[a.id] = { ...atual, situacao };
       });
       return novo;
     });
     setErroSalvar(null);
     setSalvo(false);
+  };
+
+  const limparTodasMarcacoes = () => {
+    setRegistros({});
+    setErroSalvar(null);
+    setSalvo(false);
+  };
+
+  const handleAcaoTodos = (tipo: 'fez' | 'nao_fez' | 'limpar') => {
+    if (tipo === 'limpar' || haAlgumRegistro) { setConfirmAcao(tipo); return; }
+    aplicarSituacaoTodos(tipo);
+  };
+
+  const confirmarAcaoTodos = () => {
+    if (!confirmAcao) return;
+    if (confirmAcao === 'limpar') limparTodasMarcacoes();
+    else aplicarSituacaoTodos(confirmAcao);
+    setConfirmAcao(null);
   };
 
   const notaMaxima = trabalhoAtual?.valor ?? 10;
@@ -280,7 +304,7 @@ export function Trabalhos() {
     setSalvando(true);
     setErroSalvar(null);
     try {
-      const lista = alunos
+      const paraSalvar = alunos
         .filter(a => registros[a.id]?.situacao)
         .map(a => ({
           aluno_id: a.id,
@@ -288,10 +312,16 @@ export function Trabalhos() {
           nota: registros[a.id].nota,
           observacao: registros[a.id].observacao || null,
         }));
-      await salvarRegistrosTrabalho(trabalhoId, lista);
+      const paraRemover = alunos
+        .filter(a => registrosOriginais[a.id]?.situacao && !registros[a.id]?.situacao)
+        .map(a => a.id);
+      await Promise.all([
+        salvarRegistrosTrabalho(trabalhoId, paraSalvar),
+        removerRegistrosTrabalho(trabalhoId, paraRemover),
+      ]);
       setRegistrosOriginais(registros);
       setSalvo(true);
-      setTimeout(() => setSalvo(false), 3000);
+      setTimeout(() => setSalvo(false), 2500);
     } catch (e: any) {
       setErroSalvar('Erro ao salvar registros: ' + (e?.message || 'tente novamente.'));
     } finally {
@@ -421,21 +451,34 @@ export function Trabalhos() {
               )}
             </div>
 
-            <div className="flex gap-2 flex-wrap">
-              <button onClick={marcarTodosComoFez}
-                className="flex-1 min-w-[160px] py-2.5 bg-green-600 text-white rounded-xl font-bold text-sm shadow-sm hover:bg-green-700 transition-all flex items-center justify-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4" /> Marcar todos como Fez
+            <div className="flex flex-col gap-1.5">
+              <div className="flex gap-2">
+                <button onClick={() => handleAcaoTodos('fez')}
+                  className="flex-1 py-2.5 bg-green-600 text-white rounded-xl font-bold text-sm shadow-sm hover:bg-green-700 transition-all flex items-center justify-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4" /> Todos fizeram
+                </button>
+                <button onClick={() => handleAcaoTodos('nao_fez')}
+                  className="flex-1 py-2.5 bg-red-600 text-white rounded-xl font-bold text-sm shadow-sm hover:bg-red-700 transition-all flex items-center justify-center gap-1.5">
+                  <XCircle className="w-4 h-4" /> Todos não fizeram
+                </button>
+              </div>
+              <button onClick={() => handleAcaoTodos('limpar')}
+                className="text-xs font-semibold text-gray-400 hover:text-gray-600 self-center py-1 transition-colors">
+                Limpar marcações
               </button>
             </div>
 
             <div className="flex gap-1 p-1 bg-gray-200/50 rounded-xl border border-gray-200 overflow-x-auto">
               {([
-                ['todos', 'Todos'], ['fez', 'Fizeram'], ['nao_fez', 'Não fizeram'], ['sem_registro', 'Sem registro'],
-              ] as [Filtro, string][]).map(([v, l]) => (
+                ['todos', 'Todos', contagens.total],
+                ['fez', 'Fizeram', contagens.fez],
+                ['nao_fez', 'Não fizeram', contagens.naoFez],
+                ['sem_registro', 'Sem registro', contagens.semRegistro],
+              ] as [Filtro, string, number][]).map(([v, l, n]) => (
                 <button key={v} onClick={() => setFiltro(v)}
                   className={cn("flex-1 py-2 text-center rounded-lg text-xs font-semibold transition-all whitespace-nowrap",
                     filtro === v ? "bg-white text-primary ring-1 ring-gray-200" : "bg-transparent text-gray-500")}>
-                  {l}
+                  {l} ({n})
                 </button>
               ))}
             </div>
@@ -494,7 +537,7 @@ export function Trabalhos() {
                         disabled={situacaoAtiva === null}
                         value={reg.nota ?? ''}
                         onChange={e => handleNotaChange(aluno.id, e.target.value)}
-                        className="w-20 bg-gray-50 border border-gray-200 rounded-xl px-2 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-40 disabled:bg-gray-100"
+                        className="w-16 shrink-0 bg-gray-50 border border-gray-200 rounded-xl px-2 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-40 disabled:bg-gray-100"
                       />
                       <input
                         type="text"
@@ -515,7 +558,6 @@ export function Trabalhos() {
 
       {trabalhoId && (
         <div className="fixed bottom-20 left-4 right-4 max-w-md mx-auto z-20">
-          {salvo && <div className="mb-2 text-xs text-center text-green-600 font-semibold bg-white/90 rounded-lg py-1">Registros salvos</div>}
           <button
             onClick={handleSalvar}
             disabled={salvando || !dirty}
@@ -524,6 +566,35 @@ export function Trabalhos() {
             {salvando ? <Loader2 className="w-6 h-6 animate-spin" /> : <Save className="w-6 h-6" />}
             {salvando ? 'Salvando...' : dirty ? 'Salvar registros' : 'Tudo salvo'}
           </button>
+        </div>
+      )}
+
+      {salvo && (
+        <div className="fixed bottom-36 left-1/2 -translate-x-1/2 z-30 bg-primary text-white text-sm font-semibold px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-2 animate-in fade-in slide-in-from-bottom-4">
+          <CheckCircle2 className="w-4 h-4" /> Salvo automaticamente
+        </div>
+      )}
+
+      {confirmAcao && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl">
+            <h3 className="text-lg font-black text-gray-900">
+              {confirmAcao === 'limpar' ? 'Limpar marcações?' : 'Substituir marcações?'}
+            </h3>
+            <p className="text-sm text-gray-600">
+              {confirmAcao === 'limpar'
+                ? 'Isso vai deixar todos os alunos desta lista como "Sem registro" (nota e observação também serão apagadas nesta tela). Você ainda precisa tocar em "Salvar registros" para confirmar.'
+                : 'Já existem alunos registrados. Deseja substituir todas as marcações desta lista?'}
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmAcao(null)} className="flex-1 py-3 rounded-2xl font-bold bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
+                Cancelar
+              </button>
+              <button onClick={confirmarAcaoTodos} className="flex-1 py-3 rounded-2xl font-black text-white bg-primary hover:bg-primary-dark transition-all active:scale-95">
+                {confirmAcao === 'limpar' ? 'Limpar marcações' : 'Substituir marcações'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
