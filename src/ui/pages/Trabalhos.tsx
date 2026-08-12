@@ -11,6 +11,7 @@ import {
   salvarRegistrosTrabalho, buscarTrabalhosHistorico, excluirTrabalho, Trabalho,
 } from '../../data/supabase';
 import { chamarClaudeProxy } from '../../utils/claudeProxy';
+import { bimestreAtual } from '../../domain/useRelatorioFrequencia';
 
 const TURMAS = ["6F", "7B", "7C", "7D", "7E", "7F", "8A", "8B", "8C", "8D", "8E", "8F", "9A", "9B", "9C", "9D", "9E", "9F"];
 
@@ -47,7 +48,7 @@ export function Trabalhos() {
   const navigate = useNavigate();
 
   const [turma, setTurma] = useState(TURMAS[0]);
-  const [bimestre, setBimestre] = useState<1 | 2 | 3 | 4>(1);
+  const [bimestre, setBimestre] = useState<1 | 2 | 3 | 4>(() => bimestreAtual());
 
   const [alunos, setAlunos] = useState<AlunoSupabase[]>([]);
   const [loadingAlunos, setLoadingAlunos] = useState(false);

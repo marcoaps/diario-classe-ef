@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { cn } from "../AppLayout";
 import { X, FileDown, Save, Upload, Loader2 } from "lucide-react";
 import { salvarNotas, buscarNotas, sincronizarNomesAlunos, supabase } from "../../data/supabase";
+import { bimestreAtual } from "../../domain/useRelatorioFrequencia";
 
 const TURMAS = ["6F", "7B", "7C", "7D", "7E", "7F", "8A", "8B", "8C", "8D", "8E", "8F", "9A", "9B", "9C", "9D", "9E", "9F"];
 
@@ -84,7 +85,7 @@ async function buscarFaltasBimestre(turma: string, bimestre: number): Promise<Re
 
 export function GradeReport() {
   const [view, setView] = useState<"notas" | "desempenho" | "grafico">("notas");
-  const [bimestre, setBimestre] = useState<1 | 2 | 3 | 4>(1);
+  const [bimestre, setBimestre] = useState<1 | 2 | 3 | 4>(() => bimestreAtual());
   const [turma, setTurma] = useState("7B");
   const [alunos, setAlunos] = useState<AlunoNota[]>([]);
   const [desempenho, setDesempenho] = useState<any[]>([]);
