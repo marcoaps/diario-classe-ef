@@ -2,6 +2,27 @@
 import { chamarClaudeProxy } from "../../../utils/claudeProxy";
 import { curriculumData } from "../../../data/curriculumData";
 
+// Datas de "Planejamento Escolar" do Calendário Escolar 2026 (Instituto
+// Odilon Pratagi), em ordem cronológica — usadas só nesta aba (Gerador de
+// Sequências Didáticas) para numerar automaticamente a sequência atual:
+// a 1ª data vira a 1ª Sequência, a 2ª data vira a 2ª Sequência, etc.
+// Atualizar esta lista todo início de ano letivo, conforme o novo calendário.
+const DATAS_PLANEJAMENTO_2026 = [
+  "2026-02-19", "2026-03-09", "2026-04-06", "2026-04-27",
+  "2026-05-18", "2026-06-08", "2026-06-29", "2026-07-31",
+  "2026-08-17", "2026-09-08", "2026-09-28", "2026-10-19",
+  "2026-11-09",
+];
+
+function numeroSequenciaAtual(data: Date = new Date()): number {
+  const iso = data.toISOString().slice(0, 10);
+  let numero = 1;
+  for (let i = 0; i < DATAS_PLANEJAMENTO_2026.length; i++) {
+    if (iso >= DATAS_PLANEJAMENTO_2026[i]) numero = i + 1;
+  }
+  return numero;
+}
+
 interface SituacaoAprendizagem {
   numero: number;
   titulo: string;
@@ -546,7 +567,7 @@ export function IASequencia() {
   const [contadorSeq, setContadorSeq] = useState(() => {
     return parseInt(localStorage.getItem("seq_contador") || "0");
   });
-  const [numeroAtual, setNumeroAtual] = useState(1);
+  const [numeroAtual, setNumeroAtual] = useState(() => numeroSequenciaAtual());
 
   useEffect(() => {
     if (status !== "gerando" && status !== "imagens") return;
@@ -628,11 +649,13 @@ Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
       })
     );
 
-    // Incrementa contador
-    const novoNumero = contadorSeq + 1;
-    setContadorSeq(novoNumero);
-    setNumeroAtual(novoNumero);
-    localStorage.setItem("seq_contador", String(novoNumero));
+    setNumeroAtual(numeroSequenciaAtual());
+
+    // Contador cumulativo (independente do número da sequência), só para o
+    // selo "N sequências geradas" no topo da tela.
+    const novoContador = contadorSeq + 1;
+    setContadorSeq(novoContador);
+    localStorage.setItem("seq_contador", String(novoContador));
 
     setSequencia({ ...seq, situacoes: situacoesComImg });
     setStatus("pronto");
