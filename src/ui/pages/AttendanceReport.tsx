@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../data/supabase';
 import { Loader2, BarChart3, AlertTriangle, FileSpreadsheet, FileText, ShieldCheck, Users, Percent, Award, Trash2, Calendar, X, BookOpen, ClipboardList } from 'lucide-react';
 import { cn } from '../AppLayout';
-import { useRelatorioFrequencia, type Bimestre, PONTOS_MAXIMOS, getPeriodoBimestre } from '../../domain/useRelatorioFrequencia';
+import { useRelatorioFrequencia, type Bimestre, PONTOS_MAXIMOS, getPeriodoBimestre, bimestreAtual } from '../../domain/useRelatorioFrequencia';
 import { exportarExcel, exportarPDF } from '../../domain/exportarFrequencia';
 import { exportarDiario } from '../../domain/exportarDiario';
 import { exportarDiarioOficial } from '../../domain/exportarDiarioOficial';
@@ -66,7 +66,7 @@ export function AttendanceReport() {
   );
 
   const [turmaId, setTurmaId] = useState<string>(uniqueClassRooms[0]?.name ?? '');
-  const [bimestre, setBimestre] = useState<Bimestre>(1);
+  const [bimestre, setBimestre] = useState<Bimestre>(() => bimestreAtual());
 
   React.useEffect(() => {
     if (!turmaId && uniqueClassRooms.length > 0) setTurmaId(uniqueClassRooms[0].name);

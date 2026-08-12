@@ -40,6 +40,26 @@ export function getPeriodoBimestre(bimestre: Bimestre, ano?: number) {
   }
 }
 
+// Data-limite de cada bimestre conforme o Calendário Escolar 2026 oficial
+// (Instituto Odilon Pratagi): fim das avaliações/fechamento de cada um.
+// Atualizar estas datas todo início de ano letivo, conforme o novo calendário.
+const LIMITES_BIMESTRE_2026: { bimestre: Bimestre; fim: string }[] = [
+  { bimestre: 1, fim: '2026-04-12' }, // avaliações 1º bim (4 a 8/04) + retorno às aulas (13/04)
+  { bimestre: 2, fim: '2026-07-19' }, // avaliações 2º bim (3 a 10/07) + término do 1º semestre (17/07)
+  { bimestre: 3, fim: '2026-10-31' }, // início do 2º semestre (03/08) + avaliações 3º bim (5 a 9/10)
+  { bimestre: 4, fim: '2026-12-23' }, // avaliações 4º bim (7 a 11/12) + término do ano letivo (23/12)
+];
+
+// Bimestre vigente na data informada (hoje, por padrão), para pré-selecionar
+// o bimestre correto ao abrir uma tela em vez de sempre cair no 1º.
+export function bimestreAtual(data: Date = new Date()): Bimestre {
+  const iso = data.toISOString().slice(0, 10);
+  for (const { bimestre, fim } of LIMITES_BIMESTRE_2026) {
+    if (iso <= fim) return bimestre;
+  }
+  return 4;
+}
+
 // CORRIGIDO: extrai formato curto "6F" de "6º Ano F"
 function normalizarTurma(turmaId: string) {
   if (/^\d+[A-Z]$/i.test(turmaId.trim())) return turmaId.trim().toUpperCase();
