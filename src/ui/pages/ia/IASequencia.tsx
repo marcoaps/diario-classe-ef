@@ -639,17 +639,17 @@ IMPORTANTE — Use SOMENTE habilidades BNCC para ${serie}: ${habilidadesBncc}
 Selecione as que se relacionam com o tema "${tema}". Use os códigos exatos.
 
 Para imageQuery de cada situação, siga ESTAS REGRAS:
-1. Queries em inglês DIFERENTES e ESPECÍFICAS para cada atividade (nunca o tema geral)
+1. TODA query deve conter a modalidade/esporte do tema "${tema}" traduzida para inglês (ex: "martial arts", "combat sports", "volleyball", "handball"), MAIS a atividade específica daquela situação. Nunca gere uma query só com a atividade sem a modalidade — isso faz a busca de imagem trazer fotos de outro esporte ou de assunto nenhum a ver (ex: sem a modalidade, uma situação sobre um aluno narrando/arbitrando pode trazer foto de balé). Isso vale inclusive para atividades adaptadas ou mais abstratas.
 2. FAIXA ETÁRIA obrigatória nas queries conforme a série:
    - 6º e 7º ano (11-13 anos): use "middle school kids", "young students age 12", "children"
    - 8º e 9º ano (13-15 anos): use "high school students", "teenagers age 14", "teen athletes"
    - Ensino Médio: use "high school athletes", "young adults sports"
    A série atual é: ${serie}
-3. Descreva a ATIVIDADE ESPECÍFICA de cada situação. Ex:
-   - 6º/7º aquecimento → "middle school kids warm up gym"
-   - 6º/7º fundamentos → "young students volleyball practice"
-   - 8º/9º aquecimento → "teenagers warm up physical education"
-   - 8º/9º fundamentos → "teen athletes volleyball training"
+3. Descreva a ATIVIDADE ESPECÍFICA de cada situação, sempre junto com a modalidade (regra 1). Ex., para tema "Lutas":
+   - 6º/7º aquecimento → "middle school kids martial arts warm up gym"
+   - 6º/7º fundamentos → "young students martial arts grappling practice"
+   - 8º/9º atividade adaptada (aluno narrador) → "teenagers cheering martial arts match sideline"
+   - 8º/9º fundamentos → "teen athletes martial arts training"
 4. NUNCA repita a mesma query em situações diferentes
 
 Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
