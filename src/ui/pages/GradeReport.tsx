@@ -3,6 +3,7 @@ import { cn } from "../AppLayout";
 import { X, FileDown, Save, Upload, Loader2 } from "lucide-react";
 import { salvarNotas, buscarNotas, sincronizarNomesAlunos, supabase } from "../../data/supabase";
 import { bimestreAtual } from "../../domain/useRelatorioFrequencia";
+import { formatarNome } from "../../utils/formatarNome";
 
 const TURMAS = ["6F", "7B", "7C", "7D", "7E", "7F", "8A", "8B", "8C", "8D", "8E", "8F", "9A", "9B", "9C", "9D", "9E", "9F"];
 
@@ -589,7 +590,7 @@ export function GradeReport() {
                     return (
                       <div key={aluno.nome} className="p-2 pl-3 flex items-center justify-between hover:bg-gray-50/50 transition-colors gap-1">
                         <span className="font-mono text-gray-400 text-xs w-5 shrink-0">{aluno.num}</span>
-                        <span className={cn("font-semibold text-xs flex-1 truncate ml-1", transferido ? "text-gray-400 line-through" : "text-textPrimary")}>{aluno.nome}</span>
+                        <span className={cn("font-semibold text-xs flex-1 truncate ml-1", transferido ? "text-gray-400 line-through" : "text-textPrimary")}>{formatarNome(aluno.nome)}</span>
                         <span className={cn("font-bold text-sm w-10 text-center shrink-0", transferido ? "text-red-500" : "text-blue-600")}>
                           {transferido ? situacaoAbrev(aluno.situacao) : fmtNota(aluno.nota)}
                         </span>
@@ -640,7 +641,7 @@ export function GradeReport() {
                       return (
                         <tr key={aluno.nome} className="hover:bg-gray-50/50">
                           <td className="p-2 font-mono text-gray-400">{aluno.num}</td>
-                          <td className="p-2 font-semibold text-textPrimary max-w-[100px] truncate">{aluno.nome}</td>
+                          <td className="p-2 font-semibold text-textPrimary max-w-[100px] truncate">{formatarNome(aluno.nome)}</td>
                           <td className="p-2 text-center text-blue-600 font-bold">{fmtNota(aluno.b1)}</td>
                           <td className="p-2 text-center text-blue-600 font-bold">{fmtNota(aluno.b2)}</td>
                           <td className="p-2 text-center text-blue-600 font-bold">{fmtNota(aluno.b3)}</td>
