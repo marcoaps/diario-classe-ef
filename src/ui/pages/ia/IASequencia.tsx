@@ -23,6 +23,33 @@ function numeroSequenciaAtual(data: Date = new Date()): number {
   return numero;
 }
 
+function formatarDiaMes(iso: string): string {
+  const [, m, d] = iso.split("-");
+  return `${d}/${m}`;
+}
+
+function diaAnterior(iso: string): string {
+  const data = new Date(iso + "T00:00:00");
+  data.setDate(data.getDate() - 1);
+  return data.toISOString().slice(0, 10);
+}
+
+// Fim do ano letivo 2026 (Calendario Escolar) — usado como fim do período
+// de execução da última sequência, que não tem uma próxima data de
+// planejamento para delimitá-la.
+const FIM_ANO_LETIVO_2026 = "2026-12-23";
+
+// Período de execução da sequência atual: da data de planejamento que a
+// originou até o dia anterior à próxima data de planejamento (ou até o
+// fim do ano letivo, na última sequência). Ex: "31/07 a 16/08".
+function periodoExecucaoAtual(data: Date = new Date()): string {
+  const numero = numeroSequenciaAtual(data);
+  const inicio = DATAS_PLANEJAMENTO_2026[numero - 1];
+  const proxima = DATAS_PLANEJAMENTO_2026[numero];
+  const fim = proxima ? diaAnterior(proxima) : FIM_ANO_LETIVO_2026;
+  return `${formatarDiaMes(inicio)} a ${formatarDiaMes(fim)}`;
+}
+
 interface SituacaoAprendizagem {
   numero: number;
   titulo: string;
@@ -533,7 +560,7 @@ export function IASequencia() {
   const [turmas, setTurmas] = useState(TURMAS_POR_SERIE["6º e 7º"]);
   const [bimestre, setBimestre] = useState("1");
   const [aulasPrevistas, setAulasPrevistas] = useState("5");
-  const [periodo, setPeriodo] = useState("");
+  const [periodo, setPeriodo] = useState(() => periodoExecucaoAtual());
   const [tema, setTema] = useState("");
   const [recursos, setRecursos] = useState("");
   const [numSituacoes, setNumSituacoes] = useState("3");
@@ -669,7 +696,7 @@ Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
     setBaixando(false);
   };
 
-  const resetar = () => { setStatus("idle"); setSequencia(null); setTema(""); setRecursos(""); setPeriodo(""); };
+  const resetar = () => { setStatus("idle"); setSequencia(null); setTema(""); setRecursos(""); };
 
   const carregando = status === "gerando" || status === "imagens";
 
