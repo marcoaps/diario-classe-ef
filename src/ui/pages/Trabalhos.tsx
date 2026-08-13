@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import {
   ArrowLeft, ClipboardCheck, X, Plus, History, Save, Loader2,
-  CheckCircle2, XCircle, Circle, Search, Sparkles, Trash2,
+  CheckCircle2, XCircle, Circle, Search, Sparkles, Trash2, FileDown,
 } from 'lucide-react';
 import { cn } from '../AppLayout';
 import {
@@ -12,6 +12,7 @@ import {
 } from '../../data/supabase';
 import { chamarClaudeProxy } from '../../utils/claudeProxy';
 import { bimestreAtual } from '../../domain/useRelatorioFrequencia';
+import { exportarTrabalhoPDF } from '../../domain/exportarTrabalho';
 
 const TURMAS = ["6F", "7B", "7C", "7D", "7E", "7F", "8A", "8B", "8C", "8D", "8E", "8F", "9A", "9B", "9C", "9D", "9E", "9F"];
 
@@ -329,6 +330,21 @@ export function Trabalhos() {
     }
   };
 
+  const handleExportarPDF = () => {
+    if (!trabalhoAtual) return;
+    exportarTrabalhoPDF({
+      turma,
+      trabalho: { titulo: trabalhoAtual.titulo, data: trabalhoAtual.data, bimestre: trabalhoAtual.bimestre },
+      alunos: alunos.map(a => ({
+        numero_chamada: a.numero_chamada,
+        nome: a.nome,
+        situacao: registros[a.id]?.situacao ?? null,
+        nota: registros[a.id]?.nota ?? null,
+        observacao: registros[a.id]?.observacao ?? '',
+      })),
+    });
+  };
+
   return (
     <div className="flex flex-col h-full bg-background relative pb-24">
       <div className="p-4 border-b border-gray-200 sticky top-0 bg-background/90 backdrop-blur-md z-10 shadow-sm">
@@ -433,9 +449,15 @@ export function Trabalhos() {
         ) : (
           <>
             <div className="bg-surface rounded-2xl border border-gray-200 p-3 shadow-sm">
-              <p className="text-sm font-semibold text-gray-700 text-center">
-                {contagens.total} alunos · <span className="text-green-600 font-bold">{contagens.fez} fizeram</span> · <span className="text-red-600 font-bold">{contagens.naoFez} não fizeram</span> · <span className="text-gray-500 font-bold">{contagens.semRegistro} sem registro</span>
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-gray-700 flex-1">
+                  {contagens.total} alunos · <span className="text-green-600 font-bold">{contagens.fez} fizeram</span> · <span className="text-red-600 font-bold">{contagens.naoFez} não fizeram</span> · <span className="text-gray-500 font-bold">{contagens.semRegistro} sem registro</span>
+                </p>
+                <button onClick={handleExportarPDF} title="Exportar PDF"
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 text-xs font-bold shrink-0 transition-colors">
+                  <FileDown className="w-3.5 h-3.5" /> PDF
+                </button>
+              </div>
               <p className="text-xs text-gray-400 text-center mt-1">{percentualEntrega}% de entrega</p>
               {pendentes.length > 0 && (
                 <div className="mt-2 pt-2 border-t border-gray-100">
