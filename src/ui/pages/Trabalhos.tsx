@@ -419,7 +419,7 @@ export function Trabalhos() {
         </div>
       </div>
 
-      <div className="p-4 flex flex-col gap-3">
+      <div className="p-4 pb-32 flex flex-col gap-3">
         {erroAlunos && (
           <div className="bg-error-container text-on-error-container text-sm px-3 py-2 rounded-xl">{erroAlunos}</div>
         )}
