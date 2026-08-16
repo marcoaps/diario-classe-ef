@@ -2,9 +2,10 @@
 import { useStore } from '../../store';
 import { MIN_PASSING_GRADE, MAX_ABSENCES_TOTAL, ClassRoom, Student } from '../../domain/types';
 import { AgendaDia } from './AgendaDia';
-import { ChevronRight, UserX, Users, Download, Upload, Loader2, X, CheckSquare, BarChart3, CalendarSearch, Edit, Trash2, Star, ChevronDown, GraduationCap, ChevronUp, Share2, Copy, CheckCircle, ClipboardCheck } from 'lucide-react';
+import { ChevronRight, UserX, Users, Download, Upload, Loader2, X, CheckSquare, BarChart3, CalendarSearch, Edit, Trash2, Star, ChevronDown, GraduationCap, ChevronUp, Share2, Copy, CheckCircle, ClipboardCheck, CaseSensitive } from 'lucide-react';
 import { cn } from '../AppLayout';
 import { buscarAlunos, salvarNotas, sincronizarNomesAlunos, supabase } from '../../data/supabase';
+import { formatarNome } from '../../utils/formatarNome';
 import { v4 as uuidv4 } from 'uuid';
 import { useNavigate } from 'react-router-dom';
 
@@ -43,6 +44,7 @@ const MENU_ITEMS = [
   { Icon: ClipboardCheck, title: 'Trabalhos',        sub: 'Registrar entregas',   color: '#0891b2', bg: '#ecfeff', action: 'route',  value: '/trabalhos',  destaque: false },
   { Icon: Download,       title: 'Importar Lista',   sub: 'Adicionar alunos',     color: '#0284c7', bg: '#f0f9ff', action: 'import', value: '',            destaque: false },
   { Icon: Edit,           title: 'Editar Turma',     sub: 'Gerenciar lista',      color: '#64748b', bg: '#f8fafc', action: 'turmas', value: '',            destaque: false },
+  { Icon: CaseSensitive,  title: 'Corrigir Nomes',   sub: 'Ajustar maiúsculas',   color: '#0d9488', bg: '#f0fdfa', action: 'corrigirNomes', value: '',      destaque: false },
   { Icon: Trash2,         title: 'Reset Histórico',  sub: 'Apagar registros',     color: '#dc2626', bg: '#fef2f2', action: 'route',  value: '/reset',      destaque: false },
 ] as const;
 
@@ -69,6 +71,42 @@ export function Dashboard() {
   const [cardMessage, setCardMessage] = useState<string | null>(null);
   const [openYears, setOpenYears] = useState<Set<number>>(new Set<number>());
   const [showTurmas, setShowTurmas] = useState(false);
+  const [corrigindoNomes, setCorrigindoNomes] = useState(false);
+
+  const handleCorrigirNomesTodasTurmas = async () => {
+    setCorrigindoNomes(true);
+    try {
+      const { data, error } = await supabase.from('alunos').select('id, nome, turma_id');
+      if (error) throw error;
+      const candidatos = (data || [])
+        .map((a: any) => ({ id: a.id, turma_id: a.turma_id, nomeAtual: a.nome as string, nomeNovo: formatarNome(a.nome) }))
+        .filter(a => a.nomeNovo !== a.nomeAtual);
+
+      if (candidatos.length === 0) {
+        alert('Nenhum nome em caixa alta encontrado — todas as turmas já estão certinhas.');
+        return;
+      }
+
+      const turmasAfetadas = new Set(candidatos.map(c => c.turma_id));
+      const exemplos = candidatos.slice(0, 10).map(c => `${c.nomeAtual} -> ${c.nomeNovo}`).join('\n');
+      const confirmMsg = `Encontrados ${candidatos.length} aluno(s) em ${turmasAfetadas.size} turma(s) com nome em caixa alta.\n\nExemplos:\n${exemplos}${candidatos.length > 10 ? '\n...' : ''}\n\nCorrigir a capitalização de todos agora?`;
+      if (!window.confirm(confirmMsg)) return;
+
+      const resultados = await Promise.all(
+        candidatos.map(c => supabase.from('alunos').update({ nome: c.nomeNovo }).eq('id', c.id))
+      );
+      const falhas = resultados.filter(r => r.error).length;
+      if (falhas > 0) {
+        alert(`${candidatos.length - falhas} nome(s) corrigido(s), mas ${falhas} falharam. Tente novamente.`);
+      } else {
+        alert(`${candidatos.length} nome(s) corrigido(s) em ${turmasAfetadas.size} turma(s)!`);
+      }
+    } catch (e: any) {
+      alert('Erro ao corrigir nomes: ' + e.message);
+    } finally {
+      setCorrigindoNomes(false);
+    }
+  };
 
   const toggleYear = (year: number) => {
     setOpenYears(prev => {
@@ -111,6 +149,7 @@ export function Dashboard() {
     if (action === 'route') navigate(value);
     else if (action === 'turmas') { setShowTurmas(true); setTimeout(() => document.getElementById('turmas-list')?.scrollIntoView({ behavior: 'smooth' }), 100); }
     else if (action === 'import') setShowImportModal(true);
+    else if (action === 'corrigirNomes') handleCorrigirNomesTodasTurmas();
   };
 
   const handleImport = async () => {
@@ -515,21 +554,27 @@ export function Dashboard() {
         <AgendaDia onTurmaClick={(t) => { const cr = sortedClassRooms.find((x) => x.name.replace(/[^0-9A-Za-z]/g,'').toUpperCase() === t); if (cr) handleClassClick(cr); }} />
         {/* Grid de botões */}
         <div className="grid grid-cols-2 gap-3">
-          {MENU_ITEMS.map((item) => (
+          {MENU_ITEMS.map((item) => {
+            const isCorrigirNomes = item.action === 'corrigirNomes';
+            return (
             <button
               key={item.title}
               onClick={() => handleMenuClick(item.action, item.value)}
-              className="flex items-center gap-3 p-3.5 rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-md active:scale-95 transition-all text-left"
+              disabled={isCorrigirNomes && corrigindoNomes}
+              className="flex items-center gap-3 p-3.5 rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-md active:scale-95 transition-all text-left disabled:opacity-50 disabled:active:scale-100"
             >
               <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: item.bg }}>
-                <item.Icon className="w-5 h-5" style={{ color: item.color }} />
+                {isCorrigirNomes && corrigindoNomes
+                  ? <Loader2 className="w-5 h-5 animate-spin" style={{ color: item.color }} />
+                  : <item.Icon className="w-5 h-5" style={{ color: item.color }} />}
               </div>
               <div className="min-w-0">
                 <p className="font-bold text-gray-900 text-sm leading-tight">{item.title}</p>
-                <p className="text-gray-400 text-xs mt-0.5 leading-tight">{item.sub}</p>
+                <p className="text-gray-400 text-xs mt-0.5 leading-tight">{isCorrigirNomes && corrigindoNomes ? 'Verificando...' : item.sub}</p>
               </div>
             </button>
-          ))}
+            );
+          })}
         </div>
 
         {/* Bloco Turmas colapsável */}
