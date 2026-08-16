@@ -231,7 +231,7 @@ export function AttendanceReport() {
           Relatório de Frequência
         </h2>
         <div className="flex items-center gap-2 flex-wrap">
-          <button type="button" onClick={handleExcel} disabled={loading || alunos.length === 0} className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 transition-all disabled:opacity-50 shadow-sm"><FileSpreadsheet className="w-4 h-4" /> Nota 2BIM-2026</button>
+          <button type="button" onClick={handleExcel} disabled={loading || alunos.length === 0} className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 transition-all disabled:opacity-50 shadow-sm"><FileSpreadsheet className="w-4 h-4" /> Nota {bimestre}BIM-{new Date().getFullYear()}</button>
           <button type="button" onClick={handlePDF} disabled={loading || alunos.length === 0} className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-rose-600 text-white hover:bg-rose-700 active:scale-95 transition-all disabled:opacity-50 shadow-sm"><FileText className="w-4 h-4" /> PDF</button>
           <button type="button" onClick={handleDiario} disabled={loading || exportandoDiario || alunos.length === 0} className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-blue-700 text-white hover:bg-blue-800 active:scale-95 transition-all disabled:opacity-50 shadow-sm">
             {exportandoDiario ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
