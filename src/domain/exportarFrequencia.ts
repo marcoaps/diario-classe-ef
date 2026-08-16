@@ -38,21 +38,15 @@ function getLabelPeriodo(ctx: ExportContext): string {
   return `Periodo: ${formatarDataBR(pe.inicio)} a ${formatarDataBR(pe.fim)}`;
 }
 
-function calcularNotaEf(percentual: number, nome?: string, nomesAEE?: Set<string>, nomesTransferidos?: Set<string>, somaTrabalhos = 0): string {
+// Nota EF = pontos de frequ\u00eancia (0,5 por presen\u00e7a) + soma das notas de
+// trabalhos do bimestre, sem teto (reflete o mesmo valor mostrado na tela).
+function calcularNotaEf(pontos: number, nome?: string, nomesAEE?: Set<string>, nomesTransferidos?: Set<string>, somaTrabalhos = 0): string {
   if (nome) {
     const nomeLower = nome.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
     if (nomesTransferidos?.has(nomeLower)) return 'Transf.';
     if (nomesAEE?.has(nomeLower)) return 'AEE';
   }
-  const p = Math.round(percentual);
-  if (p <= 0) return '-';
-  let base: number;
-  if (p <= 20) base = 8.0;
-  else if (p <= 40) base = 8.5;
-  else if (p <= 64) base = 9.0;
-  else if (p <= 88) base = 9.5;
-  else base = 10.0;
-  return Math.min(base + somaTrabalhos, 10.0).toFixed(1).replace('.', ',');
+  return (pontos + somaTrabalhos).toFixed(1).replace('.', ',');
 }
 
 
@@ -78,7 +72,7 @@ export function exportarExcel(ctx: ExportContext) {
       ctx.resumo.total_criticos,
     ],
     [],
-    ['No', 'Nome', 'Aulas', 'Presencas', 'Faltas', 'Pontos', 'Frequencia %', 'Situacao', 'Nota EF'],
+    ['No', 'Nome', 'Aulas', 'Presencas', 'Faltas', 'Pontos', 'Frequencia %', 'Situacao', 'Nota Trabalho', 'Nota EF'],
   ];
 
   const linhas = ctx.alunos.map((a) => [
@@ -90,15 +84,16 @@ export function exportarExcel(ctx: ExportContext) {
     ctx.transferidos?.has(a.id) ? '-' : a.pontos,
     ctx.transferidos?.has(a.id) ? '-' : a.percentual,
     situacao(a, ctx.transferidos),
-    ctx.transferidos?.has(a.id) ? '-' : calcularNotaEf(a.percentual, a.nome, ctx.nomesAEE, ctx.nomesTransferidos, ctx.notasTrabalhosPorAluno?.[a.id] ?? 0),
+    ctx.transferidos?.has(a.id) ? '-' : (ctx.notasTrabalhosPorAluno?.[a.id] ?? 0),
+    ctx.transferidos?.has(a.id) ? '-' : calcularNotaEf(a.pontos, a.nome, ctx.nomesAEE, ctx.nomesTransferidos, ctx.notasTrabalhosPorAluno?.[a.id] ?? 0),
   ]);
 
   const ws = XLSX.utils.aoa_to_sheet([...cabecalho, ...linhas]);
   ws['!cols'] = [
     { wch: 5 }, { wch: 38 }, { wch: 8 }, { wch: 11 },
-    { wch: 8 }, { wch: 9 }, { wch: 13 }, { wch: 12 }, { wch: 10 },
+    { wch: 8 }, { wch: 9 }, { wch: 13 }, { wch: 12 }, { wch: 12 }, { wch: 10 },
   ];
-  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 8 } }];
+  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 9 } }];
 
   const sufixo = ctx.dataFiltro ? `_${ctx.dataFiltro}` : `_bim${ctx.bimestre}`;
   const nome = `Notas-${ctx.bimestre}BM-${ctx.turma}.xlsx`;

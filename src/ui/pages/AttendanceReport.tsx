@@ -182,22 +182,20 @@ export function AttendanceReport() {
     finally { setCriandoAvaliacao(false); }
   }
 
-  function calcularNotaEf(percentual: number, somaTrabalhos: number = 0): number | null {
-    if (percentual <= 0) return null;
-    let base: number;
-    if (percentual <= 20) base = 8.0;
-    else if (percentual <= 40) base = 8.5;
-    else if (percentual <= 64) base = 9.0;
-    else if (percentual <= 88) base = 9.5;
-    else base = 10.0;
-    return Math.min(base + somaTrabalhos, 10.0);
+  // Nota total = pontos de frequência (0,5 por presença, já calculado em
+  // a.pontos) + soma das notas de trabalhos do bimestre. Sem teto durante
+  // o bimestre (nota parcial acumulando); o teto de 10,0 só é aplicado no
+  // fechamento, ao calcular e salvar em "notas.nota_ef".
+  function notaTotal(pontos: number, somaTrabalhos: number, comTeto: boolean): number {
+    const total = pontos + somaTrabalhos;
+    return comTeto ? Math.min(total, 10.0) : total;
   }
 
   function normNome(s: string) { return s.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
 
   async function calcularESalvarNotasEf() {
     if (alunos.length === 0) return;
-    if (!window.confirm(`Calcular e salvar nota_ef para ${alunos.length} alunos da turma ${turmaId} (2º Bimestre)?\n\nIsso irá atualizar o campo nota_ef de cada aluno com base na frequência atual.`)) return;
+    if (!window.confirm(`Calcular e salvar nota_ef para ${alunos.length} alunos da turma ${turmaId} (2º Bimestre)?\n\nIsso irá atualizar o campo nota_ef de cada aluno com pontos de frequência + nota de trabalho, limitado a 10,0.`)) return;
     setCalculandoNota(true);
     setNotasCalculadas(false);
     try {
@@ -209,7 +207,7 @@ export function AttendanceReport() {
           bimestre: 2,
           nome: a.nome,
           numero: a.numero_chamada ?? 0,
-          nota_ef: calcularNotaEf(Math.round(a.percentual), notasTrabalhosPorAluno[a.id] ?? 0),
+          nota_ef: notaTotal(a.pontos, notasTrabalhosPorAluno[a.id] ?? 0, true),
         }));
       if (updates.length === 0) { alert('Nenhum aluno com registros de frequência.'); return; }
       const { error } = await supabase
@@ -424,14 +422,17 @@ export function AttendanceReport() {
                   <th className="px-5 py-4 min-w-[220px]">Aluno</th>
                   <th className="px-4 py-4 text-center">Aulas</th>
                   <th className="px-4 py-4 text-center">Faltas</th>
-                  <th className="px-4 py-4 text-center">Pontos</th>
+                  <th className="px-4 py-4 text-center" title="0,5 ponto por presença">Pontos Freq.</th>
                   <th className="px-4 py-4 min-w-[200px]">Frequência</th>
                   <th className="px-4 py-4 text-center">Situação</th>
-                  <th className="px-4 py-4 text-center" title="Nota de frequência + soma das notas de trabalhos do bimestre, limitado a 10,0">Nota EF</th>
+                  <th className="px-4 py-4 text-center" title="Soma das notas de todos os trabalhos do aluno neste bimestre">Nota Trabalho</th>
+                  <th className="px-4 py-4 text-center" title="Pontos de frequência + Nota Trabalho">Nota EF</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {alunos.map((a) => (
+                {alunos.map((a) => {
+                  const notaTrabalho = notasTrabalhosPorAluno[a.id] ?? 0;
+                  return (
                   <tr key={a.id} className={cn('transition-colors',
                     a.percentual === 0 && a.registros_total > 0 ? 'bg-red-50/60 hover:bg-red-100/50'
                     : a.em_risco || a.critico ? 'bg-amber-50/60 hover:bg-amber-100/50'
@@ -447,15 +448,19 @@ export function AttendanceReport() {
                     <td className="px-4 py-3 text-center font-bold text-gray-900">{a.pontos.toFixed(1).replace('.', ',')}</td>
                     <td className="px-4 py-3"><BarraProgresso percentual={a.percentual} critico={a.critico} emRisco={a.em_risco} /></td>
                     <td className="px-4 py-3 text-center"><BadgeSituacao aluno={a} /></td>
-                    <td className="px-4 py-3 text-center font-bold text-violet-700">{calcularNotaEf(Math.round(a.percentual), notasTrabalhosPorAluno[a.id] ?? 0) !== null ? calcularNotaEf(Math.round(a.percentual), notasTrabalhosPorAluno[a.id] ?? 0)?.toFixed(1).replace('.',',') : '—'}</td>
+                    <td className="px-4 py-3 text-center font-semibold text-gray-700">{notaTrabalho > 0 ? notaTrabalho.toFixed(1).replace('.', ',') : '—'}</td>
+                    <td className="px-4 py-3 text-center font-bold text-violet-700">{notaTotal(a.pontos, notaTrabalho, false).toFixed(1).replace('.', ',')}</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
           <div className="md:hidden flex flex-col gap-3">
-            {alunos.map((a) => (
+            {alunos.map((a) => {
+              const notaTrabalho = notasTrabalhosPorAluno[a.id] ?? 0;
+              return (
               <div key={a.id} className={cn('p-4 rounded-2xl shadow-sm border flex flex-col gap-3',
                 a.percentual === 0 && a.registros_total > 0 ? 'bg-red-50 border-red-200'
                 : a.em_risco || a.critico ? 'bg-amber-50 border-amber-200'
@@ -467,11 +472,16 @@ export function AttendanceReport() {
                 <div className="flex justify-between text-xs font-medium text-gray-600">
                   <span>Aulas: {a.registros_total}</span>
                   <span className="text-rose-600 font-semibold">Faltas: {a.ausentes}</span>
-                  <span className="text-gray-900 font-bold">{a.pontos.toFixed(1).replace('.', ',')} pts</span>
+                  <span className="text-gray-900 font-bold">{a.pontos.toFixed(1).replace('.', ',')} pts freq.</span>
                 </div>
                 <BarraProgresso percentual={a.percentual} critico={a.critico} emRisco={a.em_risco} />
+                <div className="flex justify-between items-center pt-2 border-t border-gray-100 text-xs font-medium text-gray-600">
+                  <span>Nota Trabalho: <span className="font-bold text-gray-900">{notaTrabalho > 0 ? notaTrabalho.toFixed(1).replace('.', ',') : '—'}</span></span>
+                  <span className="font-bold text-violet-700 text-sm">Nota EF: {notaTotal(a.pontos, notaTrabalho, false).toFixed(1).replace('.', ',')}</span>
+                </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </>
       )}
