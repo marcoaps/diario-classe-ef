@@ -76,12 +76,35 @@ export function AttendanceReport() {
     turmaId || null, bimestre, undefined, dataFiltro || null,
   );
 
+  const [notasTrabalhosPorAluno, setNotasTrabalhosPorAluno] = useState<Record<string, number>>({});
+
+  React.useEffect(() => {
+    let mounted = true;
+    async function carregarNotasTrabalhos() {
+      if (!turmaId) { setNotasTrabalhosPorAluno({}); return; }
+      const turmaNorm = normalizarTurma(turmaId);
+      const { data: trabalhosData } = await supabase
+        .from('trabalhos').select('id').eq('turma', turmaNorm).eq('bimestre', bimestre);
+      const trabalhoIds = (trabalhosData || []).map((t: any) => t.id);
+      if (trabalhoIds.length === 0) { if (mounted) setNotasTrabalhosPorAluno({}); return; }
+      const { data: registrosData } = await supabase
+        .from('trabalhos_registros').select('aluno_id, nota').in('trabalho_id', trabalhoIds);
+      const soma: Record<string, number> = {};
+      (registrosData || []).forEach((r: any) => {
+        if (r.nota !== null) soma[r.aluno_id] = (soma[r.aluno_id] || 0) + Number(r.nota);
+      });
+      if (mounted) setNotasTrabalhosPorAluno(soma);
+    }
+    carregarNotasTrabalhos();
+    return () => { mounted = false; };
+  }, [turmaId, bimestre]);
+
   const emRisco = alunos.filter((a) => a.em_risco || a.critico);
   const alunosCriticos = alunos.filter((a) =>
     a.registros_total > 0 && a.percentual === 0 && !nomesExcluidos.has(a.nome.toLowerCase().trim())
   );
 
-  const handleExcel = () => exportarExcel({ turma: turmaId, bimestre, periodo, periodoEfetivo, dataFiltro: dataFiltro || null, alunos, resumo, nomesAEE, nomesTransferidos });
+  const handleExcel = () => exportarExcel({ turma: turmaId, bimestre, periodo, periodoEfetivo, dataFiltro: dataFiltro || null, alunos, resumo, nomesAEE, nomesTransferidos, notasTrabalhosPorAluno });
   const handlePDF   = () => exportarPDF({ turma: turmaId, bimestre, periodo, periodoEfetivo, dataFiltro: dataFiltro || null, alunos, resumo });
 
   const handleDiario = async () => {
@@ -159,13 +182,15 @@ export function AttendanceReport() {
     finally { setCriandoAvaliacao(false); }
   }
 
-  function calcularNotaEf(percentual: number): number | null {
+  function calcularNotaEf(percentual: number, somaTrabalhos: number = 0): number | null {
     if (percentual <= 0) return null;
-    if (percentual <= 20) return 8.0;
-    if (percentual <= 40) return 8.5;
-    if (percentual <= 64) return 9.0;
-    if (percentual <= 88) return 9.5;
-    return 10.0;
+    let base: number;
+    if (percentual <= 20) base = 8.0;
+    else if (percentual <= 40) base = 8.5;
+    else if (percentual <= 64) base = 9.0;
+    else if (percentual <= 88) base = 9.5;
+    else base = 10.0;
+    return Math.min(base + somaTrabalhos, 10.0);
   }
 
   function normNome(s: string) { return s.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
@@ -184,7 +209,7 @@ export function AttendanceReport() {
           bimestre: 2,
           nome: a.nome,
           numero: a.numero_chamada ?? 0,
-          nota_ef: calcularNotaEf(Math.round(a.percentual)),
+          nota_ef: calcularNotaEf(Math.round(a.percentual), notasTrabalhosPorAluno[a.id] ?? 0),
         }));
       if (updates.length === 0) { alert('Nenhum aluno com registros de frequência.'); return; }
       const { error } = await supabase
@@ -402,7 +427,7 @@ export function AttendanceReport() {
                   <th className="px-4 py-4 text-center">Pontos</th>
                   <th className="px-4 py-4 min-w-[200px]">Frequência</th>
                   <th className="px-4 py-4 text-center">Situação</th>
-                  <th className="px-4 py-4 text-center">Nota EF</th>
+                  <th className="px-4 py-4 text-center" title="Nota de frequência + soma das notas de trabalhos do bimestre, limitado a 10,0">Nota EF</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -422,7 +447,7 @@ export function AttendanceReport() {
                     <td className="px-4 py-3 text-center font-bold text-gray-900">{a.pontos.toFixed(1).replace('.', ',')}</td>
                     <td className="px-4 py-3"><BarraProgresso percentual={a.percentual} critico={a.critico} emRisco={a.em_risco} /></td>
                     <td className="px-4 py-3 text-center"><BadgeSituacao aluno={a} /></td>
-                    <td className="px-4 py-3 text-center font-bold text-violet-700">{calcularNotaEf(Math.round(a.percentual)) !== null ? calcularNotaEf(Math.round(a.percentual))?.toFixed(1).replace('.',',') : '—'}</td>
+                    <td className="px-4 py-3 text-center font-bold text-violet-700">{calcularNotaEf(Math.round(a.percentual), notasTrabalhosPorAluno[a.id] ?? 0) !== null ? calcularNotaEf(Math.round(a.percentual), notasTrabalhosPorAluno[a.id] ?? 0)?.toFixed(1).replace('.',',') : '—'}</td>
                   </tr>
                 ))}
               </tbody>

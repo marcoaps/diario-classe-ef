@@ -16,6 +16,7 @@ interface ExportContext {
   transferidos?: Set<string>;
   nomesAEE?: Set<string>;
   nomesTransferidos?: Set<string>; // ids dos transferidos
+  notasTrabalhosPorAluno?: Record<string, number>; // id do aluno -> soma das notas de trabalhos do bimestre
 }
 
 function formatarDataBR(iso: string) {
@@ -37,7 +38,7 @@ function getLabelPeriodo(ctx: ExportContext): string {
   return `Periodo: ${formatarDataBR(pe.inicio)} a ${formatarDataBR(pe.fim)}`;
 }
 
-function calcularNotaEf(percentual: number, nome?: string, nomesAEE?: Set<string>, nomesTransferidos?: Set<string>): string {
+function calcularNotaEf(percentual: number, nome?: string, nomesAEE?: Set<string>, nomesTransferidos?: Set<string>, somaTrabalhos = 0): string {
   if (nome) {
     const nomeLower = nome.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
     if (nomesTransferidos?.has(nomeLower)) return 'Transf.';
@@ -45,11 +46,13 @@ function calcularNotaEf(percentual: number, nome?: string, nomesAEE?: Set<string
   }
   const p = Math.round(percentual);
   if (p <= 0) return '-';
-  if (p <= 20) return '8,0';
-  if (p <= 40) return '8,5';
-  if (p <= 64) return '9,0';
-  if (p <= 88) return '9,5';
-  return '10,0';
+  let base: number;
+  if (p <= 20) base = 8.0;
+  else if (p <= 40) base = 8.5;
+  else if (p <= 64) base = 9.0;
+  else if (p <= 88) base = 9.5;
+  else base = 10.0;
+  return Math.min(base + somaTrabalhos, 10.0).toFixed(1).replace('.', ',');
 }
 
 
@@ -87,7 +90,7 @@ export function exportarExcel(ctx: ExportContext) {
     ctx.transferidos?.has(a.id) ? '-' : a.pontos,
     ctx.transferidos?.has(a.id) ? '-' : a.percentual,
     situacao(a, ctx.transferidos),
-    ctx.transferidos?.has(a.id) ? '-' : calcularNotaEf(a.percentual, a.nome, ctx.nomesAEE, ctx.nomesTransferidos),
+    ctx.transferidos?.has(a.id) ? '-' : calcularNotaEf(a.percentual, a.nome, ctx.nomesAEE, ctx.nomesTransferidos, ctx.notasTrabalhosPorAluno?.[a.id] ?? 0),
   ]);
 
   const ws = XLSX.utils.aoa_to_sheet([...cabecalho, ...linhas]);
