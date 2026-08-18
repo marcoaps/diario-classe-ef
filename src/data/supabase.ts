@@ -13,7 +13,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 });
 
 export async function salvarChamada(
-  registros: { aluno_id: string; data: string; presente: boolean }[]
+  registros: { aluno_id: string; data: string; presente: boolean; participacao?: "fez" | "fez_em_parte" | "nao_fez" | null }[]
 ) {
   if (registros.length === 0) return;
   const data = registros[0].data;
@@ -31,7 +31,7 @@ export async function salvarChamada(
 
   const upsertData = registros.map((r) => {
     const recordId = existingMap.get(r.aluno_id) || uuidv4();
-    return { id: recordId, aluno_id: r.aluno_id, data: r.data, presente: r.presente };
+    return { id: recordId, aluno_id: r.aluno_id, data: r.data, presente: r.presente, participacao: r.presente ? (r.participacao ?? null) : null };
   });
 
   const { error: upsertError } = await supabase.from("frequencia").upsert(upsertData);

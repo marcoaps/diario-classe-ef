@@ -182,10 +182,11 @@ export function AttendanceReport() {
     finally { setCriandoAvaliacao(false); }
   }
 
-  // Nota total = pontos de frequência (0,5 por presença, já calculado em
-  // a.pontos) + soma das notas de trabalhos do bimestre. Sem teto durante
-  // o bimestre (nota parcial acumulando); o teto de 10,0 só é aplicado no
-  // fechamento, ao calcular e salvar em "notas.nota_ef".
+  // Nota total = pontos de frequência (0,25 a 0,75 por aula, conforme
+  // participação nas atividades — já calculado em a.pontos) + soma das
+  // notas de trabalhos do bimestre. Sem teto durante o bimestre (nota
+  // parcial acumulando); o teto de 10,0 só é aplicado no fechamento, ao
+  // calcular e salvar em "notas.nota_ef".
   function notaTotal(pontos: number, somaTrabalhos: number, comTeto: boolean): number {
     const total = pontos + somaTrabalhos;
     return comTeto ? Math.min(total, 10.0) : total;
@@ -422,7 +423,7 @@ export function AttendanceReport() {
                   <th className="px-5 py-4 min-w-[220px]">Aluno</th>
                   <th className="px-4 py-4 text-center">Aulas</th>
                   <th className="px-4 py-4 text-center">Faltas</th>
-                  <th className="px-4 py-4 text-center" title="0,5 ponto por presença">Pontos Freq.</th>
+                  <th className="px-4 py-4 text-center" title="0,25 a 0,75 por aula, conforme participação nas atividades">Pontos Freq.</th>
                   <th className="px-4 py-4 min-w-[200px]">Frequência</th>
                   <th className="px-4 py-4 text-center">Situação</th>
                   <th className="px-4 py-4 text-center" title="Soma das notas de todos os trabalhos do aluno neste bimestre">Nota Trabalho</th>

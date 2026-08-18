@@ -20,6 +20,7 @@ import { CentralAluno } from './ui/pages/CentralAluno';
 import { IAHub } from './ui/pages/ia/IAHub';
 import { IAPlanoAula } from './ui/pages/ia/IAPlanoAula';
 import { IASequencia } from './ui/pages/ia/IASequencia';
+import { IAEsportesInvasao } from './ui/pages/ia/IAEsportesInvasao';
 import { IAPlanejamentoAnual } from './ui/pages/ia/IAPlanejamentoAnual';
 import { IARoteiro } from './ui/pages/ia/IARoteiro';
 import { IAPlanoMensal } from './ui/pages/ia/IAPlanoMensal';
@@ -111,6 +112,7 @@ export default function App() {
           <Route path="/ia" element={<IAHub />} />
           <Route path="/ia/plano-aula" element={<IAPlanoAula />} />
           <Route path="/ia/sequencia" element={<IASequencia />} />
+          <Route path="/ia/esportes-invasao" element={<IAEsportesInvasao />} />
           <Route path="/ia/planejamento-anual" element={<IAPlanejamentoAnual />} />
           <Route path="/ia/roteiro" element={<IARoteiro />} />
           <Route path="/ia/plano-mensal" element={<IAPlanoMensal />} />

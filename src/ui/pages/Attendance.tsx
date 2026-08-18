@@ -5,12 +5,18 @@ import { Save, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '../../data/supabase';
 import { ConteudoAulas } from './ConteudoAulas';
+import { PARTICIPACAO_OPCOES, type Participacao } from '../../domain/frequenciaPontos';
 
 interface AlunoSupabase {
   id: string;
   nome: string;
   turma_id: string;
   numero_chamada: number | null;
+}
+
+interface RegistroChamada {
+  presente: boolean;
+  participacao: Participacao;
 }
 
 function normalizarTurma(turmaId: string) {
@@ -27,7 +33,7 @@ export function Attendance() {
   const [abaAtiva, setAbaAtiva] = useState<Aba>('chamada');
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [alunos, setAlunos] = useState<AlunoSupabase[]>([]);
-  const [records, setRecords] = useState<Record<string, boolean>>({});
+  const [records, setRecords] = useState<Record<string, RegistroChamada>>({});
   const [transferidos, setTransferidos] = useState<Map<string, string>>(new Map());
   const [especiais, setEspeciais] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
@@ -93,19 +99,19 @@ export function Attendance() {
         if (mounted) setEspeciais(idsAEE);
 
         // Busca frequencia existente
-        const novosRecords: Record<string, boolean> = {};
-        lista.forEach(a => { novosRecords[a.id] = false; });
+        const novosRecords: Record<string, RegistroChamada> = {};
+        lista.forEach(a => { novosRecords[a.id] = { presente: false, participacao: null }; });
 
         if (lista.length > 0) {
           const ids = lista.map(a => a.id);
           const { data: freqData } = await supabase
             .from('frequencia')
-            .select('aluno_id, presente')
+            .select('aluno_id, presente, participacao')
             .eq('data', date)
             .in('aluno_id', ids);
 
           (freqData || []).forEach((r: any) => {
-            novosRecords[r.aluno_id] = r.presente;
+            novosRecords[r.aluno_id] = { presente: r.presente, participacao: r.participacao ?? null };
           });
         }
 
@@ -128,14 +134,23 @@ export function Attendance() {
 
   const handleToggle = (alunoId: string) => {
     if (transferidos.has(alunoId)) return;
-    setRecords(prev => ({ ...prev, [alunoId]: !prev[alunoId] }));
+    setRecords(prev => {
+      const novoPresente = !prev[alunoId]?.presente;
+      // Ao marcar presente, assume "Fez" por padrão (caso mais comum) — o
+      // professor só precisa tocar no checklist para marcar as exceções.
+      return { ...prev, [alunoId]: { presente: novoPresente, participacao: novoPresente ? 'fez' : null } };
+    });
+  };
+
+  const handleParticipacao = (alunoId: string, participacao: Participacao) => {
+    setRecords(prev => ({ ...prev, [alunoId]: { presente: true, participacao } }));
   };
 
   const handleMarcarTodos = (presente: boolean) => {
     setRecords(prev => {
       const novos = { ...prev };
       alunos.forEach(a => {
-        if (!transferidos.has(a.id)) novos[a.id] = presente;
+        if (!transferidos.has(a.id)) novos[a.id] = { presente, participacao: presente ? 'fez' : null };
       });
       return novos;
     });
@@ -160,7 +175,8 @@ export function Attendance() {
         .map(a => ({
           aluno_id: a.id,
           data: date,
-          presente: records[a.id] ?? false,
+          presente: records[a.id]?.presente ?? false,
+          participacao: records[a.id]?.presente ? records[a.id]?.participacao ?? null : null,
         }));
 
       const { error: insError } = await supabase.from('frequencia').insert(recordsToSave);
@@ -245,7 +261,8 @@ export function Attendance() {
                 const situacaoAluno = transferidos.get(aluno.id);
                 const isTransf = !!situacaoAluno;
                 const isEspecial = especiais.has(aluno.id);
-                const isPresent = records[aluno.id] === true;
+                const registro = records[aluno.id];
+                const isPresent = registro?.presente === true;
 
                 if (isTransf) {
                   const rotulo = situacaoAluno!.toLowerCase().includes('remanej') ? 'Remanej.' : 'Transf.';
@@ -266,30 +283,55 @@ export function Attendance() {
                 }
 
                 return (
-                  <button
+                  <div
                     key={aluno.id}
-                    onClick={() => handleToggle(aluno.id)}
                     className={cn(
-                      "p-3 rounded-xl border transition-all flex items-center justify-between shadow-sm active:scale-[0.98]",
-                      isPresent ? "bg-white border-teal-500/30 ring-1 ring-teal-200" : "bg-white border-red-500/30 ring-1 ring-red-200"
+                      "rounded-xl border shadow-sm overflow-hidden",
+                      isPresent ? "border-teal-500/30 ring-1 ring-teal-200" : "border-red-500/30 ring-1 ring-red-200"
                     )}
                   >
-                    <span className={cn("font-semibold text-base transition-colors flex items-center gap-2", isPresent ? "text-teal-800" : "text-red-800")}>
-                      {aluno.numero_chamada ? <span className="font-mono text-gray-500 mr-2 text-sm">{aluno.numero_chamada}</span> : null}
-                      {aluno.nome}
-                      {isEspecial && (
-                        <span className="ml-1 px-1.5 py-0.5 rounded-md bg-purple-100 text-purple-700 text-[10px] font-bold border border-purple-300">
-                          AEE
-                        </span>
-                      )}
-                    </span>
-                    <div className={cn(
-                      "w-10 h-10 rounded-lg flex justify-center items-center font-bold text-lg shadow-sm border",
-                      isPresent ? "bg-teal-600 text-white border-teal-700" : "bg-red-600 text-white border-red-700"
-                    )}>
-                      {isPresent ? "P" : "F"}
-                    </div>
-                  </button>
+                    <button
+                      onClick={() => handleToggle(aluno.id)}
+                      className="w-full p-3 bg-white transition-all flex items-center justify-between active:scale-[0.98]"
+                    >
+                      <span className={cn("font-semibold text-base transition-colors flex items-center gap-2", isPresent ? "text-teal-800" : "text-red-800")}>
+                        {aluno.numero_chamada ? <span className="font-mono text-gray-500 mr-2 text-sm">{aluno.numero_chamada}</span> : null}
+                        {aluno.nome}
+                        {isEspecial && (
+                          <span className="ml-1 px-1.5 py-0.5 rounded-md bg-purple-100 text-purple-700 text-[10px] font-bold border border-purple-300">
+                            AEE
+                          </span>
+                        )}
+                      </span>
+                      <div className={cn(
+                        "w-10 h-10 rounded-lg flex justify-center items-center font-bold text-lg shadow-sm border",
+                        isPresent ? "bg-teal-600 text-white border-teal-700" : "bg-red-600 text-white border-red-700"
+                      )}>
+                        {isPresent ? "P" : "F"}
+                      </div>
+                    </button>
+                    {isPresent && (
+                      <div className="flex gap-1.5 px-3 pb-3 pt-1 bg-white">
+                        {PARTICIPACAO_OPCOES.map(opt => {
+                          const ativo = registro?.participacao === opt.valor;
+                          const cores = opt.valor === 'fez'
+                            ? (ativo ? "bg-teal-600 text-white border-teal-700" : "bg-teal-50 text-teal-700 border-teal-200")
+                            : opt.valor === 'fez_em_parte'
+                            ? (ativo ? "bg-amber-500 text-white border-amber-600" : "bg-amber-50 text-amber-700 border-amber-200")
+                            : (ativo ? "bg-red-600 text-white border-red-700" : "bg-red-50 text-red-700 border-red-200");
+                          return (
+                            <button
+                              key={opt.valor}
+                              onClick={() => handleParticipacao(aluno.id, opt.valor)}
+                              className={cn("flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all active:scale-95", cores)}
+                            >
+                              {opt.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 );
               })
             )}

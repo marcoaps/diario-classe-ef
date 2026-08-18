@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '../data/supabase';
 import { formatarNome } from '../utils/formatarNome';
+import { pontosPorRegistro, type Participacao } from './frequenciaPontos';
 
 export type Bimestre = 1 | 2 | 3 | 4;
 
@@ -115,25 +116,26 @@ export function useRelatorioFrequencia(
 
       const { data: freqData, error: freqErr } = await supabase
         .from('frequencia')
-        .select('aluno_id, data, presente')
+        .select('aluno_id, data, presente, participacao')
         .gte('data', periodoEfetivo.inicio)
         .lte('data', periodoEfetivo.fim)
         .in('aluno_id', ids);
 
       if (freqErr) throw freqErr;
 
-      const mapa = new Map<string, { presentes: number; ausentes: number }>();
+      const mapa = new Map<string, { presentes: number; ausentes: number; pontos: number }>();
       (freqData || []).forEach((r: any) => {
-        const acc = mapa.get(r.aluno_id) || { presentes: 0, ausentes: 0 };
+        const acc = mapa.get(r.aluno_id) || { presentes: 0, ausentes: 0, pontos: 0 };
         if (r.presente) acc.presentes += 1;
         else acc.ausentes += 1;
+        acc.pontos += pontosPorRegistro(r.presente, (r.participacao ?? null) as Participacao);
         mapa.set(r.aluno_id, acc);
       });
 
       const resultado: AlunoFrequencia[] = listaAlunos.map((a: any) => {
-        const m = mapa.get(a.id) || { presentes: 0, ausentes: 0 };
+        const m = mapa.get(a.id) || { presentes: 0, ausentes: 0, pontos: 0 };
         const registros_total = m.presentes + m.ausentes;
-        const pontos = +(m.presentes * PONTOS_POR_REGISTRO).toFixed(2);
+        const pontos = +m.pontos.toFixed(2);
         const percentual = registros_total > 0
           ? +((m.presentes / registros_total) * 100).toFixed(2)
           : 0;

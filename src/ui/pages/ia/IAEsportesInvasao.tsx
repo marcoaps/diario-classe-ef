@@ -1,75 +1,53 @@
 import { useState, useEffect } from "react";
-import { curriculumData } from "../../../data/curriculumData";
 import type { Sequencia } from "./sequenciaDidaticaTypes";
 import {
   numeroSequenciaAtual, periodoExecucaoAtual, ordinal,
-  sugerirRecursos, ehEsporteInvasao, sugerirFundamentos, TURMAS_POR_SERIE,
+  sugerirRecursos, sugerirFundamentos, TURMAS_POR_SERIE,
 } from "./sequenciaDidaticaHelpers";
 import { gerarSequenciaComIA } from "./sequenciaDidaticaGerador";
 import { baixarWord } from "./sequenciaDidaticaWord";
 import { AnimacaoGerando, AnimacaoBaixando } from "./SequenciaDidaticaAnimacoes";
 import { SequenciaDidaticaPreview } from "./SequenciaDidaticaPreview";
 
-/**
- * O Plano de Curso oficial (`curriculumData.ts`) é organizado por ano único
- * (6, 7, 8, 9), mas esta tela permite escolher grupos de séries ("6º e 7º",
- * "8º e 9º"). Para as combinações, usamos o primeiro ano do par como
- * referência de sugestão — os dois anos do par tratam objetos de
- * conhecimento equivalentes em cada bimestre. Ensino Médio não tem Plano de
- * Curso cadastrado, então essas séries continuam com o campo de texto livre.
- */
-const ANO_CURRICULO_POR_SERIE: Record<string, string> = {
-  "6º ano": "6", "7º ano": "7", "8º ano": "8", "9º ano": "9",
-  "6º e 7º": "6", "8º e 9º": "8",
-};
+// Aba dedicada a esportes de invasão (handebol, futsal, basquete...):
+// separada do Gerador de Sequência genérico porque o Plano de Curso oficial
+// trata esses esportes de forma agrupada ("Esporte de invasão ou
+// territorial", sem nomear a modalidade), então aqui a Modalidade é um
+// campo de primeira classe em vez de precisar editar o Tema manualmente.
+const MODALIDADES = ["Handebol", "Futsal", "Basquete"];
 
-const BIMESTRES = [
-  { valor: "1", label: "1º Bimestre" },
-  { valor: "2", label: "2º Bimestre" },
-  { valor: "3", label: "3º Bimestre" },
-  { valor: "4", label: "4º Bimestre" },
-];
+function temaPadrao(modalidade: string): string {
+  return `${modalidade} — Fundamentos técnico-táticos e regras`;
+}
 
-export function IASequencia() {
+export function IAEsportesInvasao() {
   const [professor, setProfessor] = useState("Marco Pedro");
   const [coordenador, setCoordenador] = useState("Jair Fiesca e Amarildo Saady");
+  const [modalidade, setModalidade] = useState("Handebol");
   const [serie, setSerie] = useState("6º e 7º");
   const [turmas, setTurmas] = useState(TURMAS_POR_SERIE["6º e 7º"]);
-  const [bimestre, setBimestre] = useState("1");
   const [aulasPrevistas, setAulasPrevistas] = useState("5");
   const [periodo, setPeriodo] = useState(() => periodoExecucaoAtual());
-  const [tema, setTema] = useState("");
-  const [recursos, setRecursos] = useState("");
+  const [tema, setTema] = useState(() => temaPadrao("Handebol"));
+  const [recursos, setRecursos] = useState(() => sugerirRecursos("Handebol"));
   const [numSituacoes, setNumSituacoes] = useState("3");
-  const [incluirEstacoes, setIncluirEstacoes] = useState(false);
-  const [fundamentos, setFundamentos] = useState("");
+  const [incluirEstacoes, setIncluirEstacoes] = useState(true);
+  const [fundamentos, setFundamentos] = useState(() => sugerirFundamentos("Handebol"));
 
-  const anoCurriculo = ANO_CURRICULO_POR_SERIE[serie];
-  const dadosPlano = anoCurriculo ? curriculumData[anoCurriculo]?.bimestres?.[bimestre] ?? null : null;
-
-  // Sempre que Ano/Série ou Bimestre mudarem, sincroniza Tema e Recursos com
-  // o primeiro objeto de conhecimento do Plano de Curso daquele ano/bimestre
-  // (mesmo padrão do Gerador de Questões: auto-seleciona, mas continua editável).
-  useEffect(() => {
-    if (!dadosPlano) return;
-    if (!dadosPlano.objetosConhecimento.includes(tema)) {
-      const primeiroObjeto = dadosPlano.objetosConhecimento[0] ?? "";
-      setTema(primeiroObjeto);
-      setRecursos(sugerirRecursos(primeiroObjeto));
-      const invasao = ehEsporteInvasao(primeiroObjeto);
-      setIncluirEstacoes(invasao);
-      setFundamentos(invasao ? sugerirFundamentos(primeiroObjeto) : "");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anoCurriculo, bimestre]);
-
-  function selecionarObjetoConhecimento(valor: string) {
-    setTema(valor);
+  // Ao trocar a Modalidade, sincroniza Tema/Recursos/Fundamentos com os
+  // padrões daquele esporte — mesmo padrão "pré-preencher, mas deixar
+  // editável" do restante do app.
+  function selecionarModalidade(valor: string) {
+    setModalidade(valor);
+    setTema(temaPadrao(valor));
     setRecursos(sugerirRecursos(valor));
-    const invasao = ehEsporteInvasao(valor);
-    setIncluirEstacoes(invasao);
-    setFundamentos(invasao ? sugerirFundamentos(valor) : "");
+    setFundamentos(sugerirFundamentos(valor));
   }
+
+  const handleSerie = (s: string) => {
+    setSerie(s);
+    if (TURMAS_POR_SERIE[s] !== undefined) setTurmas(TURMAS_POR_SERIE[s]);
+  };
 
   const [status, setStatus] = useState<"idle" | "gerando" | "imagens" | "pronto" | "erro">("idle");
   const [baixando, setBaixando] = useState(false);
@@ -87,11 +65,6 @@ export function IASequencia() {
     return () => clearInterval(iv);
   }, [status]);
 
-  const handleSerie = (s: string) => {
-    setSerie(s);
-    if (TURMAS_POR_SERIE[s] !== undefined) setTurmas(TURMAS_POR_SERIE[s]);
-  };
-
   const gerar = async () => {
     if (!tema.trim()) { alert("Informe o tema/conteúdo da aula!"); return; }
     setStatus("gerando"); setErroMsg(""); setSequencia(null); setEtapaAnim(0);
@@ -106,8 +79,6 @@ export function IASequencia() {
 
     setNumeroAtual(numeroSequenciaAtual());
 
-    // Contador cumulativo (independente do número da sequência), só para o
-    // selo "N sequências geradas" no topo da tela.
     const novoContador = contadorSeq + 1;
     setContadorSeq(novoContador);
     localStorage.setItem("seq_contador", String(novoContador));
@@ -124,7 +95,7 @@ export function IASequencia() {
     setBaixando(false);
   };
 
-  const resetar = () => { setStatus("idle"); setSequencia(null); setTema(""); setRecursos(""); setIncluirEstacoes(false); setFundamentos(""); };
+  const resetar = () => { setStatus("idle"); setSequencia(null); };
 
   const carregando = status === "gerando" || status === "imagens";
 
@@ -135,7 +106,7 @@ export function IASequencia() {
 
       <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-800">🤖 Gerador de Sequência Didática Oficial — IA</h2>
+          <h2 className="text-lg font-semibold text-gray-800">🥅 Esportes de Invasão — Gerador de Sequência (IA)</h2>
           {contadorSeq > 0 && (
             <span className="text-xs bg-blue-100 text-blue-700 font-semibold px-3 py-1 rounded-full">
               {contadorSeq} sequência{contadorSeq > 1 ? "s" : ""} gerada{contadorSeq > 1 ? "s" : ""}
@@ -144,20 +115,16 @@ export function IASequencia() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {dadosPlano && (
-            <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="text-xs font-medium text-gray-500">Objeto de Conhecimento (Plano de Curso oficial)</label>
-              <select className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" value={tema} onChange={(e) => selecionarObjetoConhecimento(e.target.value)}>
-                {dadosPlano.objetosConhecimento.map((o) => <option key={o} value={o}>{o}</option>)}
-              </select>
-            </div>
-          )}
+          <div className="sm:col-span-2 flex flex-col gap-1">
+            <label className="text-xs font-medium text-gray-500">Modalidade</label>
+            <select className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" value={modalidade} onChange={(e) => selecionarModalidade(e.target.value)}>
+              {MODALIDADES.map((m) => <option key={m}>{m}</option>)}
+            </select>
+            <p className="text-[11px] text-gray-400">O Plano de Curso oficial agrupa esportes de invasão sem nomear a modalidade — aqui você escolhe direto e o resto do formulário já vem ajustado.</p>
+          </div>
           <div className="sm:col-span-2 flex flex-col gap-1">
             <label className="text-xs font-medium text-gray-500">Tema / Conteúdo *</label>
-            <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" placeholder="Ex: Futsal — Fundamentos técnico-táticos e regras" value={tema} onChange={(e) => setTema(e.target.value)} />
-            {dadosPlano && (
-              <p className="text-[11px] text-gray-400">Carregado a partir do Objeto de Conhecimento selecionado acima — pode editar/resumir antes de gerar.</p>
-            )}
+            <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" value={tema} onChange={(e) => setTema(e.target.value)} />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-gray-500">Professor(a)</label>
@@ -178,12 +145,6 @@ export function IASequencia() {
             <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" placeholder="Ex: 6ºF, 7ºB, 7ºC..." value={turmas} onChange={(e) => setTurmas(e.target.value)} />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-500">Bimestre (Plano de Curso oficial)</label>
-            <select className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" value={bimestre} onChange={(e) => setBimestre(e.target.value)}>
-              {BIMESTRES.map((b) => <option key={b.valor} value={b.valor}>{b.label}</option>)}
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-gray-500">Aulas previstas</label>
             <select className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" value={aulasPrevistas} onChange={(e) => setAulasPrevistas(e.target.value)}>
               {["2","3","4","5","6","8","10"].map((n) => <option key={n}>{n}</option>)}
@@ -201,10 +162,8 @@ export function IASequencia() {
           </div>
           <div className="sm:col-span-2 flex flex-col gap-1">
             <label className="text-xs font-medium text-gray-500">Recursos disponíveis</label>
-            <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" placeholder="Ex: quadra coberta, bolas de futsal, cones, coletes..." value={recursos} onChange={(e) => setRecursos(e.target.value)} />
-            {dadosPlano && (
-              <p className="text-[11px] text-gray-400">Sugestão automática com base no Objeto de Conhecimento selecionado — pode editar antes de gerar.</p>
-            )}
+            <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" value={recursos} onChange={(e) => setRecursos(e.target.value)} />
+            <p className="text-[11px] text-gray-400">Sugestão automática com base na modalidade — pode editar antes de gerar.</p>
           </div>
 
           <div className="sm:col-span-2 flex flex-col gap-2 border border-orange-100 bg-orange-50/60 rounded-lg p-3">
@@ -216,10 +175,10 @@ export function IASequencia() {
                 onChange={(e) => {
                   const checked = e.target.checked;
                   setIncluirEstacoes(checked);
-                  if (checked && !fundamentos.trim()) setFundamentos(sugerirFundamentos(tema));
+                  if (checked && !fundamentos.trim()) setFundamentos(sugerirFundamentos(modalidade));
                 }}
               />
-              🎯 Organizar por Estações (uma estação por fundamento) — recomendado para esportes de invasão
+              🎯 Organizar por Estações (uma estação por fundamento)
             </label>
             {incluirEstacoes && (
               <div className="flex flex-col gap-1">
@@ -230,7 +189,11 @@ export function IASequencia() {
                   value={fundamentos}
                   onChange={(e) => setFundamentos(e.target.value)}
                 />
-                <p className="text-[11px] text-gray-400">A IA vai gerar o passo a passo e uma imagem ilustrativa para cada estação/fundamento, na ordem informada.</p>
+                <p className="text-[11px] text-gray-400">
+                  {modalidade === "Handebol"
+                    ? "Para Passe, Recepção, Empunhadura, Arremesso e Deslocamento, a IA usa a técnica dos seus próprios vídeos como referência."
+                    : "A IA vai gerar o passo a passo e uma imagem ilustrativa para cada estação/fundamento, na ordem informada."}
+                </p>
               </div>
             )}
           </div>
