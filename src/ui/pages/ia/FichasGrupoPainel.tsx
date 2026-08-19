@@ -31,6 +31,7 @@ export function FichasGrupoPainel({ sequencia, tema, serie }: { sequencia: Seque
   const [turmasSelecionadas, setTurmasSelecionadas] = useState<string[]>(turmasUnicas[0] ? [turmasUnicas[0].name] : []);
   const [genero, setGenero] = useState<"M" | "F" | null>(null);
   const [gerando, setGerando] = useState(false);
+  const [aviso, setAviso] = useState("");
 
   if (!sequencia.estacoes || sequencia.estacoes.length === 0) return null;
   const estacoes = sequencia.estacoes;
@@ -40,10 +41,12 @@ export function FichasGrupoPainel({ sequencia, tema, serie }: { sequencia: Seque
   };
 
   const handleGerar = async () => {
-    if (turmasSelecionadas.length === 0) { alert("Selecione ao menos uma turma."); return; }
+    setAviso("");
+    if (turmasSelecionadas.length === 0) { setAviso("Selecione ao menos uma turma."); return; }
     setGerando(true);
     try {
       const alunos: AlunoFicha[] = [];
+      let totalNaTurma = 0;
       for (const turma of turmasSelecionadas) {
         const turmaNorm = normalizarTurma(turma);
         const { data, error } = await supabase
@@ -52,13 +55,14 @@ export function FichasGrupoPainel({ sequencia, tema, serie }: { sequencia: Seque
           .eq("turma_id", turmaNorm)
           .order("numero_chamada", { ascending: true, nullsFirst: false });
         if (error) throw error;
+        totalNaTurma += (data || []).length;
         (data || [])
           .filter((a: any) => !genero || a.sexo === genero)
           .forEach((a: any) => alunos.push({ nome: a.nome, numero_chamada: a.numero_chamada ?? null }));
       }
       if (alunos.length === 0) {
-        alert(genero
-          ? `Nenhum aluno marcado como "${genero === 'M' ? 'Meninos' : 'Meninas'}" nessas turmas — use a tela "Marcar Gênero" primeiro.`
+        setAviso(genero
+          ? `Nenhum aluno marcado como "${genero === 'M' ? 'Meninos' : 'Meninas'}" nessas turmas (${totalNaTurma} alunos no total, nenhum com gênero marcado) — vá em "Marcar Gênero" na aba Turmas primeiro.`
           : "Nenhum aluno encontrado nessas turmas.");
         return;
       }
@@ -67,7 +71,7 @@ export function FichasGrupoPainel({ sequencia, tema, serie }: { sequencia: Seque
       const grupos = dividirEmGrupos(alunos, estacoes.length);
       await baixarFichasGrupo({ tema, turma: turmaLabel, serie, estacoes, grupos });
     } catch (e) {
-      alert("Erro ao gerar fichas: " + (e instanceof Error ? e.message : String(e)));
+      setAviso("Erro ao gerar fichas: " + (e instanceof Error ? e.message : String(e)));
     } finally {
       setGerando(false);
     }
@@ -133,6 +137,10 @@ export function FichasGrupoPainel({ sequencia, tema, serie }: { sequencia: Seque
       >
         {gerando ? "Gerando..." : "📄 Gerar Fichas (Word)"}
       </button>
+
+      {aviso && (
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">⚠️ {aviso}</div>
+      )}
     </div>
   );
 }
