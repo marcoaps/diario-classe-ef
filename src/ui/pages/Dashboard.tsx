@@ -2,7 +2,7 @@
 import { useStore } from '../../store';
 import { MIN_PASSING_GRADE, MAX_ABSENCES_TOTAL, ClassRoom, Student } from '../../domain/types';
 import { AgendaDia } from './AgendaDia';
-import { ChevronRight, UserX, Users, Download, Upload, Loader2, X, CheckSquare, BarChart3, CalendarSearch, Edit, Trash2, Star, ChevronDown, GraduationCap, ChevronUp, Share2, Copy, CheckCircle, ClipboardCheck, CaseSensitive } from 'lucide-react';
+import { ChevronRight, UserX, Users, Download, Upload, Loader2, X, CheckSquare, BarChart3, CalendarSearch, Edit, Trash2, Star, ChevronDown, GraduationCap, ChevronUp, Share2, Copy, CheckCircle, ClipboardCheck, CaseSensitive, UserCheck } from 'lucide-react';
 import { cn } from '../AppLayout';
 import { buscarAlunos, salvarNotas, sincronizarNomesAlunos, supabase } from '../../data/supabase';
 import { formatarNome } from '../../utils/formatarNome';
@@ -44,6 +44,7 @@ const MENU_ITEMS = [
   { Icon: ClipboardCheck, title: 'Trabalhos',        sub: 'Registrar entregas',   color: '#0891b2', bg: '#ecfeff', action: 'route',  value: '/trabalhos',  destaque: false },
   { Icon: Download,       title: 'Importar Lista',   sub: 'Adicionar alunos',     color: '#0284c7', bg: '#f0f9ff', action: 'import', value: '',            destaque: false },
   { Icon: Edit,           title: 'Editar Turma',     sub: 'Gerenciar lista',      color: '#64748b', bg: '#f8fafc', action: 'turmas', value: '',            destaque: false },
+  { Icon: UserCheck,      title: 'Marcar Gênero',    sub: 'Meninos e meninas',    color: '#9333ea', bg: '#faf5ff', action: 'route',  value: '/genero',     destaque: false },
   { Icon: CaseSensitive,  title: 'Corrigir Nomes',   sub: 'Ajustar maiúsculas',   color: '#0d9488', bg: '#f0fdfa', action: 'corrigirNomes', value: '',      destaque: false },
   { Icon: Trash2,         title: 'Reset Histórico',  sub: 'Apagar registros',     color: '#dc2626', bg: '#fef2f2', action: 'route',  value: '/reset',      destaque: false },
 ] as const;

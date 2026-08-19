@@ -4,6 +4,7 @@ import { StoreProvider } from './store';
 import { AppLayout } from './ui/AppLayout';
 import { Dashboard } from './ui/pages/Dashboard';
 import { Attendance } from './ui/pages/Attendance';
+import { MarcarGenero } from './ui/pages/MarcarGenero';
 import { AttendanceHistory } from './ui/pages/AttendanceHistory';
 import { AttendanceReport } from './ui/pages/AttendanceReport';
 import { Evaluations } from './ui/pages/Evaluations';
@@ -89,6 +90,7 @@ export default function App() {
         <Route element={<LayoutProtegido />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/attendance" element={<Attendance />} />
+          <Route path="/genero" element={<MarcarGenero />} />
           <Route path="/history" element={<AttendanceHistory />} />
           <Route path="/report" element={<AttendanceReport />} />
           <Route path="/evaluations" element={<Evaluations />} />
