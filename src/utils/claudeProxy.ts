@@ -8,7 +8,10 @@ export async function chamarClaudeProxy(prompt: string): Promise<string> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
-      max_tokens: 8000,
+      // 8000 cortava respostas grandes no meio (ex: sequência didática com
+      // 5 estações), quebrando o JSON. max_tokens é só um teto — a IA gera
+      // só o que precisa, então subir esse valor não aumenta custo à toa.
+      max_tokens: 16000,
       messages: [{ role: "user", content: prompt }],
     }),
   });
