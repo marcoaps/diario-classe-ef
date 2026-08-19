@@ -4,7 +4,6 @@
 // passo a passo), pronta pra colar no local da estação.
 
 import type { Estacao } from "./sequenciaDidaticaTypes";
-import { base64ToUint8Array } from "./sequenciaDidaticaImagens";
 
 export interface AlunoFicha {
   nome: string;
@@ -37,7 +36,7 @@ export interface BaixarFichasGrupoParams {
 export async function baixarFichasGrupo({ tema, turma, serie, estacoes, grupos }: BaixarFichasGrupoParams) {
   const {
     Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
-    ImageRun, AlignmentType, BorderStyle, WidthType, ShadingType, VerticalAlign, LevelFormat, PageBreak,
+    AlignmentType, BorderStyle, WidthType, ShadingType, VerticalAlign, LevelFormat, PageBreak,
   } = await import("docx");
 
   const W = 9360;
@@ -88,15 +87,6 @@ export async function baixarFichasGrupo({ tema, turma, serie, estacoes, grupos }
       new Paragraph({ spacing: { before: 100, after: 60 }, children: [new TextRun({ text: "Passo a Passo:", bold: true, size: 22, color: "1F4E79", font: "Arial" })] }),
       ...textoParagrafos(es.passoAPasso),
     ];
-
-    if (es.imageBase64 && es.imageType) {
-      const imgType = es.imageType.includes("png") ? "png" : "jpg";
-      children.push(
-        new Paragraph({ spacing: { before: 160, after: 60 }, alignment: AlignmentType.CENTER, children: [
-          new ImageRun({ data: base64ToUint8Array(es.imageBase64), transformation: { width: 380, height: 220 }, type: imgType }),
-        ] }),
-      );
-    }
 
     return children;
   };
