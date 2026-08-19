@@ -9,6 +9,7 @@ import { gerarSequenciaComIA } from "./sequenciaDidaticaGerador";
 import { baixarWord } from "./sequenciaDidaticaWord";
 import { AnimacaoGerando, AnimacaoBaixando } from "./SequenciaDidaticaAnimacoes";
 import { SequenciaDidaticaPreview } from "./SequenciaDidaticaPreview";
+import { FichasGrupoPainel } from "./FichasGrupoPainel";
 
 /**
  * O Plano de Curso oficial (`curriculumData.ts`) é organizado por ano único
@@ -255,6 +256,8 @@ export function IASequencia() {
             sequencia={sequencia} professor={professor} coordenador={coordenador} serie={serie}
             turmas={turmas} aulasPrevistas={aulasPrevistas} periodo={periodo} tema={tema} numeroAtual={numeroAtual}
           />
+
+          <FichasGrupoPainel sequencia={sequencia} tema={tema} serie={serie} />
         </div>
       )}
     </div>

@@ -8,6 +8,7 @@ import { gerarSequenciaComIA } from "./sequenciaDidaticaGerador";
 import { baixarWord } from "./sequenciaDidaticaWord";
 import { AnimacaoGerando, AnimacaoBaixando } from "./SequenciaDidaticaAnimacoes";
 import { SequenciaDidaticaPreview } from "./SequenciaDidaticaPreview";
+import { FichasGrupoPainel } from "./FichasGrupoPainel";
 
 // Aba dedicada a esportes de invasão (handebol, futsal, basquete...):
 // separada do Gerador de Sequência genérico porque o Plano de Curso oficial
@@ -218,6 +219,8 @@ export function IAEsportesInvasao() {
             sequencia={sequencia} professor={professor} coordenador={coordenador} serie={serie}
             turmas={turmas} aulasPrevistas={aulasPrevistas} periodo={periodo} tema={tema} numeroAtual={numeroAtual}
           />
+
+          <FichasGrupoPainel sequencia={sequencia} tema={tema} serie={serie} />
         </div>
       )}
     </div>

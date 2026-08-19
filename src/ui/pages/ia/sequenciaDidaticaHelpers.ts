@@ -98,6 +98,16 @@ export const TURMAS_POR_SERIE: Record<string, string> = {
   "1º EM": "", "2º EM": "", "3º EM": "", "1º e 2º EM": "",
 };
 
+// Normaliza o identificador de turma para o formato usado nas tabelas do
+// Supabase (ex: "6º Ano F" -> "6F"). Mesma lógica usada em Attendance.tsx,
+// AttendanceReport.tsx e useRelatorioFrequencia.ts.
+export function normalizarTurma(turmaId: string): string {
+  if (/^\d+[A-Z]$/i.test(turmaId.trim())) return turmaId.trim().toUpperCase();
+  const match = turmaId.match(/(\d+).*?([A-Z])$/i);
+  if (match) return `${match[1]}${match[2].toUpperCase()}`;
+  return turmaId.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+}
+
 export function sugerirFundamentos(texto: string): string {
   const t = texto.toLowerCase();
   if (t.includes("futsal") || t.includes("futebol")) return "Passe, Domínio de bola, Drible, Chute a gol, Marcação";
