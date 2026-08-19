@@ -130,7 +130,7 @@ export function IASequencia() {
   const carregando = status === "gerando" || status === "imagens";
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+    <div className="max-w-4xl mx-auto px-4 pt-6 pb-24 space-y-6">
       {carregando && <AnimacaoGerando etapa={etapaAnim} />}
       {baixando && <AnimacaoBaixando />}
 
