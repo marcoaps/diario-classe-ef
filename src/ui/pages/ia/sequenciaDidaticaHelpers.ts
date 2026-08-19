@@ -108,6 +108,23 @@ export function normalizarTurma(turmaId: string): string {
   return turmaId.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
 }
 
+/**
+ * Termo em inglês que a foto do Pexels precisa mencionar pra ser aceita
+ * como ilustração de uma situação/estação — usado pra filtrar resultados
+ * de busca de imagem que erram o esporte (ex: query com "handball" e
+ * "dribbling drill" às vezes traz foto de futebol no Pexels).
+ */
+export function termoObrigatorioImagem(tema: string): string | undefined {
+  const t = tema.toLowerCase();
+  if (t.includes("handebol") || t.includes("handball")) return "handball";
+  if (t.includes("futsal")) return "futsal";
+  if (t.includes("basquete")) return "basketball";
+  if (t.includes("vôlei") || t.includes("volei")) return "volleyball";
+  if (t.includes("futebol")) return "soccer";
+  if (t.includes("rugby")) return "rugby";
+  return undefined;
+}
+
 export function sugerirFundamentos(texto: string): string {
   const t = texto.toLowerCase();
   if (t.includes("futsal") || t.includes("futebol")) return "Passe, Domínio de bola, Drible, Chute a gol, Marcação";
