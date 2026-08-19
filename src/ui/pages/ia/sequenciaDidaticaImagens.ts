@@ -13,26 +13,48 @@ async function pesquisarPexels(query: string, page: number): Promise<FotoPexels[
   }
 }
 
+// Esportes que a legenda do Pexels às vezes cita junto com o esperado (ex:
+// uma foto de vôlei rotulada mencionando "handball" também) — se a
+// descrição citar um desses ao lado do termo obrigatório, a foto é
+// ambígua/errada e deve ser descartada, não aceita.
+const ESPORTES_CONCORRENTES: Record<string, string[]> = {
+  handball: ["volleyball", "soccer", "football", "basketball", "floorball", "hockey"],
+  futsal: ["handball", "volleyball", "basketball", "rugby"],
+  basketball: ["handball", "volleyball", "soccer", "football"],
+  volleyball: ["handball", "soccer", "basketball"],
+  soccer: ["handball", "volleyball", "basketball", "rugby"],
+  rugby: ["soccer", "football", "handball"],
+};
+
+function fotoBateComEsporte(foto: FotoPexels, termoObrigatorio: string): boolean {
+  const alt = foto.alt?.toLowerCase();
+  if (!alt || !alt.includes(termoObrigatorio.toLowerCase())) return false;
+  const concorrentes = ESPORTES_CONCORRENTES[termoObrigatorio.toLowerCase()] ?? [];
+  return !concorrentes.some((esporte) => alt.includes(esporte));
+}
+
 /**
  * Busca uma imagem no Pexels para a query dada. Quando `termoObrigatorio` é
  * informado (ex: "handball"), prioriza — entre as várias candidatas
  * retornadas — a primeira cuja descrição (alt) realmente menciona esse
- * termo, em vez de aceitar cegamente o 1º resultado. Necessário porque o
- * Pexels às vezes erra o esporte em queries compostas (ex: "handball
- * dribbling drill" traz só fotos de futebol/basquete, mesmo com "handball"
- * na busca). Se nenhuma das candidatas da query original bater, tenta de
- * novo com "{termoObrigatorio} training", uma busca mais simples e segura.
+ * termo E não cita um esporte concorrente (a legenda do Pexels às vezes é
+ * ambígua/mistura dois esportes), em vez de aceitar cegamente o 1º
+ * resultado. Necessário porque o Pexels às vezes erra o esporte em queries
+ * compostas (ex: "handball dribbling drill" traz só fotos de futebol/
+ * basquete, mesmo com "handball" na busca). Se nenhuma das candidatas da
+ * query original bater, tenta de novo com "{termoObrigatorio} training",
+ * uma busca mais simples e segura.
  */
 export async function buscarImagemPexels(query: string, index = 0, termoObrigatorio?: string): Promise<{ url: string; author: string } | null> {
   const page = (index % 5) + 1;
   const fotos = await pesquisarPexels(query, page);
 
   if (termoObrigatorio) {
-    const bate = fotos.find((f) => f.alt?.toLowerCase().includes(termoObrigatorio.toLowerCase()));
+    const bate = fotos.find((f) => fotoBateComEsporte(f, termoObrigatorio));
     if (bate) return { url: bate.src.medium, author: bate.photographer };
 
     const fotosFallback = await pesquisarPexels(`${termoObrigatorio} training`, page);
-    const escolhidaFallback = fotosFallback.find((f) => f.alt?.toLowerCase().includes(termoObrigatorio.toLowerCase())) ?? fotosFallback[0];
+    const escolhidaFallback = fotosFallback.find((f) => fotoBateComEsporte(f, termoObrigatorio)) ?? fotosFallback[0];
     if (escolhidaFallback) return { url: escolhidaFallback.src.medium, author: escolhidaFallback.photographer };
   }
 
