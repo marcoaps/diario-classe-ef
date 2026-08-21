@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Loader2, Save, Copy, Trash2, Shuffle, Plus, X, CheckCircle2 } from 'lucide-react';
+import { Loader2, Save, Copy, Trash2, Shuffle, Plus, X, CheckCircle2, Swords } from 'lucide-react';
 import { cn } from '../AppLayout';
 import { supabase, salvarEscalacaoFutsal } from '../../data/supabase';
 
@@ -45,6 +45,41 @@ function shuffle<T>(arr: T[]): T[] {
   return r;
 }
 
+interface Rodada {
+  numero: number;
+  partidas: [TimeFutsal, TimeFutsal][];
+  descansa: TimeFutsal | null;
+}
+
+// Método do rodízio circular (round-robin): em N-1 rodadas (N par) cada
+// time enfrenta todos os outros exatamente uma vez, sem repetir confronto
+// até o ciclo fechar. Se N for ímpar, um time "descansa" a cada rodada,
+// alternando igualmente entre todos.
+function gerarRodadas(timesOriginais: TimeFutsal[]): Rodada[] {
+  if (timesOriginais.length < 2) return [];
+  const comBye: (TimeFutsal | null)[] = [...timesOriginais];
+  if (comBye.length % 2 !== 0) comBye.push(null);
+  const n = comBye.length;
+  const rodadas: Rodada[] = [];
+  let atual = [...comBye];
+  for (let r = 0; r < n - 1; r++) {
+    const partidas: [TimeFutsal, TimeFutsal][] = [];
+    let descansa: TimeFutsal | null = null;
+    for (let i = 0; i < n / 2; i++) {
+      const a = atual[i];
+      const b = atual[n - 1 - i];
+      if (a && b) partidas.push([a, b]);
+      else descansa = a || b;
+    }
+    rodadas.push({ numero: r + 1, partidas, descansa });
+    const fixo = atual[0];
+    const resto = atual.slice(1);
+    const ultimo = resto.pop()!;
+    atual = [fixo, ultimo, ...resto];
+  }
+  return rodadas;
+}
+
 export function TimesFutsal() {
   const [turmasSelecionadas, setTurmasSelecionadas] = useState<Set<string>>(new Set());
   const [alunos, setAlunos] = useState<AlunoSupabase[]>([]);
@@ -53,6 +88,7 @@ export function TimesFutsal() {
   const [saving, setSaving] = useState(false);
   const [copiado, setCopiado] = useState(false);
   const [salvo, setSalvo] = useState(false);
+  const [rodadas, setRodadas] = useState<Rodada[] | null>(null);
 
   const turmasArray = useMemo(() => Array.from(turmasSelecionadas).sort(), [turmasSelecionadas]);
   const turmasKey = turmasArray.join(',');
@@ -79,6 +115,7 @@ export function TimesFutsal() {
     if (turmasArray.length === 0) {
       setAlunos([]);
       setTimes([novoTime(1), novoTime(2)]);
+      setRodadas(null);
       return;
     }
     let mounted = true;
@@ -94,6 +131,7 @@ export function TimesFutsal() {
         if (error) console.error('Erro ao buscar alunos:', error);
         setAlunos((data || []) as AlunoSupabase[]);
         setTimes([novoTime(1), novoTime(2)]);
+        setRodadas(null);
         setLoading(false);
       });
     return () => { mounted = false; };
@@ -144,12 +182,18 @@ export function TimesFutsal() {
 
   const adicionarTime = useCallback(() => {
     setTimes(prev => [...prev, novoTime(prev.length + 1)]);
+    setRodadas(null);
   }, []);
 
   const removerTime = useCallback((timeId: string) => {
     if (!window.confirm('Remover este time? Os alunos alocados voltam para a lista de disponíveis.')) return;
     setTimes(prev => prev.filter(t => t.id !== timeId));
+    setRodadas(null);
   }, []);
+
+  const handleGerarConfrontos = useCallback(() => {
+    setRodadas(gerarRodadas(times));
+  }, [times]);
 
   const sortear = useCallback(() => {
     const embaralhados = shuffle(disponiveis);
@@ -285,7 +329,42 @@ export function TimesFutsal() {
             >
               <Plus className="w-4 h-4" /> Adicionar Time
             </button>
+            <button
+              onClick={handleGerarConfrontos}
+              disabled={times.length < 2}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-tertiary-container text-on-tertiary-container text-xs font-bold disabled:opacity-40 transition-colors"
+            >
+              <Swords className="w-4 h-4" /> Gerar Confrontos
+            </button>
           </div>
+
+          {/* Confrontos (rodízio circular) */}
+          {rodadas && rodadas.length > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+              <div className="text-xs font-semibold text-gray-500 mb-3">
+                Confrontos — cada time enfrenta todos os outros uma vez em {rodadas.length} rodada{rodadas.length !== 1 ? 's' : ''}
+              </div>
+              <div className="flex flex-col gap-3">
+                {rodadas.map(rod => (
+                  <div key={rod.numero} className="border border-gray-100 rounded-xl p-3">
+                    <div className="text-xs font-bold text-primary mb-1.5">Rodada {rod.numero}</div>
+                    <div className="flex flex-col gap-1">
+                      {rod.partidas.map(([a, b], i) => (
+                        <div key={i} className="flex items-center justify-between text-sm">
+                          <span className="font-semibold text-on-surface">{a.nome}</span>
+                          <span className="text-gray-400 text-xs px-2">vs</span>
+                          <span className="font-semibold text-on-surface text-right">{b.nome}</span>
+                        </div>
+                      ))}
+                      {rod.descansa && (
+                        <div className="text-xs text-gray-400 mt-1">Descansa: {rod.descansa.nome}</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Times */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
