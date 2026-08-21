@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Loader2, Save, Copy, Trash2, Shuffle, Plus, X, CheckCircle2 } from 'lucide-react';
-import { useStore } from '../../store';
 import { cn } from '../AppLayout';
 import { supabase, salvarEscalacaoFutsal } from '../../data/supabase';
 
@@ -22,12 +21,16 @@ interface TimeFutsal {
 
 const LINHA_SLOTS = 4;
 
-function normalizarTurma(turmaId: string) {
-  if (/^\d+[A-Z]$/i.test(turmaId.trim())) return turmaId.trim().toUpperCase();
-  const match = turmaId.match(/(\d+).*?([A-Z])$/i);
-  if (match) return `${match[1]}${match[2].toUpperCase()}`;
-  return turmaId.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
-}
+const TURMAS = ["6F", "7B", "7C", "7D", "7E", "7F", "8A", "8B", "8C", "8D", "8E", "8F", "9A", "9B", "9C", "9D", "9E", "9F"];
+
+// Agrupamentos de série usados nos atalhos rápidos — não é "todas as turmas
+// do ano", é a combinação real que joga junto (ex: 7º só D/E/F, sem B/C).
+const GRUPOS_SERIE: [string, string[]][] = [
+  ['6º', ['6F']],
+  ['7º', ['7D', '7E', '7F']],
+  ['8º', ['8A', '8B', '8C', '8D', '8E', '8F']],
+  ['9º', ['9A', '9B', '9C', '9D', '9E', '9F']],
+];
 
 function novoTime(numero: number): TimeFutsal {
   return { id: uuidv4(), numero, nome: `Time ${numero}`, goleiro: null, linha: Array(LINHA_SLOTS).fill(null) };
@@ -43,7 +46,7 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 export function TimesFutsal() {
-  const { selectedClassId, classRooms } = useStore();
+  const [turmasSelecionadas, setTurmasSelecionadas] = useState<Set<string>>(new Set());
   const [alunos, setAlunos] = useState<AlunoSupabase[]>([]);
   const [loading, setLoading] = useState(false);
   const [times, setTimes] = useState<TimeFutsal[]>([novoTime(1), novoTime(2)]);
@@ -51,17 +54,40 @@ export function TimesFutsal() {
   const [copiado, setCopiado] = useState(false);
   const [salvo, setSalvo] = useState(false);
 
-  const turmaAtual = classRooms.find(cr => cr.id === selectedClassId);
-  const turmaNorm = turmaAtual ? normalizarTurma(turmaAtual.name) : null;
+  const turmasArray = useMemo(() => Array.from(turmasSelecionadas).sort(), [turmasSelecionadas]);
+  const turmasKey = turmasArray.join(',');
+  const turmasLabel = turmasArray.join(', ');
+
+  const toggleTurma = (t: string) => {
+    setTurmasSelecionadas(prev => {
+      const novo = new Set(prev);
+      if (novo.has(t)) novo.delete(t); else novo.add(t);
+      return novo;
+    });
+  };
+
+  const toggleGrupo = (turmasDoGrupo: string[]) => {
+    setTurmasSelecionadas(prev => {
+      const todasMarcadas = turmasDoGrupo.every(t => prev.has(t));
+      const novo = new Set(prev);
+      turmasDoGrupo.forEach(t => todasMarcadas ? novo.delete(t) : novo.add(t));
+      return novo;
+    });
+  };
 
   useEffect(() => {
-    if (!turmaNorm) return;
+    if (turmasArray.length === 0) {
+      setAlunos([]);
+      setTimes([novoTime(1), novoTime(2)]);
+      return;
+    }
     let mounted = true;
     setLoading(true);
     supabase
       .from('alunos')
       .select('id, nome, turma_id, numero_chamada')
-      .eq('turma_id', turmaNorm)
+      .in('turma_id', turmasArray)
+      .order('turma_id', { ascending: true })
       .order('numero_chamada', { ascending: true, nullsFirst: false })
       .then(({ data, error }) => {
         if (!mounted) return;
@@ -71,7 +97,7 @@ export function TimesFutsal() {
         setLoading(false);
       });
     return () => { mounted = false; };
-  }, [turmaNorm]);
+  }, [turmasKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const idsAlocados = useMemo(() => {
     const s = new Set<string>();
@@ -145,7 +171,7 @@ export function TimesFutsal() {
   }, []);
 
   const gerarTexto = useCallback(() => {
-    const linhas: string[] = [`⚽ Times de Futsal — ${turmaAtual?.name ?? ''}`, ''];
+    const linhas: string[] = [`⚽ Times de Futsal — ${turmasLabel}`, ''];
     times.forEach(t => {
       linhas.push(`${t.nome}`);
       linhas.push(`  🧤 Goleiro: ${t.goleiro ? t.goleiro.nome : '—'}`);
@@ -153,7 +179,7 @@ export function TimesFutsal() {
       linhas.push('');
     });
     return linhas.join('\n');
-  }, [times, turmaAtual]);
+  }, [times, turmasLabel]);
 
   const copiarEscalacao = useCallback(async () => {
     try {
@@ -166,7 +192,7 @@ export function TimesFutsal() {
   }, [gerarTexto]);
 
   const salvarNoHistorico = useCallback(async () => {
-    if (!turmaNorm) return;
+    if (turmasArray.length === 0) return;
     const timesComJogadores = times.filter(t => t.goleiro || t.linha.some(Boolean));
     if (timesComJogadores.length === 0) {
       alert('Escale ao menos um jogador antes de salvar.');
@@ -175,7 +201,7 @@ export function TimesFutsal() {
     setSaving(true);
     try {
       await salvarEscalacaoFutsal(
-        turmaNorm,
+        turmasArray.join('+'),
         timesComJogadores.map(t => ({
           numero: t.numero,
           nome: t.nome,
@@ -193,30 +219,55 @@ export function TimesFutsal() {
     } finally {
       setSaving(false);
     }
-  }, [times, turmaNorm]);
-
-  if (!selectedClassId) {
-    return <div className="p-8 text-center text-gray-500 mt-10 font-medium">Por favor, selecione uma turma na aba "Turmas".</div>;
-  }
+  }, [times, turmasArray]);
 
   return (
     <div className="flex flex-col gap-4 pb-32 font-sans">
+      {/* Seletor de turmas */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mt-2">
+        <label className="text-xs font-semibold text-gray-500 mb-2 block">SÉRIES</label>
+        <div className="flex gap-1.5 mb-2 flex-wrap">
+          {GRUPOS_SERIE.map(([label, turmasDoGrupo]) => {
+            const todasMarcadas = turmasDoGrupo.every(t => turmasSelecionadas.has(t));
+            return (
+              <button key={label} type="button" onClick={() => toggleGrupo(turmasDoGrupo)}
+                className={cn("flex-1 min-w-[70px] py-1.5 rounded-lg text-xs font-bold transition-all",
+                  todasMarcadas ? "bg-primary text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200")}>
+                Todos {label}
+              </button>
+            );
+          })}
+        </div>
+        <label className="text-xs font-semibold text-gray-500 mb-1 block">TURMAS</label>
+        <div className="grid grid-cols-6 gap-1">
+          {TURMAS.map(t => (
+            <button key={t} type="button" onClick={() => toggleTurma(t)}
+              className={cn("py-1.5 rounded-lg text-xs font-bold transition-all",
+                turmasSelecionadas.has(t) ? "bg-primary text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200")}>
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Header */}
-      <div className="bg-primary rounded-[2rem] p-5 text-white shadow-lg relative overflow-hidden mt-2">
+      <div className="bg-primary rounded-[2rem] p-5 text-white shadow-lg relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10" />
         <h2 className="text-xl font-bold relative z-10">⚽ Times de Futsal</h2>
         <p className="text-white/70 text-sm relative z-10 mt-0.5">
-          {turmaAtual?.name ?? ''} · {disponiveis.length} aluno{disponiveis.length !== 1 ? 's' : ''} disponível{disponiveis.length !== 1 ? 'eis' : ''}
+          {turmasArray.length === 0 ? 'Selecione as turmas acima' : `${turmasLabel} · ${disponiveis.length} aluno${disponiveis.length !== 1 ? 's' : ''} disponível${disponiveis.length !== 1 ? 'eis' : ''}`}
         </p>
       </div>
 
-      {loading ? (
+      {turmasArray.length === 0 ? (
+        <div className="text-center text-gray-500 py-10 font-medium">Selecione ao menos uma turma para carregar os alunos.</div>
+      ) : loading ? (
         <div className="flex gap-2 items-center justify-center p-8 text-gray-500">
           <Loader2 className="w-5 h-5 animate-spin" />
-          <span>Carregando alunos da turma...</span>
+          <span>Carregando alunos...</span>
         </div>
       ) : alunos.length === 0 ? (
-        <div className="text-center text-gray-500 py-10 font-medium">Nenhum aluno cadastrado nesta turma.</div>
+        <div className="text-center text-gray-500 py-10 font-medium">Nenhum aluno cadastrado nessas turmas.</div>
       ) : (
         <>
           {/* Barra de ações */}
@@ -294,7 +345,8 @@ export function TimesFutsal() {
               <div className="flex flex-wrap gap-1.5">
                 {disponiveis.map(a => (
                   <span key={a.id} className="text-xs text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full">
-                    {a.numero_chamada ? `${a.numero_chamada} · ` : ''}{a.nome}
+                    <span className="font-mono text-gray-400">{a.turma_id}</span>
+                    {a.numero_chamada ? ` ${a.numero_chamada} · ` : ' · '}{a.nome}
                   </span>
                 ))}
               </div>
@@ -348,7 +400,7 @@ function SlotAluno({
         destaque ? 'bg-tertiary-container/10 border-tertiary/30' : 'bg-secondary-container/20 border-secondary/20'
       )}>
         <span className="text-sm font-medium text-on-surface truncate">
-          {aluno.numero_chamada ? <span className="font-mono text-xs text-gray-400 mr-1.5">{aluno.numero_chamada}</span> : null}
+          <span className="font-mono text-xs text-gray-400 mr-1.5">{aluno.turma_id}{aluno.numero_chamada ? ` ${aluno.numero_chamada}` : ''}</span>
           {aluno.nome}
         </span>
         <button onClick={onRemover} className="text-gray-400 hover:text-error flex-shrink-0">
@@ -366,7 +418,7 @@ function SlotAluno({
       <option value="" disabled>{label} — selecionar aluno</option>
       {disponiveis.map(a => (
         <option key={a.id} value={a.id}>
-          {a.numero_chamada ? `${a.numero_chamada} · ` : ''}{a.nome}
+          {a.turma_id} {a.numero_chamada ? `${a.numero_chamada} · ` : '· '}{a.nome}
         </option>
       ))}
     </select>
