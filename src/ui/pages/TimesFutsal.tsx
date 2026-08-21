@@ -9,7 +9,14 @@ interface AlunoSupabase {
   nome: string;
   turma_id: string;
   numero_chamada: number | null;
+  sexo: 'M' | 'F' | null;
 }
+
+const GENEROS = [
+  { valor: 'M' as const, label: 'Meninos' },
+  { valor: 'F' as const, label: 'Meninas' },
+  { valor: null, label: 'Todos (misto)' },
+];
 
 interface TimeFutsal {
   id: string;
@@ -82,7 +89,8 @@ function gerarRodadas(timesOriginais: TimeFutsal[]): Rodada[] {
 
 export function TimesFutsal() {
   const [turmasSelecionadas, setTurmasSelecionadas] = useState<Set<string>>(new Set());
-  const [alunos, setAlunos] = useState<AlunoSupabase[]>([]);
+  const [genero, setGenero] = useState<'M' | 'F' | null>('M');
+  const [alunosBrutos, setAlunosBrutos] = useState<AlunoSupabase[]>([]);
   const [loading, setLoading] = useState(false);
   const [times, setTimes] = useState<TimeFutsal[]>([novoTime(1), novoTime(2)]);
   const [saving, setSaving] = useState(false);
@@ -111,9 +119,15 @@ export function TimesFutsal() {
     });
   };
 
+  const handleSetGenero = (novoGenero: 'M' | 'F' | null) => {
+    setGenero(novoGenero);
+    setTimes([novoTime(1), novoTime(2)]);
+    setRodadas(null);
+  };
+
   useEffect(() => {
     if (turmasArray.length === 0) {
-      setAlunos([]);
+      setAlunosBrutos([]);
       setTimes([novoTime(1), novoTime(2)]);
       setRodadas(null);
       return;
@@ -122,20 +136,25 @@ export function TimesFutsal() {
     setLoading(true);
     supabase
       .from('alunos')
-      .select('id, nome, turma_id, numero_chamada')
+      .select('id, nome, turma_id, numero_chamada, sexo')
       .in('turma_id', turmasArray)
       .order('turma_id', { ascending: true })
       .order('numero_chamada', { ascending: true, nullsFirst: false })
       .then(({ data, error }) => {
         if (!mounted) return;
         if (error) console.error('Erro ao buscar alunos:', error);
-        setAlunos((data || []) as AlunoSupabase[]);
+        setAlunosBrutos((data || []) as AlunoSupabase[]);
         setTimes([novoTime(1), novoTime(2)]);
         setRodadas(null);
         setLoading(false);
       });
     return () => { mounted = false; };
   }, [turmasKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const alunos = useMemo(
+    () => alunosBrutos.filter(a => !genero || a.sexo === genero),
+    [alunosBrutos, genero]
+  );
 
   const idsAlocados = useMemo(() => {
     const s = new Set<string>();
@@ -283,7 +302,7 @@ export function TimesFutsal() {
           })}
         </div>
         <label className="text-xs font-semibold text-gray-500 mb-1 block">TURMAS</label>
-        <div className="grid grid-cols-6 gap-1">
+        <div className="grid grid-cols-6 gap-1 mb-3">
           {TURMAS.map(t => (
             <button key={t} type="button" onClick={() => toggleTurma(t)}
               className={cn("py-1.5 rounded-lg text-xs font-bold transition-all",
@@ -292,6 +311,19 @@ export function TimesFutsal() {
             </button>
           ))}
         </div>
+        <label className="text-xs font-semibold text-gray-500 mb-1 block">GÊNERO</label>
+        <div className="flex gap-1.5">
+          {GENEROS.map(g => (
+            <button key={g.label} type="button" onClick={() => handleSetGenero(g.valor)}
+              className={cn("flex-1 py-1.5 rounded-lg text-xs font-bold transition-all",
+                genero === g.valor ? "bg-primary text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200")}>
+              {g.label}
+            </button>
+          ))}
+        </div>
+        {genero && (
+          <p className="text-[11px] text-gray-400 mt-1.5">Alunos sem gênero marcado ficam de fora — use "Marcar Gênero" na aba Turmas se faltar alguém.</p>
+        )}
       </div>
 
       {/* Header */}
