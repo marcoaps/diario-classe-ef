@@ -41,6 +41,7 @@ import { GeradorCharges } from './ui/pages/charges/GeradorCharges';
 import { ChargesHistorico } from './ui/pages/charges/ChargesHistorico';
 import Torneio from './ui/pages/Torneio';
 import { InscricaoTime } from './ui/pages/InscricaoTime';
+import { TimesFutsal } from './ui/pages/TimesFutsal';
 import { AgendaHoje } from './ui/pages/AgendaHoje';
 import { supabase } from './data/supabase';
 
@@ -102,6 +103,7 @@ export default function App() {
           <Route path="/alunos" element={<CentralAluno />} />
           <Route path="/rendimento" element={<RendimentoBimestre />} />
           <Route path="/torneio" element={<Torneio />} />
+          <Route path="/futsal" element={<TimesFutsal />} />
 
           {/* Modulo Avaliacoes com QR Code */}
           <Route path="/avaliacoes" element={<Avaliacoes />} />

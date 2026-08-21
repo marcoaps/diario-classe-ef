@@ -1,0 +1,374 @@
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { v4 as uuidv4 } from 'uuid';
+import { Loader2, Save, Copy, Trash2, Shuffle, Plus, X, CheckCircle2 } from 'lucide-react';
+import { useStore } from '../../store';
+import { cn } from '../AppLayout';
+import { supabase, salvarEscalacaoFutsal } from '../../data/supabase';
+
+interface AlunoSupabase {
+  id: string;
+  nome: string;
+  turma_id: string;
+  numero_chamada: number | null;
+}
+
+interface TimeFutsal {
+  id: string;
+  numero: number;
+  nome: string;
+  goleiro: AlunoSupabase | null;
+  linha: (AlunoSupabase | null)[]; // 4 posições de linha
+}
+
+const LINHA_SLOTS = 4;
+
+function normalizarTurma(turmaId: string) {
+  if (/^\d+[A-Z]$/i.test(turmaId.trim())) return turmaId.trim().toUpperCase();
+  const match = turmaId.match(/(\d+).*?([A-Z])$/i);
+  if (match) return `${match[1]}${match[2].toUpperCase()}`;
+  return turmaId.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+}
+
+function novoTime(numero: number): TimeFutsal {
+  return { id: uuidv4(), numero, nome: `Time ${numero}`, goleiro: null, linha: Array(LINHA_SLOTS).fill(null) };
+}
+
+function shuffle<T>(arr: T[]): T[] {
+  const r = [...arr];
+  for (let i = r.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [r[i], r[j]] = [r[j], r[i]];
+  }
+  return r;
+}
+
+export function TimesFutsal() {
+  const { selectedClassId, classRooms } = useStore();
+  const [alunos, setAlunos] = useState<AlunoSupabase[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [times, setTimes] = useState<TimeFutsal[]>([novoTime(1), novoTime(2)]);
+  const [saving, setSaving] = useState(false);
+  const [copiado, setCopiado] = useState(false);
+  const [salvo, setSalvo] = useState(false);
+
+  const turmaAtual = classRooms.find(cr => cr.id === selectedClassId);
+  const turmaNorm = turmaAtual ? normalizarTurma(turmaAtual.name) : null;
+
+  useEffect(() => {
+    if (!turmaNorm) return;
+    let mounted = true;
+    setLoading(true);
+    supabase
+      .from('alunos')
+      .select('id, nome, turma_id, numero_chamada')
+      .eq('turma_id', turmaNorm)
+      .order('numero_chamada', { ascending: true, nullsFirst: false })
+      .then(({ data, error }) => {
+        if (!mounted) return;
+        if (error) console.error('Erro ao buscar alunos:', error);
+        setAlunos((data || []) as AlunoSupabase[]);
+        setTimes([novoTime(1), novoTime(2)]);
+        setLoading(false);
+      });
+    return () => { mounted = false; };
+  }, [turmaNorm]);
+
+  const idsAlocados = useMemo(() => {
+    const s = new Set<string>();
+    times.forEach(t => {
+      if (t.goleiro) s.add(t.goleiro.id);
+      t.linha.forEach(j => { if (j) s.add(j.id); });
+    });
+    return s;
+  }, [times]);
+
+  const disponiveis = useMemo(
+    () => alunos.filter(a => !idsAlocados.has(a.id)),
+    [alunos, idsAlocados]
+  );
+
+  const atribuirGoleiro = useCallback((timeId: string, alunoId: string) => {
+    const aluno = alunos.find(a => a.id === alunoId) || null;
+    setTimes(prev => prev.map(t => t.id === timeId ? { ...t, goleiro: aluno } : t));
+  }, [alunos]);
+
+  const atribuirLinha = useCallback((timeId: string, slot: number, alunoId: string) => {
+    const aluno = alunos.find(a => a.id === alunoId) || null;
+    setTimes(prev => prev.map(t => {
+      if (t.id !== timeId) return t;
+      const linha = [...t.linha];
+      linha[slot] = aluno;
+      return { ...t, linha };
+    }));
+  }, [alunos]);
+
+  const removerDoTime = useCallback((timeId: string, tipo: 'goleiro' | 'linha', slot?: number) => {
+    setTimes(prev => prev.map(t => {
+      if (t.id !== timeId) return t;
+      if (tipo === 'goleiro') return { ...t, goleiro: null };
+      const linha = [...t.linha];
+      linha[slot!] = null;
+      return { ...t, linha };
+    }));
+  }, []);
+
+  const renomearTime = useCallback((timeId: string, nome: string) => {
+    setTimes(prev => prev.map(t => t.id === timeId ? { ...t, nome } : t));
+  }, []);
+
+  const adicionarTime = useCallback(() => {
+    setTimes(prev => [...prev, novoTime(prev.length + 1)]);
+  }, []);
+
+  const removerTime = useCallback((timeId: string) => {
+    if (!window.confirm('Remover este time? Os alunos alocados voltam para a lista de disponíveis.')) return;
+    setTimes(prev => prev.filter(t => t.id !== timeId));
+  }, []);
+
+  const sortear = useCallback(() => {
+    const embaralhados = shuffle(disponiveis);
+    let idx = 0;
+    setTimes(prev => prev.map(t => {
+      let goleiro = t.goleiro;
+      if (!goleiro && idx < embaralhados.length) { goleiro = embaralhados[idx]; idx++; }
+      const linha = t.linha.map(slot => {
+        if (!slot && idx < embaralhados.length) { const a = embaralhados[idx]; idx++; return a; }
+        return slot;
+      });
+      return { ...t, goleiro, linha };
+    }));
+  }, [disponiveis]);
+
+  const limparTudo = useCallback(() => {
+    if (!window.confirm('Limpar toda a escalação? Todos os alunos voltam para a lista de disponíveis.')) return;
+    setTimes(prev => prev.map(t => ({ ...t, goleiro: null, linha: Array(LINHA_SLOTS).fill(null) })));
+  }, []);
+
+  const gerarTexto = useCallback(() => {
+    const linhas: string[] = [`⚽ Times de Futsal — ${turmaAtual?.name ?? ''}`, ''];
+    times.forEach(t => {
+      linhas.push(`${t.nome}`);
+      linhas.push(`  🧤 Goleiro: ${t.goleiro ? t.goleiro.nome : '—'}`);
+      t.linha.forEach((j, i) => linhas.push(`  ${i + 1}. ${j ? j.nome : '—'}`));
+      linhas.push('');
+    });
+    return linhas.join('\n');
+  }, [times, turmaAtual]);
+
+  const copiarEscalacao = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(gerarTexto());
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    } catch (e) {
+      alert('Não foi possível copiar. Copie manualmente:\n\n' + gerarTexto());
+    }
+  }, [gerarTexto]);
+
+  const salvarNoHistorico = useCallback(async () => {
+    if (!turmaNorm) return;
+    const timesComJogadores = times.filter(t => t.goleiro || t.linha.some(Boolean));
+    if (timesComJogadores.length === 0) {
+      alert('Escale ao menos um jogador antes de salvar.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await salvarEscalacaoFutsal(
+        turmaNorm,
+        timesComJogadores.map(t => ({
+          numero: t.numero,
+          nome: t.nome,
+          jogadores: [
+            ...(t.goleiro ? [{ aluno_id: t.goleiro.id, aluno_nome: t.goleiro.nome, posicao: 'goleiro' as const }] : []),
+            ...t.linha.filter((j): j is AlunoSupabase => !!j).map(j => ({ aluno_id: j.id, aluno_nome: j.nome, posicao: 'linha' as const })),
+          ],
+        }))
+      );
+      setSalvo(true);
+      setTimeout(() => setSalvo(false), 2500);
+    } catch (e) {
+      console.error(e);
+      alert('Erro ao salvar a escalação. Tente novamente.');
+    } finally {
+      setSaving(false);
+    }
+  }, [times, turmaNorm]);
+
+  if (!selectedClassId) {
+    return <div className="p-8 text-center text-gray-500 mt-10 font-medium">Por favor, selecione uma turma na aba "Turmas".</div>;
+  }
+
+  return (
+    <div className="flex flex-col gap-4 pb-32 font-sans">
+      {/* Header */}
+      <div className="bg-primary rounded-[2rem] p-5 text-white shadow-lg relative overflow-hidden mt-2">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10" />
+        <h2 className="text-xl font-bold relative z-10">⚽ Times de Futsal</h2>
+        <p className="text-white/70 text-sm relative z-10 mt-0.5">
+          {turmaAtual?.name ?? ''} · {disponiveis.length} aluno{disponiveis.length !== 1 ? 's' : ''} disponível{disponiveis.length !== 1 ? 'eis' : ''}
+        </p>
+      </div>
+
+      {loading ? (
+        <div className="flex gap-2 items-center justify-center p-8 text-gray-500">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          <span>Carregando alunos da turma...</span>
+        </div>
+      ) : alunos.length === 0 ? (
+        <div className="text-center text-gray-500 py-10 font-medium">Nenhum aluno cadastrado nesta turma.</div>
+      ) : (
+        <>
+          {/* Barra de ações */}
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={sortear}
+              disabled={disponiveis.length === 0}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-secondary-container text-on-secondary-container text-xs font-bold disabled:opacity-40 transition-colors"
+            >
+              <Shuffle className="w-4 h-4" /> Sortear automaticamente
+            </button>
+            <button
+              onClick={adicionarTime}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-100 text-gray-700 text-xs font-bold hover:bg-gray-200 transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Adicionar Time
+            </button>
+          </div>
+
+          {/* Times */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {times.map(t => {
+              const completo = !!t.goleiro && t.linha.every(Boolean);
+              const preenchidos = (t.goleiro ? 1 : 0) + t.linha.filter(Boolean).length;
+              return (
+                <div key={t.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <input
+                      value={t.nome}
+                      onChange={e => renomearTime(t.id, e.target.value)}
+                      className="font-bold text-on-surface text-sm bg-transparent outline-none border-b border-transparent focus:border-primary flex-1 min-w-0"
+                    />
+                    <span className={cn(
+                      'text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 flex-shrink-0',
+                      completo ? 'bg-secondary-container text-on-secondary-container' : 'bg-gray-100 text-gray-500'
+                    )}>
+                      {completo && <CheckCircle2 className="w-3 h-3" />}
+                      {preenchidos}/5
+                    </span>
+                    <button onClick={() => removerTime(t.id)} className="text-gray-300 hover:text-error flex-shrink-0">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Goleiro */}
+                  <SlotAluno
+                    label="🧤 Goleiro"
+                    destaque
+                    aluno={t.goleiro}
+                    disponiveis={disponiveis}
+                    onAtribuir={id => atribuirGoleiro(t.id, id)}
+                    onRemover={() => removerDoTime(t.id, 'goleiro')}
+                  />
+
+                  {/* Linha */}
+                  {t.linha.map((j, i) => (
+                    <SlotAluno
+                      key={i}
+                      label={`Jogador de Linha ${i + 1}`}
+                      aluno={j}
+                      disponiveis={disponiveis}
+                      onAtribuir={id => atribuirLinha(t.id, i, id)}
+                      onRemover={() => removerDoTime(t.id, 'linha', i)}
+                    />
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Disponíveis */}
+          {disponiveis.length > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+              <div className="text-xs font-semibold text-gray-500 mb-2">Alunos disponíveis ({disponiveis.length})</div>
+              <div className="flex flex-wrap gap-1.5">
+                {disponiveis.map(a => (
+                  <span key={a.id} className="text-xs text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full">
+                    {a.numero_chamada ? `${a.numero_chamada} · ` : ''}{a.nome}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Ações finais */}
+          <div className="fixed bottom-20 left-4 right-4 max-w-md mx-auto z-20 flex gap-2">
+            <button
+              onClick={limparTudo}
+              className="flex items-center justify-center gap-1.5 h-12 px-4 bg-white border border-gray-200 text-gray-600 rounded-2xl shadow-sm text-sm font-semibold hover:bg-gray-50 transition-all"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+            <button
+              onClick={copiarEscalacao}
+              className="flex-1 flex items-center justify-center gap-2 h-12 bg-white border border-gray-200 text-on-surface rounded-2xl shadow-sm text-sm font-semibold hover:bg-gray-50 transition-all"
+            >
+              {copiado ? <CheckCircle2 className="w-4 h-4 text-secondary" /> : <Copy className="w-4 h-4" />}
+              {copiado ? 'Copiado!' : 'Copiar'}
+            </button>
+            <button
+              onClick={salvarNoHistorico}
+              disabled={saving}
+              className="flex-1 flex items-center justify-center gap-2 h-12 bg-primary text-white font-bold rounded-2xl shadow-[0_8px_16px_rgba(31,44,151,0.2)] text-sm hover:bg-primary-dark active:scale-95 transition-all disabled:opacity-50"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : salvo ? <CheckCircle2 className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+              {saving ? 'Salvando...' : salvo ? 'Salvo!' : 'Salvar'}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function SlotAluno({
+  label, aluno, disponiveis, onAtribuir, onRemover, destaque,
+}: {
+  label: string;
+  aluno: AlunoSupabase | null;
+  disponiveis: AlunoSupabase[];
+  onAtribuir: (alunoId: string) => void;
+  onRemover: () => void;
+  destaque?: boolean;
+}) {
+  if (aluno) {
+    return (
+      <div className={cn(
+        'flex items-center justify-between gap-2 px-3 py-2 rounded-xl border',
+        destaque ? 'bg-tertiary-container/10 border-tertiary/30' : 'bg-secondary-container/20 border-secondary/20'
+      )}>
+        <span className="text-sm font-medium text-on-surface truncate">
+          {aluno.numero_chamada ? <span className="font-mono text-xs text-gray-400 mr-1.5">{aluno.numero_chamada}</span> : null}
+          {aluno.nome}
+        </span>
+        <button onClick={onRemover} className="text-gray-400 hover:text-error flex-shrink-0">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  }
+  return (
+    <select
+      value=""
+      onChange={e => { if (e.target.value) onAtribuir(e.target.value); }}
+      className="w-full bg-gray-50 border border-dashed border-gray-300 rounded-xl px-3 py-2 text-xs text-gray-500 outline-none focus:border-primary"
+    >
+      <option value="" disabled>{label} — selecionar aluno</option>
+      {disponiveis.map(a => (
+        <option key={a.id} value={a.id}>
+          {a.numero_chamada ? `${a.numero_chamada} · ` : ''}{a.nome}
+        </option>
+      ))}
+    </select>
+  );
+}
