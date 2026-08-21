@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Loader2, Save, Copy, Trash2, Shuffle, Plus, X, CheckCircle2, Swords } from 'lucide-react';
+import { Loader2, Save, Copy, Trash2, Shuffle, Plus, X, CheckCircle2, Swords, Pencil } from 'lucide-react';
 import { cn } from '../AppLayout';
 import { supabase, salvarEscalacaoFutsal } from '../../data/supabase';
 
@@ -412,11 +412,16 @@ export function TimesFutsal() {
               return (
                 <div key={t.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col gap-2.5">
                   <div className="flex items-center justify-between gap-2">
-                    <input
-                      value={t.nome}
-                      onChange={e => renomearTime(t.id, e.target.value)}
-                      className="font-bold text-on-surface text-sm bg-transparent outline-none border-b border-transparent focus:border-primary flex-1 min-w-0"
-                    />
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0 border-b border-dashed border-gray-300 focus-within:border-primary focus-within:border-solid pb-0.5">
+                      <input
+                        value={t.nome}
+                        onChange={e => renomearTime(t.id, e.target.value)}
+                        placeholder="Nome do time"
+                        title="Toque para renomear o time"
+                        className="font-bold text-on-surface text-sm bg-transparent outline-none flex-1 min-w-0"
+                      />
+                      <Pencil className="w-3 h-3 text-gray-300 shrink-0" />
+                    </div>
                     <span className={cn(
                       'text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 flex-shrink-0',
                       completo ? 'bg-secondary-container text-on-secondary-container' : 'bg-gray-100 text-gray-500'
