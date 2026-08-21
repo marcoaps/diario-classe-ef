@@ -343,7 +343,13 @@ export function TimesFutsal() {
           <span>Carregando alunos...</span>
         </div>
       ) : alunos.length === 0 ? (
-        <div className="text-center text-gray-500 py-10 font-medium">Nenhum aluno cadastrado nessas turmas.</div>
+        <div className="text-center text-gray-500 py-10 font-medium px-4">
+          {alunosBrutos.length === 0
+            ? 'Nenhum aluno cadastrado nessas turmas.'
+            : genero
+              ? `Nenhum aluno marcado como "${genero === 'M' ? 'Meninos' : 'Meninas'}" nessas turmas (${alunosBrutos.length} no total, nenhum com gênero marcado) — vá em "Marcar Gênero" na aba Turmas primeiro.`
+              : 'Nenhum aluno cadastrado nessas turmas.'}
+        </div>
       ) : (
         <>
           {/* Barra de ações */}
