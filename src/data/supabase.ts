@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
+import type { Participacao } from '../domain/frequenciaPontos';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://rsifjxeqitgiecqwvien.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_Vw7h5WZ5BF-GzaAM0hOECg_TMjwdiby';
@@ -13,7 +14,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 });
 
 export async function salvarChamada(
-  registros: { aluno_id: string; data: string; presente: boolean; participacao?: "fez" | "fez_em_parte" | "nao_fez" | null }[]
+  registros: { aluno_id: string; data: string; presente: boolean; participacao?: Participacao }[]
 ) {
   if (registros.length === 0) return;
   const data = registros[0].data;
@@ -66,6 +67,9 @@ export async function buscarHistoricoFrequencia(turmaId?: string, dt?: string) {
         id: registro.id, aluno_id: registro.aluno_id, data: registro.data,
         presente: registro.presente, nome: aluno.nome, turma_id: aluno.turma_id,
         numero_chamada: aluno.numero_chamada,
+        participacao: registro.participacao ?? null,
+        justificativa_motivo: registro.justificativa_motivo ?? null,
+        justificativa_observacao: registro.justificativa_observacao ?? null,
       });
     }
   }

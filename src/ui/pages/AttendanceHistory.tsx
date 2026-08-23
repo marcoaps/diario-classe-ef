@@ -5,6 +5,7 @@ import { supabase } from '../../data/supabase';
 import { format } from 'date-fns';
 import { Loader2, Filter, CheckCircle2, XCircle, Trash2 } from 'lucide-react';
 import { cn } from '../AppLayout';
+import { opcaoParticipacao, labelMotivoJustificativa } from '../../domain/frequenciaPontos';
 
 function normalizarTurma(turmaId: string) {
   if (/^\d+[A-Z]$/i.test(turmaId.trim())) return turmaId.trim().toUpperCase();
@@ -172,24 +173,45 @@ export function AttendanceHistory() {
             </div>
 
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-              {historico.map((registro, idx) => (
+              {historico.map((registro, idx) => {
+                const opcao = opcaoParticipacao(registro.participacao ?? null);
+                return (
                 <div
                   key={registro.id || idx}
-                  className="flex items-center justify-between p-4 border-b last:border-b-0 border-gray-100 hover:bg-gray-50 transition-colors"
+                  className="flex flex-col gap-1.5 p-4 border-b last:border-b-0 border-gray-100 hover:bg-gray-50 transition-colors"
                 >
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-gray-400 text-sm w-8">{registro.numero_chamada}</span>
-                    <span className="font-semibold text-gray-900">{registro.nome}</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="font-mono text-gray-400 text-sm w-8 shrink-0">{registro.numero_chamada}</span>
+                      <span className="font-semibold text-gray-900 truncate">{registro.nome}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {opcao && (
+                        <span
+                          title={`${opcao.sigla}: ${opcao.label}`}
+                          className={cn("px-2 py-1 rounded-lg font-bold text-xs border", opcao.corInativo)}
+                        >
+                          {opcao.sigla}
+                        </span>
+                      )}
+                      <div className={cn(
+                        "px-3 py-1.5 rounded-lg font-bold text-sm w-20 text-center flex items-center justify-center gap-1",
+                        registro.presente ? "bg-teal-50 text-teal-700" : "bg-red-50 text-red-700"
+                      )}>
+                        {registro.presente ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                        {registro.presente ? "Pres." : "Falta"}
+                      </div>
+                    </div>
                   </div>
-                  <div className={cn(
-                    "px-3 py-1.5 rounded-lg font-bold text-sm w-20 text-center flex items-center justify-center gap-1",
-                    registro.presente ? "bg-teal-50 text-teal-700" : "bg-red-50 text-red-700"
-                  )}>
-                    {registro.presente ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-                    {registro.presente ? "PP" : "FF"}
-                  </div>
+                  {opcao?.valor === 'nao_participou_justificado' && (
+                    <p className="text-xs text-purple-700 bg-purple-50 border border-purple-200 rounded-lg px-2 py-1 ml-11">
+                      NPJ — {labelMotivoJustificativa(registro.justificativa_motivo)}
+                      {registro.justificativa_observacao ? `: ${registro.justificativa_observacao}` : ''}
+                    </p>
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}

@@ -182,11 +182,11 @@ export function AttendanceReport() {
     finally { setCriandoAvaliacao(false); }
   }
 
-  // Nota total = pontos de frequência (0,20 a 0,35 por aula, conforme
-  // participação nas atividades — já calculado em a.pontos) + soma das
-  // notas de trabalhos do bimestre. Sem teto durante o bimestre (nota
-  // parcial acumulando); o teto de 10,0 só é aplicado no fechamento, ao
-  // calcular e salvar em "notas.nota_ef".
+  // Nota total = pontos de frequência (0 a 0,35 por aula, conforme o nível
+  // de participação: NP 0,20 / PP 0,275 / PI e PA 0,35 / NPJ e AUS 0 — já
+  // calculado em a.pontos) + soma das notas de trabalhos do bimestre. Sem
+  // teto durante o bimestre (nota parcial acumulando); o teto de 10,0 só é
+  // aplicado no fechamento, ao calcular e salvar em "notas.nota_ef".
   function notaTotal(pontos: number, somaTrabalhos: number, comTeto: boolean): number {
     const total = pontos + somaTrabalhos;
     return comTeto ? Math.min(total, 10.0) : total;
@@ -323,6 +323,23 @@ export function AttendanceReport() {
             <ResumoCard icon={<AlertTriangle className="w-4 h-4" />} label="Em risco / Crítico" value={`${resumo.total_em_risco} / ${resumo.total_criticos}`} tone={resumo.total_criticos > 0 ? 'danger' : 'warning'} />
           </div>
 
+          {/* Contadores por nível de participação — nunca mistura AUS com NP/NPJ */}
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+            {[
+              { sigla: 'PI', label: 'Participação Integral', valor: resumo.total_pi, cor: 'bg-teal-50 text-teal-700 border-teal-200' },
+              { sigla: 'PP', label: 'Participação Parcial', valor: resumo.total_pp, cor: 'bg-amber-50 text-amber-700 border-amber-200' },
+              { sigla: 'NP', label: 'Não Participou', valor: resumo.total_np, cor: 'bg-red-50 text-red-700 border-red-200' },
+              { sigla: 'PA', label: 'Participação Adaptada', valor: resumo.total_pa, cor: 'bg-blue-50 text-blue-700 border-blue-200' },
+              { sigla: 'NPJ', label: 'Não Participou — Justificado', valor: resumo.total_npj, cor: 'bg-purple-50 text-purple-700 border-purple-200' },
+              { sigla: 'AUS', label: 'Ausente', valor: resumo.total_aus, cor: 'bg-gray-100 text-gray-600 border-gray-200' },
+            ].map(item => (
+              <div key={item.sigla} title={item.label} className={cn('rounded-xl border p-2.5 text-center', item.cor)}>
+                <p className="text-[10px] font-bold uppercase tracking-wide">{item.sigla}</p>
+                <p className="text-lg font-bold">{item.valor}</p>
+              </div>
+            ))}
+          </div>
+
           {emRisco.length > 0 && (
             <div className="bg-amber-50 border border-amber-200 rounded-3xl p-4 md:p-5">
               <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
@@ -423,7 +440,7 @@ export function AttendanceReport() {
                   <th className="px-5 py-4 min-w-[220px]">Aluno</th>
                   <th className="px-4 py-4 text-center">Aulas</th>
                   <th className="px-4 py-4 text-center">Faltas</th>
-                  <th className="px-4 py-4 text-center" title="0,20 a 0,35 por aula, conforme participação nas atividades">Pontos Freq.</th>
+                  <th className="px-4 py-4 text-center" title="NP 0,20 · PP 0,275 · PI e PA 0,35 · NPJ e AUS não pontuam, por aula">Pontos Freq.</th>
                   <th className="px-4 py-4 min-w-[200px]">Frequência</th>
                   <th className="px-4 py-4 text-center">Situação</th>
                   <th className="px-4 py-4 text-center" title="Soma das notas de todos os trabalhos do aluno neste bimestre">Nota Trabalho</th>

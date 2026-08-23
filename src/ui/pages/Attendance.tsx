@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../../store';
 import { cn } from '../AppLayout';
-import { Save, Loader2 } from 'lucide-react';
+import { Save, Loader2, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '../../data/supabase';
 import { ConteudoAulas } from './ConteudoAulas';
-import { PARTICIPACAO_OPCOES, type Participacao } from '../../domain/frequenciaPontos';
+import { PARTICIPACAO_OPCOES, MOTIVOS_JUSTIFICATIVA, type Participacao } from '../../domain/frequenciaPontos';
 
 interface AlunoSupabase {
   id: string;
@@ -17,6 +17,8 @@ interface AlunoSupabase {
 interface RegistroChamada {
   presente: boolean;
   participacao: Participacao;
+  justificativaMotivo: string | null;
+  justificativaObservacao: string | null;
 }
 
 function normalizarTurma(turmaId: string) {
@@ -24,6 +26,10 @@ function normalizarTurma(turmaId: string) {
   const match = turmaId.match(/(\d+).*?([A-Z])$/i);
   if (match) return `${match[1]}${match[2].toUpperCase()}`;
   return turmaId.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+}
+
+function registroVazio(presente: boolean): RegistroChamada {
+  return { presente, participacao: presente ? 'fez' : null, justificativaMotivo: null, justificativaObservacao: null };
 }
 
 type Aba = 'chamada' | 'conteudo';
@@ -38,6 +44,10 @@ export function Attendance() {
   const [especiais, setEspeciais] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [modalNpjAlunoId, setModalNpjAlunoId] = useState<string | null>(null);
+  const [npjMotivo, setNpjMotivo] = useState('');
+  const [npjObservacao, setNpjObservacao] = useState('');
+  const [npjErro, setNpjErro] = useState('');
 
   const turmaAtual = classRooms.find(cr => cr.id === selectedClassId);
   const turmaNorm = turmaAtual ? normalizarTurma(turmaAtual.name) : null;
@@ -100,18 +110,23 @@ export function Attendance() {
 
         // Busca frequencia existente
         const novosRecords: Record<string, RegistroChamada> = {};
-        lista.forEach(a => { novosRecords[a.id] = { presente: false, participacao: null }; });
+        lista.forEach(a => { novosRecords[a.id] = registroVazio(false); });
 
         if (lista.length > 0) {
           const ids = lista.map(a => a.id);
           const { data: freqData } = await supabase
             .from('frequencia')
-            .select('aluno_id, presente, participacao')
+            .select('aluno_id, presente, participacao, justificativa_motivo, justificativa_observacao')
             .eq('data', date)
             .in('aluno_id', ids);
 
           (freqData || []).forEach((r: any) => {
-            novosRecords[r.aluno_id] = { presente: r.presente, participacao: r.participacao ?? null };
+            novosRecords[r.aluno_id] = {
+              presente: r.presente,
+              participacao: r.participacao ?? null,
+              justificativaMotivo: r.justificativa_motivo ?? null,
+              justificativaObservacao: r.justificativa_observacao ?? null,
+            };
           });
         }
 
@@ -136,21 +151,76 @@ export function Attendance() {
     if (transferidos.has(alunoId)) return;
     setRecords(prev => {
       const novoPresente = !prev[alunoId]?.presente;
-      // Ao marcar presente, assume "Fez" por padrão (caso mais comum) — o
+      // Ao marcar presente, assume PI por padrão (caso mais comum) — o
       // professor só precisa tocar no checklist para marcar as exceções.
-      return { ...prev, [alunoId]: { presente: novoPresente, participacao: novoPresente ? 'fez' : null } };
+      return { ...prev, [alunoId]: registroVazio(novoPresente) };
     });
   };
 
-  const handleParticipacao = (alunoId: string, participacao: Participacao) => {
-    setRecords(prev => ({ ...prev, [alunoId]: { presente: true, participacao } }));
+  const abrirModalNpj = (alunoId: string) => {
+    const atual = records[alunoId];
+    setNpjMotivo(atual?.participacao === 'nao_participou_justificado' ? (atual.justificativaMotivo ?? '') : '');
+    setNpjObservacao(atual?.participacao === 'nao_participou_justificado' ? (atual.justificativaObservacao ?? '') : '');
+    setNpjErro('');
+    setModalNpjAlunoId(alunoId);
+  };
+
+  const fecharModalNpj = () => {
+    setModalNpjAlunoId(null);
+    setNpjMotivo('');
+    setNpjObservacao('');
+    setNpjErro('');
+  };
+
+  const salvarJustificativaNpj = () => {
+    if (!npjMotivo) { setNpjErro('Selecione um motivo.'); return; }
+    if (npjMotivo === 'outro' && !npjObservacao.trim()) {
+      setNpjErro('Descreva o motivo em "Observação complementar".');
+      return;
+    }
+    if (!modalNpjAlunoId) return;
+    setRecords(prev => ({
+      ...prev,
+      [modalNpjAlunoId]: {
+        presente: true,
+        participacao: 'nao_participou_justificado',
+        justificativaMotivo: npjMotivo,
+        justificativaObservacao: npjObservacao.trim() || null,
+      },
+    }));
+    fecharModalNpj();
+  };
+
+  const handleParticipacao = (alunoId: string, participacao: Exclude<Participacao, null>) => {
+    if (participacao === 'nao_participou_justificado') {
+      abrirModalNpj(alunoId);
+      return;
+    }
+    // Trocar para qualquer status diferente de NPJ limpa a justificativa
+    // antiga, para ela não ficar vinculada ao novo status por engano.
+    setRecords(prev => ({
+      ...prev,
+      [alunoId]: { presente: true, participacao, justificativaMotivo: null, justificativaObservacao: null },
+    }));
   };
 
   const handleMarcarTodos = (presente: boolean) => {
     setRecords(prev => {
       const novos = { ...prev };
       alunos.forEach(a => {
-        if (!transferidos.has(a.id)) novos[a.id] = { presente, participacao: presente ? 'fez' : null };
+        if (!transferidos.has(a.id)) novos[a.id] = registroVazio(presente);
+      });
+      return novos;
+    });
+  };
+
+  const handleMarcarTodosParticipacao = (participacao: 'fez' | 'nao_fez') => {
+    setRecords(prev => {
+      const novos = { ...prev };
+      alunos.forEach(a => {
+        if (transferidos.has(a.id)) return;
+        if (!novos[a.id]?.presente) return; // só afeta quem já está presente
+        novos[a.id] = { presente: true, participacao, justificativaMotivo: null, justificativaObservacao: null };
       });
       return novos;
     });
@@ -172,12 +242,18 @@ export function Attendance() {
       // Nao salva frequencia de transferidos
       const recordsToSave = alunos
         .filter(a => !transferidos.has(a.id))
-        .map(a => ({
-          aluno_id: a.id,
-          data: date,
-          presente: records[a.id]?.presente ?? false,
-          participacao: records[a.id]?.presente ? records[a.id]?.participacao ?? null : null,
-        }));
+        .map(a => {
+          const r = records[a.id];
+          const presente = r?.presente ?? false;
+          return {
+            aluno_id: a.id,
+            data: date,
+            presente,
+            participacao: presente ? (r?.participacao ?? null) : null,
+            justificativa_motivo: presente ? (r?.justificativaMotivo ?? null) : null,
+            justificativa_observacao: presente ? (r?.justificativaObservacao ?? null) : null,
+          };
+        });
 
       const { error: insError } = await supabase.from('frequencia').insert(recordsToSave);
       if (insError) throw insError;
@@ -248,6 +324,25 @@ export function Attendance() {
                 Marcar Todas Faltas
               </button>
             </div>
+            <div className="flex gap-2 items-center mt-2">
+              <button
+                onClick={() => handleMarcarTodosParticipacao('fez')}
+                disabled={loading || alunos.length === 0}
+                className="flex-1 h-9 rounded-xl font-bold text-xs bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 active:scale-95 transition-all disabled:opacity-50"
+              >
+                Marcar todos como PI
+              </button>
+              <button
+                onClick={() => handleMarcarTodosParticipacao('nao_fez')}
+                disabled={loading || alunos.length === 0}
+                className="flex-1 h-9 rounded-xl font-bold text-xs bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 active:scale-95 transition-all disabled:opacity-50"
+              >
+                Marcar todos como NP
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-400 mt-2 leading-snug">
+              <span className="font-semibold text-gray-500">Nível de participação:</span> PI: Participação Integral · PP: Participação Parcial · NP: Não Participou · PA: Participação Adaptada · NPJ: Não Participou — Justificado
+            </p>
           </div>
 
           <div className="p-4 pb-32 flex flex-col gap-3">
@@ -282,6 +377,8 @@ export function Attendance() {
                   );
                 }
 
+                const opcaoAtiva = PARTICIPACAO_OPCOES.find(o => o.valor === registro?.participacao);
+
                 return (
                   <div
                     key={aluno.id}
@@ -311,24 +408,31 @@ export function Attendance() {
                       </div>
                     </button>
                     {isPresent && (
-                      <div className="flex gap-1.5 px-3 pb-3 pt-1 bg-white">
-                        {PARTICIPACAO_OPCOES.map(opt => {
-                          const ativo = registro?.participacao === opt.valor;
-                          const cores = opt.valor === 'fez'
-                            ? (ativo ? "bg-teal-600 text-white border-teal-700" : "bg-teal-50 text-teal-700 border-teal-200")
-                            : opt.valor === 'fez_em_parte'
-                            ? (ativo ? "bg-amber-500 text-white border-amber-600" : "bg-amber-50 text-amber-700 border-amber-200")
-                            : (ativo ? "bg-red-600 text-white border-red-700" : "bg-red-50 text-red-700 border-red-200");
-                          return (
-                            <button
-                              key={opt.valor}
-                              onClick={() => handleParticipacao(aluno.id, opt.valor)}
-                              className={cn("flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all active:scale-95", cores)}
-                            >
-                              {opt.label}
-                            </button>
-                          );
-                        })}
+                      <div className="px-3 pb-3 pt-1 bg-white">
+                        <div className="flex gap-1.5">
+                          {PARTICIPACAO_OPCOES.map(opt => {
+                            const ativo = registro?.participacao === opt.valor;
+                            return (
+                              <button
+                                key={opt.valor}
+                                onClick={() => handleParticipacao(aluno.id, opt.valor)}
+                                title={`${opt.sigla}: ${opt.label}`}
+                                className={cn("flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all active:scale-95", ativo ? opt.corAtivo : opt.corInativo)}
+                              >
+                                {opt.sigla}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {opcaoAtiva?.valor === 'nao_participou_justificado' && (
+                          <button
+                            onClick={() => abrirModalNpj(aluno.id)}
+                            className="mt-1.5 text-left text-[11px] text-purple-700 bg-purple-50 border border-purple-200 rounded-lg px-2 py-1 w-full truncate hover:bg-purple-100 transition-colors"
+                          >
+                            NPJ — {MOTIVOS_JUSTIFICATIVA.find(m => m.valor === registro?.justificativaMotivo)?.label ?? registro?.justificativaMotivo}
+                            {registro?.justificativaObservacao ? `: ${registro.justificativaObservacao}` : ''}
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -357,6 +461,57 @@ export function Attendance() {
       {/* Aba Conteudo */}
       {abaAtiva === 'conteudo' && turmaNorm && (
         <ConteudoAulas turmaId={turmaNorm} turmaNome={turmaAtual?.name || turmaNorm} />
+      )}
+
+      {/* Modal: Justificar não participação (NPJ) */}
+      {modalNpjAlunoId && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <button onClick={fecharModalNpj} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+              <X className="w-5 h-5" />
+            </button>
+            <h3 className="text-lg font-black text-gray-900">Justificar não participação</h3>
+
+            {npjErro && <div className="bg-red-50 text-red-700 text-sm px-3 py-2 rounded-xl border border-red-200">{npjErro}</div>}
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-bold text-gray-600">Motivo da não participação *</label>
+              <select
+                value={npjMotivo}
+                onChange={e => setNpjMotivo(e.target.value)}
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+              >
+                <option value="">Selecione...</option>
+                {MOTIVOS_JUSTIFICATIVA.map(m => (
+                  <option key={m.valor} value={m.valor}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-bold text-gray-600">
+                Observação complementar {npjMotivo === 'outro' && <span className="text-red-500">*</span>}
+              </label>
+              <textarea
+                value={npjObservacao}
+                onChange={e => setNpjObservacao(e.target.value)}
+                rows={3}
+                placeholder={npjMotivo === 'outro' ? 'Descreva o motivo (obrigatório)' : 'Opcional'}
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20 resize-none"
+              />
+              <p className="text-[11px] text-gray-400">Registre só informações pedagógicas — evite descrever diagnóstico médico.</p>
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={fecharModalNpj} className="flex-1 py-3 rounded-2xl font-bold bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
+                Cancelar
+              </button>
+              <button onClick={salvarJustificativaNpj} className="flex-1 py-3 rounded-2xl font-black text-white bg-primary hover:bg-primary-dark transition-all active:scale-95">
+                Salvar justificativa
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

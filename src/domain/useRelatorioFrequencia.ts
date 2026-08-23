@@ -26,6 +26,14 @@ export interface ResumoFrequencia {
   total_em_risco: number;
   total_criticos: number;
   total_ok: number;
+  // Contadores de registros (não de alunos) por nível de participação no
+  // período — nunca misturam AUS com NP/NPJ, cada um conta separado.
+  total_pi: number;
+  total_pp: number;
+  total_np: number;
+  total_pa: number;
+  total_npj: number;
+  total_aus: number;
 }
 
 export const PONTOS_POR_REGISTRO = 0.5;
@@ -79,6 +87,7 @@ export function useRelatorioFrequencia(
   const [alunos, setAlunos] = useState<AlunoFrequencia[]>([]);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [contadores, setContadores] = useState({ total_pi: 0, total_pp: 0, total_np: 0, total_pa: 0, total_npj: 0, total_aus: 0 });
 
   const periodo = useMemo(() => getPeriodoBimestre(bimestre, ano), [bimestre, ano]);
 
@@ -91,6 +100,7 @@ export function useRelatorioFrequencia(
   const carregar = useCallback(async () => {
     if (!turmaId) {
       setAlunos([]);
+      setContadores({ total_pi: 0, total_pp: 0, total_np: 0, total_pa: 0, total_npj: 0, total_aus: 0 });
       return;
     }
     setLoading(true);
@@ -109,6 +119,7 @@ export function useRelatorioFrequencia(
 
       if (listaAlunos.length === 0) {
         setAlunos([]);
+        setContadores({ total_pi: 0, total_pp: 0, total_np: 0, total_pa: 0, total_npj: 0, total_aus: 0 });
         return;
       }
 
@@ -124,13 +135,25 @@ export function useRelatorioFrequencia(
       if (freqErr) throw freqErr;
 
       const mapa = new Map<string, { presentes: number; ausentes: number; pontos: number }>();
+      const novosContadores = { total_pi: 0, total_pp: 0, total_np: 0, total_pa: 0, total_npj: 0, total_aus: 0 };
       (freqData || []).forEach((r: any) => {
         const acc = mapa.get(r.aluno_id) || { presentes: 0, ausentes: 0, pontos: 0 };
         if (r.presente) acc.presentes += 1;
         else acc.ausentes += 1;
         acc.pontos += pontosPorRegistro(r.presente, (r.participacao ?? null) as Participacao);
         mapa.set(r.aluno_id, acc);
+
+        if (!r.presente) { novosContadores.total_aus += 1; }
+        else switch (r.participacao as Participacao) {
+          case 'fez': novosContadores.total_pi += 1; break;
+          case 'fez_em_parte': novosContadores.total_pp += 1; break;
+          case 'nao_fez': novosContadores.total_np += 1; break;
+          case 'adaptada': novosContadores.total_pa += 1; break;
+          case 'nao_participou_justificado': novosContadores.total_npj += 1; break;
+          default: break; // registro antigo sem participação marcada
+        }
       });
+      setContadores(novosContadores);
 
       const resultado: AlunoFrequencia[] = listaAlunos.map((a: any) => {
         const m = mapa.get(a.id) || { presentes: 0, ausentes: 0, pontos: 0 };
@@ -172,7 +195,7 @@ export function useRelatorioFrequencia(
 
   const resumo: ResumoFrequencia = useMemo(() => {
     if (alunos.length === 0) {
-      return { total_alunos: 0, media_percentual: 0, media_pontos: 0, total_em_risco: 0, total_criticos: 0, total_ok: 0 };
+      return { total_alunos: 0, media_percentual: 0, media_pontos: 0, total_em_risco: 0, total_criticos: 0, total_ok: 0, ...contadores };
     }
     const total_em_risco = alunos.filter(a => a.em_risco).length;
     const total_criticos = alunos.filter(a => a.critico).length;
@@ -184,8 +207,9 @@ export function useRelatorioFrequencia(
       media_percentual: +(soma_pct / alunos.length).toFixed(1),
       media_pontos: +(soma_pts / alunos.length).toFixed(2),
       total_em_risco, total_criticos, total_ok,
+      ...contadores,
     };
-  }, [alunos]);
+  }, [alunos, contadores]);
 
   return { alunos, resumo, loading, erro, periodo, periodoEfetivo, recarregar: carregar };
 }
