@@ -28,8 +28,8 @@ function normalizarTurma(turmaId: string) {
   return turmaId.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
 }
 
-function registroVazio(presente: boolean): RegistroChamada {
-  return { presente, participacao: presente ? 'fez' : null, justificativaMotivo: null, justificativaObservacao: null };
+function registroVazio(presente: boolean, semQuadra: boolean): RegistroChamada {
+  return { presente, participacao: presente && !semQuadra ? 'fez' : null, justificativaMotivo: null, justificativaObservacao: null };
 }
 
 type Aba = 'chamada' | 'conteudo';
@@ -48,6 +48,7 @@ export function Attendance() {
   const [npjMotivo, setNpjMotivo] = useState('');
   const [npjObservacao, setNpjObservacao] = useState('');
   const [npjErro, setNpjErro] = useState('');
+  const [semQuadra, setSemQuadra] = useState(false);
 
   const turmaAtual = classRooms.find(cr => cr.id === selectedClassId);
   const turmaNorm = turmaAtual ? normalizarTurma(turmaAtual.name) : null;
@@ -110,7 +111,8 @@ export function Attendance() {
 
         // Busca frequencia existente
         const novosRecords: Record<string, RegistroChamada> = {};
-        lista.forEach(a => { novosRecords[a.id] = registroVazio(false); });
+        lista.forEach(a => { novosRecords[a.id] = registroVazio(false, false); });
+        let novoSemQuadra = false;
 
         if (lista.length > 0) {
           const ids = lista.map(a => a.id);
@@ -128,9 +130,15 @@ export function Attendance() {
               justificativaObservacao: r.justificativa_observacao ?? null,
             };
           });
+
+          // Se essa chamada já foi salva antes e todo mundo que estava
+          // presente ficou sem participação marcada, era um dia "sem
+          // quadra" — reabre o toggle já ligado.
+          const presentes = (freqData || []).filter((r: any) => r.presente);
+          novoSemQuadra = presentes.length > 0 && presentes.every((r: any) => !r.participacao);
         }
 
-        if (mounted) setRecords(novosRecords);
+        if (mounted) { setRecords(novosRecords); setSemQuadra(novoSemQuadra); }
 
       } catch (err) {
         console.error('Erro ao carregar alunos:', err);
@@ -153,7 +161,26 @@ export function Attendance() {
       const novoPresente = !prev[alunoId]?.presente;
       // Ao marcar presente, assume PI por padrão (caso mais comum) — o
       // professor só precisa tocar no checklist para marcar as exceções.
-      return { ...prev, [alunoId]: registroVazio(novoPresente) };
+      // Se a aula for "sem quadra", não assume nenhum status.
+      return { ...prev, [alunoId]: registroVazio(novoPresente, semQuadra) };
+    });
+  };
+
+  // Aula sem atividade de quadra (teórica, aplicação de trabalho, etc.):
+  // some o checklist de participação e todo presente vale a frequência
+  // padrão (0,5), igual um registro antigo — não é tratado como PI.
+  const handleToggleSemQuadra = () => {
+    setSemQuadra(prev => {
+      const novoValor = !prev;
+      setRecords(atuais => {
+        const novos = { ...atuais };
+        alunos.forEach(a => {
+          if (!novos[a.id]?.presente) return;
+          novos[a.id] = registroVazio(true, novoValor);
+        });
+        return novos;
+      });
+      return novoValor;
     });
   };
 
@@ -208,7 +235,7 @@ export function Attendance() {
     setRecords(prev => {
       const novos = { ...prev };
       alunos.forEach(a => {
-        if (!transferidos.has(a.id)) novos[a.id] = registroVazio(presente);
+        if (!transferidos.has(a.id)) novos[a.id] = registroVazio(presente, semQuadra);
       });
       return novos;
     });
@@ -308,6 +335,17 @@ export function Attendance() {
                 className="bg-surface border border-gray-300 rounded-xl p-3 text-textPrimary text-base font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all flex-1"
               />
             </div>
+            <label className="flex items-center gap-2 mt-3 px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={semQuadra}
+                onChange={handleToggleSemQuadra}
+                className="w-4 h-4"
+              />
+              <span className="text-xs font-semibold text-gray-600">
+                Aula sem atividade de quadra (teórica, aplicação de trabalho, etc.) — não pede nível de participação, presença vale a frequência padrão
+              </span>
+            </label>
             <div className="flex gap-2 items-center mt-3">
               <button
                 onClick={() => handleMarcarTodos(true)}
@@ -324,7 +362,7 @@ export function Attendance() {
                 Marcar Todas Faltas
               </button>
             </div>
-            <div className="flex gap-2 items-center mt-2">
+            <div className={cn("flex gap-2 items-center mt-2", semQuadra && "opacity-40 pointer-events-none")}>
               <button
                 onClick={() => handleMarcarTodosParticipacao('fez')}
                 disabled={loading || alunos.length === 0}
@@ -407,7 +445,12 @@ export function Attendance() {
                         {isPresent ? "P" : "F"}
                       </div>
                     </button>
-                    {isPresent && (
+                    {isPresent && semQuadra && (
+                      <div className="px-3 pb-3 pt-1 bg-white">
+                        <span className="text-[11px] text-gray-400 italic">Sem atividade de quadra — vale a frequência padrão (0,5)</span>
+                      </div>
+                    )}
+                    {isPresent && !semQuadra && (
                       <div className="px-3 pb-3 pt-1 bg-white">
                         <div className="flex gap-1.5">
                           {PARTICIPACAO_OPCOES.map(opt => {
