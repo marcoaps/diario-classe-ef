@@ -6,6 +6,8 @@ import { format } from 'date-fns';
 import { supabase } from '../../data/supabase';
 import { ConteudoAulas } from './ConteudoAulas';
 import { PARTICIPACAO_OPCOES, MOTIVOS_JUSTIFICATIVA, type Participacao } from '../../domain/frequenciaPontos';
+import { buscarTrabalhos, type Trabalho } from '../../data/supabase';
+import { bimestreAtual } from '../../domain/useRelatorioFrequencia';
 
 interface AlunoSupabase {
   id: string;
@@ -19,6 +21,7 @@ interface RegistroChamada {
   participacao: Participacao;
   justificativaMotivo: string | null;
   justificativaObservacao: string | null;
+  trabalhoCompensatorioId: string | null;
 }
 
 function normalizarTurma(turmaId: string) {
@@ -29,7 +32,10 @@ function normalizarTurma(turmaId: string) {
 }
 
 function registroVazio(presente: boolean, semQuadra: boolean): RegistroChamada {
-  return { presente, participacao: presente && !semQuadra ? 'fez' : null, justificativaMotivo: null, justificativaObservacao: null };
+  return {
+    presente, participacao: presente && !semQuadra ? 'fez' : null,
+    justificativaMotivo: null, justificativaObservacao: null, trabalhoCompensatorioId: null,
+  };
 }
 
 type Aba = 'chamada' | 'conteudo';
@@ -49,9 +55,24 @@ export function Attendance() {
   const [npjObservacao, setNpjObservacao] = useState('');
   const [npjErro, setNpjErro] = useState('');
   const [semQuadra, setSemQuadra] = useState(false);
+  const [trabalhosDaTurma, setTrabalhosDaTurma] = useState<Trabalho[]>([]);
+  const [modalCompensatorioAlunoId, setModalCompensatorioAlunoId] = useState<string | null>(null);
+  const [trabalhoSelecionadoModal, setTrabalhoSelecionadoModal] = useState('');
 
   const turmaAtual = classRooms.find(cr => cr.id === selectedClassId);
   const turmaNorm = turmaAtual ? normalizarTurma(turmaAtual.name) : null;
+
+  // Trabalhos da turma no bimestre da data selecionada, pra oferecer como
+  // trabalho compensatório de um NP.
+  useEffect(() => {
+    if (!turmaNorm) { setTrabalhosDaTurma([]); return; }
+    let mounted = true;
+    const bimestre = bimestreAtual(new Date(date + 'T00:00:00'));
+    buscarTrabalhos(turmaNorm, bimestre)
+      .then(lista => { if (mounted) setTrabalhosDaTurma(lista); })
+      .catch(() => { if (mounted) setTrabalhosDaTurma([]); });
+    return () => { mounted = false; };
+  }, [turmaNorm, date]);
 
   useEffect(() => {
     if (!turmaNorm) return;
@@ -118,7 +139,7 @@ export function Attendance() {
           const ids = lista.map(a => a.id);
           const { data: freqData } = await supabase
             .from('frequencia')
-            .select('aluno_id, presente, participacao, justificativa_motivo, justificativa_observacao')
+            .select('aluno_id, presente, participacao, justificativa_motivo, justificativa_observacao, trabalho_compensatorio_id')
             .eq('data', date)
             .in('aluno_id', ids);
 
@@ -128,6 +149,7 @@ export function Attendance() {
               participacao: r.participacao ?? null,
               justificativaMotivo: r.justificativa_motivo ?? null,
               justificativaObservacao: r.justificativa_observacao ?? null,
+              trabalhoCompensatorioId: r.trabalho_compensatorio_id ?? null,
             };
           });
 
@@ -213,9 +235,33 @@ export function Attendance() {
         participacao: 'nao_participou_justificado',
         justificativaMotivo: npjMotivo,
         justificativaObservacao: npjObservacao.trim() || null,
+        trabalhoCompensatorioId: null,
       },
     }));
     fecharModalNpj();
+  };
+
+  const abrirModalCompensatorio = (alunoId: string) => {
+    setTrabalhoSelecionadoModal(records[alunoId]?.trabalhoCompensatorioId ?? '');
+    setModalCompensatorioAlunoId(alunoId);
+  };
+
+  const fecharModalCompensatorio = () => {
+    setModalCompensatorioAlunoId(null);
+    setTrabalhoSelecionadoModal('');
+  };
+
+  const vincularTrabalhoCompensatorio = () => {
+    if (!modalCompensatorioAlunoId || !trabalhoSelecionadoModal) return;
+    setRecords(prev => ({
+      ...prev,
+      [modalCompensatorioAlunoId]: { ...prev[modalCompensatorioAlunoId], trabalhoCompensatorioId: trabalhoSelecionadoModal },
+    }));
+    fecharModalCompensatorio();
+  };
+
+  const desvincularTrabalhoCompensatorio = (alunoId: string) => {
+    setRecords(prev => ({ ...prev, [alunoId]: { ...prev[alunoId], trabalhoCompensatorioId: null } }));
   };
 
   const handleParticipacao = (alunoId: string, participacao: Exclude<Participacao, null>) => {
@@ -224,10 +270,14 @@ export function Attendance() {
       return;
     }
     // Trocar para qualquer status diferente de NPJ limpa a justificativa
-    // antiga, para ela não ficar vinculada ao novo status por engano.
+    // antiga, e trocar pra fora de NP limpa o trabalho compensatório
+    // vinculado, para não ficarem presos a um status que já mudou.
     setRecords(prev => ({
       ...prev,
-      [alunoId]: { presente: true, participacao, justificativaMotivo: null, justificativaObservacao: null },
+      [alunoId]: {
+        presente: true, participacao, justificativaMotivo: null, justificativaObservacao: null,
+        trabalhoCompensatorioId: participacao === 'nao_fez' ? (prev[alunoId]?.trabalhoCompensatorioId ?? null) : null,
+      },
     }));
   };
 
@@ -279,6 +329,7 @@ export function Attendance() {
             participacao: presente ? (r?.participacao ?? null) : null,
             justificativa_motivo: presente ? (r?.justificativaMotivo ?? null) : null,
             justificativa_observacao: presente ? (r?.justificativaObservacao ?? null) : null,
+            trabalho_compensatorio_id: presente && r?.participacao === 'nao_fez' ? (r?.trabalhoCompensatorioId ?? null) : null,
           };
         });
 
@@ -476,6 +527,25 @@ export function Attendance() {
                             {registro?.justificativaObservacao ? `: ${registro.justificativaObservacao}` : ''}
                           </button>
                         )}
+                        {opcaoAtiva?.valor === 'nao_fez' && (
+                          registro?.trabalhoCompensatorioId ? (
+                            <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-lg px-2 py-1">
+                              <button onClick={() => abrirModalCompensatorio(aluno.id)} className="flex-1 text-left truncate hover:underline">
+                                📋 Trabalho: {trabalhosDaTurma.find(t => t.id === registro.trabalhoCompensatorioId)?.titulo ?? 'vinculado'}
+                              </button>
+                              <button onClick={() => desvincularTrabalhoCompensatorio(aluno.id)} className="shrink-0 text-red-400 hover:text-red-600">
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => abrirModalCompensatorio(aluno.id)}
+                              className="mt-1.5 text-left text-[11px] text-red-600 bg-white border border-dashed border-red-300 rounded-lg px-2 py-1 w-full hover:bg-red-50 transition-colors"
+                            >
+                              + Aplicar trabalho compensatório
+                            </button>
+                          )
+                        )}
                       </div>
                     )}
                   </div>
@@ -551,6 +621,54 @@ export function Attendance() {
               </button>
               <button onClick={salvarJustificativaNpj} className="flex-1 py-3 rounded-2xl font-black text-white bg-primary hover:bg-primary-dark transition-all active:scale-95">
                 Salvar justificativa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Vincular trabalho compensatório (NP) */}
+      {modalCompensatorioAlunoId && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl relative">
+            <button onClick={fecharModalCompensatorio} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+              <X className="w-5 h-5" />
+            </button>
+            <h3 className="text-lg font-black text-gray-900">Trabalho compensatório</h3>
+            <p className="text-xs text-gray-500 -mt-2">
+              Vincula esse registro de NP a um trabalho aplicado ao aluno em vez da atividade de quadra.
+            </p>
+
+            {trabalhosDaTurma.length === 0 ? (
+              <p className="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl px-3 py-3">
+                Nenhum trabalho cadastrado ainda para essa turma/bimestre. Cadastre um na aba "Trabalhos" e volte aqui pra vincular.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-gray-600">Trabalho</label>
+                <select
+                  value={trabalhoSelecionadoModal}
+                  onChange={e => setTrabalhoSelecionadoModal(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                >
+                  <option value="">Selecione...</option>
+                  {trabalhosDaTurma.map(t => (
+                    <option key={t.id} value={t.id}>{t.titulo}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button onClick={fecharModalCompensatorio} className="flex-1 py-3 rounded-2xl font-bold bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
+                Cancelar
+              </button>
+              <button
+                onClick={vincularTrabalhoCompensatorio}
+                disabled={!trabalhoSelecionadoModal}
+                className="flex-1 py-3 rounded-2xl font-black text-white bg-primary hover:bg-primary-dark transition-all active:scale-95 disabled:opacity-50"
+              >
+                Vincular
               </button>
             </div>
           </div>

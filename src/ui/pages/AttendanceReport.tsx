@@ -328,7 +328,8 @@ export function AttendanceReport() {
             {[
               { sigla: 'PI', label: 'Participação Integral', valor: resumo.total_pi, cor: 'bg-teal-50 text-teal-700 border-teal-200' },
               { sigla: 'PP', label: 'Participação Parcial', valor: resumo.total_pp, cor: 'bg-amber-50 text-amber-700 border-amber-200' },
-              { sigla: 'NP', label: 'Não Participou', valor: resumo.total_np, cor: 'bg-red-50 text-red-700 border-red-200' },
+              { sigla: 'NP', label: 'Não Participou', valor: resumo.total_np, cor: 'bg-red-50 text-red-700 border-red-200',
+                sub: resumo.total_np > 0 ? `${resumo.total_np - resumo.total_np_com_trabalho} sem trabalho` : undefined },
               { sigla: 'PA', label: 'Participação Adaptada', valor: resumo.total_pa, cor: 'bg-blue-50 text-blue-700 border-blue-200' },
               { sigla: 'NPJ', label: 'Não Participou — Justificado', valor: resumo.total_npj, cor: 'bg-purple-50 text-purple-700 border-purple-200' },
               { sigla: 'AUS', label: 'Ausente', valor: resumo.total_aus, cor: 'bg-gray-100 text-gray-600 border-gray-200' },
@@ -336,6 +337,7 @@ export function AttendanceReport() {
               <div key={item.sigla} title={item.label} className={cn('rounded-xl border p-2.5 text-center', item.cor)}>
                 <p className="text-[10px] font-bold uppercase tracking-wide">{item.sigla}</p>
                 <p className="text-lg font-bold">{item.valor}</p>
+                {'sub' in item && item.sub && <p className="text-[9px] font-semibold opacity-70 leading-tight">{item.sub}</p>}
               </div>
             ))}
           </div>

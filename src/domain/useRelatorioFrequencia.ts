@@ -34,6 +34,8 @@ export interface ResumoFrequencia {
   total_pa: number;
   total_npj: number;
   total_aus: number;
+  // Entre os NP, quantos já têm um trabalho compensatório vinculado.
+  total_np_com_trabalho: number;
 }
 
 export const PONTOS_POR_REGISTRO = 0.5;
@@ -87,7 +89,7 @@ export function useRelatorioFrequencia(
   const [alunos, setAlunos] = useState<AlunoFrequencia[]>([]);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  const [contadores, setContadores] = useState({ total_pi: 0, total_pp: 0, total_np: 0, total_pa: 0, total_npj: 0, total_aus: 0 });
+  const [contadores, setContadores] = useState({ total_pi: 0, total_pp: 0, total_np: 0, total_pa: 0, total_npj: 0, total_aus: 0, total_np_com_trabalho: 0 });
 
   const periodo = useMemo(() => getPeriodoBimestre(bimestre, ano), [bimestre, ano]);
 
@@ -100,7 +102,7 @@ export function useRelatorioFrequencia(
   const carregar = useCallback(async () => {
     if (!turmaId) {
       setAlunos([]);
-      setContadores({ total_pi: 0, total_pp: 0, total_np: 0, total_pa: 0, total_npj: 0, total_aus: 0 });
+      setContadores({ total_pi: 0, total_pp: 0, total_np: 0, total_pa: 0, total_npj: 0, total_aus: 0, total_np_com_trabalho: 0 });
       return;
     }
     setLoading(true);
@@ -119,7 +121,7 @@ export function useRelatorioFrequencia(
 
       if (listaAlunos.length === 0) {
         setAlunos([]);
-        setContadores({ total_pi: 0, total_pp: 0, total_np: 0, total_pa: 0, total_npj: 0, total_aus: 0 });
+        setContadores({ total_pi: 0, total_pp: 0, total_np: 0, total_pa: 0, total_npj: 0, total_aus: 0, total_np_com_trabalho: 0 });
         return;
       }
 
@@ -127,7 +129,7 @@ export function useRelatorioFrequencia(
 
       const { data: freqData, error: freqErr } = await supabase
         .from('frequencia')
-        .select('aluno_id, data, presente, participacao')
+        .select('aluno_id, data, presente, participacao, trabalho_compensatorio_id')
         .gte('data', periodoEfetivo.inicio)
         .lte('data', periodoEfetivo.fim)
         .in('aluno_id', ids);
@@ -135,7 +137,7 @@ export function useRelatorioFrequencia(
       if (freqErr) throw freqErr;
 
       const mapa = new Map<string, { presentes: number; ausentes: number; pontos: number }>();
-      const novosContadores = { total_pi: 0, total_pp: 0, total_np: 0, total_pa: 0, total_npj: 0, total_aus: 0 };
+      const novosContadores = { total_pi: 0, total_pp: 0, total_np: 0, total_pa: 0, total_npj: 0, total_aus: 0, total_np_com_trabalho: 0 };
       (freqData || []).forEach((r: any) => {
         const acc = mapa.get(r.aluno_id) || { presentes: 0, ausentes: 0, pontos: 0 };
         if (r.presente) acc.presentes += 1;
@@ -147,7 +149,10 @@ export function useRelatorioFrequencia(
         else switch (r.participacao as Participacao) {
           case 'fez': novosContadores.total_pi += 1; break;
           case 'fez_em_parte': novosContadores.total_pp += 1; break;
-          case 'nao_fez': novosContadores.total_np += 1; break;
+          case 'nao_fez':
+            novosContadores.total_np += 1;
+            if (r.trabalho_compensatorio_id) novosContadores.total_np_com_trabalho += 1;
+            break;
           case 'adaptada': novosContadores.total_pa += 1; break;
           case 'nao_participou_justificado': novosContadores.total_npj += 1; break;
           default: break; // registro antigo sem participação marcada
