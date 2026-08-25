@@ -138,13 +138,18 @@ Gere ${quantidadeNesteLote} questão(ões) de avaliação com estes parâmetros:
 - Componente curricular: ${params.componenteCurricular}
 - Ano escolar: ${params.anoEscolar}º ano
 - Bimestre (Plano de Curso oficial): ${params.bimestre}º bimestre
-- Objeto de conhecimento: ${params.objetoConhecimento || '(não especificado — infira a partir do conteúdo)'}
-- Habilidade BNCC/referência: ${params.habilidadeBncc || '(não especificada — descreva a habilidade avaliada no campo "objetivoQuestao")'}
-- Conteúdo: ${params.conteudo}
 - Nível de dificuldade: ${labelDificuldade(params.dificuldade)}
 - Tipo de questão: ${labelTipoQuestao(params.tipoQuestao)}
 - Contextualização: ${labelContextualizacao(params.contextualizacao)}
 - Estilo da questão: ${labelEstilo(params.estilo)}
+
+=== ASSUNTO EXATO DAS QUESTÕES (OBRIGATÓRIO, NÃO GENERALIZE) ===
+As questões devem ser especificamente sobre: "${params.conteudo}"
+Use o vocabulário, as regras, os fatos e as situações REAIS e específicas desse conteúdo — nunca troque por outro tema/modalidade/prática diferente, mesmo que pertença à mesma categoria pedagógica mais ampla indicada abaixo. Se "${params.conteudo}" nomear um esporte, prática ou tema específico (ex: "Handebol", "Capoeira", "Vôlei"), as questões inteiras devem girar em torno DESSE assunto — não de exemplos genéricos da categoria.
+
+=== CLASSIFICAÇÃO PEDAGÓGICA (contexto/enquadramento na BNCC — não redefine nem generaliza o assunto acima) ===
+- Objeto de conhecimento: ${params.objetoConhecimento || '(não especificado — infira a partir do conteúdo)'}
+- Habilidade BNCC/referência: ${params.habilidadeBncc || '(não especificada — descreva a habilidade avaliada no campo "objetivoQuestao")'}
 
 === AUTORREVISÃO OBRIGATÓRIA (5º Passo do guia) ===
 Antes de finalizar CADA questão, "resolva" o item mentalmente como se fosse um estudante do ${params.anoEscolar}º ano, e preencha o campo "autorrevisaoIA" com o resultado honesto dessa checagem. Se algum critério falhar, corrija a questão internamente ANTES de incluí-la na resposta — só inclua na resposta questões que você mesmo aprovaria. Ainda assim, preencha os critérios com sinceridade (não force todos para "true" sem checar de verdade).

@@ -106,11 +106,16 @@ ${blocoPersonagens}
 IMPORTANTE: você NÃO deve descrever a aparência física dos personagens (uniforme, cabelo, cor de pele etc.) em nenhum campo — isso já está cadastrado no sistema e será preenchido automaticamente depois. Você só precisa dizer QUAIS personagens aparecem em cada quadro, com que EXPRESSÃO e em que POSIÇÃO/POSE naquele momento da cena.
 
 === TAREFA ===
-Crie o roteiro de uma(um) ${labelTipoImagem(params.tipoImagem)} com exatamente ${params.numeroQuadros} quadro(s), estilo de ilustração "${labelEstiloIlustracao(params.estiloIlustracao)}", para uma atividade de ${COMPONENTE_CURRICULAR_CHARGES} do ${params.anoEscolar}º ano, sobre:
-- Objeto de conhecimento: ${params.objetoConhecimento || '(não especificado — infira a partir do conteúdo)'}
+Crie o roteiro de uma(um) ${labelTipoImagem(params.tipoImagem)} com exatamente ${params.numeroQuadros} quadro(s), estilo de ilustração "${labelEstiloIlustracao(params.estiloIlustracao)}", para uma atividade de ${COMPONENTE_CURRICULAR_CHARGES} do ${params.anoEscolar}º ano.
+
+=== ASSUNTO EXATO DA CENA (OBRIGATÓRIO, NÃO GENERALIZE) ===
+A cena deve ser especificamente sobre: "${params.conteudo}"
+Use o vocabulário, as regras, os gestos técnicos e as situações de jogo REAIS e específicos desse conteúdo — nunca troque por outra modalidade/prática/jogo diferente, mesmo que pertença à mesma categoria pedagógica mais ampla indicada abaixo. Se "${params.conteudo}" nomear um esporte ou prática específica (ex: "Handebol", "Capoeira", "Vôlei"), a cena inteira deve girar em torno DESSE esporte/prática — não de exemplos genéricos da categoria.
+${params.observacoesAdicionais ? `Observações adicionais do professor: ${params.observacoesAdicionais}` : ''}
+
+=== CLASSIFICAÇÃO PEDAGÓGICA (contexto/enquadramento na BNCC — não redefine nem generaliza o assunto acima) ===
+- Objeto de conhecimento (BNCC): ${params.objetoConhecimento || '(não especificado)'}
 - Habilidade BNCC/referência: ${params.habilidadeBncc || '(não especificada)'}
-- Conteúdo: ${params.conteudo}
-${params.observacoesAdicionais ? `- Observações adicionais do professor: ${params.observacoesAdicionais}` : ''}
 
 O roteiro deve contar uma cena pedagógica coerente relacionada ao conteúdo (ex: uma situação de jogo, uma regra sendo aplicada, uma dúvida sendo esclarecida), de forma leve e compreensível para a faixa etária do ${params.anoEscolar}º ano. Se houver algum tipo de conflito/disputa na cena (comum em contextos esportivos), ele deve ser resolvido de forma pedagógica — nunca com violência (ver regras de segurança acima).
 
