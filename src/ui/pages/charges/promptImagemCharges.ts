@@ -80,7 +80,8 @@ function montarBlocoBaloesFala(quadro: QuadroIA): string {
   const linhas = quadro.textoBalao.map(b => `- Personagem "${b.personagem}" fala: "${b.fala}"`).join('\n');
   return `
 BALÕES DE FALA (desenhar como balões de fala de quadrinho clássicos — contorno definido, "rabicho"/ponta apontando para a boca de quem fala — com o texto a seguir escrito de forma legível, com ortografia correta em português, EXATAMENTE como está abaixo, sem inventar, resumir ou alterar palavras):
-${linhas}`;
+${linhas}
+TAMANHO DA FONTE DOS BALÕES (IMPORTANTE): esta imagem será impressa BEM PEQUENA (poucos centímetros de largura) junto com outras questões numa prova. A fonte do texto dentro dos balões precisa ser GRANDE, GROSSA (bold) e de ALTO CONTRASTE (texto escuro em fundo branco/claro do balão) — bem maior, proporcionalmente, do que o padrão usual de balão de HQ — para continuar legível mesmo reduzida. Se a fala for longa, aumente o balão para caber o texto grande, em vez de diminuir a fonte. Nunca use fonte fina, cursiva ou decorativa.`;
 }
 
 function montarPromptDeUmQuadro(quadro: QuadroIA, contexto: ContextoPromptImagem): string {
