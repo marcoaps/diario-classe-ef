@@ -58,6 +58,19 @@ function letraRespostaCorreta(questao: AtividadeCharge['questoes'][number]): str
   return questao.respostaEsperada || '-';
 }
 
+/**
+ * Evita mostrar a mesma imagem de quadro repetida em questões consecutivas
+ * (ex: Questão 1 e 2 ambas sobre o Quadro 1) — só ilustra a 1ª questão de
+ * cada sequência que referencia aquele quadro; a exportação já deixa claro
+ * que a questão seguinte é sobre a mesma cena, sem precisar repetir a imagem.
+ */
+function deveIlustrarQuestaoComQuadro(questoes: AtividadeCharge['questoes'], idx: number): boolean {
+  const questao = questoes[idx];
+  if (questao.quadroReferenciado == null) return false;
+  const anterior = questoes[idx - 1];
+  return !anterior || anterior.quadroReferenciado !== questao.quadroReferenciado;
+}
+
 // ── PDF — Modelo 1 (1 atividade por folha, conteúdo completo) ──────────────
 
 function exportarModelo1(doc: jsPDF, atividade: AtividadeCharge, opcoes: OpcoesExportacaoCharges) {
@@ -199,7 +212,7 @@ function exportarModelo1(doc: jsPDF, atividade: AtividadeCharge, opcoes: OpcoesE
     doc.text(`QUESTÃO ${idx + 1}`, margin, y);
     y += 7;
 
-    if (questao.quadroReferenciado != null) {
+    if (deveIlustrarQuestaoComQuadro(atividade.questoes, idx)) {
       const imagemDoQuadro = atividade.imagensQuadros.find(i => i.quadro === questao.quadroReferenciado);
       if (imagemDoQuadro) {
         const { largura, altura } = calcularDimensoesImagemMM(imagemDoQuadro.larguraOriginal, imagemDoQuadro.alturaOriginal, 70, 55);
@@ -551,7 +564,7 @@ export async function exportarChargeWord(atividade: AtividadeCharge): Promise<vo
 
   atividade.questoes.forEach((questao, idx) => {
     paragrafos.push(par([run(`QUESTÃO ${idx + 1}`, { bold: true, sz: 26 })], AlignmentType.LEFT, 160, 40));
-    if (questao.quadroReferenciado != null) {
+    if (deveIlustrarQuestaoComQuadro(atividade.questoes, idx)) {
       const imagemDaQuestao = atividade.imagensQuadros.find(i => i.quadro === questao.quadroReferenciado);
       if (imagemDaQuestao) {
         paragrafos.push(paragrafoImagemQuadro(imagemDaQuestao, LARGURA_MAX_IMAGEM_QUESTAO_WORD, ALTURA_MAX_IMAGEM_QUESTAO_WORD));
@@ -629,7 +642,7 @@ function montarHTMLAtividade(atividade: AtividadeCharge): string {
   }).join('');
 
   const questoesHTML = atividade.questoes.map((questao, idx) => {
-    const imagemDaQuestao = questao.quadroReferenciado != null
+    const imagemDaQuestao = deveIlustrarQuestaoComQuadro(atividade.questoes, idx)
       ? atividade.imagensQuadros.find(i => i.quadro === questao.quadroReferenciado)
       : undefined;
     return `
