@@ -55,6 +55,8 @@ interface ContextoPromptImagem {
   personagensUsados: Personagem[];
   tipoImagem: TipoImagem;
   estiloIlustracao: EstiloIlustracao;
+  /** Conteúdo específico da atividade (ex: "Handebol") — repetido em CADA quadro como reforço visual, independente de como o roteiro descreveu a cena, para reduzir a chance da ferramenta de imagem "confundir" com outro esporte/prática parecido da mesma categoria. */
+  conteudo: string;
 }
 
 function montarBlocoPersonagensDoQuadro(quadro: QuadroIA, personagensUsados: Personagem[]): string {
@@ -71,11 +73,13 @@ function montarBlocoPersonagensDoQuadro(quadro: QuadroIA, personagensUsados: Per
 }
 
 function montarPromptDeUmQuadro(quadro: QuadroIA, contexto: ContextoPromptImagem): string {
-  const { roteiro, personagensUsados, tipoImagem, estiloIlustracao } = contexto;
+  const { roteiro, personagensUsados, tipoImagem, estiloIlustracao, conteudo } = contexto;
 
   return `
 ${labelTipo(tipoImagem)} — Quadro ${quadro.numero} de ${roteiro.quadros.length}.
 Estilo artístico: ${labelEstilo(estiloIlustracao)}.
+
+ASSUNTO/ESPORTE ESPECÍFICO DESTA ATIVIDADE (OBRIGATÓRIO EM TODOS OS ELEMENTOS VISUAIS): "${conteudo}" — a bola, a quadra/campo, o gol/cesta/alvo e os gestos dos jogadores nesta imagem têm que ser reconhecíveis como sendo especificamente deste esporte/prática, nunca de outro parecido (ex: não desenhe bola nem gestos de futebol se o assunto for handebol).
 
 CENA: ${quadro.descricaoCena}
 ÂNGULO DE CÂMERA: ${quadro.anguloCamera}

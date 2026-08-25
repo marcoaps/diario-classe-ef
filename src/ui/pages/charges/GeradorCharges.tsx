@@ -129,6 +129,7 @@ export function GeradorCharges() {
         personagensUsados: personagensSelecionados,
         tipoImagem: params.tipoImagem,
         estiloIlustracao: params.estiloIlustracao,
+        conteudo: params.conteudo,
       });
 
       const agora = new Date().toISOString();

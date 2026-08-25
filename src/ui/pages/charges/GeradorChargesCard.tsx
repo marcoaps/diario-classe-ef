@@ -241,7 +241,8 @@ export function GeradorChargesCard({ atividade, onEditarQuestao, onImagemQuadro,
     personagensUsados: atividade.personagensUsados,
     tipoImagem: atividade.parametros.tipoImagem,
     estiloIlustracao: atividade.parametros.estiloIlustracao,
-  }), [atividade.roteiro, atividade.personagensUsados, atividade.parametros.tipoImagem, atividade.parametros.estiloIlustracao]);
+    conteudo: atividade.parametros.conteudo,
+  }), [atividade.roteiro, atividade.personagensUsados, atividade.parametros.tipoImagem, atividade.parametros.estiloIlustracao, atividade.parametros.conteudo]);
 
   async function copiarPromptUnico() {
     try {
