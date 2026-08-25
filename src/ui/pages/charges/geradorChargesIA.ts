@@ -175,6 +175,9 @@ Sinopse: ${roteiro.sinopse}
 ${resumoQuadros}
 Texto de apoio: ${roteiro.textoApoio}
 
+=== ASSUNTO EXATO DAS QUESTÕES (OBRIGATÓRIO, NÃO GENERALIZE) ===
+As questões devem ser especificamente sobre "${params.conteudo}" e sobre a charge/tirinha do jeito que ela foi criada acima — use SOMENTE os fatos, esportes, personagens e situações que já estão na charge (título, sinopse, quadros e falas listados em "CONTEXTO" acima). NUNCA invente um exemplo, esporte ou cena diferente da charge real para ilustrar a questão (ex: se a charge é sobre handebol, as questões e alternativas têm que falar de handebol — bola arremessada com a mão, área do goleiro etc. — nunca trocar por basquete, futebol ou outro esporte da mesma categoria, mesmo que pareça um bom exemplo genérico).
+
 === TAREFA ===
 A partir da charge/tirinha acima, elabore uma atividade de avaliação com estes parâmetros:
 - Ano escolar: ${params.anoEscolar}º ano
