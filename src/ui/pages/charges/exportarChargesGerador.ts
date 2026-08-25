@@ -710,6 +710,43 @@ export async function exportarChargeWord(atividade: AtividadeCharge): Promise<vo
   saveAs(blob, `${nomeArquivoBase(atividade)}.docx`);
 }
 
+/**
+ * Word equivalente ao "PDF (Prova)": só as questões, sem título/sinopse/Quadros/Texto de
+ * Apoio/Gabarito/Orientações — usando colunas nativas do Word (2 colunas, ~3mm de espaço
+ * entre elas) em vez de tentar replicar manualmente a quebra de coluna como no jsPDF.
+ */
+export async function exportarChargeProvaWord(atividade: AtividadeCharge): Promise<void> {
+  const paragrafos: Paragraph[] = [];
+
+  atividade.questoes.forEach((questao, idx) => {
+    paragrafos.push(par([run(`QUESTÃO ${idx + 1}`, { bold: true, sz: 22 })], AlignmentType.LEFT, 140, 30));
+    if (deveIlustrarQuestaoComQuadro(atividade.questoes, idx)) {
+      const imagemDaQuestao = atividade.imagensQuadros.find(i => i.quadro === questao.quadroReferenciado);
+      if (imagemDaQuestao) {
+        paragrafos.push(paragrafoImagemQuadro(imagemDaQuestao, LARGURA_MAX_IMAGEM_QUESTAO_WORD, ALTURA_MAX_IMAGEM_QUESTAO_WORD));
+      }
+    }
+    paragrafos.push(par([run(questao.enunciado, { sz: 20 })], AlignmentType.LEFT, 10, 40));
+    if (questao.alternativas) {
+      questao.alternativas.forEach(alt => {
+        paragrafos.push(par([run(`(${alt.letra}) ${alt.texto}`, { sz: 18 })], AlignmentType.LEFT, 6, 6));
+      });
+    } else {
+      paragrafos.push(...linhasResposta(3));
+    }
+  });
+
+  const doc = new Document({
+    sections: [{
+      properties: { column: { count: 2, space: 170, equalWidth: true } }, // space em twips (~170 ≈ 3mm)
+      children: paragrafos,
+    }],
+  });
+
+  const blob = await Packer.toBlob(doc);
+  saveAs(blob, `${nomeArquivoBase(atividade)}_prova.docx`);
+}
+
 // ── HTML ─────────────────────────────────────────────────────────────────
 
 function escaparHTML(texto: string): string {

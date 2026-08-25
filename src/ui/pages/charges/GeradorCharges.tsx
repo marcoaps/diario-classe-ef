@@ -8,7 +8,7 @@ import type { AtividadeCharge, ImagemQuadro, ImagemUnica, ParametrosGeracaoCharg
 import { listarPersonagensAtivos } from './personagensChargesData';
 import { gerarERevisarCharge } from './revisaoAutomaticaCharges';
 import { montarPromptImagemPorQuadro } from './promptImagemCharges';
-import { exportarChargeHTML, exportarChargePDF, exportarChargeProvaPDF, exportarChargeWord } from './exportarChargesGerador';
+import { exportarChargeHTML, exportarChargePDF, exportarChargeProvaPDF, exportarChargeProvaWord, exportarChargeWord } from './exportarChargesGerador';
 import { buscarChargeHistoricoPorId, salvarChargeNoHistorico, atualizarChargeHistorico } from './chargesDidaticasData';
 
 type Etapa = 'formulario' | 'gerando' | 'resultado';
@@ -200,6 +200,15 @@ export function GeradorCharges() {
     }
   }
 
+  async function handleExportarProvaWord() {
+    if (!atividade) return;
+    try {
+      await exportarChargeProvaWord(atividade);
+    } catch (e) {
+      setErro(`Erro ao exportar Word (Prova): ${(e as Error).message}`);
+    }
+  }
+
   async function handleExportarWord() {
     if (!atividade) return;
     try {
@@ -306,6 +315,9 @@ export function GeradorCharges() {
               </button>
               <button onClick={handleExportarProvaPDF} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-secondary-container text-on-secondary-container text-xs font-semibold">
                 <FileDown className="w-3.5 h-3.5" /> PDF (Prova)
+              </button>
+              <button onClick={handleExportarProvaWord} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-secondary-container text-on-secondary-container text-xs font-semibold">
+                <FileText className="w-3.5 h-3.5" /> Word (Prova)
               </button>
               <button onClick={handleExportarWord} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-semibold">
                 <FileText className="w-3.5 h-3.5" /> Word
