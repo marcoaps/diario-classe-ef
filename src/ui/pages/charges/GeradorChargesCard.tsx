@@ -197,6 +197,73 @@ function RecorteImagemUnicaControle({
   );
 }
 
+/**
+ * Envia várias imagens de uma vez (uma por arquivo selecionado) e distribui
+ * automaticamente pelos Quadros 1..numeroQuadros — evita o professor ter que
+ * clicar "Enviar imagem" quadro por quadro quando já gerou todas de uma vez
+ * numa ferramenta externa. A ordem de atribuição segue o nome do arquivo
+ * (ordenação alfabética/numérica), não a ordem de seleção no picker do SO,
+ * que varia entre navegadores/sistemas e não é confiável.
+ */
+function UploadEmLoteQuadros({
+  numeroQuadros,
+  onImagem,
+}: {
+  numeroQuadros: number;
+  onImagem: (quadro: number, imagem: ImagemQuadro | null) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [processando, setProcessando] = useState(false);
+  const [erro, setErro] = useState('');
+  const [resultado, setResultado] = useState('');
+
+  async function selecionarArquivos(e: React.ChangeEvent<HTMLInputElement>) {
+    const arquivos: File[] = e.target.files ? Array.from(e.target.files) : [];
+    e.target.value = '';
+    if (arquivos.length === 0) return;
+
+    setErro('');
+    setResultado('');
+    setProcessando(true);
+    try {
+      const ordenados = [...arquivos].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+      const aAtribuir = ordenados.slice(0, numeroQuadros);
+      for (let i = 0; i < aAtribuir.length; i++) {
+        const redimensionada = await redimensionarImagemParaDataUrl(aAtribuir[i]);
+        onImagem(i + 1, { quadro: i + 1, dataUrl: redimensionada.dataUrl, larguraOriginal: redimensionada.largura, alturaOriginal: redimensionada.altura });
+      }
+      const ignorados = ordenados.length - aAtribuir.length;
+      setResultado(
+        `${aAtribuir.length} imagem(ns) atribuída(s) aos Quadros 1-${aAtribuir.length}, na ordem dos nomes dos arquivos.` +
+        (ignorados > 0 ? ` ${ignorados} arquivo(s) a mais foram ignorados (só há ${numeroQuadros} quadro(s)).` : '')
+      );
+    } catch (err) {
+      setErro((err as Error).message);
+    } finally {
+      setProcessando(false);
+    }
+  }
+
+  return (
+    <div className="bg-background border border-outline-variant rounded-xl p-2 space-y-1.5">
+      <p className="text-[11px] font-semibold text-on-surface-variant">Enviar imagens em lote (todos os Quadros de uma vez)</p>
+      <p className="text-[11px] text-on-surface-variant">
+        Selecione várias imagens de uma vez — são atribuídas aos Quadros 1 a {numeroQuadros} seguindo a ordem alfabética/numérica do nome do arquivo (ex: "quadro1.jpg", "quadro2.jpg"...). Renomeie os arquivos antes de enviar se precisar controlar a ordem.
+      </p>
+      <input ref={inputRef} type="file" accept="image/*" multiple onChange={selecionarArquivos} className="hidden" />
+      <button
+        onClick={() => inputRef.current?.click()}
+        disabled={processando}
+        className="flex items-center gap-1 text-[11px] text-primary font-semibold disabled:opacity-60"
+      >
+        <Upload className="w-3 h-3" /> {processando ? 'Processando...' : 'Selecionar imagens'}
+      </button>
+      {erro && <p className="text-[11px] text-on-error-container bg-error-container rounded-lg px-2 py-1">{erro}</p>}
+      {resultado && !erro && <p className="text-[11px] text-on-surface-variant">{resultado}</p>}
+    </div>
+  );
+}
+
 function QuestaoItem({
   questao,
   indice,
@@ -455,6 +522,9 @@ export function GeradorChargesCard({ atividade, onEditarQuestao, onImagemQuadro,
         <p className="text-sm font-semibold text-on-surface">
           Quadros{atividade.imagemUnica && atividade.imagensQuadros.length === 0 ? ' (a imagem única acima já ilustra todos — ou recorte-a acima para ilustrar cada um individualmente)' : ''}
         </p>
+        {atividade.roteiro.quadros.length > 1 && (
+          <UploadEmLoteQuadros numeroQuadros={atividade.roteiro.quadros.length} onImagem={onImagemQuadro} />
+        )}
         {atividade.roteiro.quadros.map(quadro => (
           <QuadroItem
             key={quadro.numero}
