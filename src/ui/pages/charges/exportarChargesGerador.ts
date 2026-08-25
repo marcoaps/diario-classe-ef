@@ -463,6 +463,109 @@ export async function exportarChargePDF(
   doc.save(`${nomeArquivoBase(atividade)}_modelo${opcoes.modeloImpressao}.pdf`);
 }
 
+// ── PDF — Prova (só as questões, 2 colunas, sem título/sinopse/quadros/texto de apoio/gabarito) ──
+
+function exportarProva(doc: jsPDF, atividade: AtividadeCharge) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 14;
+  const gutter = 3;
+  const colWidth = (pageWidth - margin * 2 - gutter) / 2;
+  const colX = [margin, margin + colWidth + gutter];
+  const topY = margin;
+  const bottomLimit = pageHeight - margin;
+
+  let col = 0;
+  let y = topY;
+
+  function novaColuna() {
+    if (col === 0) {
+      col = 1;
+      y = topY;
+    } else {
+      doc.addPage();
+      col = 0;
+      y = topY;
+    }
+  }
+
+  atividade.questoes.forEach((questao, idx) => {
+    const imagemDaQuestao = deveIlustrarQuestaoComQuadro(atividade.questoes, idx)
+      ? atividade.imagensQuadros.find(i => i.quadro === questao.quadroReferenciado)
+      : undefined;
+    const dimensoesImagem = imagemDaQuestao
+      ? calcularDimensoesImagemMM(imagemDaQuestao.larguraOriginal, imagemDaQuestao.alturaOriginal, colWidth, 55)
+      : null;
+
+    // Medir o bloco inteiro (título + imagem + enunciado + alternativas/linhas de resposta) antes de
+    // decidir se cabe na coluna atual — as mesmas chamadas de splitTextToSize são reaproveitadas no desenho.
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
+    const linhasEnunciado = doc.splitTextToSize(questao.enunciado, colWidth);
+
+    doc.setFontSize(9);
+    const linhasAlternativas = questao.alternativas
+      ? questao.alternativas.map(alt => doc.splitTextToSize(`(${alt.letra}) ${alt.texto}`, colWidth - 3))
+      : null;
+
+    const alturaTitulo = 5.5;
+    const alturaImagem = dimensoesImagem ? dimensoesImagem.altura + 2 : 0;
+    const alturaEnunciado = linhasEnunciado.length * 4.2 + 1.5;
+    const alturaAlternativas = linhasAlternativas
+      ? linhasAlternativas.reduce((acc: number, l: string[]) => acc + l.length * 4 + 0.8, 0)
+      : 3 * 6; // 3 linhas de resposta para questão discursiva
+    const alturaBloco = alturaTitulo + alturaImagem + alturaEnunciado + alturaAlternativas + 4;
+
+    if (y + alturaBloco > bottomLimit) {
+      novaColuna();
+    }
+
+    const x = colX[col];
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10.5);
+    doc.text(`QUESTÃO ${idx + 1}`, x, y);
+    y += alturaTitulo;
+
+    if (dimensoesImagem && imagemDaQuestao) {
+      try {
+        doc.addImage(imagemDaQuestao.dataUrl, 'JPEG', x, y, dimensoesImagem.largura, dimensoesImagem.altura);
+        y += dimensoesImagem.altura + 2;
+      } catch {
+        // Se a imagem vier num formato que o jsPDF não reconheça, segue sem travar a exportação.
+      }
+    }
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
+    doc.text(linhasEnunciado, x, y);
+    y += alturaEnunciado;
+
+    if (linhasAlternativas) {
+      doc.setFontSize(9);
+      linhasAlternativas.forEach(linhas => {
+        doc.text(linhas, x + 2, y);
+        y += linhas.length * 4 + 0.8;
+      });
+    } else {
+      doc.setDrawColor(180, 180, 180);
+      for (let i = 0; i < 3; i++) {
+        doc.line(x, y, x + colWidth, y);
+        y += 6;
+      }
+    }
+
+    y += 4;
+  });
+}
+
+/** Prova pronta pra aplicar: só as questões (com a imagem do quadro correspondente, quando houver), em 2 colunas com 3mm de espaço entre elas — sem título, sinopse, Quadros, Texto de Apoio, Gabarito nem Orientações (essas informações continuam nas exportações Word/HTML, para uso do professor). */
+export async function exportarChargeProvaPDF(atividade: AtividadeCharge): Promise<void> {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  exportarProva(doc, atividade);
+  doc.save(`${nomeArquivoBase(atividade)}_prova.pdf`);
+}
+
 // ── WORD ─────────────────────────────────────────────────────────────────
 
 const ROXO = '4C1D95';
