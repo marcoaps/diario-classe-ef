@@ -26,8 +26,8 @@ export const TIPOS_IMAGEM: { valor: TipoImagem; label: string }[] = [
   { valor: 'ilustracao', label: 'Ilustração' },
 ];
 
-export type NumeroQuadros = 1 | 2 | 3 | 4;
-export const NUMEROS_QUADROS: NumeroQuadros[] = [1, 2, 3, 4];
+export type NumeroQuadros = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+export const NUMEROS_QUADROS: NumeroQuadros[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 export type EstiloIlustracao = 'infantil' | 'didatico' | 'hq' | 'cartoon' | 'semi_realista';
 export const ESTILOS_ILUSTRACAO: { valor: EstiloIlustracao; label: string }[] = [

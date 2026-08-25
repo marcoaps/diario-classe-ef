@@ -95,22 +95,27 @@ interface LayoutRecorte {
   label: string;
 }
 
-/** Layouts de grade oferecidos por número de quadros — a 1ª opção é o palpite mais comum de como ferramentas de imagem organizam a grade ("lado a lado" para 2/3, 2×2 para 4). */
+/**
+ * Layouts de grade oferecidos por número de quadros (1 a 10) — a 1ª opção é o
+ * palpite mais "quadrado" (melhor divisor em 2+ linhas), com "lado a lado" e
+ * "empilhados" sempre disponíveis como alternativa. Calculado por divisores em
+ * vez de tabela fixa, já que o número de quadros varia bem mais agora
+ * (até 10, para acompanhar até 10 questões).
+ */
 function layoutsDeRecorteParaNumeroQuadros(numeroQuadros: number): LayoutRecorte[] {
-  if (numeroQuadros === 1) return [{ linhas: 1, colunas: 1, label: '1 quadro (imagem inteira)' }];
-  if (numeroQuadros === 2) return [
-    { linhas: 1, colunas: 2, label: '1 linha × 2 colunas (lado a lado)' },
-    { linhas: 2, colunas: 1, label: '2 linhas × 1 coluna (empilhados)' },
-  ];
-  if (numeroQuadros === 3) return [
-    { linhas: 1, colunas: 3, label: '1 linha × 3 colunas' },
-    { linhas: 3, colunas: 1, label: '3 linhas × 1 coluna' },
-  ];
-  return [
-    { linhas: 2, colunas: 2, label: '2 linhas × 2 colunas (grade)' },
-    { linhas: 1, colunas: 4, label: '1 linha × 4 colunas' },
-    { linhas: 4, colunas: 1, label: '4 linhas × 1 coluna' },
-  ];
+  if (numeroQuadros <= 1) return [{ linhas: 1, colunas: 1, label: '1 quadro (imagem inteira)' }];
+
+  const layouts: LayoutRecorte[] = [];
+  const limite = Math.ceil(Math.sqrt(numeroQuadros)) + 1;
+  for (let linhas = 2; linhas <= limite; linhas++) {
+    if (numeroQuadros % linhas === 0) {
+      const colunas = numeroQuadros / linhas;
+      layouts.push({ linhas, colunas, label: `${linhas} linhas × ${colunas} colunas (grade)` });
+    }
+  }
+  layouts.push({ linhas: 1, colunas: numeroQuadros, label: `1 linha × ${numeroQuadros} colunas (lado a lado)` });
+  layouts.push({ linhas: numeroQuadros, colunas: 1, label: `${numeroQuadros} linhas × 1 coluna (empilhados)` });
+  return layouts;
 }
 
 /**
