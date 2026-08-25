@@ -839,6 +839,28 @@ export const curriculumData: { [key: string]: CurriculumYear } = {
   },
 };
 
+// Helper: retorna os Objetos de Conhecimento de TODOS os bimestres de um ano,
+// sem repetição (preserva a ordem de 1º a 4º bimestre) — usado pelos
+// geradores de IA para dar liberdade de escolher qualquer conteúdo do ano,
+// independente do bimestre selecionado (que serve só de referência/registro).
+export function getObjetosConhecimentoDoAno(anoEscolar: number | string): string[] {
+  const ano = curriculumData[String(anoEscolar)];
+  if (!ano) return [];
+  const vistos = new Set<string>();
+  const resultado: string[] = [];
+  for (const bimestreKey of ['1', '2', '3', '4']) {
+    const bimestre = ano.bimestres[bimestreKey];
+    if (!bimestre) continue;
+    for (const objeto of bimestre.objetosConhecimento) {
+      if (!vistos.has(objeto)) {
+        vistos.add(objeto);
+        resultado.push(objeto);
+      }
+    }
+  }
+  return resultado;
+}
+
 // Helper: retorna o ano a partir do identificador da turma (ex: '7B' → '7', '9F' → '9')
 export function getAnoFromTurma(turma: string): string {
   const match = turma.match(/^(\d+)/);

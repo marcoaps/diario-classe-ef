@@ -12,7 +12,7 @@ import {
 } from './tiposCharges';
 import type { EstiloIlustracao, NivelCharges, NumeroQuadros, ParametrosGeracaoCharges, TipoImagem, TipoQuestoesCharges } from './tiposCharges';
 import { PersonagensSeletor } from './PersonagensSeletor';
-import { curriculumData } from '../../../data/curriculumData';
+import { getObjetosConhecimentoDoAno } from '../../../data/curriculumData';
 import { formatarHabilidadeBNCC, getHabilidadesBNCC } from '../../../data/bnccEducacaoFisicaData';
 
 const CLASSE_INPUT = 'w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface';
@@ -25,30 +25,24 @@ export interface GeradorChargesFormularioProps {
 }
 
 /**
- * O Plano de Curso oficial (`curriculumData.ts`) só existe para Educação
- * Física (único componente deste gerador), organizado por ano + bimestre —
- * não tem um campo "Unidade Temática" separado, nem vínculo direto entre
- * cada habilidade e cada objeto de conhecimento (são listas paralelas).
- * Mesma decisão já tomada no Gerador de Questões (`GeradorQuestoesFormulario.tsx`).
- * Objeto de Conhecimento continua vindo daqui; a Habilidade agora vem da
- * BNCC oficial (`bnccEducacaoFisicaData.ts`), que é organizada por bloco de
- * anos (6º/7º e 8º/9º), não por bimestre.
+ * Objeto de Conhecimento junta os 4 bimestres do Plano de Curso do Acre
+ * (`curriculumData.ts`) para dar liberdade de escolher qualquer conteúdo do
+ * ano, independente do Bimestre selecionado (que fica só como referência de
+ * registro). Habilidade vem da BNCC oficial (`bnccEducacaoFisicaData.ts`),
+ * organizada por bloco de anos (6º/7º e 8º/9º) — também independe do
+ * Bimestre. Mesma decisão já tomada no Gerador de Questões
+ * (`GeradorQuestoesFormulario.tsx`).
  */
-function dadosDoPlanoDeCurso(anoEscolar: number, bimestre: string) {
-  return curriculumData[String(anoEscolar)]?.bimestres?.[bimestre] ?? null;
-}
-
 export function GeradorChargesFormulario({ valores, onChange, desabilitado }: GeradorChargesFormularioProps) {
-  const dadosPlano = dadosDoPlanoDeCurso(valores.anoEscolar, valores.bimestre);
+  const objetosConhecimento = getObjetosConhecimentoDoAno(valores.anoEscolar);
   const habilidadesBNCC = getHabilidadesBNCC(valores.anoEscolar);
 
-  // Sempre que Ano Escolar ou Bimestre mudarem, sincroniza Objeto de
-  // Conhecimento e Conteúdo com o Plano de Curso daquele ano/bimestre, e a
-  // Habilidade com a lista oficial da BNCC para o bloco de anos correspondente,
-  // selecionando automaticamente o primeiro item de cada lista.
+  // Sempre que o Ano Escolar mudar, sincroniza Objeto de Conhecimento/
+  // Conteúdo e Habilidade com as listas daquele ano, selecionando
+  // automaticamente o primeiro item de cada uma.
   useEffect(() => {
-    if (dadosPlano && !dadosPlano.objetosConhecimento.includes(valores.objetoConhecimento)) {
-      const primeiroObjeto = dadosPlano.objetosConhecimento[0] ?? '';
+    if (!objetosConhecimento.includes(valores.objetoConhecimento)) {
+      const primeiroObjeto = objetosConhecimento[0] ?? '';
       onChange('objetoConhecimento', primeiroObjeto);
       onChange('conteudo', primeiroObjeto);
     }
@@ -57,7 +51,7 @@ export function GeradorChargesFormulario({ valores, onChange, desabilitado }: Ge
       onChange('habilidadeBncc', opcoesHabilidade[0] ?? '');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [valores.anoEscolar, valores.bimestre]);
+  }, [valores.anoEscolar]);
 
   function selecionarObjetoConhecimento(valor: string) {
     onChange('objetoConhecimento', valor);
@@ -95,29 +89,23 @@ export function GeradorChargesFormulario({ valores, onChange, desabilitado }: Ge
           {BIMESTRES.map(b => <option key={b.valor} value={b.valor}>{b.label}</option>)}
         </select>
         <p className="text-[11px] text-on-surface-variant mt-1">
-          O Plano de Curso não possui um campo de Unidade Temática separado — os campos abaixo já vêm do Objeto de Conhecimento do bimestre selecionado.
+          Usado só como referência de registro — não filtra mais o Objeto de Conhecimento nem a Habilidade abaixo.
         </p>
       </div>
 
       <div>
         <label className={CLASSE_LABEL}>Objeto de Conhecimento</label>
-        {dadosPlano ? (
-          <select
-            value={valores.objetoConhecimento}
-            onChange={e => selecionarObjetoConhecimento(e.target.value)}
-            disabled={desabilitado}
-            className={CLASSE_INPUT}
-          >
-            {dadosPlano.objetosConhecimento.map(o => <option key={o} value={o}>{o}</option>)}
-          </select>
-        ) : (
-          <input
-            value={valores.objetoConhecimento}
-            onChange={e => onChange('objetoConhecimento', e.target.value)}
-            disabled={desabilitado}
-            className={CLASSE_INPUT}
-          />
-        )}
+        <select
+          value={valores.objetoConhecimento}
+          onChange={e => selecionarObjetoConhecimento(e.target.value)}
+          disabled={desabilitado}
+          className={CLASSE_INPUT}
+        >
+          {objetosConhecimento.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+        <p className="text-[11px] text-on-surface-variant mt-1">
+          Lista completa do {valores.anoEscolar}º Ano (todos os bimestres) — escolha livre, não depende do Bimestre selecionado.
+        </p>
       </div>
 
       <div>

@@ -12,7 +12,7 @@ import {
 } from './tiposGeradorQuestoes';
 import type { ParametrosGeracao, TipoQuestao } from './tiposGeradorQuestoes';
 import { POLITICA_TIPOS_QUESTAO } from './regrasElaboracaoItens';
-import { curriculumData } from '../../../data/curriculumData';
+import { getObjetosConhecimentoDoAno } from '../../../data/curriculumData';
 import { formatarHabilidadeBNCC, getHabilidadesBNCC } from '../../../data/bnccEducacaoFisicaData';
 
 const CLASSE_INPUT = 'w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface';
@@ -26,34 +26,29 @@ export interface GeradorQuestoesFormularioProps {
 
 /**
  * O Plano de Curso oficial (`curriculumData.ts`) só existe para Educação
- * Física, organizado por ano + bimestre — não tem um campo "Unidade
- * Temática" separado, nem vínculo direto entre cada habilidade e cada objeto
- * de conhecimento (são listas paralelas). Por isso o dropdown de Objeto de
+ * Física — Objeto de Conhecimento junta os 4 bimestres do ano (liberdade de
+ * escolher qualquer conteúdo, independente do Bimestre selecionado, que fica
+ * só como referência de registro). Por isso o dropdown de Objeto de
  * Conhecimento só se aplica quando o componente curricular é Educação
  * Física; para os demais componentes, mantemos o campo de texto livre, já
  * que não há base de dados para eles. A Habilidade, quando o componente é
  * Educação Física, vem da BNCC oficial (`bnccEducacaoFisicaData.ts`), que é
- * organizada por bloco de anos (6º/7º e 8º/9º), não por bimestre.
+ * organizada por bloco de anos (6º/7º e 8º/9º) — também independe do Bimestre.
  */
-function dadosDoPlanoDeCurso(anoEscolar: number, bimestre: string) {
-  return curriculumData[String(anoEscolar)]?.bimestres?.[bimestre] ?? null;
-}
-
 export function GeradorQuestoesFormulario({ valores, onChange, desabilitado }: GeradorQuestoesFormularioProps) {
   const politicaTipo = POLITICA_TIPOS_QUESTAO[valores.tipoQuestao];
   const ehEducacaoFisica = valores.componenteCurricular === 'Educação Física';
-  const dadosPlano = ehEducacaoFisica ? dadosDoPlanoDeCurso(valores.anoEscolar, valores.bimestre) : null;
+  const objetosConhecimento = ehEducacaoFisica ? getObjetosConhecimentoDoAno(valores.anoEscolar) : [];
   const habilidadesBNCC = ehEducacaoFisica ? getHabilidadesBNCC(valores.anoEscolar) : [];
 
-  // Sempre que Ano Escolar ou Bimestre mudarem (ou o componente deixar de ser
-  // Educação Física), garante que Objeto de Conhecimento e Conteúdo fiquem
-  // sincronizados com o Plano de Curso daquele ano/bimestre, e a Habilidade
-  // com a lista oficial da BNCC para o bloco de anos correspondente,
-  // selecionando automaticamente o primeiro item de cada lista.
+  // Sempre que Ano Escolar mudar (ou o componente deixar de ser Educação
+  // Física), garante que Objeto de Conhecimento/Conteúdo e Habilidade fiquem
+  // sincronizados com as listas daquele ano, selecionando automaticamente o
+  // primeiro item de cada uma.
   useEffect(() => {
     if (!ehEducacaoFisica) return;
-    if (dadosPlano && !dadosPlano.objetosConhecimento.includes(valores.objetoConhecimento)) {
-      const primeiroObjeto = dadosPlano.objetosConhecimento[0] ?? '';
+    if (!objetosConhecimento.includes(valores.objetoConhecimento)) {
+      const primeiroObjeto = objetosConhecimento[0] ?? '';
       onChange('objetoConhecimento', primeiroObjeto);
       onChange('conteudo', primeiroObjeto);
     }
@@ -62,7 +57,7 @@ export function GeradorQuestoesFormulario({ valores, onChange, desabilitado }: G
       onChange('habilidadeBncc', opcoesHabilidade[0] ?? '');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ehEducacaoFisica, valores.anoEscolar, valores.bimestre]);
+  }, [ehEducacaoFisica, valores.anoEscolar]);
 
   function selecionarObjetoConhecimento(valor: string) {
     onChange('objetoConhecimento', valor);
@@ -110,15 +105,20 @@ export function GeradorQuestoesFormulario({ valores, onChange, desabilitado }: G
 
       <div>
         <label className={CLASSE_LABEL}>Objeto de Conhecimento</label>
-        {ehEducacaoFisica && dadosPlano ? (
-          <select
-            value={valores.objetoConhecimento}
-            onChange={e => selecionarObjetoConhecimento(e.target.value)}
-            disabled={desabilitado}
-            className={CLASSE_INPUT}
-          >
-            {dadosPlano.objetosConhecimento.map(o => <option key={o} value={o}>{o}</option>)}
-          </select>
+        {ehEducacaoFisica ? (
+          <>
+            <select
+              value={valores.objetoConhecimento}
+              onChange={e => selecionarObjetoConhecimento(e.target.value)}
+              disabled={desabilitado}
+              className={CLASSE_INPUT}
+            >
+              {objetosConhecimento.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+            <p className="text-[11px] text-on-surface-variant mt-1">
+              Lista completa do {valores.anoEscolar}º Ano (todos os bimestres) — escolha livre, não depende do Bimestre selecionado.
+            </p>
+          </>
         ) : (
           <input
             value={valores.objetoConhecimento}
