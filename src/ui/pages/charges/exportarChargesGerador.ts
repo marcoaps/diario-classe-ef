@@ -199,6 +199,20 @@ function exportarModelo1(doc: jsPDF, atividade: AtividadeCharge, opcoes: OpcoesE
     doc.text(`QUESTÃO ${idx + 1}`, margin, y);
     y += 7;
 
+    if (questao.quadroReferenciado != null) {
+      const imagemDoQuadro = atividade.imagensQuadros.find(i => i.quadro === questao.quadroReferenciado);
+      if (imagemDoQuadro) {
+        const { largura, altura } = calcularDimensoesImagemMM(imagemDoQuadro.larguraOriginal, imagemDoQuadro.alturaOriginal, 70, 55);
+        if (y + altura > 280) { doc.addPage(); y = 20; }
+        try {
+          doc.addImage(imagemDoQuadro.dataUrl, 'JPEG', margin, y, largura, altura);
+          y += altura + 3;
+        } catch {
+          // Se a imagem vier num formato que o jsPDF não reconheça, segue sem travar a exportação.
+        }
+      }
+    }
+
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(11);
     const linhaEnunciado = doc.splitTextToSize(questao.enunciado, larguraUtil);
@@ -469,6 +483,8 @@ const LARGURA_MAX_IMAGEM_WORD = 340;
 const ALTURA_MAX_IMAGEM_WORD = 260;
 const LARGURA_MAX_IMAGEM_UNICA_WORD = 460;
 const ALTURA_MAX_IMAGEM_UNICA_WORD = 360;
+const LARGURA_MAX_IMAGEM_QUESTAO_WORD = 240;
+const ALTURA_MAX_IMAGEM_QUESTAO_WORD = 190;
 
 /** Imagem do quadro (ou da tira completa), centralizada, mantendo a proporção original sem exceder o limite máximo (unidades docx, ~pixels a 96dpi). */
 function paragrafoImagemQuadro(
@@ -535,6 +551,12 @@ export async function exportarChargeWord(atividade: AtividadeCharge): Promise<vo
 
   atividade.questoes.forEach((questao, idx) => {
     paragrafos.push(par([run(`QUESTÃO ${idx + 1}`, { bold: true, sz: 26 })], AlignmentType.LEFT, 160, 40));
+    if (questao.quadroReferenciado != null) {
+      const imagemDaQuestao = atividade.imagensQuadros.find(i => i.quadro === questao.quadroReferenciado);
+      if (imagemDaQuestao) {
+        paragrafos.push(paragrafoImagemQuadro(imagemDaQuestao, LARGURA_MAX_IMAGEM_QUESTAO_WORD, ALTURA_MAX_IMAGEM_QUESTAO_WORD));
+      }
+    }
     paragrafos.push(par([run(questao.enunciado, { sz: 24 })], AlignmentType.LEFT, 20, 60));
     if (questao.alternativas) {
       questao.alternativas.forEach(alt => {
@@ -606,15 +628,21 @@ function montarHTMLAtividade(atividade: AtividadeCharge): string {
   `;
   }).join('');
 
-  const questoesHTML = atividade.questoes.map((questao, idx) => `
+  const questoesHTML = atividade.questoes.map((questao, idx) => {
+    const imagemDaQuestao = questao.quadroReferenciado != null
+      ? atividade.imagensQuadros.find(i => i.quadro === questao.quadroReferenciado)
+      : undefined;
+    return `
     <div class="questao">
       <h3>Questão ${idx + 1}</h3>
+      ${imagemDaQuestao ? `<img class="imagem-questao" src="${imagemDaQuestao.dataUrl}" alt="Ilustração do quadro ${questao.quadroReferenciado}">` : ''}
       <p>${escaparHTML(questao.enunciado)}</p>
       ${questao.alternativas
         ? `<ul class="alternativas">${questao.alternativas.map(a => `<li>(${a.letra}) ${escaparHTML(a.texto)}</li>`).join('')}</ul>`
         : '<div class="linha-resposta"></div><div class="linha-resposta"></div><div class="linha-resposta"></div>'}
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   const gabaritoHTML = atividade.questoes.map((q, idx) => `<li>${idx + 1}. ${escaparHTML(letraRespostaCorreta(q))}</li>`).join('');
 
@@ -638,6 +666,7 @@ function montarHTMLAtividade(atividade: AtividadeCharge): string {
   .balao { font-style: italic; margin-top: 6px; padding-left: 10px; border-left: 3px solid #ddd; }
   .imagem-quadro { max-width: 100%; border-radius: 8px; margin-top: 8px; }
   .imagem-unica { max-width: 100%; border-radius: 8px; margin: 12px 0; display: block; }
+  .imagem-questao { max-width: 260px; border-radius: 8px; margin-bottom: 8px; display: block; }
   .prompt summary { cursor: pointer; font-size: 12px; color: #4c1d95; margin-top: 8px; }
   .prompt pre { white-space: pre-wrap; font-size: 11px; color: #555; background: #f5f5f5; padding: 8px; border-radius: 6px; margin-top: 6px; }
   .questao { margin-bottom: 16px; }

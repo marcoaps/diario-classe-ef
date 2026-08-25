@@ -192,7 +192,19 @@ function RecorteImagemUnicaControle({
   );
 }
 
-function QuestaoItem({ questao, indice, onEditar }: { questao: QuestaoChargeIA; indice: number; onEditar: (alteracoes: Partial<QuestaoChargeIA>) => void }) {
+function QuestaoItem({
+  questao,
+  indice,
+  onEditar,
+  numeroQuadros,
+  imagemDoQuadro,
+}: {
+  questao: QuestaoChargeIA;
+  indice: number;
+  onEditar: (alteracoes: Partial<QuestaoChargeIA>) => void;
+  numeroQuadros: number;
+  imagemDoQuadro: ImagemQuadro | undefined;
+}) {
   const [editando, setEditando] = useState(false);
   const [rascunho, setRascunho] = useState(questao.enunciado);
 
@@ -211,6 +223,23 @@ function QuestaoItem({ questao, indice, onEditar }: { questao: QuestaoChargeIA; 
           <Pencil className="w-3.5 h-3.5" />
         </button>
       </div>
+
+      <div className="flex items-center gap-2">
+        <label className="text-[11px] text-on-surface-variant shrink-0">Quadro relacionado (ilustra a questão na exportação):</label>
+        <select
+          value={questao.quadroReferenciado ?? ''}
+          onChange={e => onEditar({ quadroReferenciado: e.target.value === '' ? null : Number(e.target.value) })}
+          className="px-2 py-1 rounded-lg border border-outline-variant bg-background text-xs text-on-surface"
+        >
+          <option value="">Nenhum (charge inteira)</option>
+          {Array.from({ length: numeroQuadros }, (_, i) => i + 1).map(n => (
+            <option key={n} value={n}>Quadro {n}</option>
+          ))}
+        </select>
+      </div>
+      {imagemDoQuadro && (
+        <img src={imagemDoQuadro.dataUrl} alt={`Ilustração do quadro ${questao.quadroReferenciado}`} className="w-32 rounded-lg border border-outline-variant" />
+      )}
 
       {editando ? (
         <div className="space-y-2">
@@ -442,7 +471,14 @@ export function GeradorChargesCard({ atividade, onEditarQuestao, onImagemQuadro,
       <div className="space-y-3">
         <p className="text-sm font-semibold text-on-surface">Questões</p>
         {atividade.questoes.map((questao, indice) => (
-          <QuestaoItem key={indice} questao={questao} indice={indice} onEditar={alteracoes => onEditarQuestao(indice, alteracoes)} />
+          <QuestaoItem
+            key={indice}
+            questao={questao}
+            indice={indice}
+            onEditar={alteracoes => onEditarQuestao(indice, alteracoes)}
+            numeroQuadros={atividade.parametros.numeroQuadros}
+            imagemDoQuadro={questao.quadroReferenciado != null ? imagensPorQuadro.get(questao.quadroReferenciado) : undefined}
+          />
         ))}
       </div>
 

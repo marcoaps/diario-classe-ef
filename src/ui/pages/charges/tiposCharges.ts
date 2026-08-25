@@ -175,6 +175,8 @@ export interface QuestaoChargeIA {
   tipo: 'objetiva' | 'discursiva';
   alternativas: AlternativaCharge[] | null;
   respostaEsperada: string;
+  /** Número do quadro (`QuadroIA.numero`) que a questão pergunta sobre diretamente — null se a questão for sobre a charge como um todo, sem depender de um quadro específico. Usado nas exportações para ilustrar a questão com a imagem daquele quadro (se enviada). */
+  quadroReferenciado: number | null;
 }
 
 /** O que a IA devolve na 1ª chamada (roteiro + quadros). */

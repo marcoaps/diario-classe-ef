@@ -147,7 +147,8 @@ const ESQUEMA_JSON_QUESTOES = `
         { "letra": "C", "texto": string, "correta": boolean },
         { "letra": "D", "texto": string, "correta": boolean }
       ] | null,
-      "respostaEsperada": string
+      "respostaEsperada": string,
+      "quadroReferenciado": number | null
     }
   ],
   "competencias": string[],
@@ -184,6 +185,8 @@ A partir da charge/tirinha acima, elabore uma atividade de avaliação com estes
 - Nível de dificuldade: ${labelNivel(params.nivel)}
 
 As questões devem se referir diretamente à cena/situação da charge/tirinha (ex: "o que a professora explicou no quadro 2?", "por que o personagem X parou o jogo?"), verificando se o aluno compreendeu tanto a cena quanto o conteúdo pedagógico por trás dela.
+
+Para cada questão, preencha "quadroReferenciado" com o número do quadro (1 a ${roteiro.quadros.length}) que ela pergunta diretamente — a mesma cena/fala/situação que a questão está cobrando. Se a questão for sobre a charge inteira ou não depender de um quadro específico, use null. Sempre que possível, prefira formular a questão amarrada a UM quadro específico (em vez de genérica), já que a imagem daquele quadro é mostrada junto da questão na prova impressa.
 ${params.tipoQuestoes === 'objetivas' ? 'Todas as questões devem ser do tipo "objetiva", com exatamente 4 alternativas (A-D) e exatamente 1 correta.' : ''}
 ${params.tipoQuestoes === 'discursivas' ? 'Todas as questões devem ser do tipo "discursiva", com "alternativas": null e "respostaEsperada" contendo a resposta/critério de correção esperado.' : ''}
 ${params.tipoQuestoes === 'mistas' ? 'Misture questões "objetiva" e "discursiva" de forma equilibrada.' : ''}
