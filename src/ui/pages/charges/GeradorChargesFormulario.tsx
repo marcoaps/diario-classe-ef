@@ -13,6 +13,7 @@ import {
 import type { EstiloIlustracao, NivelCharges, NumeroQuadros, ParametrosGeracaoCharges, TipoImagem, TipoQuestoesCharges } from './tiposCharges';
 import { PersonagensSeletor } from './PersonagensSeletor';
 import { curriculumData } from '../../../data/curriculumData';
+import { formatarHabilidadeBNCC, getHabilidadesBNCC } from '../../../data/bnccEducacaoFisicaData';
 
 const CLASSE_INPUT = 'w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface';
 const CLASSE_LABEL = 'text-xs text-on-surface-variant mb-1 block';
@@ -29,6 +30,9 @@ export interface GeradorChargesFormularioProps {
  * não tem um campo "Unidade Temática" separado, nem vínculo direto entre
  * cada habilidade e cada objeto de conhecimento (são listas paralelas).
  * Mesma decisão já tomada no Gerador de Questões (`GeradorQuestoesFormulario.tsx`).
+ * Objeto de Conhecimento continua vindo daqui; a Habilidade agora vem da
+ * BNCC oficial (`bnccEducacaoFisicaData.ts`), que é organizada por bloco de
+ * anos (6º/7º e 8º/9º), não por bimestre.
  */
 function dadosDoPlanoDeCurso(anoEscolar: number, bimestre: string) {
   return curriculumData[String(anoEscolar)]?.bimestres?.[bimestre] ?? null;
@@ -36,19 +40,21 @@ function dadosDoPlanoDeCurso(anoEscolar: number, bimestre: string) {
 
 export function GeradorChargesFormulario({ valores, onChange, desabilitado }: GeradorChargesFormularioProps) {
   const dadosPlano = dadosDoPlanoDeCurso(valores.anoEscolar, valores.bimestre);
+  const habilidadesBNCC = getHabilidadesBNCC(valores.anoEscolar);
 
   // Sempre que Ano Escolar ou Bimestre mudarem, sincroniza Objeto de
-  // Conhecimento, Habilidade e Conteúdo com o Plano de Curso daquele
-  // ano/bimestre, selecionando automaticamente o primeiro item de cada lista.
+  // Conhecimento e Conteúdo com o Plano de Curso daquele ano/bimestre, e a
+  // Habilidade com a lista oficial da BNCC para o bloco de anos correspondente,
+  // selecionando automaticamente o primeiro item de cada lista.
   useEffect(() => {
-    if (!dadosPlano) return;
-    if (!dadosPlano.objetosConhecimento.includes(valores.objetoConhecimento)) {
+    if (dadosPlano && !dadosPlano.objetosConhecimento.includes(valores.objetoConhecimento)) {
       const primeiroObjeto = dadosPlano.objetosConhecimento[0] ?? '';
       onChange('objetoConhecimento', primeiroObjeto);
       onChange('conteudo', primeiroObjeto);
     }
-    if (!dadosPlano.habilidades.includes(valores.habilidadeBncc)) {
-      onChange('habilidadeBncc', dadosPlano.habilidades[0] ?? '');
+    const opcoesHabilidade = habilidadesBNCC.map(formatarHabilidadeBNCC);
+    if (!opcoesHabilidade.includes(valores.habilidadeBncc)) {
+      onChange('habilidadeBncc', opcoesHabilidade[0] ?? '');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [valores.anoEscolar, valores.bimestre]);
@@ -115,24 +121,21 @@ export function GeradorChargesFormulario({ valores, onChange, desabilitado }: Ge
       </div>
 
       <div>
-        <label className={CLASSE_LABEL}>Habilidade (Plano de Curso / BNCC)</label>
-        {dadosPlano ? (
-          <select
-            value={valores.habilidadeBncc}
-            onChange={e => onChange('habilidadeBncc', e.target.value)}
-            disabled={desabilitado}
-            className={CLASSE_INPUT}
-          >
-            {dadosPlano.habilidades.map(h => <option key={h} value={h}>{h}</option>)}
-          </select>
-        ) : (
-          <input
-            value={valores.habilidadeBncc}
-            onChange={e => onChange('habilidadeBncc', e.target.value)}
-            disabled={desabilitado}
-            className={CLASSE_INPUT}
-          />
-        )}
+        <label className={CLASSE_LABEL}>Habilidade (BNCC oficial)</label>
+        <select
+          value={valores.habilidadeBncc}
+          onChange={e => onChange('habilidadeBncc', e.target.value)}
+          disabled={desabilitado}
+          className={CLASSE_INPUT}
+        >
+          {habilidadesBNCC.map(h => {
+            const opcao = formatarHabilidadeBNCC(h);
+            return <option key={h.codigo} value={opcao}>{opcao}</option>;
+          })}
+        </select>
+        <p className="text-[11px] text-on-surface-variant mt-1">
+          Habilidades oficiais da BNCC para {valores.anoEscolar <= 7 ? '6º e 7º anos' : '8º e 9º anos'} — independem do bimestre.
+        </p>
       </div>
 
       <div>
