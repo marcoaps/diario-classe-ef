@@ -58,6 +58,12 @@ export function GeradorChargesFormulario({ valores, onChange, desabilitado }: Ge
     onChange('conteudo', valor);
   }
 
+  /** Número de quadros acompanha a Quantidade de questões (mesmo intervalo, 1-10) — cada questão ganha seu próprio quadro/imagem. O professor ainda pode reduzir "Número de quadros" manualmente depois, se preferir menos imagens. */
+  function selecionarQuantidadeQuestoes(valor: number) {
+    onChange('quantidadeQuestoes', valor as ParametrosGeracaoCharges['quantidadeQuestoes']);
+    onChange('numeroQuadros', valor as NumeroQuadros);
+  }
+
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
@@ -166,6 +172,7 @@ export function GeradorChargesFormulario({ valores, onChange, desabilitado }: Ge
           >
             {NUMEROS_QUADROS.map(n => <option key={n} value={n}>{n}</option>)}
           </select>
+          <p className="text-[11px] text-on-surface-variant mt-1">Acompanha a Quantidade de questões automaticamente — pode reduzir aqui se quiser menos imagens.</p>
         </div>
       </div>
 
@@ -186,7 +193,7 @@ export function GeradorChargesFormulario({ valores, onChange, desabilitado }: Ge
           <label className={CLASSE_LABEL}>Quantidade de questões</label>
           <select
             value={valores.quantidadeQuestoes}
-            onChange={e => onChange('quantidadeQuestoes', Number(e.target.value) as ParametrosGeracaoCharges['quantidadeQuestoes'])}
+            onChange={e => selecionarQuantidadeQuestoes(Number(e.target.value))}
             disabled={desabilitado}
             className={CLASSE_INPUT}
           >
