@@ -215,7 +215,8 @@ function exportarModelo1(doc: jsPDF, atividade: AtividadeCharge, opcoes: OpcoesE
     if (deveIlustrarQuestaoComQuadro(atividade.questoes, idx)) {
       const imagemDoQuadro = atividade.imagensQuadros.find(i => i.quadro === questao.quadroReferenciado);
       if (imagemDoQuadro) {
-        const { largura, altura } = calcularDimensoesImagemMM(imagemDoQuadro.larguraOriginal, imagemDoQuadro.alturaOriginal, 70, 55);
+        // Coluna única tem bem mais espaço que a Prova em 2 colunas — usa o mesmo tamanho generoso da seção de Quadros (padrão de calcularDimensoesImagemMM), não o cap estreito da Prova.
+        const { largura, altura } = calcularDimensoesImagemMM(imagemDoQuadro.larguraOriginal, imagemDoQuadro.alturaOriginal);
         if (y + altura > 280) { doc.addPage(); y = 20; }
         try {
           doc.addImage(imagemDoQuadro.dataUrl, 'JPEG', margin, y, largura, altura);
@@ -599,8 +600,12 @@ const LARGURA_MAX_IMAGEM_WORD = 340;
 const ALTURA_MAX_IMAGEM_WORD = 260;
 const LARGURA_MAX_IMAGEM_UNICA_WORD = 460;
 const ALTURA_MAX_IMAGEM_UNICA_WORD = 360;
-const LARGURA_MAX_IMAGEM_QUESTAO_WORD = 240;
-const ALTURA_MAX_IMAGEM_QUESTAO_WORD = 190;
+// Coluna única (exportarChargeWord) tem bem mais espaço disponível que a Prova em 2 colunas — caps bem maiores.
+const LARGURA_MAX_IMAGEM_QUESTAO_MODELO1_WORD = 320;
+const ALTURA_MAX_IMAGEM_QUESTAO_MODELO1_WORD = 240;
+// Prova em 2 colunas (exportarChargeProvaWord) — coluna estreita, precisa de um cap menor.
+const LARGURA_MAX_IMAGEM_QUESTAO_PROVA_WORD = 240;
+const ALTURA_MAX_IMAGEM_QUESTAO_PROVA_WORD = 190;
 
 /** Imagem do quadro (ou da tira completa), centralizada, mantendo a proporção original sem exceder o limite máximo (unidades docx, ~pixels a 96dpi). */
 function paragrafoImagemQuadro(
@@ -670,7 +675,7 @@ export async function exportarChargeWord(atividade: AtividadeCharge): Promise<vo
     if (deveIlustrarQuestaoComQuadro(atividade.questoes, idx)) {
       const imagemDaQuestao = atividade.imagensQuadros.find(i => i.quadro === questao.quadroReferenciado);
       if (imagemDaQuestao) {
-        paragrafos.push(paragrafoImagemQuadro(imagemDaQuestao, LARGURA_MAX_IMAGEM_QUESTAO_WORD, ALTURA_MAX_IMAGEM_QUESTAO_WORD));
+        paragrafos.push(paragrafoImagemQuadro(imagemDaQuestao, LARGURA_MAX_IMAGEM_QUESTAO_MODELO1_WORD, ALTURA_MAX_IMAGEM_QUESTAO_MODELO1_WORD));
       }
     }
     paragrafos.push(par([run(questao.enunciado, { sz: 24 })], AlignmentType.LEFT, 20, 60));
@@ -723,7 +728,7 @@ export async function exportarChargeProvaWord(atividade: AtividadeCharge): Promi
     if (deveIlustrarQuestaoComQuadro(atividade.questoes, idx)) {
       const imagemDaQuestao = atividade.imagensQuadros.find(i => i.quadro === questao.quadroReferenciado);
       if (imagemDaQuestao) {
-        paragrafos.push(paragrafoImagemQuadro(imagemDaQuestao, LARGURA_MAX_IMAGEM_QUESTAO_WORD, ALTURA_MAX_IMAGEM_QUESTAO_WORD));
+        paragrafos.push(paragrafoImagemQuadro(imagemDaQuestao, LARGURA_MAX_IMAGEM_QUESTAO_PROVA_WORD, ALTURA_MAX_IMAGEM_QUESTAO_PROVA_WORD));
       }
     }
     paragrafos.push(par([run(questao.enunciado, { sz: 20 })], AlignmentType.LEFT, 10, 40));
@@ -819,7 +824,7 @@ function montarHTMLAtividade(atividade: AtividadeCharge): string {
   .balao { font-style: italic; margin-top: 6px; padding-left: 10px; border-left: 3px solid #ddd; }
   .imagem-quadro { max-width: 100%; border-radius: 8px; margin-top: 8px; }
   .imagem-unica { max-width: 100%; border-radius: 8px; margin: 12px 0; display: block; }
-  .imagem-questao { max-width: 260px; border-radius: 8px; margin-bottom: 8px; display: block; }
+  .imagem-questao { max-width: 480px; width: 100%; border-radius: 8px; margin-bottom: 8px; display: block; }
   .prompt summary { cursor: pointer; font-size: 12px; color: #4c1d95; margin-top: 8px; }
   .prompt pre { white-space: pre-wrap; font-size: 11px; color: #555; background: #f5f5f5; padding: 8px; border-radius: 6px; margin-top: 6px; }
   .questao { margin-bottom: 16px; }
