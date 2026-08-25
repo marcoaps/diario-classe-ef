@@ -127,6 +127,9 @@ O roteiro deve contar uma cena pedagógica coerente relacionada ao conteúdo (ex
 === SOBRE OS BALÕES DE FALA (IMPORTANTE PARA DAR VIDA À CENA) ===
 Inclua "textoBalao" em pelo menos metade dos quadros (idealmente na maioria) — uma charge/tirinha sem nenhuma fala costuma ficar sem graça e difícil de engajar. Use falas curtas e naturais que revelem o que os personagens estão pensando/sentindo/perguntando naquele momento (dúvida de um aluno, instrução direta do professor, reação de surpresa/comemoração de um colega) — nunca apenas narração; são falas de personagem para personagem. Só deixe "textoBalao" como null nos quadros em que uma fala realmente atrapalharia o ritmo (ex: um quadro de pura ação/jogada em silêncio). Linguagem escolar, sem gírias ofensivas.
 
+=== SOBRE O "textoApoio" ===
+"textoApoio" é um parágrafo de apoio pedagógico para o professor, explicando a cena e a conexão com o conteúdo. Ele PRECISA ser especificamente sobre "${params.conteudo}" e sobre a charge que você acabou de criar (reaproveite os fatos, o esporte e as situações dos quadros acima) — NUNCA escreva uma definição genérica de livro-texto sobre a categoria mais ampla usando outro esporte como exemplo (ex: se a charge é sobre handebol, não escreva um parágrafo genérico sobre "esportes de invasão" citando basquete/futebol como exemplo — fale do handebol, com os detalhes reais que aparecem na própria charge).
+
 === FORMATO DE SAÍDA ===
 Responda SOMENTE com um único objeto JSON válido, sem markdown, sem \`\`\`, sem texto antes ou depois, seguindo exatamente este esquema:
 ${ESQUEMA_JSON_ROTEIRO}
