@@ -240,7 +240,7 @@ export function GeradorCharges() {
   }
 
   return (
-    <div className="py-4 space-y-4">
+    <div className="py-4 pb-24 space-y-4">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <button onClick={() => navigate('/ia')} className="p-1 rounded-lg text-on-surface-variant">

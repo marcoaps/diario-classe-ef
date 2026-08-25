@@ -209,7 +209,7 @@ export function GeradorQuestoes() {
   const pendentes = questoes.filter(q => q.statusRevisao === 'requer_revisao_manual').length;
 
   return (
-    <div className="py-4 space-y-4">
+    <div className="py-4 pb-24 space-y-4">
       <div className="flex items-center gap-2">
         <button onClick={() => navigate('/avaliacoes')} className="p-1 rounded-lg text-on-surface-variant">
           <ArrowLeft className="w-5 h-5" />
