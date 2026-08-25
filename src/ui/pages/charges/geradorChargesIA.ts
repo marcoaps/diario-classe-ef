@@ -119,13 +119,13 @@ ${params.observacoesAdicionais ? `Observações adicionais do professor: ${param
 
 O roteiro deve contar uma cena pedagógica coerente relacionada ao conteúdo (ex: uma situação de jogo, uma regra sendo aplicada, uma dúvida sendo esclarecida), de forma leve e compreensível para a faixa etária do ${params.anoEscolar}º ano. Se houver algum tipo de conflito/disputa na cena (comum em contextos esportivos), ele deve ser resolvido de forma pedagógica — nunca com violência (ver regras de segurança acima).
 
-=== CONTINUIDADE ENTRE QUADROS (MUITO IMPORTANTE) ===
-- Os MESMOS personagens devem aparecer em quadros consecutivos sempre que fizer sentido para a cena — nunca troque o elenco da história no meio da narrativa sem motivo.
-- O campo "continuidadeNotas" de cada quadro (a partir do 2º) deve registrar o que permanece igual em relação ao quadro anterior (cenário, hora do dia, personagens presentes) — isso ajuda a manter a imagem final consistente.
-- "elementosCenario" deve ser consistente entre quadros da mesma cena (mesmo ambiente, salvo mudança de cena claramente justificada pela história).
+=== VARIEDADE E DINAMISMO ENTRE QUADROS (evite quadros "parados" repetindo a mesma pose) ===
+- Não faça todos os quadros com o mesmo tipo de composição (ex: "todos parados olhando/ouvindo o professor explicar"). Cada quadro deve ter uma FUNÇÃO NARRATIVA diferente na história (por ex.: 1º apresenta o contexto/desafio, 2º mostra a ação/jogada acontecendo, 3º mostra uma complicação ou dúvida, 4º mostra a resolução/aprendizado) — não apenas 4 fotos do mesmo instante didático.
+- Varie de verdade o "anguloCamera" entre os quadros (ex: plano geral, plano médio, close em uma reação, contra-plongée, visão de cima da jogada) e a pose/ação dos personagens (em movimento, driblando, arremessando, comemorando, surpreso) — evite repetir a mesma pose estática de "explicando com o braço apontando" em mais de um quadro.
+- Priorize mostrar a AÇÃO do esporte/prática acontecendo de verdade (jogada em andamento, disputa, gesto técnico específico) em pelo menos metade dos quadros, não só cenas de explicação parada.
 
-=== SOBRE OS BALÕES DE FALA ===
-"textoBalao" é OPCIONAL — inclua apenas quando a fala for realmente necessária para entender a cena. Falas curtas, linguagem escolar, sem gírias ofensivas.
+=== SOBRE OS BALÕES DE FALA (IMPORTANTE PARA DAR VIDA À CENA) ===
+Inclua "textoBalao" em pelo menos metade dos quadros (idealmente na maioria) — uma charge/tirinha sem nenhuma fala costuma ficar sem graça e difícil de engajar. Use falas curtas e naturais que revelem o que os personagens estão pensando/sentindo/perguntando naquele momento (dúvida de um aluno, instrução direta do professor, reação de surpresa/comemoração de um colega) — nunca apenas narração; são falas de personagem para personagem. Só deixe "textoBalao" como null nos quadros em que uma fala realmente atrapalharia o ritmo (ex: um quadro de pura ação/jogada em silêncio). Linguagem escolar, sem gírias ofensivas.
 
 === FORMATO DE SAÍDA ===
 Responda SOMENTE com um único objeto JSON válido, sem markdown, sem \`\`\`, sem texto antes ou depois, seguindo exatamente este esquema:
