@@ -126,6 +126,8 @@ export function montarPromptImagemUnico(contexto: ContextoPromptImagem): string 
 
   return `
 ${labelTipo(tipoImagem)} composta por ${roteiro.quadros.length} quadro(s) em sequência, formando uma única imagem (grade de painéis lado a lado ou empilhados, com uma pequena margem entre eles).
+GRADE OBRIGATORIAMENTE REGULAR: todos os painéis devem ter EXATAMENTE o mesmo tamanho, alinhados numa grade perfeitamente uniforme (linhas e colunas retas, margem/espaçamento idêntico e constante entre todos os painéis, sem painel maior, cortado ou deslocado) — isso é necessário porque o professor recorta essa imagem depois dividindo-a em partes iguais.
+NÃO desenhe números, letras, badges numerados ou qualquer marcação de identificação nos cantos dos painéis — a numeração dos quadros é adicionada depois, fora da imagem.
 Título da história: "${roteiro.tituloRoteiro}"
 Estilo artístico: ${labelEstilo(estiloIlustracao)} — MANTER O MESMO ESTILO E OS MESMOS PERSONAGENS (aparência idêntica) em todos os quadros.
 

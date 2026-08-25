@@ -111,6 +111,53 @@ export function recortarImagemEmQuadros(
   });
 }
 
+/** Retângulo de recorte em porcentagem (0-100) da imagem original — usado pela ferramenta de ajuste manual (arrastar/redimensionar caixas), já que o recorte automático em grade nem sempre bate com os limites reais dos painéis gerados pela IA de imagem. */
+export interface CaixaRecortePercentual {
+  quadro: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Recorta uma imagem única usando retângulos ajustados manualmente (ver `CaixaRecortePercentual`) em vez de uma grade uniforme — mesma saída de `recortarImagemEmQuadros`, mas com controle fino por quadro. */
+export function recortarImagemComCaixas(
+  dataUrlOrigem: string,
+  caixas: CaixaRecortePercentual[],
+  qualidadeJpeg = 0.85
+): Promise<RecorteQuadro[]> {
+  return new Promise((resolve, reject) => {
+    const imagem = new Image();
+    imagem.onerror = () => reject(new Error('Não foi possível carregar a imagem para recortar.'));
+    imagem.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Não foi possível processar a imagem neste navegador.'));
+        return;
+      }
+
+      const recortes: RecorteQuadro[] = [];
+      for (const caixa of caixas) {
+        const sx = (caixa.x / 100) * imagem.naturalWidth;
+        const sy = (caixa.y / 100) * imagem.naturalHeight;
+        const sw = (caixa.w / 100) * imagem.naturalWidth;
+        const sh = (caixa.h / 100) * imagem.naturalHeight;
+        const largura = Math.max(1, Math.round(sw));
+        const altura = Math.max(1, Math.round(sh));
+
+        canvas.width = largura;
+        canvas.height = altura;
+        ctx.clearRect(0, 0, largura, altura);
+        ctx.drawImage(imagem, sx, sy, sw, sh, 0, 0, largura, altura);
+        recortes.push({ quadro: caixa.quadro, dataUrl: canvas.toDataURL('image/jpeg', qualidadeJpeg), largura, altura });
+      }
+      resolve(recortes);
+    };
+    imagem.src = dataUrlOrigem;
+  });
+}
+
 /** Converte uma data URL (ex: "data:image/jpeg;base64,...") em ArrayBuffer, para uso em `docx.ImageRun`. */
 export function dataUrlParaArrayBuffer(dataUrl: string): ArrayBuffer {
   const base64 = dataUrl.split(',')[1] ?? '';
