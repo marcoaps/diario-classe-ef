@@ -135,7 +135,13 @@ export function GeradorChargesFormulario({ valores, onChange, desabilitado }: Ge
           placeholder="Ex: Handebol — Defesa Legal"
           className={CLASSE_INPUT}
         />
-        <p className="text-[11px] text-on-surface-variant mt-1">Carregado a partir do Objeto de Conhecimento selecionado — pode editar/resumir antes de gerar.</p>
+        {valores.conteudo === valores.objetoConhecimento ? (
+          <p className="text-[11px] text-amber-600 dark:text-amber-500 font-medium mt-1">
+            ⚠ Ainda está com o texto genérico do Objeto de Conhecimento — sem um esporte/prática específico, a IA pode escolher qualquer exemplo da categoria (ex: "Esportes de invasão" pode virar basquete, futebol, handebol...). Edite para nomear o esporte, ex: "Handebol — Defesa Legal".
+          </p>
+        ) : (
+          <p className="text-[11px] text-on-surface-variant mt-1">Carregado a partir do Objeto de Conhecimento selecionado — pode editar/resumir antes de gerar.</p>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3">

@@ -9,5 +9,19 @@
       "PowerShell(Get-ChildItem \"C:\\\\Users\\\\marco\\\\Downloads\\\\e.e.instituto-odilon-pratagi\\\\diario-classe-ef\\\\\" -File | Where-Object { $_.Name -match \"\\\\.\\(html|js|ts|json\\)$\" } | Select-Object Name)",
       "Bash(curl -s \"http://localhost:3000/src/App.tsx\")"
     ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"C:\\Users\\marco\\Downloads\\Dário Digital Educação Física\\Administrativo IOP\\e.e.instituto-odilon-pratagi\\diario-classe-ef\" && git add -A && (git diff --cached --quiet || git commit -m \"Atualização automática (Claude Code) — $(date '+%Y-%m-%d %H:%M:%S')\") && git push",
+            "timeout": 30,
+            "statusMessage": "Publicando alterações (git push automático)..."
+          }
+        ]
+      }
+    ]
   }
 }

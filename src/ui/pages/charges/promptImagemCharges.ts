@@ -72,6 +72,17 @@ function montarBlocoPersonagensDoQuadro(quadro: QuadroIA, personagensUsados: Per
     .join('\n');
 }
 
+/** Lista as falas do quadro para a IA de imagem desenhar os balões de fato — único texto permitido dentro da imagem (ver `PROIBICOES_PROMPT_IMAGEM`). */
+function montarBlocoBaloesFala(quadro: QuadroIA): string {
+  if (!quadro.textoBalao || quadro.textoBalao.length === 0) {
+    return '\nBALÕES DE FALA: nenhum balão neste quadro — cena silenciosa, sem texto algum na imagem.';
+  }
+  const linhas = quadro.textoBalao.map(b => `- Personagem "${b.personagem}" fala: "${b.fala}"`).join('\n');
+  return `
+BALÕES DE FALA (desenhar como balões de fala de quadrinho clássicos — contorno definido, "rabicho"/ponta apontando para a boca de quem fala — com o texto a seguir escrito de forma legível, com ortografia correta em português, EXATAMENTE como está abaixo, sem inventar, resumir ou alterar palavras):
+${linhas}`;
+}
+
 function montarPromptDeUmQuadro(quadro: QuadroIA, contexto: ContextoPromptImagem): string {
   const { roteiro, personagensUsados, tipoImagem, estiloIlustracao, conteudo } = contexto;
 
@@ -88,6 +99,7 @@ CONTINUIDADE EM RELAÇÃO AO QUADRO ANTERIOR: ${quadro.continuidadeNotas || '(pr
 
 PERSONAGENS NESTA CENA (aparência física fixa — manter EXATAMENTE assim em todos os quadros desta atividade):
 ${montarBlocoPersonagensDoQuadro(quadro, personagensUsados)}
+${montarBlocoBaloesFala(quadro)}
 
 ILUMINAÇÃO: consistente com ambiente escolar/quadra ao ar livre ou coberta, luz natural difusa, sem sombras dramáticas.
 

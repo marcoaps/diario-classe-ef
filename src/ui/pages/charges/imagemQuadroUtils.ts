@@ -51,6 +51,66 @@ export function redimensionarImagemParaDataUrl(
   });
 }
 
+export interface RecorteQuadro {
+  quadro: number;
+  dataUrl: string;
+  largura: number;
+  altura: number;
+}
+
+/**
+ * Recorta uma imagem única (grade de painéis, ex: a "Imagem da tira completa")
+ * em `linhas` × `colunas` pedaços iguais, em ordem de leitura (esquerda→direita,
+ * cima→baixo), numerando os quadros a partir de 1. Usado quando o professor
+ * envia só a tira inteira e quer os recortes individuais para ilustrar cada
+ * Quadro na exportação, sem precisar gerar/enviar uma imagem por quadro.
+ */
+export function recortarImagemEmQuadros(
+  dataUrlOrigem: string,
+  linhas: number,
+  colunas: number,
+  qualidadeJpeg = 0.85
+): Promise<RecorteQuadro[]> {
+  return new Promise((resolve, reject) => {
+    const imagem = new Image();
+    imagem.onerror = () => reject(new Error('Não foi possível carregar a imagem para recortar.'));
+    imagem.onload = () => {
+      const larguraTile = Math.floor(imagem.naturalWidth / colunas);
+      const alturaTile = Math.floor(imagem.naturalHeight / linhas);
+      if (larguraTile <= 0 || alturaTile <= 0) {
+        reject(new Error('Layout de recorte inválido para o tamanho desta imagem.'));
+        return;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = larguraTile;
+      canvas.height = alturaTile;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Não foi possível processar a imagem neste navegador.'));
+        return;
+      }
+
+      const recortes: RecorteQuadro[] = [];
+      let numero = 1;
+      for (let linha = 0; linha < linhas; linha++) {
+        for (let coluna = 0; coluna < colunas; coluna++) {
+          ctx.clearRect(0, 0, larguraTile, alturaTile);
+          ctx.drawImage(
+            imagem,
+            coluna * larguraTile, linha * alturaTile, larguraTile, alturaTile,
+            0, 0, larguraTile, alturaTile
+          );
+          recortes.push({ quadro: numero, dataUrl: canvas.toDataURL('image/jpeg', qualidadeJpeg), largura: larguraTile, altura: alturaTile });
+          numero++;
+        }
+      }
+      resolve(recortes);
+    };
+    imagem.src = dataUrlOrigem;
+  });
+}
+
 /** Converte uma data URL (ex: "data:image/jpeg;base64,...") em ArrayBuffer, para uso em `docx.ImageRun`. */
 export function dataUrlParaArrayBuffer(dataUrl: string): ArrayBuffer {
   const base64 = dataUrl.split(',')[1] ?? '';

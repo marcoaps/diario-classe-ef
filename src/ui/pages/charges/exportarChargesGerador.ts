@@ -145,7 +145,9 @@ function exportarModelo1(doc: jsPDF, atividade: AtividadeCharge, opcoes: OpcoesE
       y += 1;
     }
 
-    if (!atividade.imagemUnica) {
+    {
+      // Imagem do quadro tem prioridade mesmo quando há imagem única — ela pode vir de um
+      // recorte automático da própria imagem única (ver `RecorteImagemUnicaControle`).
       const imagemDoQuadro = atividade.imagensQuadros.find(i => i.quadro === quadro.numero);
       if (imagemDoQuadro) {
         const { largura, altura } = calcularDimensoesImagemMM(imagemDoQuadro.larguraOriginal, imagemDoQuadro.alturaOriginal);
@@ -156,7 +158,7 @@ function exportarModelo1(doc: jsPDF, atividade: AtividadeCharge, opcoes: OpcoesE
         } catch {
           // Se a imagem vier num formato que o jsPDF não reconheça, segue sem travar a exportação.
         }
-      } else if (opcoes.incluirPromptsImagem) {
+      } else if (!atividade.imagemUnica && opcoes.incluirPromptsImagem) {
         const promptDoQuadro = atividade.promptsImagem.find(p => p.quadro === quadro.numero)?.prompt;
         if (promptDoQuadro) {
           doc.setFont('helvetica', 'normal');
@@ -518,11 +520,11 @@ export async function exportarChargeWord(atividade: AtividadeCharge): Promise<vo
         paragrafos.push(par([run(`"${balao.fala}" — ${balao.personagem}`, { sz: 20, it: true })], AlignmentType.LEFT, 0, 10));
       });
     }
-    if (!atividade.imagemUnica) {
-      const imagemDoQuadro = atividade.imagensQuadros.find(i => i.quadro === quadro.numero);
-      if (imagemDoQuadro) {
-        paragrafos.push(paragrafoImagemQuadro(imagemDoQuadro));
-      }
+    // Imagem do quadro tem prioridade mesmo quando há imagem única — ela pode vir de um
+    // recorte automático da própria imagem única (ver `RecorteImagemUnicaControle`).
+    const imagemDoQuadro = atividade.imagensQuadros.find(i => i.quadro === quadro.numero);
+    if (imagemDoQuadro) {
+      paragrafos.push(paragrafoImagemQuadro(imagemDoQuadro));
     }
   });
 
@@ -594,13 +596,12 @@ function montarHTMLAtividade(atividade: AtividadeCharge): string {
       <p>${escaparHTML(quadro.descricaoCena)}</p>
       <p class="meta">Personagens: ${escaparHTML(quadro.personagensPresentes.join(', '))} · Ângulo: ${escaparHTML(quadro.anguloCamera)}</p>
       ${quadro.textoBalao ? quadro.textoBalao.map(b => `<p class="balao">"${escaparHTML(b.fala)}" — ${escaparHTML(b.personagem)}</p>`).join('') : ''}
-      ${atividade.imagemUnica
-        ? ''
-        : imagemDoQuadro
-          ? `<img class="imagem-quadro" src="${imagemDoQuadro.dataUrl}" alt="Ilustração do quadro ${quadro.numero}">`
-          : promptDoQuadro
-            ? `<details class="prompt"><summary>Prompt para gerar a imagem</summary><pre>${escaparHTML(promptDoQuadro)}</pre></details>`
-            : ''}
+      ${/* Imagem do quadro tem prioridade mesmo quando há imagem única — ela pode vir de um recorte automático da própria imagem única (ver `RecorteImagemUnicaControle`). */ ''}
+      ${imagemDoQuadro
+        ? `<img class="imagem-quadro" src="${imagemDoQuadro.dataUrl}" alt="Ilustração do quadro ${quadro.numero}">`
+        : (!atividade.imagemUnica && promptDoQuadro)
+          ? `<details class="prompt"><summary>Prompt para gerar a imagem</summary><pre>${escaparHTML(promptDoQuadro)}</pre></details>`
+          : ''}
     </div>
   `;
   }).join('');

@@ -48,9 +48,13 @@ export function contemTermoDeViolencia(texto: string): string | null {
   return contemTermoProibido(texto, TERMOS_PROIBIDOS_VIOLENCIA);
 }
 
-/** Proibições explícitas embutidas em todo prompt de geração de imagem (compatível com ferramentas externas de IA de imagem). */
+/**
+ * Proibições explícitas embutidas em todo prompt de geração de imagem (compatível com ferramentas externas de IA de imagem).
+ * O único texto permitido dentro da imagem é o das falas dos balões (ver `montarBlocoBaloesFala` em `promptImagemCharges.ts`)
+ * — qualquer outro texto (placas, legendas, letreiros) continua proibido.
+ */
 export const PROIBICOES_PROMPT_IMAGEM = [
-  'sem texto/letras/palavras dentro da imagem (nem balões escritos, nem placas, nem legendas)',
+  'sem NENHUM texto/letras/palavras dentro da imagem além das falas dos balões listadas abaixo (nem placas, nem legendas, nem letreiros, nem texto escrito em outro lugar da cena)',
   'sem marcas, logotipos ou marcas registradas reais',
   'sem violência, sangue, armas ou lesões',
   'sem conteúdo assustador ou inadequado para crianças/adolescentes',

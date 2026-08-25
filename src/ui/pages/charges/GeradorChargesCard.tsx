@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Copy, ImagePlus, Pencil, Trash2, Upload } from 'lucide-react';
-import { redimensionarImagemParaDataUrl, type ImagemRedimensionada } from './imagemQuadroUtils';
+import { recortarImagemEmQuadros, redimensionarImagemParaDataUrl, type ImagemRedimensionada } from './imagemQuadroUtils';
 import { montarPromptImagemUnico } from './promptImagemCharges';
 import type { AtividadeCharge, ImagemQuadro, ImagemUnica, QuestaoChargeIA } from './tiposCharges';
 
@@ -83,6 +83,109 @@ function UploadImagemControle({
       ) : (
         <p className="text-[11px] text-on-surface-variant italic">
           Gere a imagem numa ferramenta externa (ChatGPT Images, Leonardo, etc.) usando o prompt abaixo, baixe o arquivo e envie aqui — ela será usada na exportação em vez do texto do prompt.
+        </p>
+      )}
+    </div>
+  );
+}
+
+interface LayoutRecorte {
+  linhas: number;
+  colunas: number;
+  label: string;
+}
+
+/** Layouts de grade oferecidos por número de quadros — a 1ª opção é o palpite mais comum de como ferramentas de imagem organizam a grade ("lado a lado" para 2/3, 2×2 para 4). */
+function layoutsDeRecorteParaNumeroQuadros(numeroQuadros: number): LayoutRecorte[] {
+  if (numeroQuadros === 1) return [{ linhas: 1, colunas: 1, label: '1 quadro (imagem inteira)' }];
+  if (numeroQuadros === 2) return [
+    { linhas: 1, colunas: 2, label: '1 linha × 2 colunas (lado a lado)' },
+    { linhas: 2, colunas: 1, label: '2 linhas × 1 coluna (empilhados)' },
+  ];
+  if (numeroQuadros === 3) return [
+    { linhas: 1, colunas: 3, label: '1 linha × 3 colunas' },
+    { linhas: 3, colunas: 1, label: '3 linhas × 1 coluna' },
+  ];
+  return [
+    { linhas: 2, colunas: 2, label: '2 linhas × 2 colunas (grade)' },
+    { linhas: 1, colunas: 4, label: '1 linha × 4 colunas' },
+    { linhas: 4, colunas: 1, label: '4 linhas × 1 coluna' },
+  ];
+}
+
+/**
+ * Recorta a "Imagem única da tira completa" em pedaços — um por Quadro — para
+ * ilustrar cada seção de Quadro individualmente na exportação, sem o
+ * professor precisar gerar/enviar uma imagem por quadro à parte. O recorte é
+ * uma divisão geométrica simples (grade uniforme); só funciona bem se a
+ * ferramenta de imagem realmente organizou os painéis numa grade regular com
+ * esse número de linhas/colunas — por isso o professor escolhe o layout que
+ * bate com o que foi gerado, em vez do app adivinhar.
+ */
+function RecorteImagemUnicaControle({
+  imagemUnicaDataUrl,
+  numeroQuadros,
+  onRecorte,
+}: {
+  imagemUnicaDataUrl: string;
+  numeroQuadros: number;
+  onRecorte: (quadro: number, imagem: ImagemQuadro | null) => void;
+}) {
+  const layouts = useMemo(() => layoutsDeRecorteParaNumeroQuadros(numeroQuadros), [numeroQuadros]);
+  const [layoutEscolhido, setLayoutEscolhido] = useState(0);
+  const [processando, setProcessando] = useState(false);
+  const [erro, setErro] = useState('');
+  const [sucesso, setSucesso] = useState(false);
+
+  if (numeroQuadros <= 1) return null;
+
+  async function recortar() {
+    const layout = layouts[layoutEscolhido];
+    setErro('');
+    setSucesso(false);
+    setProcessando(true);
+    try {
+      const recortes = await recortarImagemEmQuadros(imagemUnicaDataUrl, layout.linhas, layout.colunas);
+      recortes.forEach(r => {
+        if (r.quadro <= numeroQuadros) {
+          onRecorte(r.quadro, { quadro: r.quadro, dataUrl: r.dataUrl, larguraOriginal: r.largura, alturaOriginal: r.altura });
+        }
+      });
+      setSucesso(true);
+    } catch (err) {
+      setErro((err as Error).message);
+    } finally {
+      setProcessando(false);
+    }
+  }
+
+  return (
+    <div className="bg-background border border-outline-variant rounded-xl p-2 space-y-1.5">
+      <p className="text-[11px] font-semibold text-on-surface-variant">Recortar automaticamente para os Quadros abaixo</p>
+      <p className="text-[11px] text-on-surface-variant">
+        Escolha o layout que bate com a grade que a ferramenta de imagem gerou, para dividir esta imagem em {numeroQuadros} pedaços — um por Quadro.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={layoutEscolhido}
+          onChange={e => { setLayoutEscolhido(Number(e.target.value)); setSucesso(false); }}
+          disabled={processando}
+          className="px-2 py-1.5 rounded-lg border border-outline-variant bg-surface text-xs text-on-surface"
+        >
+          {layouts.map((l, i) => <option key={i} value={i}>{l.label}</option>)}
+        </select>
+        <button
+          onClick={recortar}
+          disabled={processando}
+          className="px-3 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-semibold disabled:opacity-60"
+        >
+          {processando ? 'Recortando...' : 'Recortar'}
+        </button>
+      </div>
+      {erro && <p className="text-[11px] text-on-error-container bg-error-container rounded-lg px-2 py-1">{erro}</p>}
+      {sucesso && !erro && (
+        <p className="text-[11px] text-on-surface-variant">
+          Recortes aplicados aos Quadros abaixo — se o layout não bateu com a grade real, escolha outro e recorte de novo (substitui os anteriores).
         </p>
       )}
     </div>
@@ -296,6 +399,13 @@ export function GeradorChargesCard({ atividade, onEditarQuestao, onImagemQuadro,
             onImagemUnica(resultado ? { dataUrl: resultado.dataUrl, larguraOriginal: resultado.largura, alturaOriginal: resultado.altura } : null)
           }
         />
+        {atividade.imagemUnica && (
+          <RecorteImagemUnicaControle
+            imagemUnicaDataUrl={atividade.imagemUnica.dataUrl}
+            numeroQuadros={atividade.parametros.numeroQuadros}
+            onRecorte={onImagemQuadro}
+          />
+        )}
         <div className="bg-background border border-outline-variant rounded-xl p-2 space-y-1.5">
           <div className="flex items-center justify-between">
             <p className="text-[11px] font-semibold text-on-surface-variant">Prompt para gerar a tira completa</p>
@@ -308,7 +418,9 @@ export function GeradorChargesCard({ atividade, onEditarQuestao, onImagemQuadro,
       </div>
 
       <div className="space-y-3">
-        <p className="text-sm font-semibold text-on-surface">Quadros{atividade.imagemUnica ? ' (a imagem única acima já ilustra todos)' : ''}</p>
+        <p className="text-sm font-semibold text-on-surface">
+          Quadros{atividade.imagemUnica && atividade.imagensQuadros.length === 0 ? ' (a imagem única acima já ilustra todos — ou recorte-a acima para ilustrar cada um individualmente)' : ''}
+        </p>
         {atividade.roteiro.quadros.map(quadro => (
           <QuadroItem
             key={quadro.numero}
