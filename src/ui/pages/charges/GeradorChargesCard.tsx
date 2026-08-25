@@ -29,11 +29,14 @@ function UploadImagemControle({
   imagemDataUrl,
   altTexto,
   onImagem,
+  destaque = false,
 }: {
   rotulo: string;
   imagemDataUrl: string | undefined | null;
   altTexto: string;
   onImagem: (resultado: ImagemRedimensionada | null) => void;
+  /** Deixa o botão "Enviar imagem" com visual de destaque (preenchido, maior) — usado na Imagem única, que fica no meio de vários outros botões "Enviar imagem" iguais (um por Quadro) e precisa ser fácil de achar. */
+  destaque?: boolean;
 }) {
   const [processando, setProcessando] = useState(false);
   const [erro, setErro] = useState('');
@@ -65,9 +68,13 @@ function UploadImagemControle({
           <button
             onClick={() => inputArquivoRef.current?.click()}
             disabled={processando}
-            className="flex items-center gap-1 text-[11px] text-primary font-semibold disabled:opacity-60"
+            className={
+              destaque
+                ? 'flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-bold shadow-sm disabled:opacity-60'
+                : 'flex items-center gap-1 text-[11px] text-primary font-semibold disabled:opacity-60'
+            }
           >
-            <Upload className="w-3 h-3" /> {processando ? 'Processando...' : 'Enviar imagem'}
+            <Upload className={destaque ? 'w-3.5 h-3.5' : 'w-3 h-3'} /> {processando ? 'Processando...' : 'Enviar imagem'}
           </button>
         )}
       </div>
@@ -681,6 +688,7 @@ export function GeradorChargesCard({ atividade, onEditarQuestao, onImagemQuadro,
           onImagem={resultado =>
             onImagemUnica(resultado ? { dataUrl: resultado.dataUrl, larguraOriginal: resultado.largura, alturaOriginal: resultado.altura } : null)
           }
+          destaque
         />
         {atividade.imagemUnica && (
           <RecorteImagemUnicaControle
