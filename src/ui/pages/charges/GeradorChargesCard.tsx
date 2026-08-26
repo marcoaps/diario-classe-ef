@@ -361,7 +361,7 @@ function RecorteImagemUnicaControle({
       {ajusteAberto && caixas && (
         <div className="space-y-2 pt-2 border-t border-outline-variant">
           <p className="text-[11px] text-on-surface-variant">
-            Arraste cada caixa numerada até alinhar com o quadro real da imagem. Use a bolinha no canto inferior direito de cada caixa para redimensionar.
+            Arraste cada caixa numerada até alinhar com o quadro real da imagem. Use a bolinha no canto inferior direito de cada caixa para redimensionar. Se a IA desenhou um numerinho no canto do quadro (útil como referência na avaliação), confira se ele ficou dentro da caixa — se estiver cortando, arraste a borda um pouco pra fora.
           </p>
           <AjusteVisualRecorte imagemDataUrl={imagemUnicaDataUrl} caixas={caixas} onCaixasChange={setCaixas} />
           <div className="flex gap-2">
