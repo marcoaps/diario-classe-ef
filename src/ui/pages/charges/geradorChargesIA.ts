@@ -203,7 +203,11 @@ ${params.tipoQuestoes === 'mistas' ? 'Misture questões "objetiva" e "discursiva
 
 Preencha também "competencias" (Competências Gerais da BNCC relacionadas), "habilidades" (habilidades específicas trabalhadas — pode reaproveitar e detalhar a habilidade BNCC informada), "objetivos" (objetivos de aprendizagem desta atividade) e "observacoesProfessor" (orientações práticas de aplicação em sala, incluindo como conduzir a leitura da charge/tirinha antes das questões).
 
+=== AUTORREVISÃO FINAL POR QUESTÃO (OBRIGATÓRIO — erro real já aconteceu: pergunta sobre "handebol" testando regra de "basquete"/"cesta"/"linha de três pontos") ===
+Isso costuma vazar quando a questão testa um CONCEITO geral (o que é "invasão", como funciona a pontuação, o que é "drible") em vez de um fato concreto da própria charge — nesses casos é fácil "puxar" sem querer um exemplo genérico de outro esporte mais comum (o exemplo clássico é usar basquete/cesta sem perceber). Para CADA UMA das ${params.quantidadeQuestoes} questões, antes de colocá-la no array final, releia o enunciado E as 4 alternativas isoladamente (como se não soubesse o resto do prompt) e pergunte: alguma palavra ali nomeia ou descreve um esporte diferente de "${params.conteudo}" (ex: "cesta", "basquete", "arremesso à cesta", "linha de três pontos", "gol de futebol", "campo", "chute" — quando esses não forem literalmente o conteúdo pedido)? Se sim, a questão está ERRADA: reescreva o enunciado e as 4 alternativas inteiramente com vocabulário, ações e pontuação reais de "${params.conteudo}" antes de incluir no resultado.
+
 === FORMATO DE SAÍDA ===
+Antes de responder, confirme mentalmente mais uma vez: todas as ${params.quantidadeQuestoes} questões e suas alternativas são só sobre "${params.conteudo}", sem nenhuma palavra de outro esporte.
 Responda SOMENTE com um único objeto JSON válido, sem markdown, sem \`\`\`, sem texto antes ou depois, seguindo exatamente este esquema:
 ${ESQUEMA_JSON_QUESTOES}
 

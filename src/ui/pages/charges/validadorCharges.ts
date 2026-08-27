@@ -12,7 +12,47 @@
 // ============================================================================
 
 import { contemTermoDeViolencia } from './regrasChargesDidaticas';
+import { contemTermoProibido } from '../../../utils/filtroPalavras';
 import type { Personagem, QuadroIA, QuestaoChargeIA, RoteiroChargeIA } from './tiposCharges';
+
+/**
+ * Esportes que mais se confundem entre si nas questões (mesma categoria BNCC
+ * de "esportes de invasão"/coletivos com bola) — já causou erro real: questão
+ * sobre handebol testando pontuação de basquete ("cesta", "linha de três
+ * pontos") sem o professor pedir isso. `nomes` identifica o próprio esporte
+ * (usado tanto pra saber se ELE é o conteúdo pedido, quanto pra detectar
+ * menção a ele); `termosExclusivos` são substantivos que só fazem sentido
+ * nesse esporte — mantidos numa lista curta e conservadora (não inclui verbos
+ * como "chutar", que podem aparecer legitimamente numa alternativa errada de
+ * outro esporte, ex: "no handebol não se pode chutar a bola").
+ */
+const ESPORTES_PARA_NAO_CONFUNDIR: { nomes: string[]; termosExclusivos: string[] }[] = [
+  { nomes: ['handebol'], termosExclusivos: [] },
+  { nomes: ['basquete', 'basquetebol'], termosExclusivos: ['cesta', 'cestas', 'garrafão', 'linha de três pontos', 'lance livre', 'bandeja'] },
+  { nomes: ['futebol de campo', 'futebol'], termosExclusivos: ['escanteio', 'impedimento', 'goleira', 'pênalti'] },
+  { nomes: ['futsal'], termosExclusivos: [] },
+  { nomes: ['vôlei', 'voleibol'], termosExclusivos: ['saque', 'cortada', 'rally'] },
+];
+
+/** Procura, no enunciado/alternativas/resposta de cada questão, o nome ou um termo exclusivo de um esporte DIFERENTE do conteúdo pedido. */
+export function checarMencaoDeOutroEsporte(conteudo: string, questoes: QuestaoChargeIA[]): string | null {
+  for (const [idx, questao] of questoes.entries()) {
+    const textoQuestao = [
+      questao.enunciado,
+      ...(questao.alternativas ?? []).map(a => a.texto),
+      questao.respostaEsperada,
+    ].join(' ');
+
+    for (const esporte of ESPORTES_PARA_NAO_CONFUNDIR) {
+      const ehOProprioConteudo = contemTermoProibido(conteudo, esporte.nomes) !== null;
+      if (ehOProprioConteudo) continue;
+
+      const termo = contemTermoProibido(textoQuestao, [...esporte.nomes, ...esporte.termosExclusivos]);
+      if (termo) return `Questão ${idx + 1} menciona "${termo}" (termo de ${esporte.nomes[0]}), mas o conteúdo pedido é "${conteudo}".`;
+    }
+  }
+  return null;
+}
 
 export interface CriterioResultadoCharge {
   id: string;
@@ -103,11 +143,13 @@ export function validarChargeDeterministico(
   roteiro: RoteiroChargeIA,
   questoes: QuestaoChargeIA[],
   personagensSelecionados: Personagem[],
-  numeroQuadrosEsperado: number
+  numeroQuadrosEsperado: number,
+  conteudo: string
 ): ResultadoValidacaoCharges {
   const personagemInvalido = checarPersonagensValidos(roteiro, personagensSelecionados);
   const questaoComFormatoQuebrado = checarFormatoQuestoesObjetivas(questoes);
   const termoDeViolencia = checarSemViolencia(roteiro, questoes);
+  const outroEsporteMencionado = checarMencaoDeOutroEsporte(conteudo, questoes);
 
   const criterios: CriterioResultadoCharge[] = [
     {
@@ -142,6 +184,13 @@ export function validarChargeDeterministico(
       descricao: 'Quadros consecutivos devem compartilhar ao menos 1 personagem (recomendação de continuidade, não bloqueia).',
       passou: checarContinuidadePersonagens(roteiro),
       bloqueante: false,
+    },
+    {
+      id: 'sem_outro_esporte_nas_questoes',
+      descricao: 'Nenhuma questão pode mencionar nome/termo exclusivo de um esporte diferente do conteúdo pedido.',
+      passou: outroEsporteMencionado === null,
+      bloqueante: true,
+      detalhe: outroEsporteMencionado ?? undefined,
     },
   ];
 

@@ -59,7 +59,7 @@ export async function gerarERevisarCharge(
     const questoesEMetadados = await gerarQuestoesEMetadadosCharge(params, roteiro);
 
     onProgresso?.('revisando', tentativa);
-    const resultado = validarChargeDeterministico(roteiro, questoesEMetadados.questoes, personagens, params.numeroQuadros);
+    const resultado = validarChargeDeterministico(roteiro, questoesEMetadados.questoes, personagens, params.numeroQuadros, params.conteudo);
 
     if (resultado.aprovada) {
       return { roteiro, questoesEMetadados, statusRevisao: 'aprovada', tentativasRevisao: tentativa, historicoRevisao: historico };
