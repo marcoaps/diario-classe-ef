@@ -125,25 +125,51 @@ export function TimesFutsal() {
     setRodadas(null);
   };
 
+  const [presentesHojeIds, setPresentesHojeIds] = useState<Set<string>>(new Set());
+  const [chamadaCarregada, setChamadaCarregada] = useState(false);
+
   useEffect(() => {
     if (turmasArray.length === 0) {
       setAlunosBrutos([]);
+      setPresentesHojeIds(new Set());
+      setChamadaCarregada(false);
       setTimes([novoTime(1), novoTime(2)]);
       setRodadas(null);
       return;
     }
     let mounted = true;
     setLoading(true);
+    setChamadaCarregada(false);
     supabase
       .from('alunos')
       .select('id, nome, turma_id, numero_chamada, sexo')
       .in('turma_id', turmasArray)
       .order('turma_id', { ascending: true })
       .order('numero_chamada', { ascending: true, nullsFirst: false })
-      .then(({ data, error }) => {
+      .then(async ({ data, error }) => {
         if (!mounted) return;
         if (error) console.error('Erro ao buscar alunos:', error);
-        setAlunosBrutos((data || []) as AlunoSupabase[]);
+        const lista = (data || []) as AlunoSupabase[];
+        setAlunosBrutos(lista);
+
+        // Só ficam "disponíveis" os alunos com a chamada de HOJE marcada como
+        // presente — se a turma ainda não teve chamada feita hoje, ninguém
+        // dela aparece disponível (força fazer a chamada antes de montar times).
+        const hoje = new Date().toISOString().slice(0, 10);
+        if (lista.length > 0) {
+          const { data: freqData, error: freqError } = await supabase
+            .from('frequencia')
+            .select('aluno_id, presente')
+            .eq('data', hoje)
+            .in('aluno_id', lista.map(a => a.id));
+          if (!mounted) return;
+          if (freqError) console.error('Erro ao buscar frequência do dia:', freqError);
+          setPresentesHojeIds(new Set((freqData || []).filter(r => r.presente).map(r => r.aluno_id)));
+        } else {
+          setPresentesHojeIds(new Set());
+        }
+
+        setChamadaCarregada(true);
         setTimes([novoTime(1), novoTime(2)]);
         setRodadas(null);
         setLoading(false);
@@ -151,9 +177,14 @@ export function TimesFutsal() {
     return () => { mounted = false; };
   }, [turmasKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const alunos = useMemo(
+  const alunosComGenero = useMemo(
     () => alunosBrutos.filter(a => !genero || a.sexo === genero),
     [alunosBrutos, genero]
+  );
+
+  const alunos = useMemo(
+    () => alunosComGenero.filter(a => presentesHojeIds.has(a.id)),
+    [alunosComGenero, presentesHojeIds]
   );
 
   const idsAlocados = useMemo(() => {
@@ -345,9 +376,13 @@ export function TimesFutsal() {
         <div className="text-center text-gray-500 py-10 font-medium px-4">
           {alunosBrutos.length === 0
             ? 'Nenhum aluno cadastrado nessas turmas.'
-            : genero
-              ? `Nenhum aluno marcado como "${genero === 'M' ? 'Meninos' : 'Meninas'}" nessas turmas (${alunosBrutos.length} no total, nenhum com gênero marcado) — vá em "Marcar Gênero" na aba Turmas primeiro.`
-              : 'Nenhum aluno cadastrado nessas turmas.'}
+            : alunosComGenero.length === 0
+              ? genero
+                ? `Nenhum aluno marcado como "${genero === 'M' ? 'Meninos' : 'Meninas'}" nessas turmas (${alunosBrutos.length} no total, nenhum com gênero marcado) — vá em "Marcar Gênero" na aba Turmas primeiro.`
+                : 'Nenhum aluno cadastrado nessas turmas.'
+              : chamadaCarregada
+                ? 'Nenhum aluno dessas turmas está marcado como presente na chamada de hoje ainda — faça a chamada na aba "Chamada" primeiro (ou marque os presentes) para eles aparecerem aqui.'
+                : 'Verificando a chamada de hoje...'}
         </div>
       ) : (
         <>
