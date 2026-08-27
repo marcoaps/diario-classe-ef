@@ -397,16 +397,29 @@ export async function salvarEscalacaoFutsal(
     .eq('data', data);
   if (delError) throw delError;
 
+  // Um time sem jogador nenhum ainda vira uma linha "placeholder" (aluno_id
+  // null) — só pra registrar que o time existe (número + nome), já que a
+  // tabela é "uma linha por jogador" e não tem uma tabela própria de times.
   const rows = times.flatMap(t =>
-    t.jogadores.map(j => ({
-      turma_id: turmaId,
-      data,
-      time_numero: t.numero,
-      time_nome: t.nome,
-      aluno_id: j.aluno_id,
-      aluno_nome: j.aluno_nome,
-      posicao: j.posicao,
-    }))
+    t.jogadores.length > 0
+      ? t.jogadores.map(j => ({
+          turma_id: turmaId,
+          data,
+          time_numero: t.numero,
+          time_nome: t.nome,
+          aluno_id: j.aluno_id,
+          aluno_nome: j.aluno_nome,
+          posicao: j.posicao,
+        }))
+      : [{
+          turma_id: turmaId,
+          data,
+          time_numero: t.numero,
+          time_nome: t.nome,
+          aluno_id: null,
+          aluno_nome: null,
+          posicao: null,
+        }]
   );
   if (rows.length === 0) return;
 

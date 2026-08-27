@@ -256,16 +256,15 @@ export function TimesFutsal() {
 
   const salvarNoHistorico = useCallback(async () => {
     if (turmasArray.length === 0) return;
-    const timesComJogadores = times.filter(t => t.goleiro || t.linha.some(Boolean));
-    if (timesComJogadores.length === 0) {
-      alert('Escale ao menos um jogador antes de salvar.');
+    if (times.length === 0) {
+      alert('Adicione ao menos um time antes de salvar.');
       return;
     }
     setSaving(true);
     try {
       await salvarEscalacaoFutsal(
         turmasArray.join('+'),
-        timesComJogadores.map(t => ({
+        times.map(t => ({
           numero: t.numero,
           nome: t.nome,
           jogadores: [
