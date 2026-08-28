@@ -106,7 +106,7 @@ export function AppLayout() {
           <PopupItem
             to="/torneio"
             icon={<Trophy className="w-5 h-5" />}
-            label="Torneio"
+            label="Interclasses IOP"
             onClick={() => setMaisAberto(false)}
           />
           <PopupItem

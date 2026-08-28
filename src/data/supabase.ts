@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import type { Participacao } from '../domain/frequenciaPontos';
+import type { InscricaoInterclasses } from '../domain/interclasses';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://rsifjxeqitgiecqwvien.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_Vw7h5WZ5BF-GzaAM0hOECg_TMjwdiby';
@@ -433,4 +434,87 @@ export async function buscarEscalacaoFutsal(turmaId: string, data?: string) {
   const { data: rows, error } = await query;
   if (error) throw error;
   return rows || [];
+}
+
+// ------------------------------------------------------------
+// Interclasses IOP — inscrição individual de alunos por equipe
+// ------------------------------------------------------------
+
+// Turmas "reais" do sistema, derivadas dos alunos já cadastrados — evita
+// manter uma lista de turmas hardcoded e desatualizada em mais um lugar.
+export async function buscarTurmasDisponiveis(): Promise<string[]> {
+  const { data, error } = await supabase.from('alunos').select('turma_id');
+  if (error) throw error;
+  const turmas = new Set<string>();
+  (data || []).forEach((r: any) => { if (r.turma_id) turmas.add(r.turma_id); });
+  return Array.from(turmas).sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
+}
+
+export async function buscarInscricoesInterclasses(edicao: string): Promise<InscricaoInterclasses[]> {
+  const { data, error } = await supabase
+    .from('interclasses_inscricoes')
+    .select('*')
+    .eq('edicao', edicao)
+    .order('nome_time', { ascending: true })
+    .order('numero_camisa', { ascending: true, nullsFirst: false });
+  if (error) throw error;
+  return (data || []) as InscricaoInterclasses[];
+}
+
+export interface InscricaoInterclassesPayload {
+  edicao: string;
+  aluno_id: string | null;
+  nome_completo: string;
+  turma_id: string;
+  numero_chamada: number;
+  numero_camisa: number;
+  nome_time: string;
+}
+
+export async function criarInscricaoInterclasses(payload: InscricaoInterclassesPayload): Promise<InscricaoInterclasses> {
+  const { data, error } = await supabase
+    .from('interclasses_inscricoes')
+    .insert(payload)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as InscricaoInterclasses;
+}
+
+export async function atualizarInscricaoInterclasses(
+  id: string,
+  payload: Partial<InscricaoInterclassesPayload>
+): Promise<InscricaoInterclasses> {
+  const { data, error } = await supabase
+    .from('interclasses_inscricoes')
+    .update(payload)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as InscricaoInterclasses;
+}
+
+export async function excluirInscricaoInterclasses(id: string) {
+  const { error } = await supabase.from('interclasses_inscricoes').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// Renomeia o time de várias inscrições de uma vez — usado pra corrigir/mesclar
+// times que ficaram separados por erro de digitação (ex: "O Pernas de Pau" vs
+// "Os Pernas de Pau").
+export async function renomearTimeInterclasses(ids: string[], nomeNovo: string) {
+  if (ids.length === 0) return;
+  const { error } = await supabase
+    .from('interclasses_inscricoes')
+    .update({ nome_time: nomeNovo.trim() })
+    .in('id', ids);
+  if (error) throw error;
+}
+
+// Apaga TODAS as inscrições de uma edição de uma vez — usado pra zerar dados
+// de teste antes de abrir pra valer.
+export async function limparInscricoesInterclasses(edicao: string) {
+  const { error } = await supabase.from('interclasses_inscricoes').delete().eq('edicao', edicao);
+  if (error) throw error;
 }
