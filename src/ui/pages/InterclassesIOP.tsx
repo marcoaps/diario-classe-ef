@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { LayoutGrid, ClipboardPlus, Users2, Trophy } from 'lucide-react';
 import { cn } from '../AppLayout';
 import { buscarInscricoesInterclasses, buscarTurmasDisponiveis } from '../../data/supabase';
-import { EDICAO_PADRAO } from '../../domain/interclasses';
+import { EDICAO_PADRAO, unirTurmas } from '../../domain/interclasses';
 import type { InscricaoInterclasses } from '../../domain/interclasses';
 import { VisaoGeral } from './interclasses/VisaoGeral';
 import { InscricaoAlunos } from './interclasses/InscricaoAlunos';
@@ -34,7 +34,7 @@ export default function InterclassesIOP() {
         buscarTurmasDisponiveis(),
       ]);
       setInscricoes(insc);
-      setTurmas(tms);
+      setTurmas(unirTurmas(tms));
     } catch (e) {
       console.error('Erro ao carregar dados do Interclasses:', e);
     } finally {

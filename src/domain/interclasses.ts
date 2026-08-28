@@ -1,5 +1,16 @@
 export const EDICAO_PADRAO = '2026';
 
+// Turmas que disputam o Interclasses mas não têm alunos cadastrados neste
+// app (o professor de Educação Física não dá aula nelas) — somadas às turmas
+// reais do banco pra aparecerem no seletor. Sem cadastro local, o aluno
+// dessas turmas só entra com nome digitado manualmente (sem autocomplete).
+export const TURMAS_SEM_CADASTRO_LOCAL = ['6A', '6B', '6C', '6D', '6E', '7A'];
+
+export function unirTurmas(turmasDoBanco: string[]): string[] {
+  return Array.from(new Set([...turmasDoBanco, ...TURMAS_SEM_CADASTRO_LOCAL]))
+    .sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
+}
+
 // Um time só é considerado "completo" (pronto pra entrar em confrontos) com
 // pelo menos esse número de jogadores inscritos.
 export const MINIMO_JOGADORES_TIME = 5;

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { buscarInscricoesInterclasses, buscarTurmasDisponiveis } from '../../data/supabase';
-import { EDICAO_PADRAO } from '../../domain/interclasses';
+import { EDICAO_PADRAO, unirTurmas } from '../../domain/interclasses';
 import type { InscricaoInterclasses } from '../../domain/interclasses';
 import { InscricaoAlunos } from './interclasses/InscricaoAlunos';
 
@@ -20,7 +20,7 @@ export function InscricaoAlunosPublico() {
         buscarTurmasDisponiveis(),
       ]);
       setInscricoes(insc);
-      setTurmas(tms);
+      setTurmas(unirTurmas(tms));
     } catch (e) {
       console.error('Erro ao carregar inscrições do Interclasses:', e);
     } finally {
