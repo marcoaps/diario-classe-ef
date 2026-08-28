@@ -40,6 +40,7 @@ import { GeradorQuestoes } from './ui/pages/avaliacoes/GeradorQuestoes';
 import { GeradorCharges } from './ui/pages/charges/GeradorCharges';
 import { ChargesHistorico } from './ui/pages/charges/ChargesHistorico';
 import InterclassesIOP from './ui/pages/InterclassesIOP';
+import { InscricaoAlunosPublico } from './ui/pages/InscricaoAlunosPublico';
 import { InscricaoTime } from './ui/pages/InscricaoTime';
 import { TimesFutsal } from './ui/pages/TimesFutsal';
 import { AgendaHoje } from './ui/pages/AgendaHoje';
@@ -86,6 +87,7 @@ export default function App() {
         <Route path="/responder" element={<ResponderProva />} />
         <Route path="/login" element={<Login />} />
         <Route path="/torneio/inscricao/:token" element={<InscricaoTime />} />
+        <Route path="/interclasses/inscricao" element={<InscricaoAlunosPublico />} />
         <Route path="/agenda" element={<AgendaHoje />} />
 
         <Route element={<LayoutProtegido />}>

@@ -18,11 +18,14 @@ interface Props {
   turmas: string[];
   loading: boolean;
   onRefetch: () => Promise<void>;
+  // Tela pública (sem login) usada pelos próprios alunos: some com Editar,
+  // Excluir e "Limpar tudo" — só o professor logado pode alterar/apagar.
+  modoPublico?: boolean;
 }
 
 const FORM_VAZIO = { nomeCompleto: '', turmaId: '', numeroChamada: '', numeroCamisa: '', nomeTime: '' };
 
-export function InscricaoAlunos({ edicao, inscricoes, turmas, loading, onRefetch }: Props) {
+export function InscricaoAlunos({ edicao, inscricoes, turmas, loading, onRefetch, modoPublico = false }: Props) {
   const [form, setForm] = useState(FORM_VAZIO);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [alunoIdVinculado, setAlunoIdVinculado] = useState<string | null>(null);
@@ -326,7 +329,7 @@ export function InscricaoAlunos({ edicao, inscricoes, turmas, loading, onRefetch
           <h3 className="font-bold text-on-surface text-sm">Alunos Inscritos — Interclasses {edicao}</h3>
           <div className="flex items-center gap-2">
             <span className="text-[11px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{listaFiltrada.length}/{inscricoes.length}</span>
-            {inscricoes.length > 0 && (
+            {!modoPublico && inscricoes.length > 0 && (
               <button
                 onClick={limparTudo}
                 disabled={limpandoTudo}
@@ -394,7 +397,7 @@ export function InscricaoAlunos({ edicao, inscricoes, turmas, loading, onRefetch
                   <th className="py-2 px-1 font-semibold">Chamada</th>
                   <th className="py-2 px-1 font-semibold">Camisa</th>
                   <th className="py-2 px-1 font-semibold">Time</th>
-                  <th className="py-2 px-1 font-semibold text-right">Ações</th>
+                  {!modoPublico && <th className="py-2 px-1 font-semibold text-right">Ações</th>}
                 </tr>
               </thead>
               <tbody>
@@ -406,21 +409,23 @@ export function InscricaoAlunos({ edicao, inscricoes, turmas, loading, onRefetch
                     <td className="py-2 px-1 text-gray-500">{insc.numero_chamada}</td>
                     <td className="py-2 px-1 text-gray-500">#{insc.numero_camisa}</td>
                     <td className="py-2 px-1 text-gray-500 whitespace-nowrap">{insc.nome_time}</td>
-                    <td className="py-2 px-1">
-                      <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => iniciarEdicao(insc)} title="Editar" className="text-gray-400 hover:text-primary">
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => excluir(insc)}
-                          disabled={excluindoId === insc.id}
-                          title="Excluir"
-                          className={cn("text-gray-400 hover:text-error", excluindoId === insc.id && "opacity-40")}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
+                    {!modoPublico && (
+                      <td className="py-2 px-1">
+                        <div className="flex items-center justify-end gap-2">
+                          <button onClick={() => iniciarEdicao(insc)} title="Editar" className="text-gray-400 hover:text-primary">
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => excluir(insc)}
+                            disabled={excluindoId === insc.id}
+                            title="Excluir"
+                            className={cn("text-gray-400 hover:text-error", excluindoId === insc.id && "opacity-40")}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
