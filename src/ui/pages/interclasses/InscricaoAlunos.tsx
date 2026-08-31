@@ -39,6 +39,11 @@ export function InscricaoAlunos({ edicao, inscricoes, turmas, loading, onRefetch
   const [filtroTurma, setFiltroTurma] = useState('TODAS');
   const [filtroTime, setFiltroTime] = useState('TODOS');
 
+  // Sugestões feitas na mão em vez de <datalist> nativo — no Chrome Android
+  // o datalist nativo às vezes sobrepõe/esconde o texto digitado.
+  const [sugestoesAlunoAbertas, setSugestoesAlunoAbertas] = useState(false);
+  const [sugestoesTimeAbertas, setSugestoesTimeAbertas] = useState(false);
+
   const formRef = useRef<HTMLDivElement>(null);
 
   // Alunos já cadastrados oficialmente na turma selecionada — usados para
@@ -67,6 +72,22 @@ export function InscricaoAlunos({ edicao, inscricoes, turmas, loading, onRefetch
       setAlunoIdVinculado(null);
     }
   }
+
+  function selecionarAlunoSugestao(aluno: AlunoOficial) {
+    setForm(f => ({ ...f, nomeCompleto: aluno.nome, numeroChamada: aluno.numero_chamada ? String(aluno.numero_chamada) : f.numeroChamada }));
+    setAlunoIdVinculado(aluno.id);
+    setSugestoesAlunoAbertas(false);
+  }
+
+  function selecionarTimeSugestao(nome: string) {
+    setForm(f => ({ ...f, nomeTime: nome }));
+    setSugestoesTimeAbertas(false);
+  }
+
+  const sugestoesAluno = useMemo(() => {
+    const termo = form.nomeCompleto.trim().toLowerCase();
+    return alunosDaTurma.filter(a => !termo || a.nome.toLowerCase().includes(termo)).slice(0, 8);
+  }, [alunosDaTurma, form.nomeCompleto]);
 
   function limparFormulario() {
     setForm(FORM_VAZIO);
@@ -193,6 +214,11 @@ export function InscricaoAlunos({ edicao, inscricoes, turmas, loading, onRefetch
   // lógica de agrupamento da aba Equipes), pra alimentar sugestão e filtro.
   const timesUnicos = useMemo(() => agruparPorTime(inscricoes).map(e => e.nomeTime), [inscricoes]);
 
+  const sugestoesTime = useMemo(() => {
+    const termo = form.nomeTime.trim().toLowerCase();
+    return timesUnicos.filter(t => !termo || t.toLowerCase().includes(termo)).slice(0, 8);
+  }, [timesUnicos, form.nomeTime]);
+
   const listaFiltrada = useMemo(() => {
     const buscaNorm = busca.trim().toLowerCase();
     const filtroTimeNorm = filtroTime.trim().toLowerCase();
@@ -237,19 +263,34 @@ export function InscricaoAlunos({ edicao, inscricoes, turmas, loading, onRefetch
             )}
           </div>
 
-          <div>
+          <div className="relative">
             <label className="text-xs font-semibold text-gray-500 mb-1 block">Nome completo do aluno *</label>
             <input
-              list="alunos-turma-sugestoes"
+              type="text"
+              autoComplete="off"
               value={form.nomeCompleto}
-              onChange={e => handleNomeChange(e.target.value)}
+              onChange={e => { handleNomeChange(e.target.value); setSugestoesAlunoAbertas(true); }}
+              onFocus={() => setSugestoesAlunoAbertas(true)}
+              onBlur={() => setTimeout(() => setSugestoesAlunoAbertas(false), 150)}
               placeholder={form.turmaId ? 'Digite ou selecione o aluno da turma' : 'Selecione a turma primeiro'}
               required
               className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-on-surface outline-none focus:border-primary"
             />
-            <datalist id="alunos-turma-sugestoes">
-              {alunosDaTurma.map(a => <option key={a.id} value={a.nome} />)}
-            </datalist>
+            {sugestoesAlunoAbertas && form.turmaId && sugestoesAluno.length > 0 && (
+              <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-52 overflow-y-auto">
+                {sugestoesAluno.map(a => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onMouseDown={() => selecionarAlunoSugestao(a)}
+                    className="w-full text-left px-3 py-2 text-sm text-on-surface hover:bg-gray-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-0"
+                  >
+                    <span className="truncate">{a.nome}</span>
+                    {a.numero_chamada != null && <span className="text-gray-400 text-xs flex-shrink-0">#{a.numero_chamada}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
             {alunoIdVinculado && (
               <p className="text-[11px] text-secondary mt-1 flex items-center gap-1">
                 <CheckCircle2 className="w-3 h-3" /> Aluno reconhecido no cadastro da turma — nº de chamada preenchido automaticamente.
@@ -282,20 +323,33 @@ export function InscricaoAlunos({ edicao, inscricoes, turmas, loading, onRefetch
             </div>
           </div>
 
-          <div>
+          <div className="relative">
             <label className="text-xs font-semibold text-gray-500 mb-1 block">Nome do time *</label>
             <input
-              list="times-existentes-sugestoes"
               type="text"
+              autoComplete="off"
               value={form.nomeTime}
-              onChange={e => setForm(f => ({ ...f, nomeTime: e.target.value }))}
+              onChange={e => { setForm(f => ({ ...f, nomeTime: e.target.value })); setSugestoesTimeAbertas(true); }}
+              onFocus={() => setSugestoesTimeAbertas(true)}
+              onBlur={() => setTimeout(() => setSugestoesTimeAbertas(false), 150)}
               placeholder="Ex: Os Pernas de Pau"
               required
               className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-on-surface outline-none focus:border-primary"
             />
-            <datalist id="times-existentes-sugestoes">
-              {timesUnicos.map(t => <option key={t} value={t} />)}
-            </datalist>
+            {sugestoesTimeAbertas && sugestoesTime.length > 0 && (
+              <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-52 overflow-y-auto">
+                {sugestoesTime.map(t => (
+                  <button
+                    key={t}
+                    type="button"
+                    onMouseDown={() => selecionarTimeSugestao(t)}
+                    className="w-full text-left px-3 py-2 text-sm text-on-surface hover:bg-gray-50 truncate border-b border-gray-50 last:border-0"
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            )}
             <p className="text-[11px] text-gray-400 mt-1">
               Não precisa ser igual ao nome da turma. Cada time deve ter entre {MINIMO_JOGADORES_TIME} e {MAXIMO_JOGADORES_TIME} jogadores. {timesUnicos.length > 0 && 'Se o time já existe, selecione a sugestão em vez de digitar de novo — evita duplicar o time por erro de digitação.'}
             </p>
