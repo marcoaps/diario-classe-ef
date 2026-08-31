@@ -86,7 +86,9 @@ export function InscricaoAlunos({ edicao, inscricoes, turmas, loading, onRefetch
 
   const sugestoesAluno = useMemo(() => {
     const termo = form.nomeCompleto.trim().toLowerCase();
-    return alunosDaTurma.filter(a => !termo || a.nome.toLowerCase().includes(termo)).slice(0, 8);
+    // Sem limite artificial — uma turma inteira (até ~36 alunos) cabe numa
+    // lista rolável, e cortar a lista escondia quem vinha depois do 8º.
+    return alunosDaTurma.filter(a => !termo || a.nome.toLowerCase().includes(termo));
   }, [alunosDaTurma, form.nomeCompleto]);
 
   function limparFormulario() {
@@ -216,7 +218,7 @@ export function InscricaoAlunos({ edicao, inscricoes, turmas, loading, onRefetch
 
   const sugestoesTime = useMemo(() => {
     const termo = form.nomeTime.trim().toLowerCase();
-    return timesUnicos.filter(t => !termo || t.toLowerCase().includes(termo)).slice(0, 8);
+    return timesUnicos.filter(t => !termo || t.toLowerCase().includes(termo));
   }, [timesUnicos, form.nomeTime]);
 
   const listaFiltrada = useMemo(() => {
