@@ -155,6 +155,17 @@ export function GeradorCharges() {
 
       setAtividade(novaAtividade);
       setEtapa('resultado');
+
+      // Salva automaticamente no histórico assim que a charge fica pronta —
+      // não depende mais do professor lembrar de clicar em "Salvar no histórico".
+      // Se falhar, a charge continua visível na tela (id "local-...") e o
+      // botão "Salvar no histórico" serve de retry manual.
+      try {
+        const novoId = await salvarChargeNoHistorico(novaAtividade);
+        setAtividade(prev => (prev && prev.id === novaAtividade.id ? { ...prev, id: novoId } : prev));
+      } catch (erroSalvar) {
+        console.error('Erro ao salvar charge automaticamente no histórico:', erroSalvar);
+      }
     } catch (e) {
       setErro(`Erro ao gerar a charge: ${mensagemErroAmigavel(e)}`);
       setEtapa('formulario');

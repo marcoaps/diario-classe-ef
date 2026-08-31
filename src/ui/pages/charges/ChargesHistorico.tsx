@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Copy, FolderOpen } from 'lucide-react';
-import { buscarChargesHistorico, duplicarChargeHistorico } from './chargesDidaticasData';
+import { ArrowLeft, Copy, FolderOpen, Trash2 } from 'lucide-react';
+import { buscarChargesHistorico, duplicarChargeHistorico, excluirChargeHistorico } from './chargesDidaticasData';
 import type { AtividadeCharge } from './tiposCharges';
 
 export function ChargesHistorico() {
@@ -10,6 +10,8 @@ export function ChargesHistorico() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
   const [duplicandoId, setDuplicandoId] = useState<string | null>(null);
+  const [excluindoId, setExcluindoId] = useState<string | null>(null);
+  const [limpandoTudo, setLimpandoTudo] = useState(false);
 
   function carregar() {
     setCarregando(true);
@@ -33,13 +35,54 @@ export function ChargesHistorico() {
     }
   }
 
+  async function handleExcluir(atividade: AtividadeCharge) {
+    const titulo = atividade.roteiro.tituloRoteiro || 'esta charge';
+    if (!window.confirm(`Excluir "${titulo}"? Essa ação não pode ser desfeita.`)) return;
+    setExcluindoId(atividade.id);
+    try {
+      await excluirChargeHistorico(atividade.id);
+      setAtividades(prev => prev.filter(a => a.id !== atividade.id));
+    } catch (e) {
+      setErro(`Erro ao excluir: ${(e as Error).message}`);
+    } finally {
+      setExcluindoId(null);
+    }
+  }
+
+  async function handleLimparTudo() {
+    if (atividades.length === 0) return;
+    if (!window.confirm(`Isso vai apagar TODAS as ${atividades.length} charges salvas. Essa ação não pode ser desfeita. Confirmar?`)) return;
+    if (!window.confirm('Tem certeza mesmo? Não tem como recuperar depois.')) return;
+    setLimpandoTudo(true);
+    try {
+      await Promise.all(atividades.map(a => excluirChargeHistorico(a.id)));
+      setAtividades([]);
+    } catch (e) {
+      setErro(`Erro ao limpar o histórico: ${(e as Error).message}`);
+      carregar();
+    } finally {
+      setLimpandoTudo(false);
+    }
+  }
+
   return (
     <div className="py-4 space-y-4">
-      <div className="flex items-center gap-2">
-        <button onClick={() => navigate('/ia/charges')} className="p-1 rounded-lg text-on-surface-variant">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <h1 className="text-lg font-bold text-on-surface">Histórico de Charges</h1>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <button onClick={() => navigate('/ia/charges')} className="p-1 rounded-lg text-on-surface-variant">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <h1 className="text-lg font-bold text-on-surface">Histórico de Charges</h1>
+        </div>
+        {atividades.length > 0 && (
+          <button
+            onClick={handleLimparTudo}
+            disabled={limpandoTudo}
+            className="flex items-center gap-1 text-xs text-error/70 hover:text-error font-medium disabled:opacity-40"
+          >
+            <Trash2 className="w-3.5 h-3.5" /> {limpandoTudo ? 'Limpando...' : 'Limpar tudo'}
+          </button>
+        )}
       </div>
 
       {erro && <div className="bg-error-container text-on-error-container text-xs px-3 py-2 rounded-xl">{erro}</div>}
@@ -70,6 +113,13 @@ export function ChargesHistorico() {
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-secondary-container text-on-secondary-container text-xs font-semibold disabled:opacity-60"
                 >
                   <Copy className="w-3.5 h-3.5" /> {duplicandoId === atividade.id ? 'Duplicando...' : 'Duplicar'}
+                </button>
+                <button
+                  onClick={() => handleExcluir(atividade)}
+                  disabled={excluindoId === atividade.id}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-error-container text-on-error-container text-xs font-semibold disabled:opacity-60"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> {excluindoId === atividade.id ? 'Excluindo...' : 'Excluir'}
                 </button>
               </div>
             </div>
