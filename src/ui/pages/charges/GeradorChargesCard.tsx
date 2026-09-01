@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Copy, ImagePlus, Pencil, Trash2, Upload } from 'lucide-react';
 import {
+  layoutQuaseQuadrado,
   recortarImagemComCaixas,
-  recortarImagemEmQuadros,
   redimensionarImagemParaDataUrl,
   type CaixaRecortePercentual,
   type ImagemRedimensionada,
@@ -103,31 +103,38 @@ function UploadImagemControle({
 }
 
 interface LayoutRecorte {
-  linhas: number;
-  colunas: number;
+  /** Quantidade de painéis em cada fileira, de cima pra baixo — nem toda fileira precisa ter o mesmo tanto (grade "quase quadrada" com a última fileira mais curta, alinhada à esquerda). */
+  colunasPorLinha: number[];
   label: string;
 }
 
+function labelColunasPorLinha(colunasPorLinha: number[]): string {
+  if (colunasPorLinha.length === 1) return `1 linha × ${colunasPorLinha[0]} colunas (lado a lado)`;
+  if (colunasPorLinha.every(c => c === 1)) return `${colunasPorLinha.length} linhas × 1 coluna (empilhados)`;
+  if (colunasPorLinha.every(c => c === colunasPorLinha[0])) return `${colunasPorLinha.length} linhas × ${colunasPorLinha[0]} colunas (grade)`;
+  return `${colunasPorLinha.length} fileiras desiguais (${colunasPorLinha.join(' + ')} painéis)`;
+}
+
 /**
- * Layouts de grade oferecidos por número de quadros (1 a 10) — a 1ª opção é o
- * palpite mais "quadrado" (melhor divisor em 2+ linhas), com "lado a lado" e
- * "empilhados" sempre disponíveis como alternativa. Calculado por divisores em
- * vez de tabela fixa, já que o número de quadros varia bem mais agora
- * (até 10, para acompanhar até 10 questões).
+ * Layouts de grade oferecidos por número de quadros (1 a 10) — a 1ª opção
+ * (padrão) é sempre a grade "quase quadrada" que também foi pedida no prompt
+ * de imagem, com "lado a lado" e "empilhados" como alternativas manuais caso
+ * a IA de imagem tenha ignorado o pedido e organizado diferente.
  */
 function layoutsDeRecorteParaNumeroQuadros(numeroQuadros: number): LayoutRecorte[] {
-  if (numeroQuadros <= 1) return [{ linhas: 1, colunas: 1, label: '1 quadro (imagem inteira)' }];
+  if (numeroQuadros <= 1) return [{ colunasPorLinha: [1], label: '1 quadro (imagem inteira)' }];
 
-  const layouts: LayoutRecorte[] = [];
-  const limite = Math.ceil(Math.sqrt(numeroQuadros)) + 1;
-  for (let linhas = 2; linhas <= limite; linhas++) {
-    if (numeroQuadros % linhas === 0) {
-      const colunas = numeroQuadros / linhas;
-      layouts.push({ linhas, colunas, label: `${linhas} linhas × ${colunas} colunas (grade)` });
-    }
+  const quaseQuadrado = layoutQuaseQuadrado(numeroQuadros);
+  const layouts: LayoutRecorte[] = [{ colunasPorLinha: quaseQuadrado, label: `${labelColunasPorLinha(quaseQuadrado)} — recomendado` }];
+
+  const ladoALado = [numeroQuadros];
+  const empilhados = Array.from({ length: numeroQuadros }, () => 1);
+  if (labelColunasPorLinha(ladoALado) !== layouts[0].label.replace(' — recomendado', '')) {
+    layouts.push({ colunasPorLinha: ladoALado, label: labelColunasPorLinha(ladoALado) });
   }
-  layouts.push({ linhas: 1, colunas: numeroQuadros, label: `1 linha × ${numeroQuadros} colunas (lado a lado)` });
-  layouts.push({ linhas: numeroQuadros, colunas: 1, label: `${numeroQuadros} linhas × 1 coluna (empilhados)` });
+  if (labelColunasPorLinha(empilhados) !== layouts[0].label.replace(' — recomendado', '')) {
+    layouts.push({ colunasPorLinha: empilhados, label: labelColunasPorLinha(empilhados) });
+  }
   return layouts;
 }
 
@@ -140,17 +147,26 @@ function layoutsDeRecorteParaNumeroQuadros(numeroQuadros: number): LayoutRecorte
  * esse número de linhas/colunas — por isso o professor escolhe o layout que
  * bate com o que foi gerado, em vez do app adivinhar.
  */
-/** Gera as caixas de recorte iniciais (em %) a partir de um layout de grade — ponto de partida para o ajuste manual. */
+/**
+ * Gera as caixas de recorte iniciais (em %) a partir de um layout — ponto de
+ * partida tanto pro recorte automático quanto pro ajuste manual. Cada fileira
+ * tem sua própria altura (100 / nº de fileiras) e divide sua LARGURA pelo
+ * número de painéis daquela fileira especificamente — por isso uma fileira
+ * mais curta (grade "quase quadrada" com resto) fica com painéis mais
+ * largos nela, alinhados à esquerda, em vez de esticar por engano até onde
+ * a fileira de cima termina.
+ */
 function gerarCaixasIniciais(layout: LayoutRecorte, numeroQuadros: number): CaixaRecortePercentual[] {
-  const w = 100 / layout.colunas;
-  const h = 100 / layout.linhas;
+  const h = 100 / layout.colunasPorLinha.length;
   const caixas: CaixaRecortePercentual[] = [];
-  for (let n = 1; n <= numeroQuadros; n++) {
-    const idx = n - 1;
-    const linha = Math.floor(idx / layout.colunas);
-    const coluna = idx % layout.colunas;
-    caixas.push({ quadro: n, x: coluna * w, y: linha * h, w, h });
-  }
+  let n = 1;
+  layout.colunasPorLinha.forEach((colunasNaLinha, linha) => {
+    const w = 100 / colunasNaLinha;
+    for (let coluna = 0; coluna < colunasNaLinha && n <= numeroQuadros; coluna++) {
+      caixas.push({ quadro: n, x: coluna * w, y: linha * h, w, h });
+      n++;
+    }
+  });
   return caixas;
 }
 
@@ -281,7 +297,8 @@ function RecorteImagemUnicaControle({
     setSucesso(false);
     setProcessando(true);
     try {
-      const recortes = await recortarImagemEmQuadros(imagemUnicaDataUrl, layout.linhas, layout.colunas);
+      const caixasIniciais = gerarCaixasIniciais(layout, numeroQuadros);
+      const recortes = await recortarImagemComCaixas(imagemUnicaDataUrl, caixasIniciais);
       recortes.forEach(r => {
         if (r.quadro <= numeroQuadros) {
           onRecorte(r.quadro, { quadro: r.quadro, dataUrl: r.dataUrl, larguraOriginal: r.largura, alturaOriginal: r.altura });

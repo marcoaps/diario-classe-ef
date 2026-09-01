@@ -13,6 +13,7 @@
 // ============================================================================
 
 import { PROIBICOES_PROMPT_IMAGEM } from './regrasChargesDidaticas';
+import { layoutQuaseQuadrado } from './imagemQuadroUtils';
 import type { EstiloIlustracao, Personagem, PromptImagemQuadro, QuadroIA, RoteiroChargeIA, TipoImagem } from './tiposCharges';
 
 function labelEstilo(e: EstiloIlustracao): string {
@@ -118,6 +119,15 @@ export function montarPromptImagemPorQuadro(contexto: ContextoPromptImagem): Pro
 }
 
 /** Um único prompt multi-painel — para ferramentas que aceitam gerar a tira inteira numa chamada só. */
+/** Descreve em português a grade "quase quadrada" (fileiras podem ter tamanhos diferentes) que o recorte automático do app vai assumir — a IA de imagem precisa seguir essa mesma grade, senão o recorte não bate com os painéis de verdade. */
+function descreverGradeParaPrompt(numeroQuadros: number): string {
+  const fileiras = layoutQuaseQuadrado(numeroQuadros);
+  if (fileiras.length === 1) return `numa ÚNICA FILEIRA horizontal com os ${numeroQuadros} painéis lado a lado`;
+  const porExtenso = fileiras.map((n, i) => `${i + 1}ª fileira (de cima pra baixo) com ${n} painéis`).join(', ');
+  const desigual = new Set(fileiras).size > 1;
+  return `em EXATAMENTE ${fileiras.length} fileiras: ${porExtenso}${desigual ? ' — a fileira mais curta fica alinhada à ESQUERDA, com um espaço vazio/neutro (sem desenho) do lado direito dela em vez de esticar os painéis dessa fileira pra ficarem maiores que os das outras' : ''}`;
+}
+
 export function montarPromptImagemUnico(contexto: ContextoPromptImagem): string {
   const { roteiro, tipoImagem, estiloIlustracao } = contexto;
   const blocosPorQuadro = roteiro.quadros
@@ -125,9 +135,10 @@ export function montarPromptImagemUnico(contexto: ContextoPromptImagem): string 
     .join('\n\n');
 
   return `
-${labelTipo(tipoImagem)} composta por ${roteiro.quadros.length} quadro(s) em sequência, formando uma única imagem (grade de painéis lado a lado ou empilhados, com uma pequena margem entre eles).
-GRADE OBRIGATORIAMENTE REGULAR: todos os painéis devem ter EXATAMENTE o mesmo tamanho, alinhados numa grade perfeitamente uniforme (linhas e colunas retas, margem/espaçamento idêntico e constante entre todos os painéis, sem painel maior, cortado ou deslocado) — isso é necessário porque o professor recorta essa imagem depois dividindo-a em partes iguais.
-NUMERAÇÃO DOS PAINÉIS (exceção às proibições de texto abaixo — isto é permitido, além das falas dos balões): desenhe um pequeno selo/badge numerado (círculo ou quadrado sólido com o número do quadro dentro, ex: "1", "2"...) no canto superior esquerdo de CADA painel, na ordem de 1 a ${roteiro.quadros.length} — ajuda o professor a identificar cada quadro na hora de recortar e usar na avaliação. Desenhe esse número com uma margem de segurança das bordas do painel (não encostado no limite exato), para que continue visível mesmo se o recorte tiver uma pequena variação.
+${labelTipo(tipoImagem)} composta por ${roteiro.quadros.length} quadro(s) em sequência, formando uma única imagem (grade de painéis, com uma pequena margem entre eles).
+GRADE OBRIGATÓRIA (siga exatamente esta organização, não escolha outra): organize os painéis ${descreverGradeParaPrompt(roteiro.quadros.length)}. Preencha os painéis na ordem de leitura (esquerda→direita, de cima pra baixo) — o Quadro 1 é o primeiro painel da 1ª fileira, e assim por diante.
+GRADE OBRIGATORIAMENTE REGULAR: todo painel com desenho deve ter EXATAMENTE o mesmo tamanho retangular que os outros, alinhados numa grade perfeitamente uniforme (linhas e colunas retas, margem/espaçamento idêntico e constante entre todos os painéis, sem painel maior, cortado ou deslocado) — isso é necessário porque o professor recorta essa imagem depois dividindo-a nessa mesma grade.
+NUMERAÇÃO DOS PAINÉIS (exceção às proibições de texto abaixo — isto é permitido, além das falas dos balões): desenhe um pequeno selo/badge numerado (círculo ou quadrado sólido com o número do quadro dentro, ex: "1", "2"...) no canto superior esquerdo de CADA painel, seguindo a ordem de leitura descrita acima (1 a ${roteiro.quadros.length}) — ajuda o professor a identificar cada quadro na hora de recortar e usar na avaliação. Desenhe esse número com uma margem de segurança das bordas do painel (não encostado no limite exato), para que continue visível mesmo se o recorte tiver uma pequena variação.
 Título da história: "${roteiro.tituloRoteiro}"
 Estilo artístico: ${labelEstilo(estiloIlustracao)} — MANTER O MESMO ESTILO E OS MESMOS PERSONAGENS (aparência idêntica) em todos os quadros.
 

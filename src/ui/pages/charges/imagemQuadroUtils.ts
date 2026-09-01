@@ -51,6 +51,26 @@ export function redimensionarImagemParaDataUrl(
   });
 }
 
+/**
+ * Grade "quase quadrada" pra organizar N painéis: nº de fileiras ≈ raiz
+ * quadrada de N, distribuindo o resto nas primeiras fileiras (nunca deixando
+ * painel "sobrando" sozinho na última). Pra números que fecham num retângulo
+ * perfeito (4, 6, 8, 9...) já dá exatamente esse retângulo; pra números
+ * primos (5, 7...) dá fileiras desiguais (ex: 5 → [3, 2]) em vez de forçar
+ * tudo numa linha só ou tudo empilhado.
+ *
+ * Usada tanto no prompt de geração de imagem (`promptImagemCharges.ts`,
+ * pra pedir pra IA organizar os painéis exatamente assim) quanto no recorte
+ * automático (`GeradorChargesCard.tsx`) — as duas pontas precisam concordar
+ * no mesmo layout pra o recorte em grade bater com os painéis de verdade.
+ */
+export function layoutQuaseQuadrado(numeroQuadros: number): number[] {
+  const linhas = Math.max(1, Math.round(Math.sqrt(numeroQuadros)));
+  const base = Math.floor(numeroQuadros / linhas);
+  const resto = numeroQuadros % linhas;
+  return Array.from({ length: linhas }, (_, i) => base + (i < resto ? 1 : 0));
+}
+
 export interface RecorteQuadro {
   quadro: number;
   dataUrl: string;
