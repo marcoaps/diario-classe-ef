@@ -59,7 +59,7 @@ function gerarHtmlExercicio(
   const colDireita = exercicio.questoes.slice(meio).map((q, i) => questaoHtml(q, i + meio)).join('');
 
   return `
-    <div class="folha-exercicio" style="--escala-texto:1;--escala-imagem:1;font-family:'Times New Roman',Times,serif;color:#1e293b;width:100%;">
+    <div class="folha-exercicio" style="--escala-texto:1;--escala-imagem:1;font-family:Arial,Helvetica,sans-serif;color:#1e293b;width:100%;">
       <table style="width:100%;border:2px solid #1e3a5f;border-radius:4px;margin-bottom:10px;border-collapse:collapse;">
         <tr>
           <td style="width:72px;padding:6px;vertical-align:middle;text-align:center;">
@@ -116,7 +116,7 @@ function versoHtml(exercicio: ExercicioFixacao, aluno: Aluno | null, opcoes: { p
   }).join('');
 
   return `
-    <div class="folha-verso" style="font-family:'Times New Roman',Times,serif;color:#1e293b;width:100%;">
+    <div class="folha-verso" style="font-family:Arial,Helvetica,sans-serif;color:#1e293b;width:100%;">
       <div style="font-size:10pt;color:#64748b;margin-bottom:5mm;border-bottom:1px solid #cbd5e1;padding-bottom:2mm;">
         ${escaparHTML(exercicio.titulo)} &mdash; Folha de respostas${identificacao}
       </div>
