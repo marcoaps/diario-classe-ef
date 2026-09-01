@@ -356,26 +356,37 @@ export function Dashboard() {
     const seen = new Set<string>();
     for (const line of lines) { const lower = line.toLowerCase(); if (!seen.has(lower)) { seen.add(lower); uniqueLines.push(line); } }
     try {
-      // Buscar alunos existentes para preservar IDs e token_acesso
+      // Buscar alunos existentes para preservar ID e token_acesso — o ID é a
+      // chave que liga cada aluno às chamadas/notas já lançadas, então nunca
+      // pode ser recriado para quem já estava na turma.
       const { data: existentes } = await supabase.from('alunos').select('id, nome, token_acesso').eq('turma_id', turmaNormalizada);
       const mapaExistentes = new Map((existentes || []).map((a: any) => [a.nome.toLowerCase().trim(), a]));
 
-      const { error: delError } = await supabase.from('alunos').delete().eq('turma_id', turmaNormalizada);
-      if (delError) throw new Error('Erro ao deletar: ' + delError.message);
+      // Só remove quem realmente saiu da lista colada.
+      const nomesNovaLista = new Set(uniqueLines.map(l => l.toLowerCase().trim()));
+      const removidos = (existentes || []).filter((a: any) => !nomesNovaLista.has(a.nome.toLowerCase().trim()));
+      if (removidos.length > 0) {
+        const { error: delError } = await supabase.from('alunos').delete().in('id', removidos.map((a: any) => a.id));
+        if (delError) throw new Error('Erro ao remover alunos que saíram da lista: ' + delError.message);
+      }
 
       if (uniqueLines.length > 0) {
-        const inserts = uniqueLines.map((name, index) => {
+        const mapped = await Promise.all(uniqueLines.map(async (name, index) => {
+          const numero_chamada = index + 1;
           const existente = mapaExistentes.get(name.toLowerCase().trim());
-          return {
-            nome: name,
-            turma_id: turmaNormalizada,
-            numero_chamada: index + 1,
-            token_acesso: existente?.token_acesso || uuidv4(),
-          };
-        });
-        const { error: insError } = await supabase.from('alunos').insert(inserts);
-        if (insError) throw new Error('Erro ao inserir: ' + insError.message);
-        const mapped = inserts.map((a, i) => ({ id: uuidv4(), classRoomId: classToConfirm.id, name: a.nome, numero_chamada: a.numero_chamada, numberInClass: i + 1 }));
+          if (existente) {
+            const { error } = await supabase.from('alunos').update({ nome: name, numero_chamada }).eq('id', existente.id);
+            if (error) throw new Error(`Erro ao atualizar "${name}": ` + error.message);
+            return { id: existente.id, classRoomId: classToConfirm.id, name, numero_chamada, numberInClass: index + 1 };
+          }
+          const { data, error } = await supabase
+            .from('alunos')
+            .insert({ nome: name, turma_id: turmaNormalizada, numero_chamada, token_acesso: uuidv4() })
+            .select('id')
+            .single();
+          if (error) throw new Error(`Erro ao inserir "${name}": ` + error.message);
+          return { id: data!.id, classRoomId: classToConfirm.id, name, numero_chamada, numberInClass: index + 1 };
+        }));
         setFetchedStudents(mapped);
         setStudentCounts(prev => ({ ...prev, [classToConfirm.id]: mapped.length }));
       } else {
