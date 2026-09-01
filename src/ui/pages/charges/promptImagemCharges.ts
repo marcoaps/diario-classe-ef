@@ -118,7 +118,6 @@ export function montarPromptImagemPorQuadro(contexto: ContextoPromptImagem): Pro
   }));
 }
 
-/** Um único prompt multi-painel — para ferramentas que aceitam gerar a tira inteira numa chamada só. */
 /** Descreve em português a grade "quase quadrada" (fileiras podem ter tamanhos diferentes) que o recorte automático do app vai assumir — a IA de imagem precisa seguir essa mesma grade, senão o recorte não bate com os painéis de verdade. */
 function descreverGradeParaPrompt(numeroQuadros: number): string {
   const fileiras = layoutQuaseQuadrado(numeroQuadros);
@@ -126,6 +125,21 @@ function descreverGradeParaPrompt(numeroQuadros: number): string {
   const porExtenso = fileiras.map((n, i) => `${i + 1}ª fileira (de cima pra baixo) com ${n} painéis`).join(', ');
   const desigual = new Set(fileiras).size > 1;
   return `em EXATAMENTE ${fileiras.length} fileiras: ${porExtenso}${desigual ? ' — a fileira mais curta fica alinhada à ESQUERDA, com um espaço vazio/neutro (sem desenho) do lado direito dela em vez de esticar os painéis dessa fileira pra ficarem maiores que os das outras' : ''}`;
+}
+
+/**
+ * A orientação/proporção do CANVAS INTEIRO importa tanto quanto a grade —
+ * já aconteceu de a ferramenta de imagem gerar em retrato (vertical) mesmo
+ * com vários painéis lado a lado, resultando em painéis espremidos e
+ * compridos ("quadradinhos" que saem em tiras finas de retrato). Calcula
+ * uma proporção aproximada largura:altura a partir da própria grade pedida.
+ */
+function descreverProporcaoParaPrompt(numeroQuadros: number): string {
+  const fileiras = layoutQuaseQuadrado(numeroQuadros);
+  const colunasMax = Math.max(...fileiras);
+  const linhas = fileiras.length;
+  if (colunasMax === linhas) return 'orientação QUADRADA (largura igual à altura)';
+  return `orientação PAISAGEM — mais larga do que alta, proporção aproximada ${colunasMax}:${linhas} (largura:altura)`;
 }
 
 export function montarPromptImagemUnico(contexto: ContextoPromptImagem): string {
@@ -137,6 +151,7 @@ export function montarPromptImagemUnico(contexto: ContextoPromptImagem): string 
   return `
 ${labelTipo(tipoImagem)} composta por ${roteiro.quadros.length} quadro(s) em sequência, formando uma única imagem (grade de painéis, com uma pequena margem entre eles).
 GRADE OBRIGATÓRIA (siga exatamente esta organização, não escolha outra): organize os painéis ${descreverGradeParaPrompt(roteiro.quadros.length)}. Preencha os painéis na ordem de leitura (esquerda→direita, de cima pra baixo) — o Quadro 1 é o primeiro painel da 1ª fileira, e assim por diante.
+ORIENTAÇÃO/PROPORÇÃO DA IMAGEM INTEIRA (obrigatório): gere o canvas completo em ${descreverProporcaoParaPrompt(roteiro.quadros.length)} — NUNCA em retrato/vertical (mais alta que larga), mesmo que o site/ferramenta de imagem sugira retrato por padrão. Retrato faz os painéis saírem espremidos e compridos, difíceis de recortar e de ler.
 GRADE OBRIGATORIAMENTE REGULAR: todo painel com desenho deve ter EXATAMENTE o mesmo tamanho retangular que os outros, alinhados numa grade perfeitamente uniforme (linhas e colunas retas, margem/espaçamento idêntico e constante entre todos os painéis, sem painel maior, cortado ou deslocado) — isso é necessário porque o professor recorta essa imagem depois dividindo-a nessa mesma grade.
 NUMERAÇÃO DOS PAINÉIS (exceção às proibições de texto abaixo — isto é permitido, além das falas dos balões): desenhe um pequeno selo/badge numerado (círculo ou quadrado sólido com o número do quadro dentro, ex: "1", "2"...) no canto superior esquerdo de CADA painel, seguindo a ordem de leitura descrita acima (1 a ${roteiro.quadros.length}) — ajuda o professor a identificar cada quadro na hora de recortar e usar na avaliação. Desenhe esse número com uma margem de segurança das bordas do painel (não encostado no limite exato), para que continue visível mesmo se o recorte tiver uma pequena variação.
 Título da história: "${roteiro.tituloRoteiro}"
