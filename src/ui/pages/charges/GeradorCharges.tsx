@@ -102,6 +102,10 @@ export function GeradorCharges() {
       setErro('Preencha o campo "Conteúdo" antes de gerar a charge.');
       return;
     }
+    if (params.conteudo.trim() === params.objetoConhecimento.trim()) {
+      setErro('O campo "Conteúdo" ainda está com o texto genérico do Objeto de Conhecimento — sem um esporte/prática específico, a IA escolhe qualquer exemplo da categoria e a checagem automática pode reprovar o resultado à toa. Edite o campo "Conteúdo" pra nomear o esporte, ex: "Handebol — Defesa Legal".');
+      return;
+    }
     if (params.personagensSelecionadosIds.length === 0) {
       setErro('Selecione ao menos 1 personagem para gerar a charge.');
       return;
