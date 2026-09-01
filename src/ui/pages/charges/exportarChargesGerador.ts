@@ -48,6 +48,46 @@ export const OPCOES_EXPORTACAO_CHARGES_PADRAO: OpcoesExportacaoCharges = {
   incluirPromptsImagem: true,
 };
 
+/** Letras de turma que têm cabeçalho oficial (ficha impressa com logo, Professor(a)/Nome/Nº) em public/cabecalhos/{serie}{letra}.png */
+export const LETRAS_TURMA_COM_CABECALHO = ['A', 'B', 'C', 'D', 'E', 'F'] as const;
+
+interface CabecalhoTurma {
+  dataUrl: string;
+  larguraOriginal: number;
+  alturaOriginal: number;
+}
+
+/** Busca o PNG do cabeçalho oficial da turma (ex: "6A") em public/cabecalhos e converte pra data URL, pronta pra doc.addImage. Retorna null se não achar o arquivo — a exportação segue sem travar, só sem o cabeçalho. */
+async function carregarCabecalhoTurma(turma: string): Promise<CabecalhoTurma | null> {
+  try {
+    const resp = await fetch(`/cabecalhos/${turma}.png`);
+    if (!resp.ok) return null;
+    const blob = await resp.blob();
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    const dimensoes = await new Promise<{ larguraOriginal: number; alturaOriginal: number }>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve({ larguraOriginal: img.naturalWidth, alturaOriginal: img.naturalHeight });
+      img.onerror = reject;
+      img.src = dataUrl;
+    });
+    return { dataUrl, ...dimensoes };
+  } catch {
+    return null;
+  }
+}
+
+/** Desenha o cabeçalho oficial (logo + Professor(a)/Série/Turma/Nome/Nº) no topo da página, ocupando a largura útil. Retorna o Y logo abaixo da imagem, pra continuar o conteúdo dali. */
+function desenharCabecalhoTurma(doc: jsPDF, cabecalho: CabecalhoTurma, margin: number, larguraUtil: number): number {
+  const altura = larguraUtil / (cabecalho.larguraOriginal / cabecalho.alturaOriginal);
+  doc.addImage(cabecalho.dataUrl, 'PNG', margin, margin, larguraUtil, altura);
+  return margin + altura + 6;
+}
+
 function nomeArquivoBase(atividade: AtividadeCharge): string {
   const conteudo = atividade.parametros.conteudo.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
   return `charge_${atividade.parametros.anoEscolar}ano${conteudo ? `_${conteudo}` : ''}`;
@@ -73,23 +113,28 @@ function deveIlustrarQuestaoComQuadro(questoes: AtividadeCharge['questoes'], idx
 
 // ── PDF — Modelo 1 (1 atividade por folha, conteúdo completo) ──────────────
 
-function exportarModelo1(doc: jsPDF, atividade: AtividadeCharge, opcoes: OpcoesExportacaoCharges) {
+function exportarModelo1(doc: jsPDF, atividade: AtividadeCharge, opcoes: OpcoesExportacaoCharges, cabecalho: CabecalhoTurma | null) {
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 14;
   const larguraUtil = pageWidth - margin * 2;
 
-  doc.setFillColor(76, 29, 149);
-  doc.rect(0, 0, pageWidth, 22, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.text('E.E. Instituto Odilon Pratagi', margin, 9);
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Gerador de Charges Didáticas', margin, 16);
+  let y: number;
+  if (cabecalho) {
+    y = desenharCabecalhoTurma(doc, cabecalho, margin, larguraUtil) + 4;
+  } else {
+    doc.setFillColor(76, 29, 149);
+    doc.rect(0, 0, pageWidth, 22, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.text('E.E. Instituto Odilon Pratagi', margin, 9);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Gerador de Charges Didáticas', margin, 16);
+    y = 30;
+  }
 
   doc.setTextColor(20, 20, 20);
-  let y = 30;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
   const linhaTitulo = doc.splitTextToSize(atividade.roteiro.tituloRoteiro || 'Charge Didática', larguraUtil);
@@ -451,12 +496,14 @@ function exportarModeloCompacto(doc: jsPDF, atividade: AtividadeCharge, opcoes: 
 
 export async function exportarChargePDF(
   atividade: AtividadeCharge,
-  opcoes: OpcoesExportacaoCharges = OPCOES_EXPORTACAO_CHARGES_PADRAO
+  opcoes: OpcoesExportacaoCharges = OPCOES_EXPORTACAO_CHARGES_PADRAO,
+  turma?: string
 ): Promise<void> {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
   if (opcoes.modeloImpressao === 1) {
-    exportarModelo1(doc, atividade, opcoes);
+    const cabecalho = turma ? await carregarCabecalhoTurma(turma) : null;
+    exportarModelo1(doc, atividade, opcoes, cabecalho);
   } else {
     exportarModeloCompacto(doc, atividade, opcoes);
   }
@@ -466,14 +513,14 @@ export async function exportarChargePDF(
 
 // ── PDF — Prova (só as questões, 2 colunas, sem título/sinopse/quadros/texto de apoio/gabarito) ──
 
-function exportarProva(doc: jsPDF, atividade: AtividadeCharge) {
+function exportarProva(doc: jsPDF, atividade: AtividadeCharge, cabecalho: CabecalhoTurma | null) {
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 14;
   const gutter = 3;
   const colWidth = (pageWidth - margin * 2 - gutter) / 2;
   const colX = [margin, margin + colWidth + gutter];
-  const topY = margin;
+  const topY = cabecalho ? desenharCabecalhoTurma(doc, cabecalho, margin, pageWidth - margin * 2) : margin;
   const bottomLimit = pageHeight - margin;
 
   let col = 0;
@@ -486,7 +533,7 @@ function exportarProva(doc: jsPDF, atividade: AtividadeCharge) {
     } else {
       doc.addPage();
       col = 0;
-      y = topY;
+      y = margin; // o cabeçalho só é desenhado na 1ª página, então as seguintes usam a margem normal
     }
   }
 
@@ -561,9 +608,10 @@ function exportarProva(doc: jsPDF, atividade: AtividadeCharge) {
 }
 
 /** Prova pronta pra aplicar: só as questões (com a imagem do quadro correspondente, quando houver), em 2 colunas com 3mm de espaço entre elas — sem título, sinopse, Quadros, Texto de Apoio, Gabarito nem Orientações (essas informações continuam nas exportações Word/HTML, para uso do professor). */
-export async function exportarChargeProvaPDF(atividade: AtividadeCharge): Promise<void> {
+export async function exportarChargeProvaPDF(atividade: AtividadeCharge, turma?: string): Promise<void> {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  exportarProva(doc, atividade);
+  const cabecalho = turma ? await carregarCabecalhoTurma(turma) : null;
+  exportarProva(doc, atividade, cabecalho);
   doc.save(`${nomeArquivoBase(atividade)}_prova.pdf`);
 }
 

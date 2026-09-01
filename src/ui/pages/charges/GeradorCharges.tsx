@@ -8,7 +8,7 @@ import type { AtividadeCharge, ImagemQuadro, ImagemUnica, ParametrosGeracaoCharg
 import { listarPersonagensAtivos } from './personagensChargesData';
 import { gerarERevisarCharge } from './revisaoAutomaticaCharges';
 import { montarPromptImagemPorQuadro } from './promptImagemCharges';
-import { exportarChargeHTML, exportarChargePDF, exportarChargeProvaPDF, exportarChargeProvaWord, exportarChargeWord } from './exportarChargesGerador';
+import { exportarChargeHTML, exportarChargePDF, exportarChargeProvaPDF, exportarChargeProvaWord, exportarChargeWord, LETRAS_TURMA_COM_CABECALHO } from './exportarChargesGerador';
 import { buscarChargeHistoricoPorId, salvarChargeNoHistorico, atualizarChargeHistorico } from './chargesDidaticasData';
 
 type Etapa = 'formulario' | 'gerando' | 'resultado';
@@ -67,6 +67,7 @@ export function GeradorCharges() {
   const [salvandoHistorico, setSalvandoHistorico] = useState(false);
   const [mensagemHistorico, setMensagemHistorico] = useState('');
   const [carregandoAtividadeExistente, setCarregandoAtividadeExistente] = useState(Boolean(idParaAbrir));
+  const [letraTurma, setLetraTurma] = useState(''); // turma pra imprimir (define qual cabeçalho oficial usar no PDF) — vazio = sem cabeçalho, mantém o topo padrão
 
   useEffect(() => {
     if (!idParaAbrir) return;
@@ -200,7 +201,8 @@ export function GeradorCharges() {
   async function handleExportarPDF(modeloImpressao: 1 | 2 | 4) {
     if (!atividade) return;
     try {
-      await exportarChargePDF(atividade, { modeloImpressao, incluirPromptsImagem: modeloImpressao === 1 });
+      const turma = letraTurma ? `${atividade.parametros.anoEscolar}${letraTurma}` : undefined;
+      await exportarChargePDF(atividade, { modeloImpressao, incluirPromptsImagem: modeloImpressao === 1 }, turma);
     } catch (e) {
       setErro(`Erro ao exportar PDF: ${(e as Error).message}`);
     }
@@ -209,7 +211,8 @@ export function GeradorCharges() {
   async function handleExportarProvaPDF() {
     if (!atividade) return;
     try {
-      await exportarChargeProvaPDF(atividade);
+      const turma = letraTurma ? `${atividade.parametros.anoEscolar}${letraTurma}` : undefined;
+      await exportarChargeProvaPDF(atividade, turma);
     } catch (e) {
       setErro(`Erro ao exportar PDF (Prova): ${(e as Error).message}`);
     }
@@ -316,6 +319,22 @@ export function GeradorCharges() {
               <button onClick={handleNovaGeracao} className="px-3 py-1.5 rounded-xl bg-secondary-container text-on-secondary-container text-xs font-semibold">
                 Nova geração
               </button>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <label className="text-xs font-semibold text-on-surface-variant">
+                Turma (cabeçalho oficial no PDF):
+              </label>
+              <select
+                value={letraTurma}
+                onChange={e => setLetraTurma(e.target.value)}
+                className="px-2.5 py-1.5 rounded-xl bg-surface border border-outline-variant text-xs font-semibold text-on-surface"
+              >
+                <option value="">Sem cabeçalho de turma</option>
+                {LETRAS_TURMA_COM_CABECALHO.map(letra => (
+                  <option key={letra} value={letra}>{atividade.parametros.anoEscolar}º {letra}</option>
+                ))}
+              </select>
             </div>
 
             <div className="flex flex-wrap gap-2">
