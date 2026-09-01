@@ -37,24 +37,29 @@ function gerarHtmlExercicio(
   // (é vetorial, continua nítido em qualquer tamanho) e só reduz a IMAGEM
   // como último recurso — texto de balão/legenda já impresso na imagem é
   // bitmap e fica ilegível se encolher demais, então ela tem prioridade.
+  // Imagem flutua à esquerda (float) e o texto contorna ao redor dela, em vez
+  // de empilhar imagem-depois-texto — usa o espaço da coluna de forma bem
+  // mais eficiente. A resposta não fica mais aqui — vai na página do verso
+  // (`versoHtml`, mais abaixo), com linhas suficientes de verdade pra escrever.
   function questaoHtml(q: ExercicioFixacao['questoes'][number], idx: number): string {
     return `
-    <div style="margin-bottom:calc(16px * var(--escala-texto));page-break-inside:avoid;">
-      <div style="font-weight:bold;margin-bottom:4px;font-size:calc(13.5pt * var(--escala-texto));">Questão ${idx + 1} &ndash;</div>
-      ${q.imagemDataUrl ? `<img src="${q.imagemDataUrl}" style="width:100%;max-width:calc(85mm * var(--escala-imagem));max-height:calc(60mm * var(--escala-imagem));object-fit:contain;display:block;margin-bottom:7px;border:1px solid #cbd5e1;border-radius:4px;" />` : ''}
-      <div style="line-height:1.5;text-align:justify;margin-bottom:9px;font-size:calc(13.5pt * var(--escala-texto));">${escaparHTML(q.enunciado)}</div>
-      <div style="border-bottom:1px solid #cbd5e1;height:calc(26px * var(--escala-texto));"></div>
-      <div style="border-bottom:1px solid #cbd5e1;height:calc(26px * var(--escala-texto));margin-top:5px;"></div>
+    <div style="margin-bottom:calc(10px * var(--escala-texto));page-break-inside:avoid;">
+      <div style="font-weight:bold;margin-bottom:3px;font-size:calc(12pt * var(--escala-texto));">Questão ${idx + 1} &ndash;</div>
+      <div style="overflow:hidden;">
+        ${q.imagemDataUrl ? `<img src="${q.imagemDataUrl}" style="float:left;width:calc(34mm * var(--escala-imagem));height:auto;max-height:calc(34mm * var(--escala-imagem));object-fit:contain;margin:0 8px 4px 0;border:1px solid #cbd5e1;border-radius:4px;" />` : ''}
+        <div style="line-height:1.35;text-align:justify;font-size:calc(12pt * var(--escala-texto));">${escaparHTML(q.enunciado)}</div>
+      </div>
+      <div style="clear:both;"></div>
     </div>`;
   }
 
   // Duas colunas, mesmo padrão visual da Parte 1 da prova em AvaliacaoFolha.tsx — metade das questões em cada coluna, na ordem, aproveitando melhor a largura da folha A4.
   const meio = Math.ceil(exercicio.questoes.length / 2);
-  const colEsquerda = exercicio.questoes.slice(0, meio).map(questaoHtml).join('');
-  const colDireita = exercicio.questoes.slice(meio).map(questaoHtml).join('');
+  const colEsquerda = exercicio.questoes.slice(0, meio).map((q, i) => questaoHtml(q, i)).join('');
+  const colDireita = exercicio.questoes.slice(meio).map((q, i) => questaoHtml(q, i + meio)).join('');
 
   return `
-    <div class="folha-exercicio" style="--escala-texto:1;--escala-imagem:1;font-family:Arial,sans-serif;color:#1e293b;width:100%;">
+    <div class="folha-exercicio" style="--escala-texto:1;--escala-imagem:1;font-family:'Times New Roman',Times,serif;color:#1e293b;width:100%;">
       <table style="width:100%;border:2px solid #1e3a5f;border-radius:4px;margin-bottom:10px;border-collapse:collapse;">
         <tr>
           <td style="width:72px;padding:6px;vertical-align:middle;text-align:center;">
@@ -69,7 +74,7 @@ function gerarHtmlExercicio(
         </tr>
       </table>
 
-      <div style="font-size:calc(14.5pt * var(--escala-texto));font-weight:bold;margin-bottom:6px;">${escaparHTML(exercicio.titulo)}</div>
+      <div style="font-size:calc(13pt * var(--escala-texto));font-weight:bold;margin-bottom:6px;">${escaparHTML(exercicio.titulo)}</div>
 
       <table style="width:100%;border-collapse:collapse;">
         <tr>
@@ -82,10 +87,40 @@ function gerarHtmlExercicio(
           </td>
         </tr>
       </table>
+    </div>`;
+}
 
-      <div style="font-size:9pt;color:#94a3b8;text-align:center;margin-top:8px;border-top:1px solid #e2e8f0;padding-top:4px;">
-        Brasiléia, Acre — 2026 &nbsp;&nbsp;&nbsp; E.E. Instituto Odilon Pratagi — Educação Física
+/** Quantas linhas de resposta dar pra cada questão no verso — quanto menos questões, mais espaço sobra pra cada uma. */
+function linhasPorQuestao(numeroQuestoes: number): number {
+  if (numeroQuestoes <= 3) return 9;
+  if (numeroQuestoes <= 5) return 6;
+  return 4;
+}
+
+/** Página do verso: só as linhas pautadas pra escrever a resposta de cada questão, sem imagem — sempre cabe numa página, então não precisa do ajuste automático de escala. */
+function versoHtml(exercicio: ExercicioFixacao, aluno: Aluno | null, opcoes: { preencherAluno: boolean }): string {
+  const linhas = linhasPorQuestao(exercicio.questoes.length);
+  const identificacao = (opcoes.preencherAluno && aluno)
+    ? ` — ${escaparHTML(aluno.nome)} (N&#186; ${aluno.numero_chamada ?? '-'})`
+    : '';
+
+  const blocos = exercicio.questoes.map((_, idx) => {
+    const linhasHtml = Array.from({ length: linhas }, () =>
+      `<div style="border-bottom:1px solid #94a3b8;height:8mm;"></div>`
+    ).join('');
+    return `
+    <div style="margin-bottom:5mm;page-break-inside:avoid;">
+      <div style="font-weight:bold;font-size:11pt;margin-bottom:2mm;">Resposta da Questão ${idx + 1}:</div>
+      ${linhasHtml}
+    </div>`;
+  }).join('');
+
+  return `
+    <div class="folha-verso" style="font-family:'Times New Roman',Times,serif;color:#1e293b;width:100%;">
+      <div style="font-size:10pt;color:#64748b;margin-bottom:5mm;border-bottom:1px solid #cbd5e1;padding-bottom:2mm;">
+        ${escaparHTML(exercicio.titulo)} &mdash; Folha de respostas${identificacao}
       </div>
+      ${blocos}
     </div>`;
 }
 
@@ -98,19 +133,34 @@ function gerarHtmlExercicio(
  * balão já "gravado" no bitmap fica ilegível se encolher demais), sem
  * precisar adivinhar de antemão quanto conteúdo a IA vai gerar.
  */
+/**
+ * Trava a largura do <body> em 190mm (largura útil da A4 com margem de
+ * 10mm dos dois lados) mesmo fora do modo de impressão — sem isso, o
+ * `SCRIPT_AJUSTE_ESCALA` mede a altura do conteúdo na largura normal da
+ * janela (bem mais larga que uma folha), o texto quebra em menos linhas
+ * do que quebraria impresso, e o resultado "cabe" na medição mas estoura
+ * pra 2ª página na hora de imprimir de verdade.
+ */
+const CSS_PAGINA_A4 = `${CSS_PROVA} @page { margin: 10mm; size: A4 portrait; } body { width: 190mm; margin: 0 auto; }`;
+
 const SCRIPT_AJUSTE_ESCALA = `
 function ajustarEscala() {
   var PX_POR_MM = 96 / 25.4;
-  var orcamentoPx = (297 - 10 * 2) * PX_POR_MM - 10;
+  // Folga extra (12%) porque o motor de impressão do navegador não divide o
+  // conteúdo de uma coluna entre páginas: se uma questão inteira não couber
+  // no espaço restante, ela pula inteira pra próxima página mesmo sobrando
+  // espaço — então "caber exatamente" no cálculo não é o suficiente, precisa
+  // sobrar uma margem de verdade.
+  var orcamentoPx = ((297 - 10 * 2) * PX_POR_MM - 10) * 0.88;
   document.querySelectorAll('.folha-exercicio').forEach(function (bloco) {
     var escalaTexto = 1, escalaImagem = 1;
     bloco.style.setProperty('--escala-texto', escalaTexto);
     bloco.style.setProperty('--escala-imagem', escalaImagem);
-    while (bloco.scrollHeight > orcamentoPx && escalaTexto > 0.6) {
+    while (bloco.scrollHeight > orcamentoPx && escalaTexto > 0.5) {
       escalaTexto = Math.round((escalaTexto - 0.05) * 100) / 100;
       bloco.style.setProperty('--escala-texto', escalaTexto);
     }
-    while (bloco.scrollHeight > orcamentoPx && escalaImagem > 0.75) {
+    while (bloco.scrollHeight > orcamentoPx && escalaImagem > 0.65) {
       escalaImagem = Math.round((escalaImagem - 0.05) * 100) / 100;
       bloco.style.setProperty('--escala-imagem', escalaImagem);
     }
@@ -202,10 +252,12 @@ export function ExercicioFormatar() {
 
   const htmlPreview = useMemo(() => {
     if (!exercicio || !alunoPreview) return '';
-    const conteudo = gerarHtmlExercicio(exercicio, alunoPreview, { professorNome, preencherAluno: true });
+    const frente = gerarHtmlExercicio(exercicio, alunoPreview, { professorNome, preencherAluno: true });
+    const verso = versoHtml(exercicio, alunoPreview, { preencherAluno: true });
     return `<!DOCTYPE html><html><head><meta charset="utf-8">
-      <style>${CSS_PROVA} @page { margin: 10mm; size: A4 portrait; }</style>
-    </head><body><div>${conteudo}</div>
+      <style>${CSS_PAGINA_A4}</style>
+    </head><body><div>${frente}</div>
+      <div style="page-break-before: always;">${verso}</div>
       <script>${SCRIPT_AJUSTE_ESCALA}\naguardarImagens(ajustarEscala);<\/script>
     </body></html>`;
   }, [exercicio, alunoPreview, professorNome]);
@@ -221,14 +273,15 @@ export function ExercicioFormatar() {
     try {
       const blocos = alunosSelecionados.map((aluno, idx) => {
         const isLast = idx === alunosSelecionados.length - 1;
-        const conteudo = gerarHtmlExercicio(exercicio, aluno, { professorNome, preencherAluno: true });
-        return `<div style="${isLast ? '' : 'page-break-after: always;'}">${conteudo}</div>`;
+        const frente = gerarHtmlExercicio(exercicio, aluno, { professorNome, preencherAluno: true });
+        const verso = versoHtml(exercicio, aluno, { preencherAluno: true });
+        return `<div>${frente}</div><div style="page-break-before: always;${isLast ? '' : ' page-break-after: always;'}">${verso}</div>`;
       }).join('');
 
       const html = `<!DOCTYPE html><html><head>
         <meta charset="utf-8">
         <title>${exercicio.titulo} -- ${exercicio.turma_id} -- ${alunosSelecionados.length} alunos</title>
-        <style>${CSS_PROVA} @page { margin: 10mm; size: A4 portrait; }</style>
+        <style>${CSS_PAGINA_A4}</style>
       </head><body>${blocos}
         <script>
           ${SCRIPT_AJUSTE_ESCALA}
