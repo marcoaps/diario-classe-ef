@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
-import { ClipboardList, Plus, QrCode, Camera, Trash2, ChevronDown, ChevronUp, CheckCircle2, BarChart2, Sparkles } from 'lucide-react';
+import { ClipboardList, Plus, QrCode, Camera, Trash2, ChevronDown, ChevronUp, CheckCircle2, BarChart2, Sparkles, Users } from 'lucide-react';
 
 const TURMAS = ['6F','7B','7C','7D','7E','7F','8A','8B','8C','8D','8E','8F','9A','9B','9C','9D','9E','9F'];
 const LETRAS = ['A','B','C','D'];
@@ -424,6 +424,13 @@ export function Avaliacoes() {
                     >
                       <BarChart2 className="w-4 h-4" />
                       Resultados
+                    </button>
+                    <button
+                      onClick={() => navigate(`/avaliacoes/formatar/${av.id}`)}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-surface border border-outline-variant text-on-surface text-xs font-semibold"
+                    >
+                      <Users className="w-4 h-4" />
+                      Formatar
                     </button>
                     <button
                       onClick={() => excluir(av.id)}

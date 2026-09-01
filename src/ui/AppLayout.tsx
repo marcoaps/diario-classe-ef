@@ -3,7 +3,7 @@ import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import {
   Users, CheckSquare, GraduationCap, CloudOff, Cloud,
   CalendarSearch, BarChart3, QrCode, ClipboardList, CalendarDays,
-  Sparkles, MoreHorizontal, X, BookOpen, Trophy, ClipboardCheck, Goal
+  Sparkles, MoreHorizontal, X, BookOpen, Trophy, ClipboardCheck, Goal, NotebookPen
 } from 'lucide-react';
 import { useStore } from '../store';
 import { clsx, type ClassValue } from 'clsx';
@@ -95,6 +95,12 @@ export function AppLayout() {
             to="/avaliacoes"
             icon={<ClipboardList className="w-5 h-5" />}
             label="Avalia&#231;&#227;o"
+            onClick={() => setMaisAberto(false)}
+          />
+          <PopupItem
+            to="/exercicios"
+            icon={<NotebookPen className="w-5 h-5" />}
+            label="Exerc&#237;cios de Fixa&#231;&#227;o"
             onClick={() => setMaisAberto(false)}
           />
           <PopupItem

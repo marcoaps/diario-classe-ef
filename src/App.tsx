@@ -36,6 +36,9 @@ import { Avaliacoes } from './ui/pages/avaliacoes/Avaliacoes';
 import { AvaliacaoFolha } from './ui/pages/avaliacoes/AvaliacaoFolha';
 import { AvaliacaoCorrigir } from './ui/pages/avaliacoes/AvaliacaoCorrigir';
 import { AvaliacaoResultados } from './ui/pages/avaliacoes/AvaliacaoResultados';
+import { AvaliacaoFormatar } from './ui/pages/avaliacoes/AvaliacaoFormatar';
+import { ExerciciosFixacao } from './ui/pages/exercicios/ExerciciosFixacao';
+import { ExercicioFormatar } from './ui/pages/exercicios/ExercicioFormatar';
 import { GeradorQuestoes } from './ui/pages/avaliacoes/GeradorQuestoes';
 import { GeradorCharges } from './ui/pages/charges/GeradorCharges';
 import { ChargesHistorico } from './ui/pages/charges/ChargesHistorico';
@@ -112,7 +115,12 @@ export default function App() {
           <Route path="/avaliacoes/folha/:id" element={<AvaliacaoFolha />} />
           <Route path="/avaliacoes/corrigir/:id" element={<AvaliacaoCorrigir />} />
           <Route path="/avaliacoes/resultados/:id" element={<AvaliacaoResultados />} />
+          <Route path="/avaliacoes/formatar/:id" element={<AvaliacaoFormatar />} />
           <Route path="/avaliacoes/gerador" element={<GeradorQuestoes />} />
+
+          {/* Exercicios de Fixacao — conteudo livre, poucas questoes, mesmo cabecalho/Formatar */}
+          <Route path="/exercicios" element={<ExerciciosFixacao />} />
+          <Route path="/exercicios/formatar/:id" element={<ExercicioFormatar />} />
 
           {/* Rotas IA */}
           <Route path="/ia" element={<IAHub />} />
