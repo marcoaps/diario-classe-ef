@@ -46,7 +46,7 @@ function gerarHtmlExercicio(
     <div style="margin-bottom:calc(10px * var(--escala-texto));page-break-inside:avoid;">
       <div style="font-weight:bold;margin-bottom:3px;font-size:calc(12pt * var(--escala-texto));">Questão ${idx + 1} &ndash;</div>
       <div style="overflow:hidden;">
-        ${q.imagemDataUrl ? `<img src="${q.imagemDataUrl}" style="float:left;width:calc(34mm * var(--escala-imagem));height:auto;max-height:calc(34mm * var(--escala-imagem));object-fit:contain;margin:0 8px 4px 0;border:1px solid #cbd5e1;border-radius:4px;" />` : ''}
+        ${q.imagemDataUrl ? `<img src="${q.imagemDataUrl}" style="float:left;width:calc(42mm * var(--escala-imagem));height:auto;max-height:calc(42mm * var(--escala-imagem));object-fit:contain;margin:0 8px 4px 0;border:1px solid #cbd5e1;border-radius:4px;" />` : ''}
         <div style="line-height:1.35;text-align:justify;font-size:calc(12pt * var(--escala-texto));">${escaparHTML(q.enunciado)}</div>
       </div>
       <div style="clear:both;"></div>
