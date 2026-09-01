@@ -12,7 +12,8 @@
 // ============================================================================
 
 import { gerarRoteiroCharge, gerarQuestoesEMetadadosCharge } from './geradorChargesIA';
-import { validarChargeDeterministico } from './validadorCharges';
+import { validarRoteiroDeterministico, validarQuestoesDeterministico } from './validadorCharges';
+import type { CriterioResultadoCharge } from './validadorCharges';
 import type {
   HistoricoTentativaCharge,
   ParametrosGeracaoCharges,
@@ -33,8 +34,8 @@ export interface ResultadoGeracaoRevisadaCharge {
   historicoRevisao: HistoricoTentativaCharge[];
 }
 
-function motivosDeFalha(resultado: ReturnType<typeof validarChargeDeterministico>): string[] {
-  return resultado.criterios
+function motivosDeFalha(criterios: CriterioResultadoCharge[]): string[] {
+  return criterios
     .filter(c => c.bloqueante && !c.passou)
     .map(c => c.detalhe ?? c.descricao);
 }
@@ -52,22 +53,39 @@ export async function gerarERevisarCharge(
   const historico: HistoricoTentativaCharge[] = [];
 
   for (let tentativa = 0; tentativa <= MAX_TENTATIVAS_GERACAO_CHARGES; tentativa++) {
+    const ehUltimaTentativa = tentativa === MAX_TENTATIVAS_GERACAO_CHARGES;
+
     onProgresso?.('roteiro', tentativa);
     const roteiro = await gerarRoteiroCharge(params, personagens);
+
+    onProgresso?.('revisando', tentativa);
+    const resultadoRoteiro = validarRoteiroDeterministico(roteiro, personagens, params.numeroQuadros, params.conteudo);
+
+    // Roteiro já reprovado (ex: fugiu do esporte pedido) e ainda sobram
+    // tentativas — nem vale gastar a 2ª chamada gerando questões pra um
+    // roteiro que vai ser descartado mesmo. Só na ÚLTIMA tentativa seguimos
+    // até o fim de qualquer jeito, pra sempre entregar algo pro professor
+    // revisar manualmente em vez de travar sem devolver nada.
+    if (!resultadoRoteiro.aprovada && !ehUltimaTentativa) {
+      historico.push({ tentativa, motivosFalha: motivosDeFalha(resultadoRoteiro.criterios), timestamp: new Date().toISOString() });
+      continue;
+    }
 
     onProgresso?.('questoes', tentativa);
     const questoesEMetadados = await gerarQuestoesEMetadadosCharge(params, roteiro);
 
     onProgresso?.('revisando', tentativa);
-    const resultado = validarChargeDeterministico(roteiro, questoesEMetadados.questoes, personagens, params.numeroQuadros, params.conteudo);
+    const resultadoQuestoes = validarQuestoesDeterministico(questoesEMetadados.questoes, params.conteudo);
+    const aprovada = resultadoRoteiro.aprovada && resultadoQuestoes.aprovada;
 
-    if (resultado.aprovada) {
+    if (aprovada) {
       return { roteiro, questoesEMetadados, statusRevisao: 'aprovada', tentativasRevisao: tentativa, historicoRevisao: historico };
     }
 
-    historico.push({ tentativa, motivosFalha: motivosDeFalha(resultado), timestamp: new Date().toISOString() });
+    const criteriosCombinados = [...resultadoRoteiro.criterios, ...resultadoQuestoes.criterios];
+    historico.push({ tentativa, motivosFalha: motivosDeFalha(criteriosCombinados), timestamp: new Date().toISOString() });
 
-    if (tentativa === MAX_TENTATIVAS_GERACAO_CHARGES) {
+    if (ehUltimaTentativa) {
       return { roteiro, questoesEMetadados, statusRevisao: 'requer_revisao_manual', tentativasRevisao: tentativa, historicoRevisao: historico };
     }
   }
