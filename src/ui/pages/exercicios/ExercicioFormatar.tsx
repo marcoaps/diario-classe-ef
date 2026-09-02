@@ -154,12 +154,15 @@ const par = (
   after = 60
 ): Paragraph => new Paragraph({ children: runs, alignment: align, spacing: { before, after } });
 
-// Borda de parágrafo (não texto sublinhado) — estica até a margem da
-// página de verdade, independente do tamanho da fonte/coluna.
+// Borda de parágrafo (não texto sublinhado) — estica até a margem da página
+// de verdade, independente do tamanho da fonte/coluna. Precisa de um
+// caractere invisível (espaço) dentro — um parágrafo totalmente vazio (sem
+// nenhum run) fica com altura zero em alguns visualizadores (Google Docs
+// principalmente), que colapsam a borda de todas as linhas menos a última.
 const linhaRespostaWord = () => new Paragraph({
   border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '94a3b8' } },
   spacing: { before: 0, after: 220 },
-  children: [],
+  children: [run(' ', { sz: 20 })],
 });
 
 const linhasRespostaWord = (n: number) => Array.from({ length: n }, linhaRespostaWord);
