@@ -154,18 +154,22 @@ const par = (
   after = 60
 ): Paragraph => new Paragraph({ children: runs, alignment: align, spacing: { before, after } });
 
-// Borda de parágrafo (não texto sublinhado) — estica até a margem da página
-// de verdade, independente do tamanho da fonte/coluna. Precisa de um
-// caractere invisível (espaço) dentro — um parágrafo totalmente vazio (sem
-// nenhum run) fica com altura zero em alguns visualizadores (Google Docs
-// principalmente), que colapsam a borda de todas as linhas menos a última.
-const linhaRespostaWord = () => new Paragraph({
-  border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '94a3b8' } },
-  spacing: { before: 0, after: 220 },
-  children: [run(' ', { sz: 20 })],
-});
-
-const linhasRespostaWord = (n: number) => Array.from({ length: n }, linhaRespostaWord);
+// Linhas de resposta como TABELA (1 coluna, N linhas), não parágrafos com
+// borda — o Word tem um comportamento conhecido de "fundir" a borda de
+// parágrafos consecutivos idênticos numa única borda só (por isso só a
+// última linha aparecia), o que não acontece com borda de tabela.
+function tabelaLinhasResposta(n: number): Table {
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: Array.from({ length: n }, () => new TableRow({
+      children: [new TableCell({
+        borders: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '94a3b8' } },
+        margins: { top: 150, bottom: 150, left: 0, right: 0 },
+        children: [par([run(' ', { sz: 20 })], AlignmentType.LEFT, 0, 0)],
+      })],
+    })),
+  });
+}
 
 /** Lê as dimensões reais da imagem (só sabemos isso no navegador, no momento do export — não fica salvo no banco) pra manter a proporção certa no Word. */
 function medirImagem(dataUrl: string): Promise<{ largura: number; altura: number }> {
@@ -261,12 +265,12 @@ async function montarSecoesAlunoWord(
     ));
   }
 
-  const paragrafosVerso: Paragraph[] = [
+  const paragrafosVerso: (Paragraph | Table)[] = [
     par([run(`${exercicio.titulo} — Folha de respostas`, { bold: true, sz: 22, cor: '64748b' })], AlignmentType.LEFT, 0, 200),
   ];
   exercicio.questoes.forEach((_, idx) => {
     paragrafosVerso.push(par([run(`Resposta da Questão ${idx + 1}:`, { bold: true, sz: 22 })], AlignmentType.LEFT, 120, 40));
-    paragrafosVerso.push(...linhasRespostaWord(linhasPorQuestao(exercicio.questoes.length)));
+    paragrafosVerso.push(tabelaLinhasResposta(linhasPorQuestao(exercicio.questoes.length)));
   });
 
   // Margem de 10mm (igual à impressão) em vez do padrão do Word (2,5cm) — sozinho já
