@@ -14,12 +14,24 @@ interface QrAssinadoLido {
 type SituacaoQuestao = 'correta' | 'incorreta' | 'branco' | 'dupla';
 type ResultadoDeteccao = 'ok' | 'invalido' | 'adulterado' | 'outra_prova' | 'aluno_nao_encontrado';
 
+const MENSAGENS_ERRO_QR: Partial<Record<ResultadoDeteccao, string>> = {
+  invalido: 'QR Code inválido — não é de uma folha gerada por este sistema.',
+  adulterado: 'QR Code adulterado ou inválido. A assinatura não confere — use uma folha original.',
+  outra_prova: 'Esta folha pertence a outra avaliação.',
+  aluno_nao_encontrado: 'Aluno da folha não encontrado nesta turma.',
+};
+
 /** Frames consecutivos com o MESMO folha_id exigidos antes de capturar —
  * evita capturar um frame borrado no instante exato em que o QR aparece. */
 const FRAMES_CONFIRMACAO = 2;
 /** Largura máxima do frame usado só pra procurar o QR (mais rápido que
  * rodar jsQR na resolução cheia da câmera a cada frame). */
 const LARGURA_SCAN = 480;
+/** Depois de N falhas seguidas verificando o MESMO QR, para de tentar
+ * automaticamente (evita loop infinito batendo no backend) e mostra um
+ * aviso explicando a causa mais provável — geralmente a folha foi gerada
+ * assinada com um QR_SECRET de outro ambiente (ex: teste local vs. produção). */
+const MAX_FALHAS_CONSECUTIVAS = 3;
 
 export function AvaliacaoCorrigir() {
   const { id } = useParams<{ id: string }>();
@@ -32,6 +44,8 @@ export function AvaliacaoCorrigir() {
   const processandoRef = useRef(false);
   const ultimoFolhaIdRef = useRef<string | null>(null);
   const contagemConfirmacaoRef = useRef(0);
+  const folhaIgnoradaRef = useRef<string | null>(null);
+  const falhasFolhaRef = useRef<{ folhaId: string | null; count: number }>({ folhaId: null, count: 0 });
 
   const [avaliacao, setAvaliacao] = useState<Avaliacao | null>(null);
   const [alunos, setAlunos] = useState<Aluno[]>([]);
@@ -114,6 +128,8 @@ export function AvaliacaoCorrigir() {
     streamRef.current = null;
     contagemConfirmacaoRef.current = 0;
     ultimoFolhaIdRef.current = null;
+    folhaIgnoradaRef.current = null;
+    falhasFolhaRef.current = { folhaId: null, count: 0 };
     setStatusCamera('parada');
   }
 
@@ -163,6 +179,13 @@ export function AvaliacaoCorrigir() {
             try { lido = JSON.parse(code.data); } catch { lido = null; }
             const folhaIdLido = lido?.payload?.folha_id ?? null;
 
+            // Essa folha já falhou demais vezes seguidas — não tenta de novo
+            // sozinho (evita loop infinito), só mostra o aviso já definido.
+            if (folhaIdLido && folhaIdLido === folhaIgnoradaRef.current) {
+              loop();
+              return;
+            }
+
             if (folhaIdLido && folhaIdLido === ultimoFolhaIdRef.current) {
               contagemConfirmacaoRef.current += 1;
             } else {
@@ -178,10 +201,32 @@ export function AvaliacaoCorrigir() {
                 scanAtivoRef.current = false;
                 return; // sai do loop — avançou de etapa
               }
+
+              if (falhasFolhaRef.current.folhaId === folhaIdLido) {
+                falhasFolhaRef.current.count += 1;
+              } else {
+                falhasFolhaRef.current = { folhaId: folhaIdLido, count: 1 };
+              }
+
+              if (falhasFolhaRef.current.count >= MAX_FALHAS_CONSECUTIVAS) {
+                folhaIgnoradaRef.current = folhaIdLido;
+                setAvisoScan('');
+                setErro(
+                  (MENSAGENS_ERRO_QR[resultado] || 'Não foi possível validar esta folha.') +
+                  ' Isso costuma acontecer quando a folha foi gerada com uma chave de assinatura de outro ambiente (ex: teste local vs. produção) — gere uma folha nova aqui, ou selecione o aluno manualmente abaixo.'
+                );
+              } else {
+                setAvisoScan('QR não confere, tentando de novo...');
+              }
+
               contagemConfirmacaoRef.current = 0;
               ultimoFolhaIdRef.current = null;
               processandoRef.current = false;
             }
+          } else if (!processandoRef.current) {
+            ultimoFolhaIdRef.current = null;
+            contagemConfirmacaoRef.current = 0;
+            setAvisoScan('');
           }
         }
         loop();
@@ -203,31 +248,25 @@ export function AvaliacaoCorrigir() {
     canvasFull.getContext('2d')!.drawImage(video, 0, 0);
     const blob: Blob = await new Promise(res => canvasFull.toBlob(b => res(b as Blob), 'image/jpeg', 0.92));
     const file = new File([blob], 'folha.jpg', { type: 'image/jpeg' });
-    return processarQrValidado(lido, file);
+    // silencioso=true: quem decide se/quando mostrar o erro é o loop da
+    // câmera (que tenta de novo antes de desistir), não esta função.
+    return processarQrValidado(lido, file, true);
   }
 
   // Núcleo compartilhado: valida a assinatura do QR já decodificado (venha
   // da câmera ao vivo ou de um arquivo estático) e segue o fluxo normal.
-  async function processarQrValidado(lido: QrAssinadoLido | null, file: File): Promise<ResultadoDeteccao> {
-    if (!lido?.payload || !lido?.assinatura) {
-      setErro('QR Code inválido — não é de uma folha gerada por este sistema.');
-      return 'invalido';
+  async function processarQrValidado(lido: QrAssinadoLido | null, file: File, silencioso = false): Promise<ResultadoDeteccao> {
+    function falhar(resultado: ResultadoDeteccao): ResultadoDeteccao {
+      if (!silencioso) setErro(MENSAGENS_ERRO_QR[resultado] || 'Não foi possível validar esta folha.');
+      return resultado;
     }
+    if (!lido?.payload || !lido?.assinatura) return falhar('invalido');
     const { payload, assinatura } = lido;
     const assinaturaValida = await verificarQr(payload, assinatura);
-    if (!assinaturaValida) {
-      setErro('QR Code adulterado ou inválido. A assinatura não confere — use uma folha original.');
-      return 'adulterado';
-    }
-    if (payload.prova_id !== id) {
-      setErro('Esta folha pertence a outra avaliação.');
-      return 'outra_prova';
-    }
+    if (!assinaturaValida) return falhar('adulterado');
+    if (payload.prova_id !== id) return falhar('outra_prova');
     const aluno = alunos.find(a => a.id === payload.aluno_id);
-    if (!aluno) {
-      setErro('Aluno da folha não encontrado nesta turma.');
-      return 'aluno_nao_encontrado';
-    }
+    if (!aluno) return falhar('aluno_nao_encontrado');
 
     setErro('');
     setAvisoScan('');
@@ -549,7 +588,13 @@ export function AvaliacaoCorrigir() {
                 </div>
               )}
             </div>
-          ) : (
+          ) : null}
+          {modoCamera && erro && (
+            <div className="flex items-start gap-2 text-sm text-error bg-error-container rounded-xl px-3 py-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" /><span>{erro}</span>
+            </div>
+          )}
+          {!modoCamera && (
             <div style={{ position: 'relative', width: '100%', borderRadius: 16, border: '2px dashed #94a3b8', overflow: 'hidden', background: analisando ? '#eff6ff' : '#fff' }}>
               {analisando && (
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#eff6ff', zIndex: 2, pointerEvents: 'none' }}>
