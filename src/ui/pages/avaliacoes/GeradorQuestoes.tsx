@@ -186,9 +186,18 @@ export function GeradorQuestoes() {
 
   async function handleSalvarNoBanco() {
     setSalvandoBanco(true);
+    setErro('');
     setMensagemBanco('');
     try {
       const paraSalvar = questoes.filter(q => incluirNaoConformes || q.conformeReferenciaOficial);
+      if (paraSalvar.length === 0) {
+        // Acontece quando todas as questões geradas são de tipos fora do
+        // padrão oficial (Verdadeiro/Falso, Associação, Completar) e a caixa
+        // "Incluir... fora do padrão" está desmarcada — sem isso, o filtro
+        // zera a lista e o professor via "nada acontecer" ao salvar.
+        setErro('Nenhuma questão foi salva: todas as geradas são de tipos fora do padrão oficial (Verdadeiro/Falso, Associação ou Completar). Marque a caixa "Incluir na exportação/banco questões fora do padrão oficial" acima e tente de novo.');
+        return;
+      }
       await salvarQuestoesNoBanco(paraSalvar, params);
       setMensagemBanco(`${paraSalvar.length} questão(ões) salva(s) no Banco de Questões.`);
     } catch (e) {
