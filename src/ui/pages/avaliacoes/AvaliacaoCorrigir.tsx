@@ -613,7 +613,7 @@ export function AvaliacaoCorrigir() {
   const alternativas = avaliacao.alternativas?.length ? avaliacao.alternativas : ['A', 'B', 'C', 'D'];
 
   return (
-    <div className="py-4 space-y-4">
+    <div className={['py-4 space-y-4', etapa === 'aguardando_foto' ? 'pb-24' : ''].join(' ')}>
       <div className="flex items-center gap-2">
         <button onClick={() => { pararCamera(); navigate('/avaliacoes'); }} className="p-1 rounded-lg text-on-surface-variant">
           <ArrowLeft className="w-5 h-5" />
@@ -706,13 +706,13 @@ export function AvaliacaoCorrigir() {
           ) : null}
 
           {etapa === 'aguardando_foto' && (
-            <div className="flex gap-2">
+            <div className="fixed bottom-20 left-4 right-4 max-w-md mx-auto z-20 flex gap-2">
               <button onClick={retomarEscaneamento} disabled={capturandoFoto || analisando}
-                className="px-4 py-3 rounded-2xl border border-outline-variant text-on-surface-variant text-sm disabled:opacity-50">
+                className="px-4 py-3 rounded-2xl border border-outline-variant bg-surface text-on-surface-variant text-sm shadow-lg disabled:opacity-50">
                 Cancelar
               </button>
               <button onClick={tirarFotoCompleta} disabled={capturandoFoto || analisando}
-                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-on-primary font-semibold disabled:opacity-90">
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-on-primary font-semibold shadow-lg disabled:opacity-90">
                 {capturandoFoto || analisando
                   ? (<><RefreshCw className="w-4 h-4 animate-spin" /> {analisando ? 'Analisando com IA...' : 'Capturando...'}</>)
                   : (<>📸 Fotografar folha</>)}
