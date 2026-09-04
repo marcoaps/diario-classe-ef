@@ -308,12 +308,17 @@ async function desenharFolhaQR(
   const BUBBLE_GAP = 46;
   const Q_START_X = CX + 8;
   const Q_START_Y = instrY + 90;
-  const areaDisponivelAltura = H - PAD - MARK - 20 - Q_START_Y - (qtdDisc > 0 ? 24 : 0);
+  // Espaço extra entre o título "QUESTÕES OBJETIVAS"/linha e a 1ª questão —
+  // sem isso a bolha da questão 1 ficava colada no cabeçalho.
+  const GAP_APOS_CABECALHO = 16;
+  const INICIO_BOLHAS_Y = Q_START_Y + GAP_APOS_CABECALHO;
+  const areaDisponivelAltura = H - PAD - MARK - 20 - INICIO_BOLHAS_Y - (qtdDisc > 0 ? 24 : 0);
   // Se houver questões discursivas, reserva espaço fixo por caixa (mín. 90px cada);
   // o resto da altura disponível é dividido entre as linhas de bolhas objetivas.
   const alturaReservadaDiscursivas = qtdDisc * 95 + (qtdDisc > 0 ? 12 : 0);
   const alturaParaObjetivas = Math.max(0, areaDisponivelAltura - alturaReservadaDiscursivas);
   const Q_ROW_H = qtdObj > 0 ? Math.max(30, Math.min(52, alturaParaObjetivas / qtdObj)) : 0;
+  const ULTIMA_COLUNA_X = Q_START_X + 46 + (alternativas.length - 1) * BUBBLE_GAP;
 
   if (qtdObj > 0) {
     ctx.fillStyle = '#1e293b';
@@ -327,7 +332,7 @@ async function desenharFolhaQR(
     ctx.stroke();
 
     for (let i = 0; i < qtdObj; i++) {
-      const qy = Q_START_Y + i * Q_ROW_H + Q_ROW_H / 2;
+      const qy = INICIO_BOLHAS_Y + i * Q_ROW_H + Q_ROW_H / 2;
       if (i % 2 === 0) {
         ctx.fillStyle = '#f8fafc';
         ctx.fillRect(Q_START_X - 4, qy - Q_ROW_H / 2 + 2, qrX - Q_START_X - 8, Q_ROW_H - 4);
@@ -351,11 +356,26 @@ async function desenharFolhaQR(
         ctx.textAlign = 'left';
       });
     }
+
+    // Marcadores da coluna de respostas — 4 cantos ao redor só das bolhas
+    // (menores que os marcadores de página), pra o professor conseguir
+    // enquadrar exatamente essa área ao fotografar só a coluna, sem precisar
+    // pegar a folha inteira.
+    const MARK_COL = 12;
+    const colTop = INICIO_BOLHAS_Y - 10;
+    const colBottom = INICIO_BOLHAS_Y + qtdObj * Q_ROW_H + 6;
+    const colLeft = Q_START_X - 10;
+    const colRight = ULTIMA_COLUNA_X + BUBBLE_R + 12;
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(colLeft - MARK_COL, colTop - MARK_COL, MARK_COL, MARK_COL);
+    ctx.fillRect(colRight, colTop - MARK_COL, MARK_COL, MARK_COL);
+    ctx.fillRect(colLeft - MARK_COL, colBottom, MARK_COL, MARK_COL);
+    ctx.fillRect(colRight, colBottom, MARK_COL, MARK_COL);
   }
 
   // Questões subjetivas — uma caixa por questão, altura dividida igualmente.
   if (qtdDisc > 0) {
-    const subjStartY = Q_START_Y + qtdObj * Q_ROW_H + 18;
+    const subjStartY = INICIO_BOLHAS_Y + qtdObj * Q_ROW_H + 18;
     const boxH = Math.max(70, (H - PAD - MARK - 20 - subjStartY - (qtdDisc - 1) * 12) / qtdDisc);
     const HDR_H = 22;
     const GAP = 12;
