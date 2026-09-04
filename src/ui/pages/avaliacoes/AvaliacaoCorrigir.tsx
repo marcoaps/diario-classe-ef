@@ -385,11 +385,7 @@ export function AvaliacaoCorrigir() {
         }
         setRespostas(normalizado);
       } else {
-        // DIAGNÓSTICO TEMPORÁRIO — mostra a resposta crua da API pra achar a
-        // causa exata (remover depois de identificar o problema).
-        console.log('[diagnostico-ia] resposta completa da API:', JSON.stringify(data));
-        const bruto = JSON.stringify(data).slice(0, 500);
-        setErro(`A IA não conseguiu detectar as respostas automaticamente. Revise e preencha manualmente abaixo. [debug: ${bruto}]`);
+        setErro('A IA não conseguiu detectar as respostas automaticamente — confira se a folha inteira apareceu na foto (não só o QR). Revise e preencha manualmente abaixo.');
         setRespostas(vazio);
       }
       setFotoPreview(previewUrl);
@@ -568,10 +564,12 @@ export function AvaliacaoCorrigir() {
         <div className="space-y-4">
           <div className="bg-secondary-container rounded-2xl p-4">
             <p className="text-sm font-medium text-on-secondary-container">
-              {modoCamera ? 'Aponte a câmera para o QR Code da folha.' : 'Escolha a foto da folha preenchida do aluno.'}
+              {modoCamera ? 'Enquadre a FOLHA INTEIRA — não aproxime só no QR.' : 'Escolha a foto da folha preenchida do aluno.'}
             </p>
             <p className="text-xs text-on-secondary-container mt-1">
-              O sistema lê o QR Code exclusivo da folha e detecta as respostas com IA.
+              {modoCamera
+                ? 'O QR é reconhecido automaticamente mesmo de longe — mas a IA só consegue ler as respostas se a folha toda aparecer na foto.'
+                : 'O sistema lê o QR Code exclusivo da folha e detecta as respostas com IA.'}
             </p>
           </div>
 
@@ -598,6 +596,9 @@ export function AvaliacaoCorrigir() {
               <canvas ref={scanCanvasRef} style={{ display: 'none' }} />
               {/* Viewfinder */}
               <div style={{ position: 'absolute', inset: 24, border: '3px solid rgba(255,255,255,0.6)', borderRadius: 16, pointerEvents: 'none' }} />
+              <div style={{ position: 'absolute', left: 0, right: 0, top: 0, padding: '10px 14px', background: 'linear-gradient(rgba(0,0,0,0.65), transparent)', textAlign: 'center' }}>
+                <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>📄 Enquadre a folha inteira, não só o QR</span>
+              </div>
               <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '10px 14px', background: 'linear-gradient(transparent, rgba(0,0,0,0.65))', display: 'flex', alignItems: 'center', gap: 8 }}>
                 {(statusCamera === 'iniciando' || statusCamera === 'procurando') && (
                   <RefreshCw className={statusCamera === 'procurando' ? '' : 'animate-spin'} style={{ width: 16, height: 16, color: '#fff' }} />
