@@ -74,6 +74,7 @@ export function AvaliacaoCorrigir() {
   const [statusCamera, setStatusCamera] = useState<'parada' | 'iniciando' | 'procurando' | 'erro'>('parada');
   const [erroCamera, setErroCamera] = useState('');
   const [tentativaCamera, setTentativaCamera] = useState(0);
+  const [capturandoFoto, setCapturandoFoto] = useState(false);
 
   useEffect(() => {
     async function init() {
@@ -324,18 +325,30 @@ export function AvaliacaoCorrigir() {
   // pra IA. Só é chamado depois que o aluno já foi identificado pelo QR.
   async function tirarFotoCompleta() {
     const video = videoRef.current;
-    if (!video || video.videoWidth === 0) return;
-    const canvasFull = document.createElement('canvas');
-    canvasFull.width = video.videoWidth;
-    canvasFull.height = video.videoHeight;
-    canvasFull.getContext('2d')!.drawImage(video, 0, 0);
-    const blob: Blob = await new Promise(res => canvasFull.toBlob(b => res(b as Blob), 'image/jpeg', 0.92));
-    const file = new File([blob], 'folha.jpg', { type: 'image/jpeg' });
-    const hash = await calcularHash(file);
-    setArquivoHash(hash);
-    const url = URL.createObjectURL(file);
-    pararCamera();
-    await analisarFolhaComIA(file, url);
+    setErro('');
+    if (!video || video.videoWidth === 0) {
+      setErro('A câmera ainda não está pronta. Aguarde um instante e tente de novo.');
+      return;
+    }
+    setCapturandoFoto(true);
+    try {
+      const canvasFull = document.createElement('canvas');
+      canvasFull.width = video.videoWidth;
+      canvasFull.height = video.videoHeight;
+      canvasFull.getContext('2d')!.drawImage(video, 0, 0);
+      const blob: Blob | null = await new Promise(res => canvasFull.toBlob(res, 'image/jpeg', 0.92));
+      if (!blob) throw new Error('Não foi possível gerar a foto a partir da câmera.');
+      const file = new File([blob], 'folha.jpg', { type: 'image/jpeg' });
+      const hash = await calcularHash(file);
+      setArquivoHash(hash);
+      const url = URL.createObjectURL(file);
+      pararCamera();
+      await analisarFolhaComIA(file, url);
+    } catch (e) {
+      setErro('Erro ao capturar a foto: ' + ((e as Error)?.message || 'tente de novo.'));
+    } finally {
+      setCapturandoFoto(false);
+    }
   }
 
   // Lê o QR de uma imagem estática (upload de arquivo/galeria) — nesse
@@ -694,12 +707,15 @@ export function AvaliacaoCorrigir() {
 
           {etapa === 'aguardando_foto' && (
             <div className="flex gap-2">
-              <button onClick={retomarEscaneamento} className="px-4 py-3 rounded-2xl border border-outline-variant text-on-surface-variant text-sm">
+              <button onClick={retomarEscaneamento} disabled={capturandoFoto || analisando}
+                className="px-4 py-3 rounded-2xl border border-outline-variant text-on-surface-variant text-sm disabled:opacity-50">
                 Cancelar
               </button>
-              <button onClick={tirarFotoCompleta} disabled={analisando}
-                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-on-primary font-semibold disabled:opacity-60">
-                📸 Fotografar folha
+              <button onClick={tirarFotoCompleta} disabled={capturandoFoto || analisando}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-on-primary font-semibold disabled:opacity-90">
+                {capturandoFoto || analisando
+                  ? (<><RefreshCw className="w-4 h-4 animate-spin" /> {analisando ? 'Analisando com IA...' : 'Capturando...'}</>)
+                  : (<>📸 Fotografar folha</>)}
               </button>
             </div>
           )}
