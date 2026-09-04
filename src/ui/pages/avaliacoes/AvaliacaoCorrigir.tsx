@@ -621,7 +621,7 @@ export function AvaliacaoCorrigir() {
               </p>
               <p className="text-xs text-on-secondary-container mt-1">
                 {modoCamera
-                  ? 'Depois de identificar o aluno, o app pede pra você afastar e fotografar a folha inteira.'
+                  ? 'Depois de identificar o aluno, o app pede uma foto só da coluna das respostas.'
                   : 'O sistema lê o QR Code exclusivo da folha e detecta as respostas com IA.'}
               </p>
             </div>
@@ -633,7 +633,7 @@ export function AvaliacaoCorrigir() {
                 ✅ {alunoDetectado.numero_chamada}. {alunoDetectado.nome}
               </p>
               <p className="text-xs text-on-tertiary-container mt-1">
-                Agora afaste a câmera até a folha inteira aparecer e toque em "Fotografar folha".
+                Agora enquadre a coluna das respostas (as bolhas de 1 a {avaliacao?.quantidade_objetivas ?? '…'}) — não precisa da folha inteira nem do QR — e toque em "Fotografar folha".
               </p>
             </div>
           )}
@@ -670,7 +670,7 @@ export function AvaliacaoCorrigir() {
               )}
               {etapa === 'aguardando_foto' && (
                 <div style={{ position: 'absolute', left: 0, right: 0, top: 0, padding: '10px 14px', background: 'linear-gradient(rgba(0,0,0,0.65), transparent)', textAlign: 'center' }}>
-                  <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>📄 Afaste até a folha inteira aparecer</span>
+                  <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>📄 Enquadre só a coluna das respostas</span>
                 </div>
               )}
               <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '10px 14px', background: 'linear-gradient(transparent, rgba(0,0,0,0.65))', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -735,7 +735,7 @@ export function AvaliacaoCorrigir() {
               </div>
             </div>
           )}
-          {etapa === 'identificar' && (
+          {etapa === 'identificar' && !modoCamera && (
           <p className="text-xs text-center text-on-surface-variant">
             Mantenha a folha inteira visível, sem sombras, sem cortar os cantos. Fotografe de cima, com boa iluminação.
           </p>
