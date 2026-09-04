@@ -385,7 +385,11 @@ export function AvaliacaoCorrigir() {
         }
         setRespostas(normalizado);
       } else {
-        setErro('A IA não conseguiu detectar as respostas automaticamente. Revise e preencha manualmente abaixo.');
+        // DIAGNÓSTICO TEMPORÁRIO — mostra a resposta crua da API pra achar a
+        // causa exata (remover depois de identificar o problema).
+        console.log('[diagnostico-ia] resposta completa da API:', JSON.stringify(data));
+        const bruto = JSON.stringify(data).slice(0, 500);
+        setErro(`A IA não conseguiu detectar as respostas automaticamente. Revise e preencha manualmente abaixo. [debug: ${bruto}]`);
         setRespostas(vazio);
       }
       setFotoPreview(previewUrl);
