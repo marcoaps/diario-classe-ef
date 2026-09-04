@@ -9,22 +9,49 @@
 
 import type { QuestaoGerada } from './tiposGeradorQuestoes';
 
+type FotoPexels = { src: { medium: string; small: string } };
+
+async function pesquisarPexels(query: string, page: number): Promise<FotoPexels[]> {
+  try {
+    const resp = await fetch(`/api/pexels?query=${encodeURIComponent(query)}&page=${page}`);
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return (data.photos ?? []) as FotoPexels[];
+  } catch {
+    return [];
+  }
+}
+
+function urlDaFoto(foto: FotoPexels | undefined): string | null {
+  return foto?.src?.medium ?? foto?.src?.small ?? null;
+}
+
 /** Busca 1 foto no Pexels para a query informada. Retorna a URL (tamanho "medium") ou null se não encontrar/der erro. */
 export async function buscarImagemPexels(query: string): Promise<string | null> {
-  try {
-    const resp = await fetch(`/api/pexels?query=${encodeURIComponent(query)}&per_page=1`);
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    return data.photos?.[0]?.src?.medium ?? data.photos?.[0]?.src?.small ?? null;
-  } catch {
-    return null;
-  }
+  const fotos = await pesquisarPexels(query, 1);
+  return urlDaFoto(fotos[0]);
 }
 
 /**
  * Preenche `imagemUrl` em todas as questões que tenham `imagemQuery` definido
  * (ou seja, que a própria IA sinalizou precisar de um suporte visual).
- * Busca em paralelo, mas não falha o fluxo todo se uma busca individual der erro.
+ *
+ * Duas medidas contra fotos repetidas entre questões da MESMA avaliação —
+ * bug real observado: questões sobre o mesmo esporte/subtema geravam
+ * `imagemQuery`s parecidos, que batiam no mesmo resultado nº 1 do Pexels, e
+ * a mesma foto acabava aparecendo em várias questões diferentes (ex: uma
+ * prova de handebol onde a questão de drible, a de passos e a de arremesso
+ * mostravam todas a mesma foto de jogador saltando):
+ *  1. Cada questão busca numa página distinta do Pexels (`page` cicla por
+ *     índice), então mesmo queries parecidos tendem a trazer conjuntos de
+ *     fotos diferentes.
+ *  2. Mesmo assim, se a página já trouxer só foto(s) usada(s) por uma
+ *     questão anterior desta mesma leva, tenta a página seguinte antes de
+ *     aceitar uma repetida como último recurso (melhor repetir do que ficar
+ *     sem imagem nenhuma).
+ *
+ * Sequencial (não em paralelo): a escolha de cada questão depende de quais
+ * URLs as questões anteriores já usaram.
  */
 export async function preencherImagensDasQuestoes(
   questoes: QuestaoGerada[],
@@ -33,17 +60,39 @@ export async function preencherImagensDasQuestoes(
   const comImagem = questoes.filter(q => q.imagemQuery);
   if (comImagem.length === 0) return questoes;
 
+  const PAGINAS_DISTINTAS = 5;
   let concluidas = 0;
   const urlPorId = new Map<string, string | null>();
+  const usadas = new Set<string>();
 
-  await Promise.all(
-    comImagem.map(async q => {
-      const url = await buscarImagemPexels(q.imagemQuery as string);
-      urlPorId.set(q.idTemporario, url);
-      concluidas += 1;
-      onProgresso?.(concluidas, comImagem.length);
-    })
-  );
+  for (let i = 0; i < comImagem.length; i++) {
+    const q = comImagem[i];
+    const query = q.imagemQuery as string;
+    const paginaBase = (i % PAGINAS_DISTINTAS) + 1;
+
+    let escolhida: string | null = null;
+    let fallback: string | null = null;
+
+    for (const pagina of [paginaBase, paginaBase + 1]) {
+      const fotos = await pesquisarPexels(query, pagina);
+      if (!fallback && fotos[0]) fallback = urlDaFoto(fotos[0]);
+
+      const inedita = fotos.find(f => {
+        const url = urlDaFoto(f);
+        return url && !usadas.has(url);
+      });
+      if (inedita) {
+        escolhida = urlDaFoto(inedita);
+        break;
+      }
+    }
+
+    const url = escolhida ?? fallback;
+    if (url) usadas.add(url);
+    urlPorId.set(q.idTemporario, url);
+    concluidas += 1;
+    onProgresso?.(concluidas, comImagem.length);
+  }
 
   return questoes.map(q => (urlPorId.has(q.idTemporario) ? { ...q, imagemUrl: urlPorId.get(q.idTemporario) ?? null } : q));
 }
