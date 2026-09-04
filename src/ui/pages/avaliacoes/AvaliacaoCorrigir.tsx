@@ -70,6 +70,8 @@ export function AvaliacaoCorrigir() {
   // Modo de captura: câmera ao vivo (padrão, ganha tempo) ou arquivo/galeria.
   const [modoCamera, setModoCamera] = useState(true);
   const [statusCamera, setStatusCamera] = useState<'parada' | 'iniciando' | 'procurando' | 'erro'>('parada');
+  const [erroCamera, setErroCamera] = useState('');
+  const [tentativaCamera, setTentativaCamera] = useState(0);
 
   useEffect(() => {
     async function init() {
@@ -141,6 +143,19 @@ export function AvaliacaoCorrigir() {
 
     async function iniciar() {
       setStatusCamera('iniciando');
+      setErroCamera('');
+
+      // Libera qualquer stream anterior que porventura ainda esteja aberto
+      // (ex: efeito reiniciando antes do cleanup anterior soltar a câmera).
+      streamRef.current?.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setErroCamera('Este navegador não suporta acesso à câmera nesta página (verifique se está acessando por HTTPS).');
+        setStatusCamera('erro');
+        return;
+      }
+
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: 'environment' } },
@@ -154,7 +169,15 @@ export function AvaliacaoCorrigir() {
         }
         setStatusCamera('procurando');
         loop();
-      } catch {
+      } catch (e) {
+        const nome = (e as Error)?.name || '';
+        const detalhe =
+          nome === 'NotAllowedError' ? 'Permissão de câmera negada. Toque no cadeado/ícone ao lado do endereço do site e permita o acesso à câmera.' :
+          nome === 'NotFoundError' ? 'Nenhuma câmera foi encontrada neste aparelho.' :
+          nome === 'NotReadableError' ? 'A câmera parece estar em uso por outro aplicativo. Feche outros apps que possam estar usando a câmera e tente de novo.' :
+          nome === 'OverconstrainedError' ? 'Não foi possível configurar a câmera traseira neste aparelho.' :
+          `${nome || 'Erro desconhecido'}${(e as Error)?.message ? ' — ' + (e as Error).message : ''}`;
+        setErroCamera(detalhe);
         setStatusCamera('erro');
       }
     }
@@ -236,7 +259,7 @@ export function AvaliacaoCorrigir() {
     iniciar();
     return () => { cancelado = true; pararCamera(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modoCamera, etapa, avaliacao?.id, alunos.length]);
+  }, [modoCamera, etapa, avaliacao?.id, alunos.length, tentativaCamera]);
 
   // Congela o frame ATUAL em resolução cheia (melhor qualidade pra IA ler as
   // bolhas do que o frame reduzido usado só pra achar o QR) e segue o mesmo
@@ -578,7 +601,7 @@ export function AvaliacaoCorrigir() {
                 <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>
                   {statusCamera === 'iniciando' && 'Ativando câmera...'}
                   {statusCamera === 'procurando' && (avisoScan || 'Procurando QR Code...')}
-                  {statusCamera === 'erro' && 'Não foi possível acessar a câmera. Use "Galeria / arquivo" abaixo.'}
+                  {statusCamera === 'erro' && (erroCamera || 'Não foi possível acessar a câmera. Use "Galeria / arquivo" abaixo.')}
                 </span>
               </div>
               {analisando && (
@@ -589,6 +612,14 @@ export function AvaliacaoCorrigir() {
               )}
             </div>
           ) : null}
+          {modoCamera && statusCamera === 'erro' && (
+            <button
+              onClick={() => setTentativaCamera(t => t + 1)}
+              className="w-full py-2 rounded-xl border border-outline-variant text-on-surface text-xs font-semibold"
+            >
+              🔄 Tentar acessar a câmera de novo
+            </button>
+          )}
           {modoCamera && erro && (
             <div className="flex items-start gap-2 text-sm text-error bg-error-container rounded-xl px-3 py-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" /><span>{erro}</span>
