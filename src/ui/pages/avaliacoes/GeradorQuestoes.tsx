@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Database, FileDown, FileText, Sparkles } from 'lucide-react';
+import { ArrowLeft, ClipboardCheck, Database, FileDown, FileText, Sparkles } from 'lucide-react';
 import { GeradorQuestoesFormulario } from './GeradorQuestoesFormulario';
 import { GeradorQuestoesCard } from './GeradorQuestoesCard';
 import { criarParametrosPadrao } from './tiposGeradorQuestoes';
 import type { ParametrosGeracao, QuestaoGerada } from './tiposGeradorQuestoes';
+import type { QuestaoObjetiva } from './tiposCorretorProvas';
 import { TAMANHO_LOTE, gerarQuestoesCompletas } from './geradorQuestoesIA';
 import { revisarEAprovarQuestao, revisarLote } from './revisaoAutomaticaQuestoes';
 import { OPCOES_EXPORTACAO_PADRAO, exportarQuestoesPDF, exportarQuestoesWord } from './exportarQuestoesGerador';
@@ -207,6 +208,56 @@ export function GeradorQuestoes() {
     }
   }
 
+  /**
+   * O Gerador só salva no Banco de Questões (tabela separada) — não cria uma
+   * avaliação sozinho. Esta função monta o formulário de Nova Avaliação já
+   * preenchido com as questões geradas, pra fechar esse fluxo sem exigir que
+   * o professor redigite tudo. Só "múltipla_escolha" vira objetiva (é o único
+   * tipo compatível com a folha de respostas A-D) e "dissertativa"/
+   * "resposta_curta" viram discursivas; V/F, Associação e Completar ainda não
+   * têm como ser lidos pela folha de bolhas, então ficam de fora.
+   */
+  function handleCriarAvaliacao() {
+    const objetivas = questoes.filter(q => q.tipoQuestao === 'multipla_escolha' && q.alternativas?.length);
+    const discursivas = questoes.filter(q => q.tipoQuestao === 'dissertativa' || q.tipoQuestao === 'resposta_curta');
+    const ignoradas = questoes.length - objetivas.length - discursivas.length;
+
+    if (objetivas.length === 0 && discursivas.length === 0) {
+      setErro('Nenhuma questão gerada é compatível com o formato de avaliação hoje (múltipla escolha ou dissertativa/resposta curta). Verdadeiro/Falso, Associação e Completar ainda não são lidos na folha de respostas.');
+      return;
+    }
+
+    const questoesObjetivas: QuestaoObjetiva[] = objetivas.map((q, i) => ({
+      numero: i + 1,
+      enunciado: q.contexto ? `${q.contexto}\n\n${q.enunciado}` : q.enunciado,
+      alternativas: (q.alternativas || []).map(a => ({ letra: a.letra, texto: a.texto })),
+    }));
+    const gabarito: Record<string, string> = {};
+    objetivas.forEach((q, i) => {
+      const correta = q.alternativas?.find(a => a.correta);
+      if (correta) gabarito[String(i + 1)] = correta.letra;
+    });
+
+    const enunciadosDiscursivas: Record<string, string> = {};
+    discursivas.forEach((q, i) => {
+      enunciadosDiscursivas[String(objetivas.length + i + 1)] = q.contexto ? `${q.contexto}\n\n${q.enunciado}` : q.enunciado;
+    });
+
+    navigate('/avaliacoes', {
+      state: {
+        questoesGeradas: {
+          titulo: params.conteudo.trim().slice(0, 80),
+          disciplina: params.componenteCurricular,
+          bimestre: params.bimestre,
+          questoesObjetivas,
+          gabarito,
+          enunciadosDiscursivas,
+          ignoradas,
+        },
+      },
+    });
+  }
+
   function handleNovaGeracao() {
     setQuestoes([]);
     setErro('');
@@ -287,6 +338,12 @@ export function GeradorQuestoes() {
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-secondary-container text-on-secondary-container text-xs font-semibold disabled:opacity-60"
               >
                 <Database className="w-3.5 h-3.5" /> {salvandoBanco ? 'Salvando...' : 'Salvar no Banco de Questões'}
+              </button>
+              <button
+                onClick={handleCriarAvaliacao}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-semibold"
+              >
+                <ClipboardCheck className="w-3.5 h-3.5" /> Criar avaliação com estas questões
               </button>
             </div>
             {mensagemBanco && <p className="text-xs text-primary font-semibold">{mensagemBanco}</p>}

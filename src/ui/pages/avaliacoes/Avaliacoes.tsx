@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
 import { ClipboardList, Plus, QrCode, Camera, Trash2, ChevronDown, ChevronUp, BarChart2, Sparkles } from 'lucide-react';
 import type { Avaliacao, QuestaoObjetiva } from './tiposCorretorProvas';
@@ -20,11 +20,13 @@ function questaoVazia(numero: number): QuestaoObjetiva {
 
 export function Avaliacoes() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [lista, setLista] = useState<Avaliacao[]>([]);
   const [loading, setLoading] = useState(true);
   const [criando, setCriando] = useState(false);
   const [expandido, setExpandido] = useState<string | null>(null);
   const [erro, setErro] = useState('');
+  const [avisoImportacao, setAvisoImportacao] = useState('');
 
   // Dados gerais
   const [titulo, setTitulo] = useState('');
@@ -87,6 +89,7 @@ export function Avaliacoes() {
     setValorTotalObjetivas('8.0'); setValorTotalDiscursivas('2.0');
     setQuestoesObjetivas(Array.from({ length: 8 }, (_, i) => questaoVazia(i + 1)));
     setGabarito({}); setEnunciadosDiscursivas({ '9': '', '10': '' });
+    setAvisoImportacao('');
   }
 
   async function gerarQuestoesObjetivasIA() {
@@ -186,6 +189,31 @@ export function Avaliacoes() {
   }
 
   useEffect(() => { carregar(); }, []);
+
+  // Chegou aqui vindo do "Criar avaliação com estas questões" do Gerador de
+  // Questões: abre o formulário já preenchido, mas com turma/data/pontuação
+  // em branco para o professor revisar antes de salvar. Limpa o state da
+  // navegação em seguida para não reaplicar isso num back/refresh.
+  useEffect(() => {
+    const dados = (location.state as any)?.questoesGeradas;
+    if (!dados) return;
+    setCriando(true);
+    setTitulo(dados.titulo || '');
+    setDisciplina(dados.disciplina || 'Educação Física');
+    setBimestre(dados.bimestre || '');
+    setQtdObjetivasStr(String(dados.questoesObjetivas.length));
+    setQtdDiscursivasStr(String(Object.keys(dados.enunciadosDiscursivas).length));
+    setQuestoesObjetivas(dados.questoesObjetivas);
+    setGabarito(dados.gabarito);
+    setEnunciadosDiscursivas(dados.enunciadosDiscursivas);
+    setAvisoImportacao(
+      `Questões importadas do Gerador (${dados.questoesObjetivas.length} objetiva(s), ${Object.keys(dados.enunciadosDiscursivas).length} discursiva(s))`
+      + (dados.ignoradas > 0 ? ` — ${dados.ignoradas} ficaram de fora por não serem múltipla escolha/dissertativa.` : '.')
+      + ' Confira turma, bimestre, data e pontuação antes de salvar.'
+    );
+    navigate(location.pathname, { replace: true, state: {} });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
 
   async function carregar() {
     setLoading(true);
@@ -304,6 +332,10 @@ export function Avaliacoes() {
       {criando && (
         <div className="bg-surface border border-outline-variant rounded-2xl p-4 space-y-4">
           <p className="text-sm font-semibold text-on-surface">Nova avaliação</p>
+
+          {avisoImportacao && (
+            <div className="bg-secondary-container text-on-secondary-container text-xs px-3 py-2 rounded-xl">{avisoImportacao}</div>
+          )}
 
           <div className="space-y-3">
             <div>
