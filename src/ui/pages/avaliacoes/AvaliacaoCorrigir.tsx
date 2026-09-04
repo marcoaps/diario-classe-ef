@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../../../data/supabase';
+import { supabase, lancarNotaCorretorProva } from '../../../data/supabase';
 import { ArrowLeft, Upload, Camera, CheckCircle2, AlertCircle, Save, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import jsQR from 'jsqr';
 import type { Avaliacao, Aluno, QrPayload } from './tiposCorretorProvas';
@@ -68,6 +68,7 @@ export function AvaliacaoCorrigir() {
   const [ajustesFeitos, setAjustesFeitos] = useState<Array<{ questao: string; de: string; para: string }>>([]);
   const [resultados, setResultados] = useState<Array<{ aluno: Aluno; nota_final: number }>>([]);
   const [mostrarResultados, setMostrarResultados] = useState(false);
+  const [avisoLancamento, setAvisoLancamento] = useState('');
 
   // Modo de captura: câmera ao vivo (padrão, ganha tempo) ou arquivo/galeria.
   const [modoCamera, setModoCamera] = useState(true);
@@ -577,6 +578,22 @@ Retorne SOMENTE um objeto JSON com EXATAMENTE ${qtd} chaves (de "1" a "${qtd}"),
       await supabase.from('folhas_respostas').update({ status: 'corrigida' }).eq('id', folhaId);
     }
 
+    if (avaliacao.bimestre) {
+      try {
+        await lancarNotaCorretorProva(
+          avaliacao.turma_id,
+          Number(avaliacao.bimestre),
+          { numero: alunoDetectado.numero_chamada, nome: alunoDetectado.nome },
+          notaFinal
+        );
+        setAvisoLancamento(`Nota lançada no Diário — ${avaliacao.bimestre}º bimestre, turma ${avaliacao.turma_id}.`);
+      } catch (e: any) {
+        setAvisoLancamento('Corrigido, mas não consegui lançar no Diário (Notas Bimestrais): ' + e.message);
+      }
+    } else {
+      setAvisoLancamento('Corrigido, mas esta avaliação não tem bimestre definido — a nota não foi lançada no Diário. Edite a avaliação e defina o bimestre para lançar automaticamente.');
+    }
+
     setSalvando(false);
     const { data: res } = await supabase.from('avaliacoes_respostas').select('aluno_id, nota_final').eq('avaliacao_id', id);
     if (res) {
@@ -602,6 +619,7 @@ Retorne SOMENTE um objeto JSON com EXATAMENTE ${qtd} chaves (de "1" a "${qtd}"),
     setErro('');
     setAvisoScan('');
     setNotaDiscursivaStr('');
+    setAvisoLancamento('');
     if (inputRef.current) inputRef.current.value = '';
     setModoCamera(manterCamera);
   }
@@ -931,6 +949,20 @@ Retorne SOMENTE um objeto JSON com EXATAMENTE ${qtd} chaves (de "1" a "${qtd}"),
             <p className="text-3xl font-bold text-primary">{notaFinal.toFixed(1)}</p>
             <p className="text-xs text-on-surface-variant">de {(avaliacao.valor_total_objetivas + avaliacao.valor_total_discursivas).toFixed(1)} pts</p>
           </div>
+
+          {avisoLancamento && (
+            <div className={[
+              'rounded-2xl px-4 py-3 text-xs flex items-start gap-2',
+              avisoLancamento.startsWith('Nota lançada')
+                ? 'bg-green-50 text-green-700 border border-green-200'
+                : 'bg-amber-50 text-amber-700 border border-amber-200',
+            ].join(' ')}>
+              {avisoLancamento.startsWith('Nota lançada')
+                ? <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                : <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />}
+              <span>{avisoLancamento}</span>
+            </div>
+          )}
 
           <button onClick={() => proximaFolha()} className="w-full py-3 rounded-2xl bg-primary text-on-primary font-semibold">
             📷 Próxima folha (câmera já ligada)

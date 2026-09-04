@@ -198,6 +198,30 @@ export async function buscarNotas(turma: string, bimestre: number) {
   return data || [];
 }
 
+// Lança/atualiza no Diário (tabela `notas`) a nota de UMA prova corrigida no
+// Corretor de Provas. Busca a linha existente do aluno antes de sobrescrever
+// -- senão o upsert do salvarNotas() reseta situacao/faltas/nota_texto para
+// os valores padrão, apagando o que a professora já tinha preenchido ali.
+export async function lancarNotaCorretorProva(
+  turma: string,
+  bimestre: number,
+  aluno: { numero: number; nome: string },
+  nota: number
+) {
+  const nomeChave = limparAnotacaoDeSituacao(aluno.nome).toUpperCase();
+  const existentes = await buscarNotas(turma, bimestre);
+  const atual = existentes.find((n: any) => n.nome === nomeChave) as any;
+  await salvarNotas(turma, bimestre, [{
+    numero: aluno.numero,
+    nome: aluno.nome,
+    nota,
+    nota_texto: atual?.nota_texto ?? null,
+    situacao: atual?.situacao ?? 'Em Curso',
+    data_situacao: atual?.data_situacao ?? '',
+    faltas: atual?.faltas ?? 0,
+  }]);
+}
+
 // Corrige nomes/sobrenomes dos alunos da turma comparando por posição na lista
 // (mesma logica do "Sincronizar Nomes" do Dashboard) -- nao apaga nem recria
 // ninguem, entao IDs e historico ficam intactos. Casa por posicao (nao pelo
