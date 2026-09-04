@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
-import { ArrowLeft, Upload, CheckCircle2, AlertCircle, Save, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Upload, Camera, CheckCircle2, AlertCircle, Save, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import jsQR from 'jsqr';
 import type { Avaliacao, Aluno, QrPayload } from './tiposCorretorProvas';
 import { arredondar, valorPorQuestaoObjetiva } from './tiposCorretorProvas';
@@ -12,11 +12,26 @@ interface QrAssinadoLido {
 }
 
 type SituacaoQuestao = 'correta' | 'incorreta' | 'branco' | 'dupla';
+type ResultadoDeteccao = 'ok' | 'invalido' | 'adulterado' | 'outra_prova' | 'aluno_nao_encontrado';
+
+/** Frames consecutivos com o MESMO folha_id exigidos antes de capturar —
+ * evita capturar um frame borrado no instante exato em que o QR aparece. */
+const FRAMES_CONFIRMACAO = 2;
+/** Largura máxima do frame usado só pra procurar o QR (mais rápido que
+ * rodar jsQR na resolução cheia da câmera a cada frame). */
+const LARGURA_SCAN = 480;
 
 export function AvaliacaoCorrigir() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const scanCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanAtivoRef = useRef(false);
+  const processandoRef = useRef(false);
+  const ultimoFolhaIdRef = useRef<string | null>(null);
+  const contagemConfirmacaoRef = useRef(0);
 
   const [avaliacao, setAvaliacao] = useState<Avaliacao | null>(null);
   const [alunos, setAlunos] = useState<Aluno[]>([]);
@@ -30,12 +45,17 @@ export function AvaliacaoCorrigir() {
   const [salvando, setSalvando] = useState(false);
   const [analisando, setAnalisando] = useState(false);
   const [erro, setErro] = useState('');
+  const [avisoScan, setAvisoScan] = useState('');
   const [fotoPreview, setFotoPreview] = useState<string>('');
   const [arquivoHash, setArquivoHash] = useState<string>('');
   const [correcaoExistente, setCorrecaoExistente] = useState<{ nota_final: number; escaneado_em: string | null } | null>(null);
   const [ajustesFeitos, setAjustesFeitos] = useState<Array<{ questao: string; de: string; para: string }>>([]);
   const [resultados, setResultados] = useState<Array<{ aluno: Aluno; nota_final: number }>>([]);
   const [mostrarResultados, setMostrarResultados] = useState(false);
+
+  // Modo de captura: câmera ao vivo (padrão, ganha tempo) ou arquivo/galeria.
+  const [modoCamera, setModoCamera] = useState(true);
+  const [statusCamera, setStatusCamera] = useState<'parada' | 'iniciando' | 'procurando' | 'erro'>('parada');
 
   useEffect(() => {
     async function init() {
@@ -55,7 +75,7 @@ export function AvaliacaoCorrigir() {
     init();
   }, [id]);
 
-  async function calcularHash(file: File): Promise<string> {
+  async function calcularHash(file: File | Blob): Promise<string> {
     const buffer = await file.arrayBuffer();
     const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
     return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -85,13 +105,153 @@ export function AvaliacaoCorrigir() {
     return data;
   }
 
-  // Lê o QR da imagem, valida a assinatura no backend e identifica prova+aluno.
-  async function lerQRDaImagem(file: File) {
+  // ── Câmera ao vivo — a mesma lógica de decodificar+validar o QR é
+  // compartilhada com o upload de arquivo (fluxo de fallback abaixo).
+
+  function pararCamera() {
+    scanAtivoRef.current = false;
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
+    contagemConfirmacaoRef.current = 0;
+    ultimoFolhaIdRef.current = null;
+    setStatusCamera('parada');
+  }
+
+  useEffect(() => {
+    if (!modoCamera || etapa !== 'identificar') { pararCamera(); return; }
+
+    let cancelado = false;
+    scanAtivoRef.current = true;
+
+    async function iniciar() {
+      setStatusCamera('iniciando');
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+          audio: false,
+        });
+        if (cancelado) { stream.getTracks().forEach(t => t.stop()); return; }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+        setStatusCamera('procurando');
+        loop();
+      } catch {
+        setStatusCamera('erro');
+      }
+    }
+
+    function loop() {
+      if (!scanAtivoRef.current || cancelado) return;
+      requestAnimationFrame(async () => {
+        if (!scanAtivoRef.current || cancelado) return;
+        const video = videoRef.current;
+        const canvas = scanCanvasRef.current;
+        if (video && canvas && video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth > 0 && !processandoRef.current) {
+          const escala = Math.min(1, LARGURA_SCAN / video.videoWidth);
+          canvas.width = Math.round(video.videoWidth * escala);
+          canvas.height = Math.round(video.videoHeight * escala);
+          const ctx = canvas.getContext('2d')!;
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+          if (code) {
+            let lido: QrAssinadoLido | null = null;
+            try { lido = JSON.parse(code.data); } catch { lido = null; }
+            const folhaIdLido = lido?.payload?.folha_id ?? null;
+
+            if (folhaIdLido && folhaIdLido === ultimoFolhaIdRef.current) {
+              contagemConfirmacaoRef.current += 1;
+            } else {
+              ultimoFolhaIdRef.current = folhaIdLido;
+              contagemConfirmacaoRef.current = 1;
+            }
+
+            if (folhaIdLido && contagemConfirmacaoRef.current >= FRAMES_CONFIRMACAO) {
+              processandoRef.current = true;
+              setAvisoScan('QR encontrado! Capturando...');
+              const resultado = await capturarECorrigir(video, lido!);
+              if (resultado === 'ok') {
+                scanAtivoRef.current = false;
+                return; // sai do loop — avançou de etapa
+              }
+              contagemConfirmacaoRef.current = 0;
+              ultimoFolhaIdRef.current = null;
+              processandoRef.current = false;
+            }
+          }
+        }
+        loop();
+      });
+    }
+
+    iniciar();
+    return () => { cancelado = true; pararCamera(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modoCamera, etapa, avaliacao?.id, alunos.length]);
+
+  // Congela o frame ATUAL em resolução cheia (melhor qualidade pra IA ler as
+  // bolhas do que o frame reduzido usado só pra achar o QR) e segue o mesmo
+  // caminho de validação usado no upload de arquivo.
+  async function capturarECorrigir(video: HTMLVideoElement, lido: QrAssinadoLido): Promise<ResultadoDeteccao> {
+    const canvasFull = document.createElement('canvas');
+    canvasFull.width = video.videoWidth;
+    canvasFull.height = video.videoHeight;
+    canvasFull.getContext('2d')!.drawImage(video, 0, 0);
+    const blob: Blob = await new Promise(res => canvasFull.toBlob(b => res(b as Blob), 'image/jpeg', 0.92));
+    const file = new File([blob], 'folha.jpg', { type: 'image/jpeg' });
+    return processarQrValidado(lido, file);
+  }
+
+  // Núcleo compartilhado: valida a assinatura do QR já decodificado (venha
+  // da câmera ao vivo ou de um arquivo estático) e segue o fluxo normal.
+  async function processarQrValidado(lido: QrAssinadoLido | null, file: File): Promise<ResultadoDeteccao> {
+    if (!lido?.payload || !lido?.assinatura) {
+      setErro('QR Code inválido — não é de uma folha gerada por este sistema.');
+      return 'invalido';
+    }
+    const { payload, assinatura } = lido;
+    const assinaturaValida = await verificarQr(payload, assinatura);
+    if (!assinaturaValida) {
+      setErro('QR Code adulterado ou inválido. A assinatura não confere — use uma folha original.');
+      return 'adulterado';
+    }
+    if (payload.prova_id !== id) {
+      setErro('Esta folha pertence a outra avaliação.');
+      return 'outra_prova';
+    }
+    const aluno = alunos.find(a => a.id === payload.aluno_id);
+    if (!aluno) {
+      setErro('Aluno da folha não encontrado nesta turma.');
+      return 'aluno_nao_encontrado';
+    }
+
     setErro('');
+    setAvisoScan('');
     setIdentificacaoManual(false);
     const hash = await calcularHash(file);
     setArquivoHash(hash);
+    const url = URL.createObjectURL(file);
 
+    const existente = await verificarCorrecaoExistente(aluno.id);
+    setAlunoDetectado(aluno);
+    setFolhaId(payload.folha_id);
+    setFotoPreview(url);
+    if (existente) {
+      setCorrecaoExistente(existente);
+      setEtapa('ja_corrigida');
+      return 'ok';
+    }
+    await analisarFolhaComIA(file, url);
+    return 'ok';
+  }
+
+  // Lê o QR de uma imagem estática (upload de arquivo/galeria).
+  async function lerQRDaImagem(file: File) {
+    setErro('');
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = async () => {
@@ -108,42 +268,9 @@ export function AvaliacaoCorrigir() {
         setFotoPreview(url);
         return;
       }
-
-      let lido: QrAssinadoLido;
-      try {
-        lido = JSON.parse(code.data);
-        if (!lido.payload || !lido.assinatura) throw new Error();
-      } catch {
-        setErro('QR Code inválido — não é de uma folha gerada por este sistema.');
-        return;
-      }
-
-      const { payload, assinatura } = lido;
-      const assinaturaValida = await verificarQr(payload, assinatura);
-      if (!assinaturaValida) {
-        setErro('QR Code adulterado ou inválido. A assinatura não confere — use uma folha original.');
-        return;
-      }
-      if (payload.prova_id !== id) {
-        setErro('Esta folha pertence a outra avaliação.');
-        return;
-      }
-      const aluno = alunos.find(a => a.id === payload.aluno_id);
-      if (!aluno) {
-        setErro('Aluno da folha não encontrado nesta turma.');
-        return;
-      }
-
-      const existente = await verificarCorrecaoExistente(aluno.id);
-      setAlunoDetectado(aluno);
-      setFolhaId(payload.folha_id);
-      setFotoPreview(url);
-      if (existente) {
-        setCorrecaoExistente(existente);
-        setEtapa('ja_corrigida');
-        return;
-      }
-      await analisarFolhaComIA(file, url);
+      let lido: QrAssinadoLido | null = null;
+      try { lido = JSON.parse(code.data); } catch { lido = null; }
+      await processarQrValidado(lido, file);
     };
     img.src = url;
   }
@@ -219,6 +346,7 @@ export function AvaliacaoCorrigir() {
   // "identificação manual" no registro salvo (nunca some silenciosamente).
   function selecionarAlunoManual(aluno: Aluno) {
     if (!avaliacao) return;
+    setModoCamera(false);
     setAlunoDetectado(aluno);
     setFolhaId(null);
     setIdentificacaoManual(true);
@@ -328,7 +456,7 @@ export function AvaliacaoCorrigir() {
     setEtapa('salvo');
   }
 
-  function proximaFolha() {
+  function proximaFolha(manterCamera = true) {
     setEtapa('identificar');
     setAlunoDetectado(null);
     setFolhaId(null);
@@ -339,8 +467,10 @@ export function AvaliacaoCorrigir() {
     setCorrecaoExistente(null);
     setAjustesFeitos([]);
     setErro('');
+    setAvisoScan('');
     setNotaDiscursivaStr('');
     if (inputRef.current) inputRef.current.value = '';
+    setModoCamera(manterCamera);
   }
 
   if (loading) return (
@@ -358,7 +488,7 @@ export function AvaliacaoCorrigir() {
   return (
     <div className="py-4 space-y-4">
       <div className="flex items-center gap-2">
-        <button onClick={() => navigate('/avaliacoes')} className="p-1 rounded-lg text-on-surface-variant">
+        <button onClick={() => { pararCamera(); navigate('/avaliacoes'); }} className="p-1 rounded-lg text-on-surface-variant">
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div>
@@ -372,34 +502,76 @@ export function AvaliacaoCorrigir() {
         <div className="space-y-4">
           <div className="bg-secondary-container rounded-2xl p-4">
             <p className="text-sm font-medium text-on-secondary-container">
-              Fotografe a folha preenchida do aluno.
+              {modoCamera ? 'Aponte a câmera para o QR Code da folha.' : 'Escolha a foto da folha preenchida do aluno.'}
             </p>
             <p className="text-xs text-on-secondary-container mt-1">
               O sistema lê o QR Code exclusivo da folha e detecta as respostas com IA.
             </p>
           </div>
 
-          <div style={{ position: 'relative', width: '100%', borderRadius: 16, border: '2px dashed #94a3b8', overflow: 'hidden', background: analisando ? '#eff6ff' : '#fff' }}>
-            {analisando && (
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#eff6ff', zIndex: 2, pointerEvents: 'none' }}>
-                <RefreshCw style={{ width: 36, height: 36, color: '#2563eb' }} className="animate-spin" />
-                <span style={{ fontSize: 14, fontWeight: 600, color: '#2563eb' }}>Analisando com IA...</span>
-                <span style={{ fontSize: 12, color: '#64748b' }}>Aguarde alguns segundos</span>
-              </div>
-            )}
-            <input
-              ref={inputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleUploadFolha}
-              style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, zIndex: 3, cursor: 'pointer' }}
-            />
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '40px 16px', pointerEvents: 'none' }}>
-              <Upload style={{ width: 36, height: 36, color: '#64748b' }} />
-              <span style={{ fontSize: 15, fontWeight: 600, color: '#1e293b' }}>Escolher foto da folha</span>
-              <span style={{ fontSize: 12, color: '#64748b' }}>Galeria ou câmera</span>
-            </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setModoCamera(true)}
+              className={['flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold border',
+                modoCamera ? 'bg-primary text-on-primary border-primary' : 'bg-surface text-on-surface-variant border-outline-variant'].join(' ')}
+            >
+              <Camera className="w-4 h-4" /> Câmera (automático)
+            </button>
+            <button
+              onClick={() => setModoCamera(false)}
+              className={['flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold border',
+                !modoCamera ? 'bg-primary text-on-primary border-primary' : 'bg-surface text-on-surface-variant border-outline-variant'].join(' ')}
+            >
+              <Upload className="w-4 h-4" /> Galeria / arquivo
+            </button>
           </div>
+
+          {modoCamera ? (
+            <div style={{ position: 'relative', width: '100%', aspectRatio: '3/4', borderRadius: 16, overflow: 'hidden', background: '#0f172a' }}>
+              <video ref={videoRef} muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <canvas ref={scanCanvasRef} style={{ display: 'none' }} />
+              {/* Viewfinder */}
+              <div style={{ position: 'absolute', inset: 24, border: '3px solid rgba(255,255,255,0.6)', borderRadius: 16, pointerEvents: 'none' }} />
+              <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '10px 14px', background: 'linear-gradient(transparent, rgba(0,0,0,0.65))', display: 'flex', alignItems: 'center', gap: 8 }}>
+                {(statusCamera === 'iniciando' || statusCamera === 'procurando') && (
+                  <RefreshCw className={statusCamera === 'procurando' ? '' : 'animate-spin'} style={{ width: 16, height: 16, color: '#fff' }} />
+                )}
+                <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>
+                  {statusCamera === 'iniciando' && 'Ativando câmera...'}
+                  {statusCamera === 'procurando' && (avisoScan || 'Procurando QR Code...')}
+                  {statusCamera === 'erro' && 'Não foi possível acessar a câmera. Use "Galeria / arquivo" abaixo.'}
+                </span>
+              </div>
+              {analisando && (
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'rgba(15,23,42,0.85)' }}>
+                  <RefreshCw style={{ width: 36, height: 36, color: '#fff' }} className="animate-spin" />
+                  <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>Analisando com IA...</span>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ position: 'relative', width: '100%', borderRadius: 16, border: '2px dashed #94a3b8', overflow: 'hidden', background: analisando ? '#eff6ff' : '#fff' }}>
+              {analisando && (
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#eff6ff', zIndex: 2, pointerEvents: 'none' }}>
+                  <RefreshCw style={{ width: 36, height: 36, color: '#2563eb' }} className="animate-spin" />
+                  <span style={{ fontSize: 14, fontWeight: 600, color: '#2563eb' }}>Analisando com IA...</span>
+                  <span style={{ fontSize: 12, color: '#64748b' }}>Aguarde alguns segundos</span>
+                </div>
+              )}
+              <input
+                ref={inputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleUploadFolha}
+                style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, zIndex: 3, cursor: 'pointer' }}
+              />
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '40px 16px', pointerEvents: 'none' }}>
+                <Upload style={{ width: 36, height: 36, color: '#64748b' }} />
+                <span style={{ fontSize: 15, fontWeight: 600, color: '#1e293b' }}>Escolher foto da folha</span>
+                <span style={{ fontSize: 12, color: '#64748b' }}>Galeria ou câmera</span>
+              </div>
+            </div>
+          )}
           <p className="text-xs text-center text-on-surface-variant">
             Mantenha a folha inteira visível, sem sombras, sem cortar os cantos. Fotografe de cima, com boa iluminação.
           </p>
@@ -440,7 +612,7 @@ export function AvaliacaoCorrigir() {
             </p>
           </div>
           <div className="flex gap-2">
-            <button onClick={proximaFolha} className="flex-1 py-3 rounded-2xl border border-outline-variant text-on-surface-variant text-sm">
+            <button onClick={() => proximaFolha()} className="flex-1 py-3 rounded-2xl border border-outline-variant text-on-surface-variant text-sm">
               Voltar
             </button>
             <button
@@ -547,7 +719,7 @@ export function AvaliacaoCorrigir() {
           )}
 
           <div className="flex gap-2">
-            <button onClick={proximaFolha} className="px-4 py-3 rounded-2xl border border-outline-variant text-on-surface-variant text-sm">
+            <button onClick={() => proximaFolha()} className="px-4 py-3 rounded-2xl border border-outline-variant text-on-surface-variant text-sm">
               Cancelar
             </button>
             <button onClick={salvar} disabled={salvando}
@@ -569,8 +741,8 @@ export function AvaliacaoCorrigir() {
             <p className="text-xs text-on-surface-variant">de {(avaliacao.valor_total_objetivas + avaliacao.valor_total_discursivas).toFixed(1)} pts</p>
           </div>
 
-          <button onClick={proximaFolha} className="w-full py-3 rounded-2xl bg-primary text-on-primary font-semibold">
-            Próxima folha
+          <button onClick={() => proximaFolha()} className="w-full py-3 rounded-2xl bg-primary text-on-primary font-semibold">
+            📷 Próxima folha (câmera já ligada)
           </button>
 
           {resultados.length > 0 && (
@@ -592,7 +764,7 @@ export function AvaliacaoCorrigir() {
             </div>
           )}
 
-          <button onClick={() => navigate('/avaliacoes')} className="w-full py-2.5 rounded-2xl border border-outline-variant text-on-surface-variant text-sm">
+          <button onClick={() => { pararCamera(); navigate('/avaliacoes'); }} className="w-full py-2.5 rounded-2xl border border-outline-variant text-on-surface-variant text-sm">
             Voltar para avaliações
           </button>
         </div>
