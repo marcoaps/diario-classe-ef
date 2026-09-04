@@ -92,28 +92,46 @@ export function Avaliacoes() {
     setAvisoImportacao('');
   }
 
+  /**
+   * Chama /api/claude e devolve o texto da resposta, já validando o status
+   * HTTP -- sem isso, um erro da API (ex: sem crédito) cai direto no
+   * `data.content?.[0]?.text || ''` e vira string vazia, fazendo o JSON.parse
+   * falhar mais adiante com uma mensagem genérica que não diz o motivo real.
+   */
+  async function chamarClaudeTexto(prompt: string, maxTokens: number): Promise<string> {
+    const resp = await fetch('/api/claude', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      throw new Error(data?.error?.message || data?.error || `A IA respondeu com erro ${resp.status}.`);
+    }
+    const text = data.content?.[0]?.text || '';
+    if (!text.trim()) throw new Error('A IA devolveu uma resposta vazia.');
+    return text;
+  }
+
+  /** Extrai o bloco JSON (array ou objeto) do texto, tolerando cercas ```json
+   * e frases extras que a IA às vezes inclui mesmo quando instruída a não o fazer. */
+  function extrairJSON(texto: string): string {
+    const semCercas = texto.replace(/```json|```/gi, '').trim();
+    const match = semCercas.match(/[\[{][\s\S]*[\]}]/);
+    return match ? match[0] : semCercas;
+  }
+
   async function gerarQuestoesObjetivasIA() {
     if (!titulo.trim()) { setErro('Informe o título da avaliação antes de gerar com IA.'); return; }
     if (qtdObjetivas < 1) { setErro('Defina a quantidade de questões objetivas antes de gerar com IA.'); return; }
     setGerandoObjetivas(true);
     setErro('');
     try {
-      const resp = await fetch('/api/claude', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 4096,
-          messages: [{
-            role: 'user',
-            content: `Você é professor de ${disciplina} do Ensino Fundamental. Gere EXATAMENTE ${qtdObjetivas} questões de múltipla escolha sobre o tema: "${titulo}"${descricao ? ' - ' + descricao : ''}. Cada questão deve ter um enunciado claro (2-4 linhas), 4 alternativas (A, B, C, D) plausíveis e apenas uma correta. Responda APENAS com um array JSON, sem texto adicional, neste formato exato: [{"enunciado":"...","alternativas":[{"letra":"A","texto":"..."},{"letra":"B","texto":"..."},{"letra":"C","texto":"..."},{"letra":"D","texto":"..."}],"correta":"A"}]`
-          }]
-        })
-      });
-      const data = await resp.json();
-      const text = data.content?.[0]?.text || '';
-      const clean = text.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(clean) as Array<{ enunciado: string; alternativas: { letra: string; texto: string }[]; correta: string }>;
+      const text = await chamarClaudeTexto(
+        `Você é professor de ${disciplina} do Ensino Fundamental. Gere EXATAMENTE ${qtdObjetivas} questões de múltipla escolha sobre o tema: "${titulo}"${descricao ? ' - ' + descricao : ''}. Cada questão deve ter um enunciado claro (2-4 linhas), 4 alternativas (A, B, C, D) plausíveis e apenas uma correta. Responda APENAS com um array JSON, sem texto adicional, neste formato exato: [{"enunciado":"...","alternativas":[{"letra":"A","texto":"..."},{"letra":"B","texto":"..."},{"letra":"C","texto":"..."},{"letra":"D","texto":"..."}],"correta":"A"}]`,
+        4096
+      );
+      const parsed = JSON.parse(extrairJSON(text)) as Array<{ enunciado: string; alternativas: { letra: string; texto: string }[]; correta: string }>;
       const novasQuestoes: QuestaoObjetiva[] = [];
       const novoGabarito: Record<string, string> = {};
       parsed.slice(0, qtdObjetivas).forEach((q, i) => {
@@ -124,8 +142,8 @@ export function Avaliacoes() {
       while (novasQuestoes.length < qtdObjetivas) novasQuestoes.push(questaoVazia(novasQuestoes.length + 1));
       setQuestoesObjetivas(novasQuestoes);
       setGabarito(novoGabarito);
-    } catch {
-      setErro('Erro ao gerar questões objetivas com IA. Tente novamente ou preencha manualmente.');
+    } catch (e) {
+      setErro('Erro ao gerar questões objetivas com IA: ' + (e as Error).message);
     } finally {
       setGerandoObjetivas(false);
     }
@@ -138,27 +156,16 @@ export function Avaliacoes() {
     setErro('');
     try {
       const numeros = Array.from({ length: qtdDiscursivas }, (_, i) => qtdObjetivas + i + 1);
-      const resp = await fetch('/api/claude', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 1500,
-          messages: [{
-            role: 'user',
-            content: `Você é professor de ${disciplina} do Ensino Fundamental. Gere EXATAMENTE ${qtdDiscursivas} questões dissertativas sobre o tema: "${titulo}"${descricao ? ' - ' + descricao : ''}. Cada questão deve pedir que o aluno explique ou justifique conceitos, ter entre 2 e 4 linhas. Responda APENAS com um objeto JSON sem texto adicional, no formato: {"${numeros[0]}":"enunciado da primeira questão", ...}`
-          }]
-        })
-      });
-      const data = await resp.json();
-      const text = data.content?.[0]?.text || '';
-      const clean = text.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(clean) as Record<string, string>;
+      const text = await chamarClaudeTexto(
+        `Você é professor de ${disciplina} do Ensino Fundamental. Gere questões dissertativas sobre o tema: "${titulo}"${descricao ? ' - ' + descricao : ''}. Cada questão deve pedir que o aluno explique ou justifique conceitos, ter entre 2 e 4 linhas. Gere exatamente uma questão para cada um destes números: ${numeros.join(', ')}. Responda APENAS com um objeto JSON válido (sem comentários, sem reticências, sem texto antes ou depois), com uma chave de texto por número, por exemplo: {"${numeros[0]}": "texto da questão"}`,
+        1500
+      );
+      const parsed = JSON.parse(extrairJSON(text)) as Record<string, string>;
       const novo: Record<string, string> = {};
       numeros.forEach(n => { novo[String(n)] = parsed[String(n)] || ''; });
       setEnunciadosDiscursivas(novo);
-    } catch {
-      setErro('Erro ao gerar enunciados discursivos com IA.');
+    } catch (e) {
+      setErro('Erro ao gerar enunciados discursivos com IA: ' + (e as Error).message);
     } finally {
       setGerandoDiscursivas(false);
     }
@@ -169,20 +176,13 @@ export function Avaliacoes() {
     setGerandoTexto(true);
     setErro('');
     try {
-      const resp = await fetch('/api/claude', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 1500,
-          messages: [{ role: 'user', content: `Você é professor de ${disciplina} do Ensino Fundamental. Crie um TEXTO DE APOIO para uma avaliação sobre o tema: "${titulo}"${descricao ? ' - ' + descricao : ''}. O texto deve: ter entre 15 e 25 linhas, ser informativo e adequado para alunos do Ensino Fundamental II, abordar os principais conceitos do tema, conter TODAS as respostas das questões de forma implícita ou explícita, usar linguagem clara e acessível. Retorne APENAS o texto, sem título nem introdução.` }]
-        })
-      });
-      const data = await resp.json();
-      const text = data.content?.[0]?.text || '';
+      const text = await chamarClaudeTexto(
+        `Você é professor de ${disciplina} do Ensino Fundamental. Crie um TEXTO DE APOIO para uma avaliação sobre o tema: "${titulo}"${descricao ? ' - ' + descricao : ''}. O texto deve: ter entre 15 e 25 linhas, ser informativo e adequado para alunos do Ensino Fundamental II, abordar os principais conceitos do tema, conter TODAS as respostas das questões de forma implícita ou explícita, usar linguagem clara e acessível. Retorne APENAS o texto, sem título nem introdução.`,
+        1500
+      );
       setTextoApoio(text.trim());
-    } catch {
-      setErro('Erro ao gerar texto de apoio.');
+    } catch (e) {
+      setErro('Erro ao gerar texto de apoio: ' + (e as Error).message);
     } finally {
       setGerandoTexto(false);
     }
