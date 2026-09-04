@@ -1,30 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
-import { ClipboardList, Plus, QrCode, Camera, Trash2, ChevronDown, ChevronUp, CheckCircle2, BarChart2, Sparkles, Users } from 'lucide-react';
+import { ClipboardList, Plus, QrCode, Camera, Trash2, ChevronDown, ChevronUp, BarChart2, Sparkles } from 'lucide-react';
+import type { Avaliacao, QuestaoObjetiva } from './tiposCorretorProvas';
+import { ALTERNATIVAS_PADRAO } from './tiposCorretorProvas';
 
 const TURMAS = ['6F','7B','7C','7D','7E','7F','8A','8B','8C','8D','8E','8F','9A','9B','9C','9D','9E','9F'];
-const LETRAS = ['A','B','C','D'];
-const NUM_OBJETIVAS = 8;
-const NUM_SUBJETIVAS = 2;
+const BIMESTRES = ['1', '2', '3', '4'];
+const MAX_OBJETIVAS = 60;
+const MAX_DISCURSIVAS = 20;
 
-interface Avaliacao {
-  id: string;
-  titulo: string;
-  descricao: string | null;
-  turma_id: string;
-  num_questoes: number;
-  gabarito: Record<string, string>;
-  valor_questao: number;
-  questoes_subjetivas: Record<string, string> | null;
-  texto_apoio: string | null;
-  criado_em: string;
-}
-
-function gabaritoPadrao(): Record<string, string> {
-  const g: Record<string, string> = {};
-  for (let i = 1; i <= NUM_OBJETIVAS; i++) g[String(i)] = 'A';
-  return g;
+function questaoVazia(numero: number): QuestaoObjetiva {
+  return {
+    numero,
+    enunciado: '',
+    alternativas: ALTERNATIVAS_PADRAO.map(letra => ({ letra, texto: '' })),
+  };
 }
 
 export function Avaliacoes() {
@@ -32,23 +23,76 @@ export function Avaliacoes() {
   const [lista, setLista] = useState<Avaliacao[]>([]);
   const [loading, setLoading] = useState(true);
   const [criando, setCriando] = useState(false);
-  const [titulo, setTitulo] = useState('');
-  const [descricao, setDescricao] = useState('');
-  const [turmaId, setTurmaId] = useState('6F');
-  const [gabarito, setGabarito] = useState<Record<string, string>>(gabaritoPadrao());
-  const [enunciado9, setEnunciado9] = useState('');
-  const [textoApoio, setTextoApoio] = useState('');
-  const [gerandoTexto, setGerandoTexto] = useState(false);
-  const [enunciado10, setEnunciado10] = useState('');
-  const [valorQuestao, setValorQuestao] = useState('1.0');
-  const [salvando, setSalvando] = useState(false);
   const [expandido, setExpandido] = useState<string | null>(null);
   const [erro, setErro] = useState('');
-  const [gerandoIA, setGerandoIA] = useState(false);
 
-  async function gerarEnunciadosIA() {
-    if (!titulo.trim()) { setErro('Informe o titulo da avaliacao antes de gerar com IA.'); return; }
-    setGerandoIA(true);
+  // Dados gerais
+  const [titulo, setTitulo] = useState('');
+  const [descricao, setDescricao] = useState('');
+  const [disciplina, setDisciplina] = useState('Educação Física');
+  const [turmaId, setTurmaId] = useState('');
+  const [bimestre, setBimestre] = useState('');
+  const [dataProva, setDataProva] = useState('');
+  const [professor, setProfessor] = useState('');
+  const [observacoes, setObservacoes] = useState('');
+
+  // Quantidades e pontuação — NADA disso é fixo no código, o professor
+  // define a quantidade de questões livremente (ex: 4, 8, 10, 20, 30...).
+  const [qtdObjetivasStr, setQtdObjetivasStr] = useState('8');
+  const [qtdDiscursivasStr, setQtdDiscursivasStr] = useState('2');
+  const [valorTotalObjetivas, setValorTotalObjetivas] = useState('8.0');
+  const [valorTotalDiscursivas, setValorTotalDiscursivas] = useState('2.0');
+
+  // Conteúdo das questões
+  const [questoesObjetivas, setQuestoesObjetivas] = useState<QuestaoObjetiva[]>(
+    Array.from({ length: 8 }, (_, i) => questaoVazia(i + 1))
+  );
+  const [gabarito, setGabarito] = useState<Record<string, string>>({});
+  const [enunciadosDiscursivas, setEnunciadosDiscursivas] = useState<Record<string, string>>({ '9': '', '10': '' });
+  const [textoApoio, setTextoApoio] = useState('');
+
+  const [gerandoObjetivas, setGerandoObjetivas] = useState(false);
+  const [gerandoDiscursivas, setGerandoDiscursivas] = useState(false);
+  const [gerandoTexto, setGerandoTexto] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+
+  const qtdObjetivas = Math.max(0, Math.min(MAX_OBJETIVAS, parseInt(qtdObjetivasStr) || 0));
+  const qtdDiscursivas = Math.max(0, Math.min(MAX_DISCURSIVAS, parseInt(qtdDiscursivasStr) || 0));
+
+  // Mantém o array de questões objetivas sincronizado com a quantidade
+  // digitada, preservando o que já foi escrito ao aumentar/diminuir.
+  useEffect(() => {
+    setQuestoesObjetivas(prev => {
+      if (prev.length === qtdObjetivas) return prev;
+      const proximo = Array.from({ length: qtdObjetivas }, (_, i) => prev[i] ?? questaoVazia(i + 1));
+      return proximo.map((q, i) => ({ ...q, numero: i + 1 }));
+    });
+  }, [qtdObjetivas]);
+
+  useEffect(() => {
+    setEnunciadosDiscursivas(prev => {
+      const proximo: Record<string, string> = {};
+      for (let i = 1; i <= qtdDiscursivas; i++) {
+        const chave = String(qtdObjetivas + i);
+        proximo[chave] = prev[chave] ?? '';
+      }
+      return proximo;
+    });
+  }, [qtdDiscursivas, qtdObjetivas]);
+
+  function limparFormulario() {
+    setTitulo(''); setDescricao(''); setTurmaId(''); setBimestre(''); setDataProva('');
+    setProfessor(''); setObservacoes(''); setTextoApoio('');
+    setQtdObjetivasStr('8'); setQtdDiscursivasStr('2');
+    setValorTotalObjetivas('8.0'); setValorTotalDiscursivas('2.0');
+    setQuestoesObjetivas(Array.from({ length: 8 }, (_, i) => questaoVazia(i + 1)));
+    setGabarito({}); setEnunciadosDiscursivas({ '9': '', '10': '' });
+  }
+
+  async function gerarQuestoesObjetivasIA() {
+    if (!titulo.trim()) { setErro('Informe o título da avaliação antes de gerar com IA.'); return; }
+    if (qtdObjetivas < 1) { setErro('Defina a quantidade de questões objetivas antes de gerar com IA.'); return; }
+    setGerandoObjetivas(true);
     setErro('');
     try {
       const resp = await fetch('/api/claude', {
@@ -56,25 +100,69 @@ export function Avaliacoes() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
-          max_tokens: 1024,
-          messages: [{ role: 'user', content: 'Voce e professor de Educacao Fisica do Ensino Fundamental. Gere EXATAMENTE 2 questoes dissertativas sobre o tema: "' + titulo + (descricao ? ' - ' + descricao : '') + '". Cada questao deve ser desafiadora, contextualizada e adequada para alunos do Fundamental II, pedir que o aluno explique ou justifique conceitos, valer 1,0 ponto e ter entre 2 e 4 linhas. Responda APENAS no formato JSON sem texto adicional: {"q9": "enunciado da questao 9", "q10": "enunciado da questao 10"}' }]
+          max_tokens: 4096,
+          messages: [{
+            role: 'user',
+            content: `Você é professor de ${disciplina} do Ensino Fundamental. Gere EXATAMENTE ${qtdObjetivas} questões de múltipla escolha sobre o tema: "${titulo}"${descricao ? ' - ' + descricao : ''}. Cada questão deve ter um enunciado claro (2-4 linhas), 4 alternativas (A, B, C, D) plausíveis e apenas uma correta. Responda APENAS com um array JSON, sem texto adicional, neste formato exato: [{"enunciado":"...","alternativas":[{"letra":"A","texto":"..."},{"letra":"B","texto":"..."},{"letra":"C","texto":"..."},{"letra":"D","texto":"..."}],"correta":"A"}]`
+          }]
         })
       });
       const data = await resp.json();
       const text = data.content?.[0]?.text || '';
       const clean = text.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(clean);
-      if (parsed.q9) setEnunciado9(parsed.q9);
-      if (parsed.q10) setEnunciado10(parsed.q10);
-    } catch (e) {
-      setErro('Erro ao gerar enunciados com IA. Tente novamente.');
+      const parsed = JSON.parse(clean) as Array<{ enunciado: string; alternativas: { letra: string; texto: string }[]; correta: string }>;
+      const novasQuestoes: QuestaoObjetiva[] = [];
+      const novoGabarito: Record<string, string> = {};
+      parsed.slice(0, qtdObjetivas).forEach((q, i) => {
+        const numero = i + 1;
+        novasQuestoes.push({ numero, enunciado: q.enunciado, alternativas: q.alternativas });
+        novoGabarito[String(numero)] = (q.correta || '').toUpperCase().trim();
+      });
+      while (novasQuestoes.length < qtdObjetivas) novasQuestoes.push(questaoVazia(novasQuestoes.length + 1));
+      setQuestoesObjetivas(novasQuestoes);
+      setGabarito(novoGabarito);
+    } catch {
+      setErro('Erro ao gerar questões objetivas com IA. Tente novamente ou preencha manualmente.');
     } finally {
-      setGerandoIA(false);
+      setGerandoObjetivas(false);
+    }
+  }
+
+  async function gerarEnunciadosDiscursivasIA() {
+    if (!titulo.trim()) { setErro('Informe o título da avaliação antes de gerar com IA.'); return; }
+    if (qtdDiscursivas < 1) { setErro('Defina a quantidade de questões discursivas antes de gerar com IA.'); return; }
+    setGerandoDiscursivas(true);
+    setErro('');
+    try {
+      const numeros = Array.from({ length: qtdDiscursivas }, (_, i) => qtdObjetivas + i + 1);
+      const resp = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1500,
+          messages: [{
+            role: 'user',
+            content: `Você é professor de ${disciplina} do Ensino Fundamental. Gere EXATAMENTE ${qtdDiscursivas} questões dissertativas sobre o tema: "${titulo}"${descricao ? ' - ' + descricao : ''}. Cada questão deve pedir que o aluno explique ou justifique conceitos, ter entre 2 e 4 linhas. Responda APENAS com um objeto JSON sem texto adicional, no formato: {"${numeros[0]}":"enunciado da primeira questão", ...}`
+          }]
+        })
+      });
+      const data = await resp.json();
+      const text = data.content?.[0]?.text || '';
+      const clean = text.replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(clean) as Record<string, string>;
+      const novo: Record<string, string> = {};
+      numeros.forEach(n => { novo[String(n)] = parsed[String(n)] || ''; });
+      setEnunciadosDiscursivas(novo);
+    } catch {
+      setErro('Erro ao gerar enunciados discursivos com IA.');
+    } finally {
+      setGerandoDiscursivas(false);
     }
   }
 
   async function gerarTextoApoioIA() {
-    if (!titulo.trim()) { setErro('Informe o titulo antes de gerar o texto de apoio.'); return; }
+    if (!titulo.trim()) { setErro('Informe o título antes de gerar o texto de apoio.'); return; }
     setGerandoTexto(true);
     setErro('');
     try {
@@ -84,13 +172,13 @@ export function Avaliacoes() {
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
           max_tokens: 1500,
-          messages: [{ role: 'user', content: 'Voce e professor de Educacao Fisica do Ensino Fundamental. Crie um TEXTO DE APOIO para uma avaliacao sobre o tema: "' + titulo + (descricao ? ' - ' + descricao : '') + '". O texto deve: ter entre 15 e 25 linhas, ser informativo e adequado para alunos do Ensino Fundamental II, abordar os principais conceitos do tema, conter TODAS as respostas das questoes objetivas e dissertativas de forma implicita ou explicita no proprio texto, usar linguagem clara e acessivel. Retorne APENAS o texto, sem titulo nem introducao.' }]
+          messages: [{ role: 'user', content: `Você é professor de ${disciplina} do Ensino Fundamental. Crie um TEXTO DE APOIO para uma avaliação sobre o tema: "${titulo}"${descricao ? ' - ' + descricao : ''}. O texto deve: ter entre 15 e 25 linhas, ser informativo e adequado para alunos do Ensino Fundamental II, abordar os principais conceitos do tema, conter TODAS as respostas das questões de forma implícita ou explícita, usar linguagem clara e acessível. Retorne APENAS o texto, sem título nem introdução.` }]
         })
       });
       const data = await resp.json();
       const text = data.content?.[0]?.text || '';
       setTextoApoio(text.trim());
-    } catch (e) {
+    } catch {
       setErro('Erro ao gerar texto de apoio.');
     } finally {
       setGerandoTexto(false);
@@ -105,50 +193,86 @@ export function Avaliacoes() {
       .from('avaliacoes')
       .select('*')
       .order('criado_em', { ascending: false });
-    setLista(data || []);
+    setLista((data || []) as Avaliacao[]);
     setLoading(false);
   }
 
+  function validar(): string | null {
+    if (!titulo.trim()) return 'Informe o título da avaliação.';
+    if (!turmaId) return 'Selecione uma turma.';
+    if (qtdObjetivas < 1 && qtdDiscursivas < 1) return 'A avaliação precisa ter pelo menos 1 questão.';
+    for (const q of questoesObjetivas) {
+      if (!q.enunciado.trim()) return `Questão objetiva ${q.numero} está sem enunciado.`;
+      if (q.alternativas.some(a => !a.texto.trim())) return `Questão objetiva ${q.numero} tem alternativa em branco.`;
+      if (!gabarito[String(q.numero)]) return `Questão objetiva ${q.numero} está sem resposta definida no gabarito.`;
+    }
+    if (Object.keys(gabarito).length !== qtdObjetivas) {
+      return 'O gabarito não tem a mesma quantidade de respostas que o número de questões objetivas.';
+    }
+    for (let i = 1; i <= qtdDiscursivas; i++) {
+      const chave = String(qtdObjetivas + i);
+      if (!enunciadosDiscursivas[chave]?.trim()) return `Questão discursiva ${chave} está sem enunciado.`;
+    }
+    const valObj = parseFloat(valorTotalObjetivas) || 0;
+    const valDisc = parseFloat(valorTotalDiscursivas) || 0;
+    if (qtdObjetivas > 0 && valObj <= 0) return 'Informe a pontuação total das questões objetivas.';
+    if (qtdDiscursivas > 0 && valDisc <= 0) return 'Informe a pontuação total das questões discursivas.';
+    return null;
+  }
+
   async function salvar() {
-    if (!titulo.trim()) { setErro('Informe o título da avaliação.'); return; }
+    const mensagem = validar();
+    if (mensagem) { setErro(mensagem); return; }
     setSalvando(true);
     setErro('');
     const { error } = await supabase.from('avaliacoes').insert({
       titulo: titulo.trim(),
       descricao: descricao.trim() || null,
+      disciplina,
       turma_id: turmaId,
-      num_questoes: NUM_OBJETIVAS + NUM_SUBJETIVAS,
+      bimestre: bimestre || null,
+      data_prova: dataProva || null,
+      professor: professor.trim() || null,
+      observacoes: observacoes.trim() || null,
+      quantidade_objetivas: qtdObjetivas,
+      quantidade_discursivas: qtdDiscursivas,
+      alternativas: [...ALTERNATIVAS_PADRAO],
       gabarito,
-      valor_questao: parseFloat(valorQuestao) || 1.0,
-      questoes_subjetivas: { '9': enunciado9.trim(), '10': enunciado10.trim() },
+      valor_total_objetivas: parseFloat(valorTotalObjetivas) || 0,
+      valor_total_discursivas: parseFloat(valorTotalDiscursivas) || 0,
+      questoes_objetivas: questoesObjetivas,
+      questoes_subjetivas: enunciadosDiscursivas,
       texto_apoio: textoApoio.trim() || null,
+      // campos legados mantidos para telas antigas que ainda os leem
+      num_questoes: qtdObjetivas + qtdDiscursivas,
+      valor_questao: qtdObjetivas > 0 ? (parseFloat(valorTotalObjetivas) || 0) / qtdObjetivas : 0,
     });
     setSalvando(false);
     if (error) { setErro('Erro ao salvar: ' + error.message); return; }
-    setTitulo('');
-    setDescricao('');
-    setEnunciado9('');
-    setEnunciado10('');
-    setTextoApoio('');
-    setGabarito(gabaritoPadrao());
-    setValorQuestao('1.0');
+    limparFormulario();
     setCriando(false);
     carregar();
   }
 
   async function excluir(id: string) {
-    if (!confirm('Excluir esta avaliação e todas as respostas?')) return;
+    if (!confirm('Excluir esta avaliação e todas as respostas/folhas relacionadas?')) return;
     await supabase.from('avaliacoes').delete().eq('id', id);
     carregar();
   }
 
-  function setLetra(questao: string, letra: string) {
-    setGabarito(prev => ({ ...prev, [questao]: letra }));
+  function setLetraCorreta(numero: number, letra: string) {
+    setGabarito(prev => ({ ...prev, [String(numero)]: letra }));
   }
 
-  const valorObj = parseFloat(valorQuestao) || 1.0;
-  const valorSubj = parseFloat(valorQuestao) || 1.0;
-  const totalPossivel = (NUM_OBJETIVAS * valorObj) + (NUM_SUBJETIVAS * valorSubj * 2);
+  function atualizarQuestao(numero: number, alteracoes: Partial<QuestaoObjetiva>) {
+    setQuestoesObjetivas(prev => prev.map(q => q.numero === numero ? { ...q, ...alteracoes } : q));
+  }
+
+  function atualizarAlternativa(numero: number, letra: string, texto: string) {
+    setQuestoesObjetivas(prev => prev.map(q => q.numero === numero
+      ? { ...q, alternativas: q.alternativas.map(a => a.letra === letra ? { ...a, texto } : a) }
+      : q));
+  }
 
   return (
     <div className="py-4 space-y-4">
@@ -194,24 +318,52 @@ export function Avaliacoes() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-on-surface-variant mb-1 block">Turma</label>
+                <label className="text-xs text-on-surface-variant mb-1 block">Disciplina</label>
+                <input
+                  value={disciplina}
+                  onChange={e => setDisciplina(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-on-surface-variant mb-1 block">Turma *</label>
                 <select
                   value={turmaId}
                   onChange={e => setTurmaId(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface"
                 >
+                  <option value="">Selecione...</option>
                   {TURMAS.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="text-xs text-on-surface-variant mb-1 block">Pontos por questão objetiva</label>
+                <label className="text-xs text-on-surface-variant mb-1 block">Bimestre</label>
+                <select
+                  value={bimestre}
+                  onChange={e => setBimestre(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface"
+                >
+                  <option value="">-</option>
+                  {BIMESTRES.map(b => <option key={b} value={b}>{b}º</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-on-surface-variant mb-1 block">Data</label>
                 <input
-                  type="number"
-                  step="0.5"
-                  min="0.5"
-                  max="10"
-                  value={valorQuestao}
-                  onChange={e => setValorQuestao(e.target.value)}
+                  type="date"
+                  value={dataProva}
+                  onChange={e => setDataProva(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-on-surface-variant mb-1 block">Professor(a)</label>
+                <input
+                  value={professor}
+                  onChange={e => setProfessor(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface"
                 />
               </div>
@@ -222,35 +374,111 @@ export function Avaliacoes() {
               <input
                 value={descricao}
                 onChange={e => setDescricao(e.target.value)}
-                placeholder="Ex: Contedo: esportes coletivos"
+                placeholder="Ex: Conteúdo: esportes coletivos"
                 className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface"
               />
             </div>
           </div>
 
-          {/* Gabarito objetivas */}
-          <div>
-            <p className="text-xs font-semibold text-on-surface-variant mb-2">
-              Gabarito &mdash; Questões Objetivas (1 a {NUM_OBJETIVAS})
-            </p>
-            <div className="space-y-2">
-              {Array.from({ length: NUM_OBJETIVAS }, (_, i) => i + 1).map(n => (
-                <div key={n} className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-on-surface-variant w-5 text-right">{n}.</span>
-                  <div className="flex gap-1 flex-1">
-                    {LETRAS.map(l => (
-                      <button
-                        key={l}
-                        onClick={() => setLetra(String(n), l)}
-                        className={[
-                          'flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all',
-                          gabarito[String(n)] === l
-                            ? 'bg-primary text-on-primary border-primary'
-                            : 'bg-background text-on-surface-variant border-outline-variant'
-                        ].join(' ')}
-                      >
-                        {l}
-                      </button>
+          {/* Quantidades e pontuacao */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-on-surface-variant mb-1 block">Nº de questões objetivas</label>
+              <input
+                type="number" min="0" max={MAX_OBJETIVAS} step="1"
+                value={qtdObjetivasStr}
+                onChange={e => setQtdObjetivasStr(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-on-surface-variant mb-1 block">Nº de questões discursivas</label>
+              <input
+                type="number" min="0" max={MAX_DISCURSIVAS} step="1"
+                value={qtdDiscursivasStr}
+                onChange={e => setQtdDiscursivasStr(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-on-surface-variant mb-1 block">Valor total — objetivas</label>
+              <input
+                type="number" min="0" step="0.5"
+                value={valorTotalObjetivas}
+                onChange={e => setValorTotalObjetivas(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-on-surface-variant mb-1 block">Valor total — discursivas</label>
+              <input
+                type="number" min="0" step="0.5"
+                value={valorTotalDiscursivas}
+                onChange={e => setValorTotalDiscursivas(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface"
+              />
+            </div>
+          </div>
+          <p className="text-xs text-on-surface-variant">
+            Alternativas: A a D (padrão desta versão) · Valor por questão objetiva: {qtdObjetivas > 0 ? ((parseFloat(valorTotalObjetivas) || 0) / qtdObjetivas).toFixed(2) : '0.00'} pts
+          </p>
+
+          {/* Questões objetivas */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-on-surface-variant">
+                Questões Objetivas (1 a {qtdObjetivas})
+              </p>
+              <button
+                onClick={gerarQuestoesObjetivasIA}
+                disabled={gerandoObjetivas || qtdObjetivas < 1}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-semibold disabled:opacity-60"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                {gerandoObjetivas ? 'Gerando...' : 'Gerar com IA'}
+              </button>
+            </div>
+            {gerandoObjetivas && (
+              <div className="flex items-center gap-2 text-xs text-on-surface-variant">
+                <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                Gerando {qtdObjetivas} questões com base no título...
+              </div>
+            )}
+            <div className="space-y-3 max-h-[28rem] overflow-y-auto pr-1">
+              {questoesObjetivas.map(q => (
+                <div key={q.numero} className="bg-background border border-outline-variant rounded-xl p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-on-surface-variant">{q.numero}.</span>
+                    <textarea
+                      value={q.enunciado}
+                      onChange={e => atualizarQuestao(q.numero, { enunciado: e.target.value })}
+                      rows={2}
+                      placeholder="Enunciado da questão..."
+                      className="flex-1 px-2 py-1.5 rounded-lg border border-outline-variant bg-surface text-sm text-on-surface resize-none"
+                    />
+                  </div>
+                  <div className="space-y-1.5 pl-6">
+                    {q.alternativas.map(alt => (
+                      <div key={alt.letra} className="flex items-center gap-2">
+                        <button
+                          onClick={() => setLetraCorreta(q.numero, alt.letra)}
+                          title="Marcar como resposta correta"
+                          className={[
+                            'w-6 h-6 flex-shrink-0 rounded-full text-xs font-bold border transition-all',
+                            gabarito[String(q.numero)] === alt.letra
+                              ? 'bg-primary text-on-primary border-primary'
+                              : 'bg-surface text-on-surface-variant border-outline-variant'
+                          ].join(' ')}
+                        >
+                          {alt.letra}
+                        </button>
+                        <input
+                          value={alt.texto}
+                          onChange={e => atualizarAlternativa(q.numero, alt.letra, e.target.value)}
+                          placeholder={`Alternativa ${alt.letra}`}
+                          className="flex-1 px-2 py-1 rounded-lg border border-outline-variant bg-surface text-xs text-on-surface"
+                        />
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -259,47 +487,41 @@ export function Avaliacoes() {
           </div>
 
           {/* Enunciados das dissertativas */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-on-surface-variant">
-                Questoes Dissertativas — Enunciados
-              </p>
-              <button
-                onClick={gerarEnunciadosIA}
-                disabled={gerandoIA}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-semibold disabled:opacity-60"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                {gerandoIA ? 'Gerando...' : 'Gerar com IA'}
-              </button>
-            </div>
-            {gerandoIA && (
-              <div className="flex items-center gap-2 text-xs text-on-surface-variant">
-                <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                Gerando enunciados com base no tema...
+          {qtdDiscursivas > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-on-surface-variant">
+                  Questões Discursivas — Enunciados
+                </p>
+                <button
+                  onClick={gerarEnunciadosDiscursivasIA}
+                  disabled={gerandoDiscursivas}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-semibold disabled:opacity-60"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  {gerandoDiscursivas ? 'Gerando...' : 'Gerar com IA'}
+                </button>
               </div>
-            )}
-            <div>
-              <label className="text-xs text-on-surface-variant mb-1 block">Questao 9</label>
-              <textarea
-                value={enunciado9}
-                onChange={e => setEnunciado9(e.target.value)}
-                rows={3}
-                placeholder="Clique em Gerar com IA ou digite o enunciado..."
-                className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface resize-none"
-              />
+              {gerandoDiscursivas && (
+                <div className="flex items-center gap-2 text-xs text-on-surface-variant">
+                  <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                  Gerando enunciados com base no título...
+                </div>
+              )}
+              {Array.from({ length: qtdDiscursivas }, (_, i) => qtdObjetivas + i + 1).map(n => (
+                <div key={n}>
+                  <label className="text-xs text-on-surface-variant mb-1 block">Questão {n}</label>
+                  <textarea
+                    value={enunciadosDiscursivas[String(n)] || ''}
+                    onChange={e => setEnunciadosDiscursivas(prev => ({ ...prev, [String(n)]: e.target.value }))}
+                    rows={3}
+                    placeholder="Clique em Gerar com IA ou digite o enunciado..."
+                    className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface resize-none"
+                  />
+                </div>
+              ))}
             </div>
-            <div>
-              <label className="text-xs text-on-surface-variant mb-1 block">Questao 10</label>
-              <textarea
-                value={enunciado10}
-                onChange={e => setEnunciado10(e.target.value)}
-                rows={3}
-                placeholder="Clique em Gerar com IA ou digite o enunciado..."
-                className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface resize-none"
-              />
-            </div>
-          </div>
+          )}
 
           {/* Texto de Apoio */}
           <div className="space-y-2">
@@ -324,7 +546,17 @@ export function Avaliacoes() {
               value={textoApoio}
               onChange={e => setTextoApoio(e.target.value)}
               rows={5}
-              placeholder="A IA gera um texto cujas respostas estao contidas nele. Pagina 1 = texto, Pagina 2 = questoes."
+              placeholder="A IA gera um texto cujas respostas estão contidas nele. Página 1 = texto, página 2 = questões."
+              className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface resize-none"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-on-surface-variant mb-1 block">Observações (opcional)</label>
+            <textarea
+              value={observacoes}
+              onChange={e => setObservacoes(e.target.value)}
+              rows={2}
               className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface resize-none"
             />
           </div>
@@ -369,7 +601,8 @@ export function Avaliacoes() {
                 <div>
                   <p className="text-sm font-semibold text-on-surface">{av.titulo}</p>
                   <p className="text-xs text-on-surface-variant">
-                    Turma {av.turma_id} &middot; {av.num_questoes} questões &middot; {av.valor_questao} pt/obj
+                    Turma {av.turma_id} · {av.quantidade_objetivas ?? av.num_questoes ?? 0} objetivas
+                    {(av.quantidade_discursivas ?? 0) > 0 ? ` + ${av.quantidade_discursivas} discursivas` : ''}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -384,25 +617,15 @@ export function Avaliacoes() {
 
               {expandido === av.id && (
                 <div className="border-t border-outline-variant px-4 py-3 space-y-3">
-                  {/* Gabarito resumido */}
-                  <div>
-                    <p className="text-xs font-semibold text-on-surface-variant mb-1.5">Gabarito</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {Array.from({ length: NUM_OBJETIVAS }, (_, i) => i + 1).map(n => (
-                        <div key={n} className="flex items-center gap-1 bg-secondary-container rounded-lg px-2 py-1">
-                          <span className="text-xs text-on-surface-variant">{n}.</span>
-                          <span className="text-xs font-bold text-on-secondary-container">{av.gabarito[String(n)] || '?'}</span>
-                        </div>
-                      ))}
-                      <div className="flex items-center gap-1 bg-surface-container-highest rounded-lg px-2 py-1">
-                        <span className="text-xs text-on-surface-variant">9-10.</span>
-                        <span className="text-xs font-bold text-on-surface-variant">Subj.</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.entries(av.gabarito || {}).sort((a, b) => Number(a[0]) - Number(b[0])).map(([n, letra]) => (
+                      <div key={n} className="flex items-center gap-1 bg-secondary-container rounded-lg px-2 py-1">
+                        <span className="text-xs text-on-surface-variant">{n}.</span>
+                        <span className="text-xs font-bold text-on-secondary-container">{letra}</span>
                       </div>
-                    </div>
+                    ))}
                   </div>
 
-                  {/* Acoes */}
-                  <EnunciadosEditor avaliacao={av} onSalvo={carregar} />
                   <div className="flex gap-2">
                     <button
                       onClick={() => navigate(`/avaliacoes/folha/${av.id}`)}
@@ -412,7 +635,7 @@ export function Avaliacoes() {
                       Folhas QR
                     </button>
                     <button
-                      onClick={() => window.open(`/upload-folha.html?av=${av.id}`, '_blank')}
+                      onClick={() => navigate(`/avaliacoes/corrigir/${av.id}`)}
                       className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-secondary-container text-on-secondary-container text-xs font-semibold"
                     >
                       <Camera className="w-4 h-4" />
@@ -424,13 +647,6 @@ export function Avaliacoes() {
                     >
                       <BarChart2 className="w-4 h-4" />
                       Resultados
-                    </button>
-                    <button
-                      onClick={() => navigate(`/avaliacoes/formatar/${av.id}`)}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-surface border border-outline-variant text-on-surface text-xs font-semibold"
-                    >
-                      <Users className="w-4 h-4" />
-                      Formatar
                     </button>
                     <button
                       onClick={() => excluir(av.id)}
@@ -445,57 +661,6 @@ export function Avaliacoes() {
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function EnunciadosEditor({ avaliacao, onSalvo }: { avaliacao: Avaliacao; onSalvo: () => void }) {
-  const [e9, setE9] = React.useState(avaliacao.questoes_subjetivas?.['9'] || '');
-  const [e10, setE10] = React.useState(avaliacao.questoes_subjetivas?.['10'] || '');
-  const [salvando, setSalvando] = React.useState(false);
-  const [salvo, setSalvo] = React.useState(false);
-
-  async function salvar() {
-    setSalvando(true);
-    await supabase.from('avaliacoes').update({
-      questoes_subjetivas: { '9': e9.trim(), '10': e10.trim() }
-    }).eq('id', avaliacao.id);
-    setSalvando(false);
-    setSalvo(true);
-    setTimeout(() => setSalvo(false), 2000);
-    onSalvo();
-  }
-
-  return (
-    <div className="space-y-2">
-      <p className="text-xs font-semibold text-on-surface-variant">Enunciados — Questões 9 e 10</p>
-      <div>
-        <label className="text-xs text-on-surface-variant">Questão 9</label>
-        <textarea
-          value={e9}
-          onChange={e => setE9(e.target.value)}
-          rows={2}
-          className="w-full mt-1 px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface resize-none"
-          placeholder="Enunciado da questão 9..."
-        />
-      </div>
-      <div>
-        <label className="text-xs text-on-surface-variant">Questão 10</label>
-        <textarea
-          value={e10}
-          onChange={e => setE10(e.target.value)}
-          rows={2}
-          className="w-full mt-1 px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface resize-none"
-          placeholder="Enunciado da questão 10..."
-        />
-      </div>
-      <button
-        onClick={salvar}
-        disabled={salvando}
-        className="w-full py-2 rounded-xl bg-secondary-container text-on-secondary-container text-xs font-semibold disabled:opacity-50"
-      >
-        {salvo ? '✅ Enunciados salvos!' : salvando ? 'Salvando...' : 'Salvar enunciados'}
-      </button>
     </div>
   );
 }

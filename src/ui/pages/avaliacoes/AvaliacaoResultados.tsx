@@ -4,26 +4,14 @@ import { supabase } from '../../../data/supabase';
 import { ArrowLeft, Download, Trophy, AlertCircle, Clock } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
-interface Avaliacao {
-  id: string;
-  titulo: string;
-  turma_id: string;
-  num_questoes: number;
-  gabarito: Record<string, string>;
-  valor_questao: number;
-}
-
-interface Aluno {
-  id: string;
-  nome: string;
-  numero_chamada: number;
-}
+import type { Avaliacao, Aluno } from './tiposCorretorProvas';
 
 interface Resposta {
   aluno_id: string;
   respostas: Record<string, string>;
   acertos: number;
   nota: number;
+  nota_final: number;
   escaneado_em: string;
 }
 
@@ -31,8 +19,6 @@ interface ResultadoAluno {
   aluno: Aluno;
   resposta: Resposta | null;
 }
-
-const NUM_OBJETIVAS = 8;
 
 export function AvaliacaoResultados() {
   const { id } = useParams<{ id: string }>();
@@ -57,7 +43,7 @@ export function AvaliacaoResultados() {
 
       const { data: respostas } = await supabase
         .from('avaliacoes_respostas')
-        .select('aluno_id, respostas, acertos, nota, escaneado_em')
+        .select('aluno_id, respostas, acertos, nota, nota_final, escaneado_em')
         .eq('avaliacao_id', id);
 
       const respostasMap = new Map((respostas || []).map(r => [r.aluno_id, r]));
@@ -73,14 +59,20 @@ export function AvaliacaoResultados() {
     init();
   }, [id]);
 
+  function notaDe(r: Resposta | null): number {
+    if (!r) return 0;
+    return r.nota_final || r.nota || 0;
+  }
+
   function exportarExcel() {
     if (!avaliacao) return;
+    const valorTotal = (avaliacao.valor_total_objetivas || 0) + (avaliacao.valor_total_discursivas || 0);
     const dados = resultados.map(r => ({
       'Nº': r.aluno.numero_chamada,
       'Nome': r.aluno.nome,
       'Acertos': r.resposta?.acertos ?? '',
-      'Nota': r.resposta?.nota ?? '',
-      'Situação': r.resposta ? (r.resposta.nota >= 5 ? 'Aprovado' : 'Recuperação') : 'Pendente',
+      'Nota': r.resposta ? notaDe(r.resposta) : '',
+      'Situação': r.resposta ? (notaDe(r.resposta) >= valorTotal / 2 ? 'Aprovado' : 'Recuperação') : 'Pendente',
     }));
     const ws = XLSX.utils.json_to_sheet(dados);
     const wb = XLSX.utils.book_new();
@@ -88,12 +80,13 @@ export function AvaliacaoResultados() {
     XLSX.writeFile(wb, `resultados_${avaliacao.titulo}_${avaliacao.turma_id}.xlsx`);
   }
 
+  const valorTotalAvaliacao = (avaliacao?.valor_total_objetivas || 0) + (avaliacao?.valor_total_discursivas || 0);
   const corrigidos = resultados.filter(r => r.resposta !== null);
   const pendentes = resultados.filter(r => r.resposta === null);
   const mediaNotas = corrigidos.length > 0
-    ? corrigidos.reduce((s, r) => s + (r.resposta?.nota || 0), 0) / corrigidos.length
+    ? corrigidos.reduce((s, r) => s + notaDe(r.resposta), 0) / corrigidos.length
     : 0;
-  const aprovados = corrigidos.filter(r => (r.resposta?.nota || 0) >= 5).length;
+  const aprovados = corrigidos.filter(r => notaDe(r.resposta) >= valorTotalAvaliacao / 2).length;
 
   const listaFiltrada = filtro === 'corrigidos' ? corrigidos
     : filtro === 'pendentes' ? pendentes
@@ -173,8 +166,8 @@ export function AvaliacaoResultados() {
       {/* Lista de alunos */}
       <div className="space-y-2">
         {listaFiltrada.map(({ aluno, resposta }) => {
-          const nota = resposta?.nota ?? null;
-          const aprovado = nota !== null && nota >= 5;
+          const nota = resposta ? notaDe(resposta) : null;
+          const aprovado = nota !== null && nota >= valorTotalAvaliacao / 2;
           return (
             <div
               key={aluno.id}
@@ -186,7 +179,7 @@ export function AvaliacaoResultados() {
                   <p className="text-sm text-on-surface font-medium">{aluno.nome}</p>
                   {resposta && (
                     <p className="text-xs text-on-surface-variant">
-                      {resposta.acertos}/{NUM_OBJETIVAS} acertos objetivas
+                      {resposta.acertos}/{avaliacao.quantidade_objetivas} acertos objetivas
                     </p>
                   )}
                 </div>

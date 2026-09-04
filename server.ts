@@ -4,6 +4,7 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
+import crypto from "crypto";
 
 // Carrega .env.local primeiro, depois .env
 dotenv.config({ path: '.env.local' });
@@ -47,6 +48,34 @@ async function startServer() {
       console.error('Erro na rota /api/claude:', e.message);
       return res.status(500).json({ error: 'Falha ao chamar Claude API: ' + e.message });
     }
+  });
+
+  // ── Rota de assinatura/verificação do QR do Corretor de Provas ────────────
+  // (espelha api/qr-assinar.ts pra funcionar também em dev local, já que este
+  // servidor não faz proxy automático das funções serverless da Vercel)
+  app.post("/api/qr-assinar", (req, res) => {
+    const segredo = process.env.QR_SECRET;
+    if (!segredo) {
+      return res.status(500).json({ error: 'QR_SECRET não configurado. Defina essa variável em .env.local antes de testar o Corretor de Provas localmente.' });
+    }
+    const { acao, payload, assinatura } = req.body || {};
+    if (!payload || typeof payload !== 'object') {
+      return res.status(400).json({ error: 'payload é obrigatório' });
+    }
+    const payloadStr = JSON.stringify(payload, Object.keys(payload).sort());
+    const assinar = (str: string) => crypto.createHmac('sha256', segredo).update(str).digest('hex');
+
+    if (acao === 'assinar') {
+      return res.status(200).json({ payload, assinatura: assinar(payloadStr) });
+    }
+    if (acao === 'verificar') {
+      if (!assinatura) return res.status(400).json({ error: 'assinatura é obrigatória para verificar' });
+      const esperada = assinar(payloadStr);
+      const valido = esperada.length === String(assinatura).length
+        && crypto.timingSafeEqual(Buffer.from(esperada), Buffer.from(String(assinatura)));
+      return res.status(200).json({ valido });
+    }
+    return res.status(400).json({ error: 'acao deve ser "assinar" ou "verificar"' });
   });
 
   // ── Vite middleware (dev) ou arquivos estáticos (prod) ────────────────────
