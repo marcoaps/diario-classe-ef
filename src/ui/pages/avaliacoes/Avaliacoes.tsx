@@ -1,9 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
-import { ClipboardList, Plus, QrCode, Camera, Trash2, ChevronDown, ChevronUp, BarChart2, Sparkles } from 'lucide-react';
+import { ClipboardList, Plus, QrCode, Camera, Trash2, ChevronDown, ChevronUp, BarChart2, Sparkles, Share2, Copy, Check } from 'lucide-react';
 import type { Avaliacao, QuestaoObjetiva } from './tiposCorretorProvas';
-import { ALTERNATIVAS_PADRAO } from './tiposCorretorProvas';
+import { ALTERNATIVAS_PADRAO, valorPorQuestaoObjetiva, arredondar } from './tiposCorretorProvas';
+import { getTurmasDoGrupo, getLabelGrupo } from '../ProvasOnline';
+
+const GRUPOS_ONLINE = ['6-7', '8', '9'];
+
+/** As Provas Online são compartilhadas por um código único por GRUPO de turmas
+ * (não por turma individual) — mesmo modelo já usado quando a prova é criada
+ * direto por lá. Aqui só descobrimos a qual grupo a turma da avaliação pertence. */
+function grupoDaTurma(turmaId: string): string {
+  return GRUPOS_ONLINE.find(id => getTurmasDoGrupo(id).includes(turmaId)) || GRUPOS_ONLINE[0];
+}
 
 const TURMAS = ['6F','7B','7C','7D','7E','7F','8A','8B','8C','8D','8E','8F','9A','9B','9C','9D','9E','9F'];
 const BIMESTRES = ['1', '2', '3', '4'];
@@ -27,6 +37,9 @@ export function Avaliacoes() {
   const [expandido, setExpandido] = useState<string | null>(null);
   const [erro, setErro] = useState('');
   const [avisoImportacao, setAvisoImportacao] = useState('');
+  const [publicando, setPublicando] = useState<string | null>(null);
+  const [codigosPublicados, setCodigosPublicados] = useState<Record<string, string>>({});
+  const [copiadoOnline, setCopiadoOnline] = useState<string | null>(null);
 
   // Dados gerais
   const [titulo, setTitulo] = useState('');
@@ -286,6 +299,80 @@ export function Avaliacoes() {
     if (!confirm('Excluir esta avaliação e todas as respostas/folhas relacionadas?')) return;
     await supabase.from('avaliacoes').delete().eq('id', id);
     carregar();
+  }
+
+  /**
+   * Publica a avaliação (já usada no Corretor de Provas em papel) como uma
+   * Prova Online também, sem redigitar nada -- copia as questões objetivas
+   * (múltipla escolha, com o gabarito virando o índice da alternativa certa
+   * em `opcoes`) e as discursivas (corrigidas por IA na hora da resposta) pra
+   * dentro das tabelas `provas`/`questoes` que o /responder já lê.
+   */
+  async function publicarOnline(av: Avaliacao) {
+    setPublicando(av.id);
+    setErro('');
+    try {
+      const valorObjetiva = arredondar(valorPorQuestaoObjetiva(av), 2);
+      const qtdDisc = av.quantidade_discursivas || 0;
+      const valorPorDiscursiva = qtdDisc > 0 ? arredondar(av.valor_total_discursivas / qtdDisc, 2) : 0;
+      const codigo = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const grupo = grupoDaTurma(av.turma_id);
+
+      const { data: prova, error } = await supabase.from('provas').insert({
+        titulo: av.titulo,
+        descricao: av.descricao || '',
+        turma_id: grupo,
+        codigo,
+        data_limite: null,
+      }).select().single();
+      if (error) throw error;
+
+      const questoesObjetivasInsert = (av.questoes_objetivas || []).map(q => {
+        const letraCorreta = av.gabarito?.[String(q.numero)];
+        const indice = q.alternativas.findIndex(a => a.letra === letraCorreta);
+        return {
+          prova_id: prova.id,
+          enunciado: q.enunciado,
+          imagem_base64: null,
+          tipo: 'multipla_escolha',
+          opcoes: q.alternativas.map(a => a.texto),
+          resposta_correta: indice >= 0 ? String(indice) : null,
+          pontos: valorObjetiva,
+          ordem: q.numero,
+        };
+      });
+      const questoesDiscursivasInsert = Object.entries(av.questoes_subjetivas || {}).map(([numero, enunciado]) => ({
+        prova_id: prova.id,
+        enunciado,
+        imagem_base64: null,
+        tipo: 'dissertativa',
+        opcoes: null,
+        resposta_correta: null,
+        pontos: valorPorDiscursiva,
+        ordem: Number(numero),
+      }));
+
+      const { error: errQ } = await supabase.from('questoes').insert([...questoesObjetivasInsert, ...questoesDiscursivasInsert]);
+      if (errQ) throw errQ;
+
+      setCodigosPublicados(prev => ({ ...prev, [av.id]: codigo }));
+    } catch (e: any) {
+      setErro('Erro ao publicar prova online: ' + e.message);
+    } finally {
+      setPublicando(null);
+    }
+  }
+
+  function copiarMensagemOnline(av: Avaliacao, codigo: string) {
+    const baseUrl = window.location.origin;
+    const labelGrupo = getLabelGrupo(grupoDaTurma(av.turma_id));
+    const texto =
+      `📝 *${av.titulo}*\n🏫 ${labelGrupo}\n\n` +
+      `Acesse:\n${baseUrl}/responder\n\n` +
+      `🔑 Código: *${codigo}*\n\n_Instituto Odilon Pratagi_`;
+    navigator.clipboard.writeText(texto);
+    setCopiadoOnline(av.id);
+    setTimeout(() => setCopiadoOnline(null), 3000);
   }
 
   function setLetraCorreta(numero: number, letra: string) {
@@ -687,6 +774,31 @@ export function Avaliacoes() {
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
+
+                  {codigosPublicados[av.id] ? (
+                    <div className="flex items-center justify-between gap-2 bg-secondary-container rounded-xl px-3 py-2">
+                      <div>
+                        <p className="text-xs text-on-secondary-container">Prova online publicada — código:</p>
+                        <p className="text-sm font-black tracking-widest text-on-secondary-container">{codigosPublicados[av.id]}</p>
+                      </div>
+                      <button
+                        onClick={() => copiarMensagemOnline(av, codigosPublicados[av.id])}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-semibold shrink-0"
+                      >
+                        {copiadoOnline === av.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        {copiadoOnline === av.id ? 'Copiado!' : 'Copiar mensagem'}
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => publicarOnline(av)}
+                      disabled={publicando === av.id}
+                      className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-outline-variant text-on-surface text-xs font-semibold disabled:opacity-60"
+                    >
+                      <Share2 className="w-4 h-4" />
+                      {publicando === av.id ? 'Publicando...' : 'Publicar como Prova Online'}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
