@@ -423,14 +423,20 @@ export function AvaliacaoCorrigir() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-opus-4-5',
-          max_tokens: 400,
+          max_tokens: 600,
           messages: [{
             role: 'user',
             content: [
               { type: 'image', source: { type: 'base64', media_type: file.type || 'image/jpeg', data: base64 } },
               {
                 type: 'text',
-                text: `Esta é uma folha de respostas de prova impressa em papel do ensino fundamental. Ela tem EXATAMENTE ${qtd} questões objetivas (numeradas de 1 a ${qtd}) com alternativas ${(avaliacao.alternativas || ['A', 'B', 'C', 'D']).join(', ')} dispostas em círculos/bolinhas. O aluno preenche/pinta completamente a bolinha da alternativa escolhida deixando-a preta e sólida. Para CADA questão de 1 a ${qtd}, identifique qual bolinha está preenchida. Se nenhuma bolinha da questão estiver preenchida, use "". Se DUAS OU MAIS bolinhas da mesma questão estiverem preenchidas, use "AMBIGUA". Retorne SOMENTE um objeto JSON com EXATAMENTE ${qtd} chaves (de "1" a "${qtd}"), sem texto adicional, neste formato: ${JSON.stringify(exemploJson)}`
+                text: `Esta é uma folha de respostas de prova impressa em papel do ensino fundamental. Ela tem EXATAMENTE ${qtd} questões objetivas (numeradas de 1 a ${qtd}) com alternativas ${(avaliacao.alternativas || ['A', 'B', 'C', 'D']).join(', ')} dispostas em círculos/bolinhas. O aluno preenche/pinta completamente a bolinha da alternativa escolhida deixando-a preta e sólida.
+
+Examine CADA questão de 1 a ${qtd} de forma INDEPENDENTE e com o MESMO cuidado — inclusive a última (questão ${qtd}), que costuma ficar mais perto da borda da foto e é onde erros de leitura são mais comuns: confira com atenção extra qual bolinha dela está realmente preenchida antes de responder, sem adivinhar ou repetir o padrão das questões anteriores.
+
+Para CADA questão, identifique qual bolinha está preenchida. Se nenhuma bolinha da questão estiver preenchida, use "". Se DUAS OU MAIS bolinhas da mesma questão estiverem preenchidas, use "AMBIGUA". Se a questão ${qtd} estiver cortada/fora da foto e não for possível ver com certeza, use "" para ela em vez de arriscar uma letra.
+
+Retorne SOMENTE um objeto JSON com EXATAMENTE ${qtd} chaves (de "1" a "${qtd}"), sem texto adicional, neste formato: ${JSON.stringify(exemploJson)}`
               }
             ]
           }]
