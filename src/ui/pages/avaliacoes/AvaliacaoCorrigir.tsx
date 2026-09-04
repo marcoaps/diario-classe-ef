@@ -47,10 +47,12 @@ export function AvaliacaoCorrigir() {
   const folhaIgnoradaRef = useRef<string | null>(null);
   const falhasFolhaRef = useRef<{ folhaId: string | null; count: number }>({ folhaId: null, count: 0 });
 
+  const loopRef = useRef<() => void>(() => {});
+
   const [avaliacao, setAvaliacao] = useState<Avaliacao | null>(null);
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [loading, setLoading] = useState(true);
-  const [etapa, setEtapa] = useState<'identificar' | 'respostas' | 'ja_corrigida' | 'salvo'>('identificar');
+  const [etapa, setEtapa] = useState<'identificar' | 'aguardando_foto' | 'respostas' | 'ja_corrigida' | 'salvo'>('identificar');
   const [alunoDetectado, setAlunoDetectado] = useState<Aluno | null>(null);
   const [folhaId, setFolhaId] = useState<string | null>(null);
   const [identificacaoManual, setIdentificacaoManual] = useState(false);
@@ -135,8 +137,15 @@ export function AvaliacaoCorrigir() {
     setStatusCamera('parada');
   }
 
+  // Câmera fica ligada tanto em "identificar" (procurando QR) quanto em
+  // "aguardando_foto" (já sabe o aluno, esperando o toque manual pra
+  // fotografar a folha inteira) — usar esse booleano (em vez de `etapa`
+  // direto) como dependência evita que o efeito reinicie a câmera bem no
+  // meio da transição entre as duas etapas.
+  const cameraDeveFicarAtiva = modoCamera && (etapa === 'identificar' || etapa === 'aguardando_foto');
+
   useEffect(() => {
-    if (!modoCamera || etapa !== 'identificar') { pararCamera(); return; }
+    if (!cameraDeveFicarAtiva) { pararCamera(); return; }
 
     let cancelado = false;
     scanAtivoRef.current = true;
@@ -218,11 +227,11 @@ export function AvaliacaoCorrigir() {
 
             if (folhaIdLido && contagemConfirmacaoRef.current >= FRAMES_CONFIRMACAO) {
               processandoRef.current = true;
-              setAvisoScan('QR encontrado! Capturando...');
-              const resultado = await capturarECorrigir(video, lido!);
+              setAvisoScan('QR encontrado! Identificando aluno...');
+              const resultado = await identificarAluno(lido!, true);
               if (resultado === 'ok') {
                 scanAtivoRef.current = false;
-                return; // sai do loop — avançou de etapa
+                return; // sai do loop — aluno identificado, aguardando foto da folha inteira
               }
 
               if (falhasFolhaRef.current.folhaId === folhaIdLido) {
@@ -256,29 +265,33 @@ export function AvaliacaoCorrigir() {
       });
     }
 
+    loopRef.current = loop;
     iniciar();
     return () => { cancelado = true; pararCamera(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modoCamera, etapa, avaliacao?.id, alunos.length, tentativaCamera]);
+  }, [cameraDeveFicarAtiva, avaliacao?.id, alunos.length, tentativaCamera]);
 
-  // Congela o frame ATUAL em resolução cheia (melhor qualidade pra IA ler as
-  // bolhas do que o frame reduzido usado só pra achar o QR) e segue o mesmo
-  // caminho de validação usado no upload de arquivo.
-  async function capturarECorrigir(video: HTMLVideoElement, lido: QrAssinadoLido): Promise<ResultadoDeteccao> {
-    const canvasFull = document.createElement('canvas');
-    canvasFull.width = video.videoWidth;
-    canvasFull.height = video.videoHeight;
-    canvasFull.getContext('2d')!.drawImage(video, 0, 0);
-    const blob: Blob = await new Promise(res => canvasFull.toBlob(b => res(b as Blob), 'image/jpeg', 0.92));
-    const file = new File([blob], 'folha.jpg', { type: 'image/jpeg' });
-    // silencioso=true: quem decide se/quando mostrar o erro é o loop da
-    // câmera (que tenta de novo antes de desistir), não esta função.
-    return processarQrValidado(lido, file, true);
+  // Retoma o escaneamento sem re-pedir a câmera (usado ao cancelar a etapa
+  // "aguardando_foto" e voltar a procurar QR, ou depois de uma falha que não
+  // desistiu ainda) — a câmera já está ligada, só o loop de leitura para.
+  function retomarEscaneamento() {
+    setEtapa('identificar');
+    setAlunoDetectado(null);
+    setFolhaId(null);
+    setErro('');
+    setAvisoScan('');
+    scanAtivoRef.current = true;
+    contagemConfirmacaoRef.current = 0;
+    ultimoFolhaIdRef.current = null;
+    processandoRef.current = false;
+    loopRef.current();
   }
 
-  // Núcleo compartilhado: valida a assinatura do QR já decodificado (venha
-  // da câmera ao vivo ou de um arquivo estático) e segue o fluxo normal.
-  async function processarQrValidado(lido: QrAssinadoLido | null, file: File, silencioso = false): Promise<ResultadoDeteccao> {
+  // Identifica o aluno pelo QR (assinatura + prova + correção existente) —
+  // NÃO tira foto nenhuma ainda. A foto da folha inteira é um passo manual
+  // separado (etapa "aguardando_foto"), porque pra ler o QR de perto a
+  // câmera não enquadra a folha toda, e vice-versa.
+  async function identificarAluno(lido: QrAssinadoLido | null, silencioso = false): Promise<ResultadoDeteccao> {
     function falhar(resultado: ResultadoDeteccao): ResultadoDeteccao {
       if (!silencioso) setErro(MENSAGENS_ERRO_QR[resultado] || 'Não foi possível validar esta folha.');
       return resultado;
@@ -294,24 +307,40 @@ export function AvaliacaoCorrigir() {
     setErro('');
     setAvisoScan('');
     setIdentificacaoManual(false);
-    const hash = await calcularHash(file);
-    setArquivoHash(hash);
-    const url = URL.createObjectURL(file);
-
     const existente = await verificarCorrecaoExistente(aluno.id);
     setAlunoDetectado(aluno);
     setFolhaId(payload.folha_id);
-    setFotoPreview(url);
     if (existente) {
       setCorrecaoExistente(existente);
       setEtapa('ja_corrigida');
       return 'ok';
     }
-    await analisarFolhaComIA(file, url);
+    setEtapa('aguardando_foto');
     return 'ok';
   }
 
-  // Lê o QR de uma imagem estática (upload de arquivo/galeria).
+  // Passo manual: o professor já afastou a câmera pra enquadrar a folha
+  // inteira e toca no botão — congela ESSE frame (resolução cheia) e manda
+  // pra IA. Só é chamado depois que o aluno já foi identificado pelo QR.
+  async function tirarFotoCompleta() {
+    const video = videoRef.current;
+    if (!video || video.videoWidth === 0) return;
+    const canvasFull = document.createElement('canvas');
+    canvasFull.width = video.videoWidth;
+    canvasFull.height = video.videoHeight;
+    canvasFull.getContext('2d')!.drawImage(video, 0, 0);
+    const blob: Blob = await new Promise(res => canvasFull.toBlob(b => res(b as Blob), 'image/jpeg', 0.92));
+    const file = new File([blob], 'folha.jpg', { type: 'image/jpeg' });
+    const hash = await calcularHash(file);
+    setArquivoHash(hash);
+    const url = URL.createObjectURL(file);
+    pararCamera();
+    await analisarFolhaComIA(file, url);
+  }
+
+  // Lê o QR de uma imagem estática (upload de arquivo/galeria) — nesse
+  // caminho a foto já é a folha inteira de uma vez só (veio da galeria ou
+  // de uma foto tirada fora do app), então identifica e já analisa direto.
   async function lerQRDaImagem(file: File) {
     setErro('');
     const img = new Image();
@@ -332,7 +361,30 @@ export function AvaliacaoCorrigir() {
       }
       let lido: QrAssinadoLido | null = null;
       try { lido = JSON.parse(code.data); } catch { lido = null; }
-      await processarQrValidado(lido, file);
+
+      function falhar(resultado: ResultadoDeteccao) {
+        setErro(MENSAGENS_ERRO_QR[resultado] || 'Não foi possível validar esta folha.');
+      }
+      if (!lido?.payload || !lido?.assinatura) return falhar('invalido');
+      const { payload, assinatura } = lido;
+      if (!(await verificarQr(payload, assinatura))) return falhar('adulterado');
+      if (payload.prova_id !== id) return falhar('outra_prova');
+      const aluno = alunos.find(a => a.id === payload.aluno_id);
+      if (!aluno) return falhar('aluno_nao_encontrado');
+
+      setIdentificacaoManual(false);
+      const hash = await calcularHash(file);
+      setArquivoHash(hash);
+      setFotoPreview(url);
+      const existente = await verificarCorrecaoExistente(aluno.id);
+      setAlunoDetectado(aluno);
+      setFolhaId(payload.folha_id);
+      if (existente) {
+        setCorrecaoExistente(existente);
+        setEtapa('ja_corrigida');
+        return;
+      }
+      await analisarFolhaComIA(file, url);
     };
     img.src = url;
   }
@@ -559,36 +611,51 @@ export function AvaliacaoCorrigir() {
         </div>
       </div>
 
-      {/* ETAPA: IDENTIFICAR ALUNO */}
-      {etapa === 'identificar' && (
+      {/* ETAPA: IDENTIFICAR ALUNO (procurando QR) + AGUARDANDO_FOTO (aluno já identificado, esperando foto da folha inteira) */}
+      {(etapa === 'identificar' || etapa === 'aguardando_foto') && (
         <div className="space-y-4">
-          <div className="bg-secondary-container rounded-2xl p-4">
-            <p className="text-sm font-medium text-on-secondary-container">
-              {modoCamera ? 'Enquadre a FOLHA INTEIRA — não aproxime só no QR.' : 'Escolha a foto da folha preenchida do aluno.'}
-            </p>
-            <p className="text-xs text-on-secondary-container mt-1">
-              {modoCamera
-                ? 'O QR é reconhecido automaticamente mesmo de longe — mas a IA só consegue ler as respostas se a folha toda aparecer na foto.'
-                : 'O sistema lê o QR Code exclusivo da folha e detecta as respostas com IA.'}
-            </p>
-          </div>
+          {etapa === 'identificar' && (
+            <div className="bg-secondary-container rounded-2xl p-4">
+              <p className="text-sm font-medium text-on-secondary-container">
+                {modoCamera ? 'Aponte a câmera pro QR — pode ficar perto, só ele precisa aparecer.' : 'Escolha a foto da folha preenchida do aluno.'}
+              </p>
+              <p className="text-xs text-on-secondary-container mt-1">
+                {modoCamera
+                  ? 'Depois de identificar o aluno, o app pede pra você afastar e fotografar a folha inteira.'
+                  : 'O sistema lê o QR Code exclusivo da folha e detecta as respostas com IA.'}
+              </p>
+            </div>
+          )}
 
-          <div className="flex gap-2">
-            <button
-              onClick={() => setModoCamera(true)}
-              className={['flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold border',
-                modoCamera ? 'bg-primary text-on-primary border-primary' : 'bg-surface text-on-surface-variant border-outline-variant'].join(' ')}
-            >
-              <Camera className="w-4 h-4" /> Câmera (automático)
-            </button>
-            <button
-              onClick={() => setModoCamera(false)}
-              className={['flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold border',
-                !modoCamera ? 'bg-primary text-on-primary border-primary' : 'bg-surface text-on-surface-variant border-outline-variant'].join(' ')}
-            >
-              <Upload className="w-4 h-4" /> Galeria / arquivo
-            </button>
-          </div>
+          {etapa === 'aguardando_foto' && alunoDetectado && (
+            <div className="bg-tertiary-container rounded-2xl p-4">
+              <p className="text-sm font-medium text-on-tertiary-container">
+                ✅ {alunoDetectado.numero_chamada}. {alunoDetectado.nome}
+              </p>
+              <p className="text-xs text-on-tertiary-container mt-1">
+                Agora afaste a câmera até a folha inteira aparecer e toque em "Fotografar folha".
+              </p>
+            </div>
+          )}
+
+          {etapa === 'identificar' && (
+            <div className="flex gap-2">
+              <button
+                onClick={() => setModoCamera(true)}
+                className={['flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold border',
+                  modoCamera ? 'bg-primary text-on-primary border-primary' : 'bg-surface text-on-surface-variant border-outline-variant'].join(' ')}
+              >
+                <Camera className="w-4 h-4" /> Câmera (automático)
+              </button>
+              <button
+                onClick={() => setModoCamera(false)}
+                className={['flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold border',
+                  !modoCamera ? 'bg-primary text-on-primary border-primary' : 'bg-surface text-on-surface-variant border-outline-variant'].join(' ')}
+              >
+                <Upload className="w-4 h-4" /> Galeria / arquivo
+              </button>
+            </div>
+          )}
 
           {modoCamera ? (
             <div style={{ position: 'relative', width: '100%', aspectRatio: '3/4', borderRadius: 16, overflow: 'hidden', background: '#0f172a' }}>
@@ -596,17 +663,24 @@ export function AvaliacaoCorrigir() {
               <canvas ref={scanCanvasRef} style={{ display: 'none' }} />
               {/* Viewfinder */}
               <div style={{ position: 'absolute', inset: 24, border: '3px solid rgba(255,255,255,0.6)', borderRadius: 16, pointerEvents: 'none' }} />
-              <div style={{ position: 'absolute', left: 0, right: 0, top: 0, padding: '10px 14px', background: 'linear-gradient(rgba(0,0,0,0.65), transparent)', textAlign: 'center' }}>
-                <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>📄 Enquadre a folha inteira, não só o QR</span>
-              </div>
+              {etapa === 'identificar' && (
+                <div style={{ position: 'absolute', left: 0, right: 0, top: 0, padding: '10px 14px', background: 'linear-gradient(rgba(0,0,0,0.65), transparent)', textAlign: 'center' }}>
+                  <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>🔎 Mire no QR — pode ficar perto</span>
+                </div>
+              )}
+              {etapa === 'aguardando_foto' && (
+                <div style={{ position: 'absolute', left: 0, right: 0, top: 0, padding: '10px 14px', background: 'linear-gradient(rgba(0,0,0,0.65), transparent)', textAlign: 'center' }}>
+                  <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>📄 Afaste até a folha inteira aparecer</span>
+                </div>
+              )}
               <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '10px 14px', background: 'linear-gradient(transparent, rgba(0,0,0,0.65))', display: 'flex', alignItems: 'center', gap: 8 }}>
-                {(statusCamera === 'iniciando' || statusCamera === 'procurando') && (
+                {etapa === 'identificar' && (statusCamera === 'iniciando' || statusCamera === 'procurando') && (
                   <RefreshCw className={statusCamera === 'procurando' ? '' : 'animate-spin'} style={{ width: 16, height: 16, color: '#fff' }} />
                 )}
                 <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>
-                  {statusCamera === 'iniciando' && 'Ativando câmera...'}
-                  {statusCamera === 'procurando' && (avisoScan || 'Procurando QR Code...')}
-                  {statusCamera === 'erro' && (erroCamera || 'Não foi possível acessar a câmera. Use "Galeria / arquivo" abaixo.')}
+                  {etapa === 'identificar' && statusCamera === 'iniciando' && 'Ativando câmera...'}
+                  {etapa === 'identificar' && statusCamera === 'procurando' && (avisoScan || 'Procurando QR Code...')}
+                  {etapa === 'identificar' && statusCamera === 'erro' && (erroCamera || 'Não foi possível acessar a câmera. Use "Galeria / arquivo" abaixo.')}
                 </span>
               </div>
               {analisando && (
@@ -617,7 +691,20 @@ export function AvaliacaoCorrigir() {
               )}
             </div>
           ) : null}
-          {modoCamera && statusCamera === 'erro' && (
+
+          {etapa === 'aguardando_foto' && (
+            <div className="flex gap-2">
+              <button onClick={retomarEscaneamento} className="px-4 py-3 rounded-2xl border border-outline-variant text-on-surface-variant text-sm">
+                Cancelar
+              </button>
+              <button onClick={tirarFotoCompleta} disabled={analisando}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-on-primary font-semibold disabled:opacity-60">
+                📸 Fotografar folha
+              </button>
+            </div>
+          )}
+
+          {etapa === 'identificar' && modoCamera && statusCamera === 'erro' && (
             <button
               onClick={() => setTentativaCamera(t => t + 1)}
               className="w-full py-2 rounded-xl border border-outline-variant text-on-surface text-xs font-semibold"
@@ -625,12 +712,7 @@ export function AvaliacaoCorrigir() {
               🔄 Tentar acessar a câmera de novo
             </button>
           )}
-          {modoCamera && erro && (
-            <div className="flex items-start gap-2 text-sm text-error bg-error-container rounded-xl px-3 py-2">
-              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" /><span>{erro}</span>
-            </div>
-          )}
-          {!modoCamera && (
+          {etapa === 'identificar' && !modoCamera && (
             <div style={{ position: 'relative', width: '100%', borderRadius: 16, border: '2px dashed #94a3b8', overflow: 'hidden', background: analisando ? '#eff6ff' : '#fff' }}>
               {analisando && (
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#eff6ff', zIndex: 2, pointerEvents: 'none' }}>
@@ -653,12 +735,17 @@ export function AvaliacaoCorrigir() {
               </div>
             </div>
           )}
+          {etapa === 'identificar' && (
           <p className="text-xs text-center text-on-surface-variant">
             Mantenha a folha inteira visível, sem sombras, sem cortar os cantos. Fotografe de cima, com boa iluminação.
           </p>
+          )}
 
+          {etapa === 'identificar' && (
           <div className="text-center"><span className="text-xs text-on-surface-variant">ou, se o QR não puder ser lido</span></div>
+          )}
 
+          {etapa === 'identificar' && (
           <div className="space-y-2 max-h-64 overflow-y-auto">
             <p className="text-xs font-semibold text-on-surface-variant px-1">Selecionar aluno manualmente:</p>
             {alunos.map(al => (
@@ -672,6 +759,7 @@ export function AvaliacaoCorrigir() {
               </button>
             ))}
           </div>
+          )}
 
           {erro && (
             <div className="flex items-start gap-2 text-sm text-error bg-error-container rounded-xl px-3 py-2">
@@ -697,7 +785,7 @@ export function AvaliacaoCorrigir() {
               Voltar
             </button>
             <button
-              onClick={async () => { setCorrecaoExistente(null); if (fotoPreview) { const resp = await fetch(fotoPreview); const blob = await resp.blob(); await analisarFolhaComIA(new File([blob], 'folha.jpg', { type: blob.type }), fotoPreview); } }}
+              onClick={() => { setCorrecaoExistente(null); setEtapa('aguardando_foto'); }}
               className="flex-1 py-3 rounded-2xl bg-primary text-on-primary text-sm font-semibold"
             >
               Refazer correção
