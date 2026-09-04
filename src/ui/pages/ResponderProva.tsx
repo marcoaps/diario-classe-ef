@@ -78,19 +78,27 @@ Responda APENAS com JSON neste formato exato (sem markdown, sem explicações fo
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 200,
         messages: [{ role: 'user', content: prompt }],
       }),
     });
 
     const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data?.error?.message || data?.error || `erro ${response.status}`);
+    }
     const texto = data.content?.[0]?.text || '';
-    const json = JSON.parse(texto.trim());
+    if (!texto.trim()) throw new Error('resposta vazia da IA');
+    // Tolera cercas ```json e frases extras ao redor do bloco, em vez de
+    // exigir que a IA devolva o JSON perfeitamente puro (ela às vezes não devolve).
+    const semCercas = texto.replace(/```json|```/gi, '').trim();
+    const bloco = semCercas.match(/\{[\s\S]*\}/);
+    const json = JSON.parse(bloco ? bloco[0] : semCercas);
     const pontosObtidos = Math.min(Math.max(parseFloat(json.pontos) || 0, 0), pontos);
     return { pontosObtidos, justificativa: json.justificativa || 'Corrigido automaticamente.' };
   } catch (e) {
-    return { pontosObtidos: 0, justificativa: 'Erro na correção automática. Professor revisará.' };
+    return { pontosObtidos: 0, justificativa: 'Erro na correção automática (' + (e as Error).message + '). Professor revisará.' };
   }
 }
 
