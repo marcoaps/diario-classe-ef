@@ -14,7 +14,7 @@ interface QrAssinadoLido {
 }
 
 type SituacaoQuestao = 'correta' | 'incorreta' | 'branco' | 'dupla';
-type ResultadoDeteccao = 'ok' | 'invalido' | 'adulterado' | 'outra_prova' | 'aluno_nao_encontrado';
+type ResultadoDeteccao = 'ok' | 'invalido' | 'adulterado' | 'outra_prova' | 'aluno_nao_encontrado' | 'selecionar_manualmente';
 
 const MENSAGENS_ERRO_QR: Partial<Record<ResultadoDeteccao, string>> = {
   invalido: 'QR Code inválido — não é de uma folha gerada por este sistema.',
@@ -60,6 +60,7 @@ export function AvaliacaoCorrigir() {
   const folhaIgnoradaRef = useRef<string | null>(null);
   const falhasFolhaRef = useRef<{ folhaId: string | null; count: number }>({ folhaId: null, count: 0 });
   const framesDesdeChecagemRef = useRef(0);
+  const turmaConfirmadaRef = useRef<string | null>(null);
 
   const loopRef = useRef<() => void>(() => {});
 
@@ -69,6 +70,9 @@ export function AvaliacaoCorrigir() {
   const [etapa, setEtapa] = useState<'identificar' | 'lendo_bolhas' | 'respostas' | 'ja_corrigida' | 'salvo'>('identificar');
   const [qrVisivel, setQrVisivel] = useState(false);
   const [marcadoresVisiveis, setMarcadoresVisiveis] = useState(false);
+  // Preenchido quando o QR lido é de "código compartilhado por turma" (sem
+  // aluno_id) -- a lista de seleção manual fica filtrada só pra essa turma.
+  const [turmaConfirmada, setTurmaConfirmada] = useState<string | null>(null);
   const [confiancaPorQuestao, setConfiancaPorQuestao] = useState<Record<string, number>>({});
   const [alunoDetectado, setAlunoDetectado] = useState<Aluno | null>(null);
   const [folhaId, setFolhaId] = useState<string | null>(null);
@@ -157,6 +161,8 @@ export function AvaliacaoCorrigir() {
     ultimoFolhaIdRef.current = null;
     folhaIgnoradaRef.current = null;
     falhasFolhaRef.current = { folhaId: null, count: 0 };
+    turmaConfirmadaRef.current = null;
+    setTurmaConfirmada(null);
     setStatusCamera('parada');
     setQrVisivel(false);
     setMarcadoresVisiveis(false);
@@ -181,6 +187,7 @@ export function AvaliacaoCorrigir() {
   // — mesmo depois dela carregar de verdade — e nunca reconheceria ninguém.
   const alunosRef = useRef(alunos);
   useEffect(() => { alunosRef.current = alunos; }, [alunos]);
+  useEffect(() => { turmaConfirmadaRef.current = turmaConfirmada; }, [turmaConfirmada]);
 
   useEffect(() => {
     if (!cameraDeveFicarAtiva) { pararCamera(); return; }
@@ -252,30 +259,46 @@ export function AvaliacaoCorrigir() {
             setQrVisivel(true);
             let lido: QrAssinadoLido | null = null;
             try { lido = JSON.parse(code.data); } catch { lido = null; }
-            const folhaIdLido = lido?.payload?.folha_id ?? null;
+            // Chave de estabilidade: o conteúdo bruto do QR, não o folha_id --
+            // no modo compartilhado por turma não existe folha_id (fica
+            // ausente pra TODOS os alunos da turma), então usar folha_id
+            // travaria a confirmação por frames instantaneamente sem checar
+            // nada. O conteúdo do QR sempre existe e é único por folha/turma.
+            const chaveLida = code.data;
+
+            // Turma já confirmada por essa MESMA leitura — já está mostrando
+            // a lista filtrada, não precisa reprocessar a cada frame.
+            if (lido?.payload && !lido.payload.aluno_id && turmaConfirmadaRef.current === lido.payload.turma_id) {
+              loop();
+              return;
+            }
 
             // Essa folha já falhou demais vezes seguidas — não tenta de novo
             // sozinho (evita loop infinito), só mostra o aviso já definido.
-            if (folhaIdLido && folhaIdLido === folhaIgnoradaRef.current) { loop(); return; }
+            if (chaveLida === folhaIgnoradaRef.current) { loop(); return; }
 
-            if (folhaIdLido && folhaIdLido === ultimoFolhaIdRef.current) {
+            if (chaveLida === ultimoFolhaIdRef.current) {
               contagemConfirmacaoRef.current += 1;
             } else {
-              ultimoFolhaIdRef.current = folhaIdLido;
+              ultimoFolhaIdRef.current = chaveLida;
               contagemConfirmacaoRef.current = 1;
             }
 
-            if (folhaIdLido && contagemConfirmacaoRef.current >= FRAMES_CONFIRMACAO) {
+            if (contagemConfirmacaoRef.current >= FRAMES_CONFIRMACAO) {
               processandoRef.current = true;
               const resultado = await identificarAluno(lido!);
-              if (resultado !== 'ok') {
-                if (falhasFolhaRef.current.folhaId === folhaIdLido) {
+              if (resultado === 'selecionar_manualmente') {
+                // Não é falha — já filtrou a lista pra turma, só aguarda o toque no nome.
+                contagemConfirmacaoRef.current = 0;
+                ultimoFolhaIdRef.current = null;
+              } else if (resultado !== 'ok') {
+                if (falhasFolhaRef.current.folhaId === chaveLida) {
                   falhasFolhaRef.current.count += 1;
                 } else {
-                  falhasFolhaRef.current = { folhaId: folhaIdLido, count: 1 };
+                  falhasFolhaRef.current = { folhaId: chaveLida, count: 1 };
                 }
                 if (falhasFolhaRef.current.count >= MAX_FALHAS_CONSECUTIVAS) {
-                  folhaIgnoradaRef.current = folhaIdLido;
+                  folhaIgnoradaRef.current = chaveLida;
                   setErro(
                     (MENSAGENS_ERRO_QR[resultado] || 'Não foi possível validar esta folha.') +
                     ' Isso costuma acontecer quando a folha foi gerada com uma chave de assinatura de outro ambiente (ex: teste local vs. produção) — gere uma folha nova aqui, ou selecione o aluno manualmente abaixo.'
@@ -338,6 +361,17 @@ export function AvaliacaoCorrigir() {
       setDiagnosticoQr(`[DEBUG] QR prova_id=${payload.prova_id} · página atual id=${id}`);
       return 'outra_prova';
     }
+
+    // Código compartilhado por turma (sem aluno_id, gerado de propósito em
+    // AvaliacaoFolha.tsx) — a assinatura já confirmou que a folha é legítima
+    // e de qual turma, só falta o professor tocar em qual aluno é.
+    if (!payload.aluno_id) {
+      setDiagnosticoQr('');
+      setErro('');
+      setTurmaConfirmada(payload.turma_id);
+      return 'selecionar_manualmente';
+    }
+
     const aluno = alunosRef.current.find(a => a.id === payload.aluno_id);
     if (!aluno) {
       setDiagnosticoQr(`[DEBUG] QR aluno_id=${payload.aluno_id} · alunos carregados (${alunosRef.current.length}): ${alunosRef.current.map(a => a.id).join(', ')}`);
@@ -346,10 +380,11 @@ export function AvaliacaoCorrigir() {
     setDiagnosticoQr('');
 
     setErro('');
+    setTurmaConfirmada(null);
     setIdentificacaoManual(false);
     const existente = await verificarCorrecaoExistente(aluno.id);
     setAlunoDetectado(aluno);
-    setFolhaId(payload.folha_id);
+    setFolhaId(payload.folha_id ?? null);
     if (existente) {
       setCorrecaoExistente(existente);
       setEtapa('ja_corrigida');
@@ -567,8 +602,9 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
     e.target.value = '';
   }
 
-  // Seleção manual — usada quando o QR não pôde ser lido. Fica marcada como
-  // "identificação manual" no registro salvo (nunca some silenciosamente).
+  // Seleção manual — usada quando o QR não pôde ser lido (nem confirmar uma
+  // folha compartilhada). Fica marcada como "identificação manual" no
+  // registro salvo, e preenche as respostas em branco pra digitação na mão.
   function selecionarAlunoManual(aluno: Aluno) {
     if (!avaliacao) return;
     setModoCamera(false);
@@ -577,6 +613,28 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
     setIdentificacaoManual(true);
     setRespostas(Object.fromEntries(Array.from({ length: avaliacao.quantidade_objetivas }, (_, i) => [String(i + 1), ''])));
     setEtapa('respostas');
+  }
+
+  // Escolha do aluno depois de um QR compartilhado por turma já confirmado
+  // (assinatura válida, turma certa) — diferente de selecionarAlunoManual:
+  // aqui o QR JÁ validou a legitimidade da folha, só o aluno específico não
+  // dava pra saber sozinho. Por isso não marca "identificação manual" e segue
+  // pro fluxo normal de leitura das bolhas (etapa "lendo_bolhas"), não pro
+  // preenchimento totalmente manual.
+  async function confirmarAlunoDaTurma(aluno: Aluno) {
+    if (!avaliacao) return;
+    setErro('');
+    setTurmaConfirmada(null);
+    setIdentificacaoManual(false);
+    const existente = await verificarCorrecaoExistente(aluno.id);
+    setAlunoDetectado(aluno);
+    setFolhaId(null);
+    if (existente) {
+      setCorrecaoExistente(existente);
+      setEtapa('ja_corrigida');
+      return;
+    }
+    setEtapa('lendo_bolhas');
   }
 
   function alterarResposta(questao: string, letra: string) {
@@ -896,19 +954,32 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
           </p>
           )}
 
-          {etapa === 'identificar' && (
+          {etapa === 'identificar' && turmaConfirmada && (
+            <div className="bg-tertiary-container rounded-2xl p-4 flex items-center justify-between gap-2">
+              <p className="text-sm font-medium text-on-tertiary-container">
+                ✅ QR confirmado (turma {turmaConfirmada}) — toque no nome do aluno abaixo.
+              </p>
+              <button onClick={() => setTurmaConfirmada(null)} className="text-xs text-on-tertiary-container underline shrink-0">
+                Cancelar
+              </button>
+            </div>
+          )}
+
+          {etapa === 'identificar' && !turmaConfirmada && (
           <div className="text-center"><span className="text-xs text-on-surface-variant">ou, se o QR não puder ser lido</span></div>
           )}
 
           {etapa === 'identificar' && (
           <div className="space-y-2 max-h-64 overflow-y-auto">
-            <p className="text-xs font-semibold text-on-surface-variant px-1">Selecionar aluno manualmente:</p>
-            {alunos.map(al => (
-              <button key={al.id} onClick={() => selecionarAlunoManual(al)}
+            <p className="text-xs font-semibold text-on-surface-variant px-1">
+              {turmaConfirmada ? `Alunos da turma ${turmaConfirmada}:` : 'Selecionar aluno manualmente:'}
+            </p>
+            {(turmaConfirmada ? alunos.filter(al => al.turma_id === turmaConfirmada) : alunos).map(al => (
+              <button key={al.id} onClick={() => (turmaConfirmada ? confirmarAlunoDaTurma(al) : selecionarAlunoManual(al))}
                 className="w-full flex items-center justify-between px-4 py-3 bg-surface border border-outline-variant rounded-xl text-left">
                 <div>
                   <span className="text-xs text-on-surface-variant mr-2">
-                    {ehGrupoDeTurmas(avaliacao.turma_id) ? `${al.turma_id} ${al.numero_chamada}.` : `${al.numero_chamada}.`}
+                    {ehGrupoDeTurmas(avaliacao.turma_id) && !turmaConfirmada ? `${al.turma_id} ${al.numero_chamada}.` : `${al.numero_chamada}.`}
                   </span>
                   <span className="text-sm text-on-surface">{al.nome}</span>
                 </div>

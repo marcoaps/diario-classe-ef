@@ -436,6 +436,9 @@ export function AvaliacaoFolha() {
   const [erroGeracao, setErroGeracao] = useState('');
   const [gerandoIA, setGerandoIA] = useState(false);
   const [gerandoTextoApoio, setGerandoTextoApoio] = useState(false);
+  // Código compartilhado por turma: abre mão da identificação automática do
+  // aluno de propósito (ex: turmas muito grandes) -- ver gerarTodos() abaixo.
+  const [qrCompartilhadoPorTurma, setQrCompartilhadoPorTurma] = useState(false);
 
   useEffect(() => {
     async function init() {
@@ -532,36 +535,52 @@ export function AvaliacaoFolha() {
     }
   }
 
-  // Gera UMA folha (com QR exclusivo) por aluno da turma.
+  // Gera uma folha por aluno da turma. Por padrão, QR exclusivo por aluno
+  // (identifica automaticamente quem é quem ao corrigir). Se
+  // `qrCompartilhadoPorTurma` estiver ligado, reaproveita o MESMO QR
+  // assinado pra todos os alunos de cada turma -- menos chamadas de
+  // assinatura (rápido mesmo com muitos alunos), mas a correção passa a
+  // pedir que o professor escolha o aluno na lista (sem identificação
+  // automática), já que o QR não carrega mais quem é o aluno.
   async function gerarTodos() {
     if (!avaliacao || alunos.length === 0) return;
     setGeradoTodos(false);
     setFolhas({});
     setErroGeracao('');
     const novasFolhas: Record<string, string> = {};
+    const assinadosPorTurma = new Map<string, { payload: QrPayload; assinatura: string }>();
+
     for (let i = 0; i < alunos.length; i++) {
       setGerandoIdx(i);
       const aluno = alunos[i];
       try {
         const turmaDoAluno = aluno.turma_id || avaliacao.turma_id;
-        const { data: folhaRow, error } = await supabase
-          .from('folhas_respostas')
-          .upsert(
-            { avaliacao_id: avaliacao.id, aluno_id: aluno.id, turma_id: turmaDoAluno },
-            { onConflict: 'avaliacao_id,aluno_id' }
-          )
-          .select('id')
-          .single();
-        if (error || !folhaRow) throw new Error(error?.message || 'Falha ao registrar a folha.');
+        let payload: QrPayload;
+        let assinatura: string;
 
-        const payload: QrPayload = {
-          prova_id: avaliacao.id,
-          aluno_id: aluno.id,
-          turma_id: turmaDoAluno,
-          folha_id: folhaRow.id,
-          layout_version: LAYOUT_VERSION,
-        };
-        const assinatura = await assinarPayload(payload);
+        if (qrCompartilhadoPorTurma) {
+          const emCache = assinadosPorTurma.get(turmaDoAluno);
+          if (emCache) {
+            ({ payload, assinatura } = emCache);
+          } else {
+            payload = { prova_id: avaliacao.id, turma_id: turmaDoAluno, layout_version: LAYOUT_VERSION };
+            assinatura = await assinarPayload(payload);
+            assinadosPorTurma.set(turmaDoAluno, { payload, assinatura });
+          }
+        } else {
+          const { data: folhaRow, error } = await supabase
+            .from('folhas_respostas')
+            .upsert(
+              { avaliacao_id: avaliacao.id, aluno_id: aluno.id, turma_id: turmaDoAluno },
+              { onConflict: 'avaliacao_id,aluno_id' }
+            )
+            .select('id')
+            .single();
+          if (error || !folhaRow) throw new Error(error?.message || 'Falha ao registrar a folha.');
+          payload = { prova_id: avaliacao.id, aluno_id: aluno.id, turma_id: turmaDoAluno, folha_id: folhaRow.id, layout_version: LAYOUT_VERSION };
+          assinatura = await assinarPayload(payload);
+        }
+
         const canvas = document.createElement('canvas');
         await desenharFolhaQR(canvas, avaliacao, aluno, payload, assinatura);
         novasFolhas[aluno.id] = canvas.toDataURL('image/png');
@@ -726,13 +745,29 @@ export function AvaliacaoFolha() {
 
       <div className="bg-surface border border-outline-variant rounded-2xl p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold text-on-surface">Folhas de resposta (QR individual)</p>
+          <p className="text-sm font-semibold text-on-surface">
+            Folhas de resposta ({qrCompartilhadoPorTurma ? 'QR compartilhado por turma' : 'QR individual'})
+          </p>
           <button onClick={gerarTodos} disabled={gerandoIdx !== null || alunos.length === 0}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-semibold disabled:opacity-50">
             <QrCode className="w-3.5 h-3.5" />
             {gerandoIdx !== null ? `Gerando ${gerandoIdx + 1}/${alunos.length}...` : 'Gerar folhas da turma'}
           </button>
         </div>
+
+        <label className="flex items-start gap-2 text-xs text-on-surface-variant">
+          <input
+            type="checkbox"
+            checked={qrCompartilhadoPorTurma}
+            onChange={e => setQrCompartilhadoPorTurma(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>
+            <strong>Código compartilhado por turma</strong> (sem identificação automática) — mais rápido de
+            gerar quando há muitos alunos, mas ao corrigir você vai precisar tocar no nome do aluno numa
+            lista já filtrada pra turma dele, em vez do app reconhecer sozinho.
+          </span>
+        </label>
 
         {erroGeracao && <p className="text-xs text-red-500">{erroGeracao}</p>}
 

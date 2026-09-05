@@ -83,13 +83,21 @@ export function labelTurmaOuGrupo(turmaIdOuGrupo: string): string {
   return GRUPOS_CORRETOR.find(g => g.id === turmaIdOuGrupo)?.label || turmaIdOuGrupo;
 }
 
-/** Conteúdo (não assinado) embutido no QR Code de cada folha individual. */
+/**
+ * Conteúdo (não assinado) embutido no QR Code da folha. Por padrão é
+ * individual (`aluno_id`/`folha_id` presentes, identifica o aluno sozinho).
+ * Quando a folha usa CÓDIGO COMPARTILHADO POR TURMA (o professor abre mão da
+ * identificação automática de propósito — ver AvaliacaoFolha.tsx), o mesmo
+ * QR é reaproveitado em todas as folhas daquela turma e `aluno_id`/`folha_id`
+ * ficam ausentes; a tela de correção então pede pra escolher o aluno na lista
+ * já filtrada pra essa turma.
+ */
 export interface QrPayload {
   prova_id: string;
-  aluno_id: string;
   turma_id: string;
-  folha_id: string;
   layout_version: number;
+  aluno_id?: string;
+  folha_id?: string;
 }
 
 /** O que de fato vai impresso no QR: payload + assinatura HMAC do backend. */
