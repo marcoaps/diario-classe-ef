@@ -40,6 +40,7 @@ import { AvaliacaoFormatar } from './ui/pages/avaliacoes/AvaliacaoFormatar';
 import { ExerciciosFixacao } from './ui/pages/exercicios/ExerciciosFixacao';
 import { ExercicioFormatar } from './ui/pages/exercicios/ExercicioFormatar';
 import { GeradorQuestoes } from './ui/pages/avaliacoes/GeradorQuestoes';
+import { AvaliacaoGabaritoRapido } from './ui/pages/avaliacoes/AvaliacaoGabaritoRapido';
 import { GeradorCharges } from './ui/pages/charges/GeradorCharges';
 import { ChargesHistorico } from './ui/pages/charges/ChargesHistorico';
 import InterclassesIOP from './ui/pages/InterclassesIOP';
@@ -117,6 +118,7 @@ export default function App() {
           <Route path="/avaliacoes/resultados/:id" element={<AvaliacaoResultados />} />
           <Route path="/avaliacoes/formatar/:id" element={<AvaliacaoFormatar />} />
           <Route path="/avaliacoes/gerador" element={<GeradorQuestoes />} />
+          <Route path="/avaliacoes/gabarito-rapido" element={<AvaliacaoGabaritoRapido />} />
 
           {/* Exercicios de Fixacao — conteudo livre, poucas questoes, mesmo cabecalho/Formatar */}
           <Route path="/exercicios" element={<ExerciciosFixacao />} />

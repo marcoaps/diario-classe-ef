@@ -397,7 +397,14 @@ export function Avaliacoes() {
           <ClipboardList className="w-5 h-5 text-primary" />
           <h1 className="text-lg font-bold text-on-surface">Avaliações</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <button
+            onClick={() => navigate('/avaliacoes/gabarito-rapido')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-outline-variant text-on-surface text-sm font-semibold"
+          >
+            <ClipboardList className="w-4 h-4" />
+            Só o Gabarito
+          </button>
           <button
             onClick={() => navigate('/avaliacoes/gerador')}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary-container text-on-secondary-container text-sm font-semibold"
