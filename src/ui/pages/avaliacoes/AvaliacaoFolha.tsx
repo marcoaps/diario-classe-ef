@@ -5,6 +5,10 @@ import { ArrowLeft, Printer, FileText, Download, Sparkles, QrCode } from 'lucide
 import QRCode from 'qrcode';
 import type { Avaliacao, Aluno, QrPayload, QuestaoObjetiva } from './tiposCorretorProvas';
 import { LAYOUT_VERSION, valorPorQuestaoObjetiva } from './tiposCorretorProvas';
+import {
+  FOLHA_W, FOLHA_H, FOLHA_PAD, FOLHA_MARK, FOLHA_MARK_COL,
+  BUBBLE_R as BUBBLE_R_GEO, BUBBLE_GAP, GAP_APOS_CABECALHO, calcularGeometriaQuestoes,
+} from './geometriaFolha';
 
 export type { Avaliacao, Aluno } from './tiposCorretorProvas';
 
@@ -195,8 +199,8 @@ async function desenharFolhaQR(
   payload: QrPayload,
   assinatura: string
 ): Promise<void> {
-  const W = 794;
-  const H = 1123;
+  const W = FOLHA_W;
+  const H = FOLHA_H;
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d')!;
@@ -208,8 +212,8 @@ async function desenharFolhaQR(
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, W, H);
 
-  const MARK = 24;
-  const PAD = 16;
+  const MARK = FOLHA_MARK;
+  const PAD = FOLHA_PAD;
   const CX = PAD + MARK + 8;
   const CW = W - 2 * (PAD + MARK + 8);
 
@@ -304,21 +308,13 @@ async function desenharFolhaQR(
   ctx.fillText('• Marque apenas UMA alternativa por questão.', CX + 8, instrY + 64);
 
   // Questões objetivas — grade calculada pela quantidade real, nunca fixa.
-  const BUBBLE_R = 15;
-  const BUBBLE_GAP = 46;
-  const Q_START_X = CX + 8;
-  const Q_START_Y = instrY + 90;
-  // Espaço extra entre o título "QUESTÕES OBJETIVAS"/linha e a 1ª questão —
-  // sem isso a bolha da questão 1 ficava colada no cabeçalho.
-  const GAP_APOS_CABECALHO = 16;
-  const INICIO_BOLHAS_Y = Q_START_Y + GAP_APOS_CABECALHO;
-  const areaDisponivelAltura = H - PAD - MARK - 20 - INICIO_BOLHAS_Y - (qtdDisc > 0 ? 24 : 0);
-  // Se houver questões discursivas, reserva espaço fixo por caixa (mín. 90px cada);
-  // o resto da altura disponível é dividido entre as linhas de bolhas objetivas.
-  const alturaReservadaDiscursivas = qtdDisc * 95 + (qtdDisc > 0 ? 12 : 0);
-  const alturaParaObjetivas = Math.max(0, areaDisponivelAltura - alturaReservadaDiscursivas);
-  const Q_ROW_H = qtdObj > 0 ? Math.max(30, Math.min(52, alturaParaObjetivas / qtdObj)) : 0;
-  const ULTIMA_COLUNA_X = Q_START_X + 46 + (alternativas.length - 1) * BUBBLE_GAP;
+  // Geometria compartilhada com src/utils/omrEngine.ts (via geometriaFolha.ts)
+  // para a leitura por Visão Computacional nunca desalinhar do que é impresso aqui.
+  const BUBBLE_R = BUBBLE_R_GEO;
+  const { Q_START_X, INICIO_BOLHAS_Y, Q_ROW_H, ULTIMA_COLUNA_X, colTop, colBottom, colLeft, colRight } =
+    calcularGeometriaQuestoes(qtdObj, qtdDisc, alternativas.length);
+  // Espaço entre o título "QUESTÕES OBJETIVAS" e a 1ª bolha (ver geometriaFolha.ts).
+  const Q_START_Y = INICIO_BOLHAS_Y - GAP_APOS_CABECALHO;
 
   if (qtdObj > 0) {
     ctx.fillStyle = '#1e293b';
@@ -358,14 +354,10 @@ async function desenharFolhaQR(
     }
 
     // Marcadores da coluna de respostas — 4 cantos ao redor só das bolhas
-    // (menores que os marcadores de página), pra o professor conseguir
-    // enquadrar exatamente essa área ao fotografar só a coluna, sem precisar
-    // pegar a folha inteira.
-    const MARK_COL = 12;
-    const colTop = INICIO_BOLHAS_Y - 10;
-    const colBottom = INICIO_BOLHAS_Y + qtdObj * Q_ROW_H + 6;
-    const colLeft = Q_START_X - 10;
-    const colRight = ULTIMA_COLUNA_X + BUBBLE_R + 12;
+    // (menores que os marcadores de página), só como referência visual pro
+    // professor enquadrar bem essa área ao fotografar (a leitura em si usa as
+    // 4 marcas de página, que cobrem a folha inteira e incluem o QR).
+    const MARK_COL = FOLHA_MARK_COL;
     ctx.fillStyle = '#1e293b';
     ctx.fillRect(colLeft - MARK_COL, colTop - MARK_COL, MARK_COL, MARK_COL);
     ctx.fillRect(colRight, colTop - MARK_COL, MARK_COL, MARK_COL);
@@ -375,7 +367,7 @@ async function desenharFolhaQR(
 
   // Questões subjetivas — uma caixa por questão, altura dividida igualmente.
   if (qtdDisc > 0) {
-    const subjStartY = INICIO_BOLHAS_Y + qtdObj * Q_ROW_H + 18;
+    const subjStartY = INICIO_BOLHAS_Y + qtdObj * Q_ROW_H + 34;
     const boxH = Math.max(70, (H - PAD - MARK - 20 - subjStartY - (qtdDisc - 1) * 12) / qtdDisc);
     const HDR_H = 22;
     const GAP = 12;

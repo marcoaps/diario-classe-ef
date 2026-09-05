@@ -5,6 +5,8 @@ import { ArrowLeft, Upload, Camera, CheckCircle2, AlertCircle, Save, RefreshCw, 
 import jsQR from 'jsqr';
 import type { Avaliacao, Aluno, QrPayload } from './tiposCorretorProvas';
 import { arredondar, valorPorQuestaoObjetiva } from './tiposCorretorProvas';
+import { processarFolhaOMR, localizarAncorasNaFoto } from '../../../utils/omrEngine';
+import type { MotivoFalhaOMR } from '../../../utils/omrEngine';
 
 interface QrAssinadoLido {
   payload: QrPayload;
@@ -21,22 +23,33 @@ const MENSAGENS_ERRO_QR: Partial<Record<ResultadoDeteccao, string>> = {
   aluno_nao_encontrado: 'Aluno da folha não encontrado nesta turma.',
 };
 
-/** Frames consecutivos com o MESMO folha_id exigidos antes de capturar —
- * evita capturar um frame borrado no instante exato em que o QR aparece. */
+const MENSAGENS_ERRO_OMR: Record<MotivoFalhaOMR, string> = {
+  sem_objetivas: 'Esta avaliação não tem questões objetivas para ler.',
+  ancoras_nao_encontradas: 'Não consegui localizar os 4 marcadores pretos ao redor da coluna de respostas. Aproxime mais, melhore a iluminação e evite sombra sobre os marcadores, e tente de novo.',
+  geometria_invalida: 'Os marcadores foram encontrados mas ficaram alinhados de um jeito inválido (foto muito inclinada). Tente fotografar mais de frente.',
+};
+
+/** Frames consecutivos com o MESMO folha_id exigidos antes de identificar o
+ * aluno — evita travar num frame borrado no instante exato em que o QR aparece. */
 const FRAMES_CONFIRMACAO = 2;
-/** Largura máxima do frame usado só pra procurar o QR (mais rápido que
- * rodar jsQR na resolução cheia da câmera a cada frame). */
+/** Largura máxima do frame usado pra procurar o QR de perto (etapa 1) e pro
+ * indicativo "marcadores visíveis" (etapa 2) — mais rápido que processar a
+ * resolução cheia da câmera a cada frame. */
 const LARGURA_SCAN = 480;
 /** Depois de N falhas seguidas verificando o MESMO QR, para de tentar
- * automaticamente (evita loop infinito batendo no backend) e mostra um
- * aviso explicando a causa mais provável — geralmente a folha foi gerada
- * assinada com um QR_SECRET de outro ambiente (ex: teste local vs. produção). */
+ * automaticamente (evita loop infinito) e mostra um aviso explicando a causa
+ * mais provável — geralmente a folha foi gerada com uma chave de assinatura
+ * de outro ambiente (ex: teste local vs. produção). */
 const MAX_FALHAS_CONSECUTIVAS = 3;
+/** A cada quantos frames o indicativo "marcadores visíveis" (etapa 2) roda a
+ * busca de âncoras — não precisa ser todo frame, é só um indicativo visual. */
+const INTERVALO_CHECAGEM_MARCADORES = 4;
 
 export function AvaliacaoCorrigir() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputDiscursivasRef = useRef<HTMLInputElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const scanCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -46,22 +59,29 @@ export function AvaliacaoCorrigir() {
   const contagemConfirmacaoRef = useRef(0);
   const folhaIgnoradaRef = useRef<string | null>(null);
   const falhasFolhaRef = useRef<{ folhaId: string | null; count: number }>({ folhaId: null, count: 0 });
+  const framesDesdeChecagemRef = useRef(0);
 
   const loopRef = useRef<() => void>(() => {});
 
   const [avaliacao, setAvaliacao] = useState<Avaliacao | null>(null);
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [loading, setLoading] = useState(true);
-  const [etapa, setEtapa] = useState<'identificar' | 'aguardando_foto' | 'respostas' | 'ja_corrigida' | 'salvo'>('identificar');
+  const [etapa, setEtapa] = useState<'identificar' | 'lendo_bolhas' | 'respostas' | 'ja_corrigida' | 'salvo'>('identificar');
+  const [qrVisivel, setQrVisivel] = useState(false);
+  const [marcadoresVisiveis, setMarcadoresVisiveis] = useState(false);
+  const [confiancaPorQuestao, setConfiancaPorQuestao] = useState<Record<string, number>>({});
   const [alunoDetectado, setAlunoDetectado] = useState<Aluno | null>(null);
   const [folhaId, setFolhaId] = useState<string | null>(null);
   const [identificacaoManual, setIdentificacaoManual] = useState(false);
   const [respostas, setRespostas] = useState<Record<string, string>>({});
   const [notaDiscursivaStr, setNotaDiscursivaStr] = useState('');
+  const [sugerindoNotaIA, setSugerindoNotaIA] = useState(false);
+  const [justificativaIA, setJustificativaIA] = useState('');
+  const [erroSugestaoIA, setErroSugestaoIA] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [analisando, setAnalisando] = useState(false);
   const [erro, setErro] = useState('');
-  const [avisoScan, setAvisoScan] = useState('');
+  const [diagnosticoQr, setDiagnosticoQr] = useState('');
   const [fotoPreview, setFotoPreview] = useState<string>('');
   const [arquivoHash, setArquivoHash] = useState<string>('');
   const [correcaoExistente, setCorrecaoExistente] = useState<{ nota_final: number; escaneado_em: string | null } | null>(null);
@@ -137,14 +157,29 @@ export function AvaliacaoCorrigir() {
     folhaIgnoradaRef.current = null;
     falhasFolhaRef.current = { folhaId: null, count: 0 };
     setStatusCamera('parada');
+    setQrVisivel(false);
+    setMarcadoresVisiveis(false);
   }
 
-  // Câmera fica ligada tanto em "identificar" (procurando QR) quanto em
-  // "aguardando_foto" (já sabe o aluno, esperando o toque manual pra
-  // fotografar a folha inteira) — usar esse booleano (em vez de `etapa`
-  // direto) como dependência evita que o efeito reinicie a câmera bem no
-  // meio da transição entre as duas etapas.
-  const cameraDeveFicarAtiva = modoCamera && (etapa === 'identificar' || etapa === 'aguardando_foto');
+  // Câmera fica ligada tanto em "identificar" (QR de perto) quanto em
+  // "lendo_bolhas" (aluno já identificado, alinhando nos marcadores da coluna
+  // de respostas) — usar esse booleano evita reiniciar a câmera na transição
+  // entre as duas etapas.
+  const cameraDeveFicarAtiva = modoCamera && (etapa === 'identificar' || etapa === 'lendo_bolhas');
+
+  // O loop de câmera lê `etapa` a cada frame por uma ref: `cameraDeveFicarAtiva`
+  // não muda entre "identificar" e "lendo_bolhas", então o efeito abaixo não
+  // reexecuta ao trocar de uma pra outra — sem a ref, o loop ficaria preso
+  // checando pra sempre a etapa de quando foi criado.
+  const etapaRef = useRef(etapa);
+  useEffect(() => { etapaRef.current = etapa; }, [etapa]);
+
+  // Mesmo motivo, pra `alunos`: a câmera liga assim que a página monta, antes
+  // da lista de alunos terminar de carregar (chamada assíncrona separada). Sem
+  // essa ref, o loop ficaria pra sempre com a lista vazia de quando foi criado
+  // — mesmo depois dela carregar de verdade — e nunca reconheceria ninguém.
+  const alunosRef = useRef(alunos);
+  useEffect(() => { alunosRef.current = alunos; }, [alunos]);
 
   useEffect(() => {
     if (!cameraDeveFicarAtiva) { pararCamera(); return; }
@@ -199,26 +234,28 @@ export function AvaliacaoCorrigir() {
         if (!scanAtivoRef.current || cancelado) return;
         const video = videoRef.current;
         const canvas = scanCanvasRef.current;
-        if (video && canvas && video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth > 0 && !processandoRef.current) {
-          const escala = Math.min(1, LARGURA_SCAN / video.videoWidth);
-          canvas.width = Math.round(video.videoWidth * escala);
-          canvas.height = Math.round(video.videoHeight * escala);
-          const ctx = canvas.getContext('2d')!;
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        if (!(video && canvas && video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth > 0)) { loop(); return; }
+
+        const escala = Math.min(1, LARGURA_SCAN / video.videoWidth);
+        canvas.width = Math.round(video.videoWidth * escala);
+        canvas.height = Math.round(video.videoHeight * escala);
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        if (etapaRef.current === 'identificar') {
+          if (processandoRef.current) { loop(); return; }
           const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const code = jsQR(imageData.data, imageData.width, imageData.height);
 
           if (code) {
+            setQrVisivel(true);
             let lido: QrAssinadoLido | null = null;
             try { lido = JSON.parse(code.data); } catch { lido = null; }
             const folhaIdLido = lido?.payload?.folha_id ?? null;
 
             // Essa folha já falhou demais vezes seguidas — não tenta de novo
             // sozinho (evita loop infinito), só mostra o aviso já definido.
-            if (folhaIdLido && folhaIdLido === folhaIgnoradaRef.current) {
-              loop();
-              return;
-            }
+            if (folhaIdLido && folhaIdLido === folhaIgnoradaRef.current) { loop(); return; }
 
             if (folhaIdLido && folhaIdLido === ultimoFolhaIdRef.current) {
               contagemConfirmacaoRef.current += 1;
@@ -229,40 +266,41 @@ export function AvaliacaoCorrigir() {
 
             if (folhaIdLido && contagemConfirmacaoRef.current >= FRAMES_CONFIRMACAO) {
               processandoRef.current = true;
-              setAvisoScan('QR encontrado! Identificando aluno...');
-              const resultado = await identificarAluno(lido!, true);
-              if (resultado === 'ok') {
-                scanAtivoRef.current = false;
-                return; // sai do loop — aluno identificado, aguardando foto da folha inteira
+              const resultado = await identificarAluno(lido!);
+              if (resultado !== 'ok') {
+                if (falhasFolhaRef.current.folhaId === folhaIdLido) {
+                  falhasFolhaRef.current.count += 1;
+                } else {
+                  falhasFolhaRef.current = { folhaId: folhaIdLido, count: 1 };
+                }
+                if (falhasFolhaRef.current.count >= MAX_FALHAS_CONSECUTIVAS) {
+                  folhaIgnoradaRef.current = folhaIdLido;
+                  setErro(
+                    (MENSAGENS_ERRO_QR[resultado] || 'Não foi possível validar esta folha.') +
+                    ' Isso costuma acontecer quando a folha foi gerada com uma chave de assinatura de outro ambiente (ex: teste local vs. produção) — gere uma folha nova aqui, ou selecione o aluno manualmente abaixo.'
+                  );
+                }
+                contagemConfirmacaoRef.current = 0;
+                ultimoFolhaIdRef.current = null;
               }
-
-              if (falhasFolhaRef.current.folhaId === folhaIdLido) {
-                falhasFolhaRef.current.count += 1;
-              } else {
-                falhasFolhaRef.current = { folhaId: folhaIdLido, count: 1 };
-              }
-
-              if (falhasFolhaRef.current.count >= MAX_FALHAS_CONSECUTIVAS) {
-                folhaIgnoradaRef.current = folhaIdLido;
-                setAvisoScan('');
-                setErro(
-                  (MENSAGENS_ERRO_QR[resultado] || 'Não foi possível validar esta folha.') +
-                  ' Isso costuma acontecer quando a folha foi gerada com uma chave de assinatura de outro ambiente (ex: teste local vs. produção) — gere uma folha nova aqui, ou selecione o aluno manualmente abaixo.'
-                );
-              } else {
-                setAvisoScan('QR não confere, tentando de novo...');
-              }
-
-              contagemConfirmacaoRef.current = 0;
-              ultimoFolhaIdRef.current = null;
               processandoRef.current = false;
             }
-          } else if (!processandoRef.current) {
+          } else {
+            setQrVisivel(false);
             ultimoFolhaIdRef.current = null;
             contagemConfirmacaoRef.current = 0;
-            setAvisoScan('');
+          }
+        } else if (etapaRef.current === 'lendo_bolhas') {
+          // Indicativo leve — só busca as âncoras (sem homografia/threshold/
+          // classificação), a cada poucos frames. A leitura de verdade roda em
+          // resolução alta quando o professor toca em "Ler Respostas".
+          framesDesdeChecagemRef.current += 1;
+          if (framesDesdeChecagemRef.current >= INTERVALO_CHECAGEM_MARCADORES) {
+            framesDesdeChecagemRef.current = 0;
+            setMarcadoresVisiveis(!!localizarAncorasNaFoto(canvas, 'coluna'));
           }
         }
+
         loop();
       });
     }
@@ -271,18 +309,16 @@ export function AvaliacaoCorrigir() {
     iniciar();
     return () => { cancelado = true; pararCamera(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cameraDeveFicarAtiva, avaliacao?.id, alunos.length, tentativaCamera]);
+  }, [cameraDeveFicarAtiva, tentativaCamera]);
 
-  // Retoma o escaneamento sem re-pedir a câmera (usado ao cancelar a etapa
-  // "aguardando_foto" e voltar a procurar QR, ou depois de uma falha que não
-  // desistiu ainda) — a câmera já está ligada, só o loop de leitura para.
-  function retomarEscaneamento() {
+  // Volta pra etapa "identificar" sem re-pedir a câmera (usado ao cancelar a
+  // etapa "lendo_bolhas") — a câmera já está ligada, só o que o loop faz muda.
+  function voltarParaIdentificar() {
     setEtapa('identificar');
     setAlunoDetectado(null);
     setFolhaId(null);
     setErro('');
-    setAvisoScan('');
-    scanAtivoRef.current = true;
+    setCorrecaoExistente(null);
     contagemConfirmacaoRef.current = 0;
     ultimoFolhaIdRef.current = null;
     processandoRef.current = false;
@@ -290,24 +326,25 @@ export function AvaliacaoCorrigir() {
   }
 
   // Identifica o aluno pelo QR (assinatura + prova + correção existente) —
-  // NÃO tira foto nenhuma ainda. A foto da folha inteira é um passo manual
-  // separado (etapa "aguardando_foto"), porque pra ler o QR de perto a
-  // câmera não enquadra a folha toda, e vice-versa.
-  async function identificarAluno(lido: QrAssinadoLido | null, silencioso = false): Promise<ResultadoDeteccao> {
-    function falhar(resultado: ResultadoDeteccao): ResultadoDeteccao {
-      if (!silencioso) setErro(MENSAGENS_ERRO_QR[resultado] || 'Não foi possível validar esta folha.');
-      return resultado;
-    }
-    if (!lido?.payload || !lido?.assinatura) return falhar('invalido');
+  // NÃO lê nenhuma bolha ainda. A leitura das respostas é um passo separado
+  // (etapa "lendo_bolhas"): pra ler o QR de perto a câmera não enquadra a
+  // coluna de respostas com resolução suficiente, e vice-versa.
+  async function identificarAluno(lido: QrAssinadoLido | null): Promise<ResultadoDeteccao> {
+    if (!lido?.payload || !lido?.assinatura) return 'invalido';
     const { payload, assinatura } = lido;
-    const assinaturaValida = await verificarQr(payload, assinatura);
-    if (!assinaturaValida) return falhar('adulterado');
-    if (payload.prova_id !== id) return falhar('outra_prova');
-    const aluno = alunos.find(a => a.id === payload.aluno_id);
-    if (!aluno) return falhar('aluno_nao_encontrado');
+    if (!(await verificarQr(payload, assinatura))) return 'adulterado';
+    if (payload.prova_id !== id) {
+      setDiagnosticoQr(`[DEBUG] QR prova_id=${payload.prova_id} · página atual id=${id}`);
+      return 'outra_prova';
+    }
+    const aluno = alunosRef.current.find(a => a.id === payload.aluno_id);
+    if (!aluno) {
+      setDiagnosticoQr(`[DEBUG] QR aluno_id=${payload.aluno_id} · alunos carregados (${alunosRef.current.length}): ${alunosRef.current.map(a => a.id).join(', ')}`);
+      return 'aluno_nao_encontrado';
+    }
+    setDiagnosticoQr('');
 
     setErro('');
-    setAvisoScan('');
     setIdentificacaoManual(false);
     const existente = await verificarCorrecaoExistente(aluno.id);
     setAlunoDetectado(aluno);
@@ -317,14 +354,15 @@ export function AvaliacaoCorrigir() {
       setEtapa('ja_corrigida');
       return 'ok';
     }
-    setEtapa('aguardando_foto');
+    setEtapa('lendo_bolhas');
     return 'ok';
   }
 
-  // Passo manual: o professor já afastou a câmera pra enquadrar a folha
-  // inteira e toca no botão — congela ESSE frame (resolução cheia) e manda
-  // pra IA. Só é chamado depois que o aluno já foi identificado pelo QR.
-  async function tirarFotoCompleta() {
+  // Passo manual: o professor já aproximou a câmera da coluna de respostas,
+  // alinhando nos 4 marcadores pretos ao redor dela, e toca no botão —
+  // congela ESSE frame (resolução cheia) e lê as bolhas por Visão Computacional.
+  async function lerRespostas() {
+    if (!avaliacao) return;
     const video = videoRef.current;
     setErro('');
     if (!video || video.videoWidth === 0) {
@@ -332,84 +370,129 @@ export function AvaliacaoCorrigir() {
       return;
     }
     setCapturandoFoto(true);
+    setAnalisando(true);
     try {
       const canvasFull = document.createElement('canvas');
       canvasFull.width = video.videoWidth;
       canvasFull.height = video.videoHeight;
       canvasFull.getContext('2d')!.drawImage(video, 0, 0);
-      const blob: Blob | null = await new Promise(res => canvasFull.toBlob(res, 'image/jpeg', 0.92));
-      if (!blob) throw new Error('Não foi possível gerar a foto a partir da câmera.');
-      const file = new File([blob], 'folha.jpg', { type: 'image/jpeg' });
-      const hash = await calcularHash(file);
-      setArquivoHash(hash);
-      const url = URL.createObjectURL(file);
+
+      const alternativas = avaliacao.alternativas?.length ? avaliacao.alternativas : ['A', 'B', 'C', 'D'];
+      const resultadoOMR = processarFolhaOMR(canvasFull, {
+        qtdObjetivas: avaliacao.quantidade_objetivas,
+        qtdDiscursivas: avaliacao.quantidade_discursivas,
+        alternativas,
+      }, 'coluna');
+
+      if (!resultadoOMR.ok) {
+        setErro(MENSAGENS_ERRO_OMR[resultadoOMR.motivo!] || 'Não foi possível ler as respostas desta foto.');
+        return;
+      }
+
+      const blob: Blob | null = await new Promise(res => canvasFull.toBlob(res, 'image/jpeg', 0.9));
+      if (blob) setArquivoHash(await calcularHash(blob));
+
+      setRespostas(resultadoOMR.respostas);
+      setConfiancaPorQuestao(resultadoOMR.confiancaPorQuestao);
+      setFotoPreview(resultadoOMR.imagemRetificadaDataUrl || '');
       pararCamera();
-      await analisarFolhaComIA(file, url);
+      setEtapa('respostas');
     } catch (e) {
-      setErro('Erro ao capturar a foto: ' + ((e as Error)?.message || 'tente de novo.'));
+      setErro('Erro ao ler a foto: ' + ((e as Error)?.message || 'tente de novo.'));
     } finally {
       setCapturandoFoto(false);
+      setAnalisando(false);
     }
   }
 
-  // Lê o QR de uma imagem estática (upload de arquivo/galeria) — nesse
-  // caminho a foto já é a folha inteira de uma vez só (veio da galeria ou
-  // de uma foto tirada fora do app), então identifica e já analisa direto.
-  async function lerQRDaImagem(file: File) {
+  // Upload de arquivo/galeria — nesse caminho a foto já é a folha INTEIRA de
+  // uma vez só (veio de fora do app), então identifica e já lê as bolhas
+  // direto, usando as 4 marcas dos CANTOS DA PÁGINA (modo 'pagina').
+  function lerQRDaImagem(file: File) {
+    if (!avaliacao) return;
     setErro('');
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = async () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(img, 0, 0);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const code = jsQR(imageData.data, imageData.width, imageData.height);
+      setAnalisando(true);
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
 
-      if (!code) {
-        setErro('QR Code não encontrado na imagem. Certifique-se de que ele está visível e não está cortado, ou selecione o aluno manualmente abaixo.');
-        setFotoPreview(url);
-        return;
-      }
-      let lido: QrAssinadoLido | null = null;
-      try { lido = JSON.parse(code.data); } catch { lido = null; }
+        function falhar(resultado: ResultadoDeteccao) {
+          setErro(MENSAGENS_ERRO_QR[resultado] || 'Não foi possível validar esta folha.');
+          setFotoPreview(url);
+        }
 
-      function falhar(resultado: ResultadoDeteccao) {
-        setErro(MENSAGENS_ERRO_QR[resultado] || 'Não foi possível validar esta folha.');
-      }
-      if (!lido?.payload || !lido?.assinatura) return falhar('invalido');
-      const { payload, assinatura } = lido;
-      if (!(await verificarQr(payload, assinatura))) return falhar('adulterado');
-      if (payload.prova_id !== id) return falhar('outra_prova');
-      const aluno = alunos.find(a => a.id === payload.aluno_id);
-      if (!aluno) return falhar('aluno_nao_encontrado');
+        let lido: QrAssinadoLido | null = null;
+        if (code) { try { lido = JSON.parse(code.data); } catch { lido = null; } }
+        if (!lido?.payload || !lido?.assinatura) { falhar('invalido'); return; }
+        const { payload, assinatura } = lido;
+        if (!(await verificarQr(payload, assinatura))) { falhar('adulterado'); return; }
+        if (payload.prova_id !== id) { falhar('outra_prova'); return; }
+        const aluno = alunos.find(a => a.id === payload.aluno_id);
+        if (!aluno) { falhar('aluno_nao_encontrado'); return; }
 
-      setIdentificacaoManual(false);
-      const hash = await calcularHash(file);
-      setArquivoHash(hash);
-      setFotoPreview(url);
-      const existente = await verificarCorrecaoExistente(aluno.id);
-      setAlunoDetectado(aluno);
-      setFolhaId(payload.folha_id);
-      if (existente) {
-        setCorrecaoExistente(existente);
-        setEtapa('ja_corrigida');
-        return;
+        setIdentificacaoManual(false);
+        const existente = await verificarCorrecaoExistente(aluno.id);
+        setAlunoDetectado(aluno);
+        setFolhaId(payload.folha_id);
+        if (existente) {
+          setCorrecaoExistente(existente);
+          setEtapa('ja_corrigida');
+          return;
+        }
+
+        const avaliacaoAtual = avaliacao!;
+        const alternativas = avaliacaoAtual.alternativas?.length ? avaliacaoAtual.alternativas : ['A', 'B', 'C', 'D'];
+        const resultadoOMR = processarFolhaOMR(canvas, {
+          qtdObjetivas: avaliacaoAtual.quantidade_objetivas,
+          qtdDiscursivas: avaliacaoAtual.quantidade_discursivas,
+          alternativas,
+        }, 'pagina');
+
+        if (!resultadoOMR.ok) {
+          setErro(MENSAGENS_ERRO_OMR[resultadoOMR.motivo!] || 'Não foi possível ler as respostas desta foto.');
+          setAlunoDetectado(null);
+          setFolhaId(null);
+          setFotoPreview(url);
+          return;
+        }
+
+        const hash = await calcularHash(file);
+        setArquivoHash(hash);
+        setRespostas(resultadoOMR.respostas);
+        setConfiancaPorQuestao(resultadoOMR.confiancaPorQuestao);
+        setFotoPreview(resultadoOMR.imagemRetificadaDataUrl || url);
+        setEtapa('respostas');
+      } finally {
+        setAnalisando(false);
       }
-      await analisarFolhaComIA(file, url);
     };
     img.src = url;
   }
 
-  // Analisa a folha com IA para detectar respostas — dinâmico pela quantidade
-  // real de questões da avaliação (nunca um número fixo no código).
-  async function analisarFolhaComIA(file: File, previewUrl: string) {
+  function handleUploadFolha(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    lerQRDaImagem(file);
+  }
+
+  // Discursiva é texto escrito à mão — não dá pra ler com o motor determinístico
+  // (esse só lê marcas em posições fixas). Aqui, e só aqui, ainda usamos IA de
+  // visão — mas apenas para a área das discursivas, nunca a prova toda, e o
+  // resultado é sempre uma SUGESTÃO: o campo de nota continua editável, o
+  // professor confirma ou ajusta antes de salvar (Human-in-the-Loop).
+  async function sugerirNotaDiscursivasComIA(file: File) {
     if (!avaliacao) return;
-    setAnalisando(true);
-    setErro('');
-    const qtd = avaliacao.quantidade_objetivas;
+    setErroSugestaoIA('');
+    setJustificativaIA('');
+    setSugerindoNotaIA(true);
     try {
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -418,62 +501,65 @@ export function AvaliacaoCorrigir() {
         reader.readAsDataURL(file);
       });
 
-      const exemploJson = Object.fromEntries(Array.from({ length: qtd }, (_, i) => [String(i + 1), 'A']));
-      const res = await fetch('/api/claude', {
+      const numeros = Array.from({ length: avaliacao.quantidade_discursivas }, (_, i) => avaliacao.quantidade_objetivas + i + 1);
+      const enunciados = numeros
+        .map(n => avaliacao.questoes_subjetivas?.[String(n)]?.trim())
+        .filter(Boolean);
+      const temEnunciado = enunciados.length > 0;
+      const valorMax = avaliacao.valor_total_discursivas;
+
+      const prompt = temEnunciado
+        ? `Você é professor de ${avaliacao.disciplina || 'Educação Física'} do Ensino Fundamental corrigindo as respostas discursivas (manuscritas) de uma prova em papel.
+
+QUESTÕES (valem juntas ${valorMax.toFixed(1)} pontos no total):
+${numeros.map(n => `Q${n}: ${avaliacao.questoes_subjetivas?.[String(n)] || '(sem enunciado cadastrado)'}`).join('\n')}
+
+Na foto está a resposta manuscrita do aluno para essa(s) questão(ões). Leia a letra manuscrita com atenção, avalie se a resposta tem relação com o tema e responde ao que foi pedido. Respostas sem relação, ilegíveis ou em branco valem 0. Respostas parciais valem proporcionalmente. Seja justo mas rigoroso.
+
+Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) neste formato: {"nota": <número de 0 a ${valorMax}, até 1 casa decimal>, "justificativa": "<frase curta, até 25 palavras, explicando a nota>"}`
+        : `Você é professor de ${avaliacao.disciplina || 'Educação Física'} do Ensino Fundamental. Na foto está uma resposta discursiva manuscrita de um aluno, mas não há o enunciado da questão cadastrado neste sistema — então você não pode avaliar se está CORRETA, só transcrever e dar um parecer geral de completude/legibilidade.
+
+Essas questões valem juntas ${valorMax.toFixed(1)} pontos no total. Leia a letra manuscrita e avalie apenas se a resposta parece completa, desenvolvida e legível (não se está certa, já que o enunciado não está disponível). Em branco ou ilegível vale 0.
+
+Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) neste formato: {"nota": <número de 0 a ${valorMax}, até 1 casa decimal>, "justificativa": "<frase curta, até 25 palavras, deixando claro que é uma estimativa sem o enunciado> — confira com atenção antes de salvar."}`;
+
+      const resp = await fetch('/api/claude', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-opus-4-5',
-          max_tokens: 600,
+          max_tokens: 300,
           messages: [{
             role: 'user',
             content: [
               { type: 'image', source: { type: 'base64', media_type: file.type || 'image/jpeg', data: base64 } },
-              {
-                type: 'text',
-                text: `Esta é uma folha de respostas de prova impressa em papel do ensino fundamental. Ela tem EXATAMENTE ${qtd} questões objetivas (numeradas de 1 a ${qtd}) com alternativas ${(avaliacao.alternativas || ['A', 'B', 'C', 'D']).join(', ')} dispostas em círculos/bolinhas. O aluno preenche/pinta completamente a bolinha da alternativa escolhida deixando-a preta e sólida.
-
-Examine CADA questão de 1 a ${qtd} de forma INDEPENDENTE e com o MESMO cuidado — inclusive a última (questão ${qtd}), que costuma ficar mais perto da borda da foto e é onde erros de leitura são mais comuns: confira com atenção extra qual bolinha dela está realmente preenchida antes de responder, sem adivinhar ou repetir o padrão das questões anteriores.
-
-Para CADA questão, identifique qual bolinha está preenchida. Se nenhuma bolinha da questão estiver preenchida, use "". Se DUAS OU MAIS bolinhas da mesma questão estiverem preenchidas, use "AMBIGUA". Se a questão ${qtd} estiver cortada/fora da foto e não for possível ver com certeza, use "" para ela em vez de arriscar uma letra.
-
-Retorne SOMENTE um objeto JSON com EXATAMENTE ${qtd} chaves (de "1" a "${qtd}"), sem texto adicional, neste formato: ${JSON.stringify(exemploJson)}`
-              }
-            ]
-          }]
-        })
+              { type: 'text', text: prompt },
+            ],
+          }],
+        }),
       });
-
-      const data = await res.json();
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data?.error?.message || data?.error || `erro ${resp.status}`);
       const texto = (data.content?.[0]?.text || '').trim();
-      const match = texto.match(/\{[\s\S]*\}/);
-      const vazio = Object.fromEntries(Array.from({ length: qtd }, (_, i) => [String(i + 1), '']));
-      if (match) {
-        const detectadas = JSON.parse(match[0]);
-        const normalizado: Record<string, string> = { ...vazio };
-        for (let i = 1; i <= qtd; i++) {
-          const v = detectadas[String(i)];
-          normalizado[String(i)] = v ? String(v).toUpperCase().trim() : '';
-        }
-        setRespostas(normalizado);
-      } else {
-        setErro('A IA não conseguiu detectar as respostas automaticamente — confira se a folha inteira apareceu na foto (não só o QR). Revise e preencha manualmente abaixo.');
-        setRespostas(vazio);
-      }
-      setFotoPreview(previewUrl);
-      setEtapa('respostas');
-    } catch {
-      setErro('Erro ao analisar a imagem. Revise e preencha manualmente abaixo.');
-      setRespostas(Object.fromEntries(Array.from({ length: qtd }, (_, i) => [String(i + 1), ''])));
-      setEtapa('respostas');
+      if (!texto) throw new Error('a IA devolveu uma resposta vazia');
+      const semCercas = texto.replace(/```json|```/gi, '').trim();
+      const match = semCercas.match(/\{[\s\S]*\}/);
+      const json = JSON.parse(match ? match[0] : semCercas);
+      const nota = Math.min(Math.max(parseFloat(json.nota) || 0, 0), valorMax);
+      setNotaDiscursivaStr(arredondar(nota, 1).toString());
+      setJustificativaIA((temEnunciado ? '' : '⚠️ Sem enunciado cadastrado — confira com atenção. ') + (json.justificativa || ''));
+    } catch (e) {
+      setErroSugestaoIA('Não consegui sugerir a nota: ' + ((e as Error).message || 'tente de novo.'));
+    } finally {
+      setSugerindoNotaIA(false);
     }
-    setAnalisando(false);
   }
 
-  function handleUploadFolha(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleUploadDiscursivas(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    lerQRDaImagem(file);
+    sugerirNotaDiscursivasComIA(file);
+    e.target.value = '';
   }
 
   // Seleção manual — usada quando o QR não pôde ser lido. Fica marcada como
@@ -617,8 +703,10 @@ Retorne SOMENTE um objeto JSON com EXATAMENTE ${qtd} chaves (de "1" a "${qtd}"),
     setCorrecaoExistente(null);
     setAjustesFeitos([]);
     setErro('');
-    setAvisoScan('');
+    setConfiancaPorQuestao({});
     setNotaDiscursivaStr('');
+    setJustificativaIA('');
+    setErroSugestaoIA('');
     setAvisoLancamento('');
     if (inputRef.current) inputRef.current.value = '';
     setModoCamera(manterCamera);
@@ -637,7 +725,7 @@ Retorne SOMENTE um objeto JSON com EXATAMENTE ${qtd} chaves (de "1" a "${qtd}"),
   const alternativas = avaliacao.alternativas?.length ? avaliacao.alternativas : ['A', 'B', 'C', 'D'];
 
   return (
-    <div className={['py-4 space-y-4', etapa === 'aguardando_foto' ? 'pb-24' : ''].join(' ')}>
+    <div className={['py-4 space-y-4', (etapa === 'identificar' || etapa === 'lendo_bolhas') && modoCamera ? 'pb-24' : ''].join(' ')}>
       <div className="flex items-center gap-2">
         <button onClick={() => { pararCamera(); navigate('/avaliacoes'); }} className="p-1 rounded-lg text-on-surface-variant">
           <ArrowLeft className="w-5 h-5" />
@@ -648,32 +736,23 @@ Retorne SOMENTE um objeto JSON com EXATAMENTE ${qtd} chaves (de "1" a "${qtd}"),
         </div>
       </div>
 
-      {/* ETAPA: IDENTIFICAR ALUNO (procurando QR) + AGUARDANDO_FOTO (aluno já identificado, esperando foto da folha inteira) */}
-      {(etapa === 'identificar' || etapa === 'aguardando_foto') && (
+      {/* ETAPA 1: IDENTIFICAR (QR de perto) + ETAPA 2: LENDO_BOLHAS (alinhar
+          nos marcadores da coluna) — o vídeo/câmera fica montado nas duas, só
+          o que o texto/botão pedem muda, pra não reiniciar a câmera na troca. */}
+      {(etapa === 'identificar' || etapa === 'lendo_bolhas') && (
         <div className="space-y-4">
-          {etapa === 'identificar' && (
-            <div className="bg-secondary-container rounded-2xl p-4">
-              <p className="text-sm font-medium text-on-secondary-container">
-                {modoCamera ? 'Aponte a câmera pro QR — pode ficar perto, só ele precisa aparecer.' : 'Escolha a foto da folha preenchida do aluno.'}
-              </p>
-              <p className="text-xs text-on-secondary-container mt-1">
-                {modoCamera
-                  ? 'Depois de identificar o aluno, o app pede uma foto só da coluna das respostas.'
-                  : 'O sistema lê o QR Code exclusivo da folha e detecta as respostas com IA.'}
-              </p>
-            </div>
-          )}
-
-          {etapa === 'aguardando_foto' && alunoDetectado && (
-            <div className="bg-tertiary-container rounded-2xl p-4">
-              <p className="text-sm font-medium text-on-tertiary-container">
-                ✅ {alunoDetectado.numero_chamada}. {alunoDetectado.nome}
-              </p>
-              <p className="text-xs text-on-tertiary-container mt-1">
-                Agora enquadre a coluna das respostas (as bolhas de 1 a {avaliacao?.quantidade_objetivas ?? '…'}) — não precisa da folha inteira nem do QR — e toque em "Fotografar folha".
-              </p>
-            </div>
-          )}
+          <div className="bg-secondary-container rounded-2xl p-4">
+            <p className="text-sm font-medium text-on-secondary-container">
+              {etapa === 'lendo_bolhas'
+                ? 'Não precisa do cabeçalho (nome/turma) — aproxime só da coluna de bolhas, do marcador preto de cima até o de baixo.'
+                : modoCamera ? 'Aproxime até o QR preencher o quadrado da mira — bem de perto.' : 'Escolha a foto da folha preenchida do aluno.'}
+            </p>
+            <p className="text-xs text-on-secondary-container mt-1">
+              {etapa === 'lendo_bolhas'
+                ? `${alunoDetectado?.numero_chamada ?? ''}. ${alunoDetectado?.nome ?? ''} — as respostas são lidas na hora, sem enviar nada pra IA.`
+                : 'Depois de identificar o aluno, o app pede pra alinhar na coluna de respostas.'}
+            </p>
+          </div>
 
           {etapa === 'identificar' && (
             <div className="flex gap-2">
@@ -682,7 +761,7 @@ Retorne SOMENTE um objeto JSON com EXATAMENTE ${qtd} chaves (de "1" a "${qtd}"),
                 className={['flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold border',
                   modoCamera ? 'bg-primary text-on-primary border-primary' : 'bg-surface text-on-surface-variant border-outline-variant'].join(' ')}
               >
-                <Camera className="w-4 h-4" /> Câmera (automático)
+                <Camera className="w-4 h-4" /> Câmera
               </button>
               <button
                 onClick={() => setModoCamera(false)}
@@ -698,48 +777,78 @@ Retorne SOMENTE um objeto JSON com EXATAMENTE ${qtd} chaves (de "1" a "${qtd}"),
             <div style={{ position: 'relative', width: '100%', aspectRatio: '3/4', borderRadius: 16, overflow: 'hidden', background: '#0f172a' }}>
               <video ref={videoRef} muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               <canvas ref={scanCanvasRef} style={{ display: 'none' }} />
-              {/* Viewfinder */}
-              <div style={{ position: 'absolute', inset: 24, border: '3px solid rgba(255,255,255,0.6)', borderRadius: 16, pointerEvents: 'none' }} />
-              {etapa === 'identificar' && (
-                <div style={{ position: 'absolute', left: 0, right: 0, top: 0, padding: '10px 14px', background: 'linear-gradient(rgba(0,0,0,0.65), transparent)', textAlign: 'center' }}>
-                  <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>🔎 Mire no QR — pode ficar perto</span>
-                </div>
+              {/* Viewfinder — menor e mais específico do que "quase a tela toda", pra
+                  deixar claro que precisa aproximar bem (senão o QR/marcadores ficam
+                  pequenos demais pra detecção na resolução do indicativo ao vivo).
+                  Formato muda por etapa: quadrado pro QR, retângulo alto pra coluna. */}
+              {etapa === 'identificar' ? (
+                <div style={{
+                  position: 'absolute', left: '30%', right: '30%', top: '38%', aspectRatio: '1/1',
+                  border: `3px solid ${qrVisivel ? '#22c55e' : 'rgba(255,255,255,0.75)'}`,
+                  borderRadius: 16, pointerEvents: 'none', transition: 'border-color 0.2s',
+                }} />
+              ) : (
+                <div style={{
+                  position: 'absolute', left: '22%', right: '22%', top: '8%', bottom: '8%',
+                  border: `3px solid ${marcadoresVisiveis ? '#22c55e' : 'rgba(255,255,255,0.75)'}`,
+                  borderRadius: 16, pointerEvents: 'none', transition: 'border-color 0.2s',
+                }} />
               )}
-              {etapa === 'aguardando_foto' && (
-                <div style={{ position: 'absolute', left: 0, right: 0, top: 0, padding: '10px 14px', background: 'linear-gradient(rgba(0,0,0,0.65), transparent)', textAlign: 'center' }}>
-                  <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>📄 Enquadre só a coluna das respostas</span>
-                </div>
-              )}
+              <div style={{ position: 'absolute', left: 0, right: 0, top: 0, padding: '10px 14px', background: 'linear-gradient(rgba(0,0,0,0.65), transparent)', textAlign: 'center' }}>
+                <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>
+                  {etapa === 'lendo_bolhas'
+                    ? (marcadoresVisiveis ? '✅ Marcadores alinhados — pode ler' : '🔎 Aproxime e alinhe nos marcadores')
+                    : (qrVisivel ? '✅ QR visível — identificando...' : '🔎 Aproxime até o QR preencher o quadrado')}
+                </span>
+              </div>
               <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '10px 14px', background: 'linear-gradient(transparent, rgba(0,0,0,0.65))', display: 'flex', alignItems: 'center', gap: 8 }}>
-                {etapa === 'identificar' && (statusCamera === 'iniciando' || statusCamera === 'procurando') && (
+                {(statusCamera === 'iniciando' || statusCamera === 'procurando') && (
                   <RefreshCw className={statusCamera === 'procurando' ? '' : 'animate-spin'} style={{ width: 16, height: 16, color: '#fff' }} />
                 )}
                 <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>
-                  {etapa === 'identificar' && statusCamera === 'iniciando' && 'Ativando câmera...'}
-                  {etapa === 'identificar' && statusCamera === 'procurando' && (avisoScan || 'Procurando QR Code...')}
-                  {etapa === 'identificar' && statusCamera === 'erro' && (erroCamera || 'Não foi possível acessar a câmera. Use "Galeria / arquivo" abaixo.')}
+                  {statusCamera === 'iniciando' && 'Ativando câmera...'}
+                  {statusCamera === 'procurando' && 'Câmera pronta'}
+                  {statusCamera === 'erro' && (erroCamera || 'Não foi possível acessar a câmera. Use "Galeria / arquivo" abaixo.')}
                 </span>
               </div>
               {analisando && (
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'rgba(15,23,42,0.85)' }}>
                   <RefreshCw style={{ width: 36, height: 36, color: '#fff' }} className="animate-spin" />
-                  <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>Analisando com IA...</span>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>Lendo respostas...</span>
+                </div>
+              )}
+              {/* Erro em cima da própria câmera — sem isso, num celular com pouca altura de
+                  tela, a mensagem de erro (lá embaixo da página) fica escondida atrás do
+                  botão fixo e do menu do app, e parece que "nada acontece" ao tocar no botão. */}
+              {erro && !analisando && (
+                <div style={{ position: 'absolute', left: 8, right: 8, bottom: 8, background: 'rgba(127,29,29,0.95)', borderRadius: 12, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                    <AlertCircle style={{ width: 16, height: 16, color: '#fff', flexShrink: 0, marginTop: 2 }} />
+                    <span style={{ fontSize: 12, color: '#fff', fontWeight: 500, flex: 1 }}>{erro}</span>
+                    <button onClick={() => { setErro(''); setDiagnosticoQr(''); }} style={{ color: '#fff', fontSize: 16, lineHeight: 1, padding: 2 }}>✕</button>
+                  </div>
+                  {/* Diagnóstico temporário — remover depois de resolver a divergência de IDs. */}
+                  {diagnosticoQr && (
+                    <div style={{ fontSize: 10, color: '#fecaca', fontFamily: 'monospace', wordBreak: 'break-all', borderTop: '1px solid rgba(255,255,255,0.3)', paddingTop: 6 }}>
+                      {diagnosticoQr}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           ) : null}
 
-          {etapa === 'aguardando_foto' && (
+          {etapa === 'lendo_bolhas' && modoCamera && statusCamera !== 'erro' && (
             <div className="fixed bottom-20 left-4 right-4 max-w-md mx-auto z-20 flex gap-2">
-              <button onClick={retomarEscaneamento} disabled={capturandoFoto || analisando}
+              <button onClick={voltarParaIdentificar} disabled={capturandoFoto || analisando}
                 className="px-4 py-3 rounded-2xl border border-outline-variant bg-surface text-on-surface-variant text-sm shadow-lg disabled:opacity-50">
                 Cancelar
               </button>
-              <button onClick={tirarFotoCompleta} disabled={capturandoFoto || analisando}
+              <button onClick={lerRespostas} disabled={capturandoFoto || analisando}
                 className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-on-primary font-semibold shadow-lg disabled:opacity-90">
                 {capturandoFoto || analisando
-                  ? (<><RefreshCw className="w-4 h-4 animate-spin" /> {analisando ? 'Analisando com IA...' : 'Capturando...'}</>)
-                  : (<>📸 Fotografar folha</>)}
+                  ? (<><RefreshCw className="w-4 h-4 animate-spin" /> Lendo...</>)
+                  : (<>📸 Ler Respostas</>)}
               </button>
             </div>
           )}
@@ -757,8 +866,7 @@ Retorne SOMENTE um objeto JSON com EXATAMENTE ${qtd} chaves (de "1" a "${qtd}"),
               {analisando && (
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#eff6ff', zIndex: 2, pointerEvents: 'none' }}>
                   <RefreshCw style={{ width: 36, height: 36, color: '#2563eb' }} className="animate-spin" />
-                  <span style={{ fontSize: 14, fontWeight: 600, color: '#2563eb' }}>Analisando com IA...</span>
-                  <span style={{ fontSize: 12, color: '#64748b' }}>Aguarde alguns segundos</span>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: '#2563eb' }}>Lendo folha...</span>
                 </div>
               )}
               <input
@@ -801,7 +909,8 @@ Retorne SOMENTE um objeto JSON com EXATAMENTE ${qtd} chaves (de "1" a "${qtd}"),
           </div>
           )}
 
-          {erro && (
+          {/* Já mostrado como overlay em cima da câmera quando modoCamera — aqui só no modo galeria/upload. */}
+          {erro && !modoCamera && (
             <div className="flex items-start gap-2 text-sm text-error bg-error-container rounded-xl px-3 py-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" /><span>{erro}</span>
             </div>
@@ -825,7 +934,7 @@ Retorne SOMENTE um objeto JSON com EXATAMENTE ${qtd} chaves (de "1" a "${qtd}"),
               Voltar
             </button>
             <button
-              onClick={() => { setCorrecaoExistente(null); setEtapa('aguardando_foto'); }}
+              onClick={voltarParaIdentificar}
               className="flex-1 py-3 rounded-2xl bg-primary text-on-primary text-sm font-semibold"
             >
               Refazer correção
@@ -858,9 +967,13 @@ Retorne SOMENTE um objeto JSON com EXATAMENTE ${qtd} chaves (de "1" a "${qtd}"),
             {Array.from({ length: avaliacao.quantidade_objetivas }, (_, i) => i + 1).map(n => {
               const situacao = situacaoQuestao(n);
               const marcada = respostas[String(n)];
+              const confianca = confiancaPorQuestao[String(n)];
+              const baixaConfianca = confianca !== undefined && confianca < 0.35;
               return (
-                <div key={n} className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-on-surface-variant w-5 text-right">{n}.</span>
+                <div key={n} className="flex items-center gap-2" title={baixaConfianca ? 'Leitura pouco confiante — confira essa questão com atenção' : undefined}>
+                  <span className={['text-xs font-bold w-5 text-right', baixaConfianca ? 'text-amber-600' : 'text-on-surface-variant'].join(' ')}>
+                    {baixaConfianca ? '⚠' : ''}{n}.
+                  </span>
                   <div className="flex gap-1 flex-1">
                     {alternativas.map(l => {
                       const isSel = marcada === l;
@@ -904,15 +1017,38 @@ Retorne SOMENTE um objeto JSON com EXATAMENTE ${qtd} chaves (de "1" a "${qtd}"),
           {avaliacao.quantidade_discursivas > 0 && (
             <div className="bg-surface border border-outline-variant rounded-2xl p-4 space-y-2">
               <p className="text-xs font-semibold text-on-surface-variant">
-                Nota das discursivas (máx. {avaliacao.valor_total_discursivas.toFixed(1)} pts) — lançamento manual
+                Nota das discursivas (máx. {avaliacao.valor_total_discursivas.toFixed(1)} pts)
               </p>
-              <input
-                type="number" min="0" max={avaliacao.valor_total_discursivas} step="0.1"
-                value={notaDiscursivaStr}
-                onChange={e => setNotaDiscursivaStr(e.target.value)}
-                placeholder="0.0"
-                className="w-28 px-3 py-1.5 rounded-xl border border-outline-variant bg-background text-sm text-center"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="number" min="0" max={avaliacao.valor_total_discursivas} step="0.1"
+                  value={notaDiscursivaStr}
+                  onChange={e => { setNotaDiscursivaStr(e.target.value); setJustificativaIA(''); }}
+                  placeholder="0.0"
+                  className="w-28 px-3 py-1.5 rounded-xl border border-outline-variant bg-background text-sm text-center"
+                />
+                <input
+                  ref={inputDiscursivasRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleUploadDiscursivas}
+                  style={{ display: 'none' }}
+                />
+                <button
+                  onClick={() => inputDiscursivasRef.current?.click()}
+                  disabled={sugerindoNotaIA}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-secondary-container text-on-secondary-container text-xs font-semibold disabled:opacity-60"
+                >
+                  {sugerindoNotaIA ? (<><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Lendo...</>) : (<>📷 Sugerir nota com IA</>)}
+                </button>
+              </div>
+              {justificativaIA && (
+                <p className="text-xs text-on-surface-variant italic">💬 {justificativaIA} — confira antes de salvar.</p>
+              )}
+              {erroSugestaoIA && (
+                <p className="text-xs text-error">{erroSugestaoIA}</p>
+              )}
             </div>
           )}
 
