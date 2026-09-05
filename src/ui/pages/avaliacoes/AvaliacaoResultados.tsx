@@ -5,6 +5,7 @@ import { ArrowLeft, Download, Trophy, AlertCircle, Clock } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 import type { Avaliacao, Aluno } from './tiposCorretorProvas';
+import { turmasDoValor, ehGrupoDeTurmas, labelTurmaOuGrupo } from './tiposCorretorProvas';
 
 interface Resposta {
   aluno_id: string;
@@ -37,8 +38,9 @@ export function AvaliacaoResultados() {
 
       const { data: alunos } = await supabase
         .from('alunos')
-        .select('id, nome, numero_chamada')
-        .eq('turma_id', av.turma_id)
+        .select('id, nome, numero_chamada, turma_id')
+        .in('turma_id', turmasDoValor(av.turma_id))
+        .order('turma_id')
         .order('numero_chamada');
 
       const { data: respostas } = await supabase
@@ -68,6 +70,7 @@ export function AvaliacaoResultados() {
     if (!avaliacao) return;
     const valorTotal = (avaliacao.valor_total_objetivas || 0) + (avaliacao.valor_total_discursivas || 0);
     const dados = resultados.map(r => ({
+      'Turma': r.aluno.turma_id || avaliacao.turma_id,
       'Nº': r.aluno.numero_chamada,
       'Nome': r.aluno.nome,
       'Acertos': r.resposta?.acertos ?? '',
@@ -112,7 +115,9 @@ export function AvaliacaoResultados() {
           </button>
           <div>
             <h1 className="text-base font-bold text-on-surface">Resultados</h1>
-            <p className="text-xs text-on-surface-variant">{avaliacao.titulo} · Turma {avaliacao.turma_id}</p>
+            <p className="text-xs text-on-surface-variant">
+              {avaliacao.titulo} · {ehGrupoDeTurmas(avaliacao.turma_id) ? labelTurmaOuGrupo(avaliacao.turma_id) : `Turma ${avaliacao.turma_id}`}
+            </p>
           </div>
         </div>
         <button
@@ -174,7 +179,9 @@ export function AvaliacaoResultados() {
               className="bg-surface border border-outline-variant rounded-2xl px-4 py-3 flex items-center justify-between"
             >
               <div className="flex items-center gap-3">
-                <span className="text-xs text-on-surface-variant w-6 text-right">{aluno.numero_chamada}.</span>
+                <span className="text-xs text-on-surface-variant w-10 text-right">
+                  {ehGrupoDeTurmas(avaliacao.turma_id) ? `${aluno.turma_id} ${aluno.numero_chamada}.` : `${aluno.numero_chamada}.`}
+                </span>
                 <div>
                   <p className="text-sm text-on-surface font-medium">{aluno.nome}</p>
                   {resposta && (

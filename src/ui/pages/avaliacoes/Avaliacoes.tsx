@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
 import { ClipboardList, Plus, QrCode, Camera, Trash2, ChevronDown, ChevronUp, BarChart2, Sparkles, Share2, Copy, Check } from 'lucide-react';
 import type { Avaliacao, QuestaoObjetiva } from './tiposCorretorProvas';
-import { ALTERNATIVAS_PADRAO, valorPorQuestaoObjetiva, arredondar } from './tiposCorretorProvas';
+import { ALTERNATIVAS_PADRAO, valorPorQuestaoObjetiva, arredondar, GRUPOS_CORRETOR, ehGrupoDeTurmas, labelTurmaOuGrupo } from './tiposCorretorProvas';
 import { getTurmasDoGrupo, getLabelGrupo } from '../ProvasOnline';
 
 const GRUPOS_ONLINE = ['6-7', '8', '9'];
@@ -459,7 +459,12 @@ export function Avaliacoes() {
                   className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface"
                 >
                   <option value="">Selecione...</option>
-                  {TURMAS.map(t => <option key={t} value={t}>{t}</option>)}
+                  <optgroup label="Turmas">
+                    {TURMAS.map(t => <option key={t} value={t}>{t}</option>)}
+                  </optgroup>
+                  <optgroup label="Grupos (várias turmas de uma vez)">
+                    {GRUPOS_CORRETOR.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+                  </optgroup>
                 </select>
               </div>
             </div>
@@ -727,7 +732,7 @@ export function Avaliacoes() {
                 <div>
                   <p className="text-sm font-semibold text-on-surface">{av.titulo}</p>
                   <p className="text-xs text-on-surface-variant">
-                    Turma {av.turma_id} · {av.quantidade_objetivas ?? av.num_questoes ?? 0} objetivas
+                    {ehGrupoDeTurmas(av.turma_id) ? labelTurmaOuGrupo(av.turma_id) : `Turma ${av.turma_id}`} · {av.quantidade_objetivas ?? av.num_questoes ?? 0} objetivas
                     {(av.quantidade_discursivas ?? 0) > 0 ? ` + ${av.quantidade_discursivas} discursivas` : ''}
                   </p>
                 </div>

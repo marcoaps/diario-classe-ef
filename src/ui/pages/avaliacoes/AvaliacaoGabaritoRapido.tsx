@@ -14,7 +14,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import { supabase } from '../../../data/supabase';
-import { ALTERNATIVAS_PADRAO, arredondar } from './tiposCorretorProvas';
+import { ALTERNATIVAS_PADRAO, arredondar, GRUPOS_CORRETOR } from './tiposCorretorProvas';
 
 const TURMAS = ['6F', '7B', '7C', '7D', '7E', '7F', '8A', '8B', '8C', '8D', '8E', '8F', '9A', '9B', '9C', '9D', '9E', '9F'];
 const BIMESTRES = ['1', '2', '3', '4'];
@@ -168,7 +168,12 @@ export function AvaliacaoGabaritoRapido() {
             <select value={turmaId} onChange={e => setTurmaId(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface">
               <option value="">Selecione...</option>
-              {TURMAS.map(t => <option key={t} value={t}>{t}</option>)}
+              <optgroup label="Turmas">
+                {TURMAS.map(t => <option key={t} value={t}>{t}</option>)}
+              </optgroup>
+              <optgroup label="Grupos (várias turmas de uma vez)">
+                {GRUPOS_CORRETOR.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+              </optgroup>
             </select>
           </div>
         </div>

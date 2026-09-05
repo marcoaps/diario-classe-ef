@@ -4,6 +4,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, Printer, Users } from 'lucide-rea
 import { supabase } from '../../../data/supabase';
 import { gerarHtmlProva, gerarHtmlTextoApoio, CSS_PROVA } from './AvaliacaoFolha';
 import type { Avaliacao, Aluno } from './AvaliacaoFolha';
+import { turmasDoValor, ehGrupoDeTurmas, labelTurmaOuGrupo } from './tiposCorretorProvas';
 
 const CHAVE_PROFESSOR_NOME = 'professorNomeEF';
 
@@ -48,10 +49,11 @@ export function AvaliacaoFormatar() {
         const { data: especiais } = await supabase.from('alunos_especiais').select('nome');
         const nomesEspeciais = (especiais || []).map((e: { nome: string }) => e.nome.toLowerCase().trim());
 
+        const turmasReais = turmasDoValor(av.turma_id);
         const { data: transferidos } = await supabase
           .from('notas')
           .select('nome')
-          .eq('turma', av.turma_id)
+          .in('turma', turmasReais)
           .or('situacao.ilike.%transferi%,situacao.ilike.%remanej%');
         const nomesTransferidos = (transferidos || []).map((e: { nome: string }) => e.nome.toLowerCase().trim());
 
@@ -59,8 +61,9 @@ export function AvaliacaoFormatar() {
 
         const { data: al } = await supabase
           .from('alunos')
-          .select('id, nome, numero_chamada, token_acesso')
-          .eq('turma_id', av.turma_id)
+          .select('id, nome, numero_chamada, turma_id, token_acesso')
+          .in('turma_id', turmasReais)
+          .order('turma_id')
           .order('numero_chamada');
 
         const filtrados = (al || []).filter((a: Aluno) => !nomesExcluidos.has(a.nome.toLowerCase().trim()));
@@ -184,7 +187,9 @@ export function AvaliacaoFormatar() {
         <Users className="w-5 h-5 text-primary" />
         <div>
           <h1 className="text-lg font-bold text-on-surface leading-tight">Formatar Avaliação</h1>
-          <p className="text-xs text-on-surface-variant">{avaliacao.titulo} — Turma {avaliacao.turma_id}</p>
+          <p className="text-xs text-on-surface-variant">
+            {avaliacao.titulo} — {ehGrupoDeTurmas(avaliacao.turma_id) ? labelTurmaOuGrupo(avaliacao.turma_id) : `Turma ${avaliacao.turma_id}`}
+          </p>
         </div>
       </div>
 
@@ -205,7 +210,9 @@ export function AvaliacaoFormatar() {
 
       <div className="bg-surface border border-outline-variant rounded-2xl p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <label className="text-sm font-semibold text-on-surface">Alunos da turma {avaliacao.turma_id} ({alunos.length})</label>
+          <label className="text-sm font-semibold text-on-surface">
+            Alunos {ehGrupoDeTurmas(avaliacao.turma_id) ? `do grupo ${labelTurmaOuGrupo(avaliacao.turma_id)}` : `da turma ${avaliacao.turma_id}`} ({alunos.length})
+          </label>
           <div className="flex gap-2">
             <button onClick={selecionarTodos} className="px-2.5 py-1 rounded-lg bg-secondary-container text-on-secondary-container text-[11px] font-semibold">
               Selecionar todos

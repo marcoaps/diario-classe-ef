@@ -49,7 +49,38 @@ export interface Aluno {
   id: string;
   nome: string;
   numero_chamada: number;
+  /** Turma real do aluno — necessária quando a avaliação usa um GRUPO
+   * (várias turmas), já que aí `avaliacao.turma_id` não é uma turma de
+   * verdade e não dá pra usar pra rotular a folha do aluno. */
+  turma_id?: string;
   token_acesso?: string;
+}
+
+/**
+ * O Corretor de Provas normalmente usa uma turma só (`avaliacao.turma_id`
+ * literal, ex: "7B"). Mas às vezes o mesmo gabarito vale pra várias turmas
+ * de uma vez (ex: mesma prova pro 6º e 7º ano inteiros) — nesse caso
+ * `turma_id` guarda um destes IDs de GRUPO em vez de uma turma real.
+ */
+export const GRUPOS_CORRETOR: { id: string; label: string; turmas: string[] }[] = [
+  { id: 'GRUPO_6_7', label: '6º e 7º Ano (todas as turmas)', turmas: ['6F', '7B', '7C', '7D', '7E', '7F'] },
+  { id: 'GRUPO_8_9', label: '8º e 9º Ano (todas as turmas)', turmas: ['8A', '8B', '8C', '8D', '8E', '8F', '9A', '9B', '9C', '9D', '9E', '9F'] },
+];
+
+/** Turmas reais cobertas por `turma_id` — devolve a própria turma se não for um grupo. */
+export function turmasDoValor(turmaIdOuGrupo: string): string[] {
+  const grupo = GRUPOS_CORRETOR.find(g => g.id === turmaIdOuGrupo);
+  return grupo ? grupo.turmas : [turmaIdOuGrupo];
+}
+
+/** true se `turma_id` for um ID de grupo (não uma turma real). */
+export function ehGrupoDeTurmas(turmaIdOuGrupo: string): boolean {
+  return GRUPOS_CORRETOR.some(g => g.id === turmaIdOuGrupo);
+}
+
+/** Rótulo amigável pra exibir — o label do grupo, ou a própria turma. */
+export function labelTurmaOuGrupo(turmaIdOuGrupo: string): string {
+  return GRUPOS_CORRETOR.find(g => g.id === turmaIdOuGrupo)?.label || turmaIdOuGrupo;
 }
 
 /** Conteúdo (não assinado) embutido no QR Code de cada folha individual. */

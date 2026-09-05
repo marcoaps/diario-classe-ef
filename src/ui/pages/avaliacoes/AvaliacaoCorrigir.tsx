@@ -4,7 +4,7 @@ import { supabase, lancarNotaCorretorProva } from '../../../data/supabase';
 import { ArrowLeft, Upload, Camera, CheckCircle2, AlertCircle, Save, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import jsQR from 'jsqr';
 import type { Avaliacao, Aluno, QrPayload } from './tiposCorretorProvas';
-import { arredondar, valorPorQuestaoObjetiva } from './tiposCorretorProvas';
+import { arredondar, valorPorQuestaoObjetiva, turmasDoValor, labelTurmaOuGrupo, ehGrupoDeTurmas } from './tiposCorretorProvas';
 import { processarFolhaOMR, localizarAncorasNaFoto } from '../../../utils/omrEngine';
 import type { MotivoFalhaOMR } from '../../../utils/omrEngine';
 
@@ -105,8 +105,9 @@ export function AvaliacaoCorrigir() {
       if (av) {
         const { data: al } = await supabase
           .from('alunos')
-          .select('id, nome, numero_chamada')
-          .eq('turma_id', av.turma_id)
+          .select('id, nome, numero_chamada, turma_id')
+          .in('turma_id', turmasDoValor(av.turma_id))
+          .order('turma_id')
           .order('numero_chamada');
         setAlunos(al || []);
       }
@@ -736,7 +737,9 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
         </button>
         <div>
           <h1 className="text-base font-bold text-on-surface">Corrigir folhas</h1>
-          <p className="text-xs text-on-surface-variant">{avaliacao.titulo} · Turma {avaliacao.turma_id}</p>
+          <p className="text-xs text-on-surface-variant">
+            {avaliacao.titulo} · {ehGrupoDeTurmas(avaliacao.turma_id) ? labelTurmaOuGrupo(avaliacao.turma_id) : `Turma ${avaliacao.turma_id}`}
+          </p>
         </div>
       </div>
 
@@ -904,7 +907,9 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
               <button key={al.id} onClick={() => selecionarAlunoManual(al)}
                 className="w-full flex items-center justify-between px-4 py-3 bg-surface border border-outline-variant rounded-xl text-left">
                 <div>
-                  <span className="text-xs text-on-surface-variant mr-2">{al.numero_chamada}.</span>
+                  <span className="text-xs text-on-surface-variant mr-2">
+                    {ehGrupoDeTurmas(avaliacao.turma_id) ? `${al.turma_id} ${al.numero_chamada}.` : `${al.numero_chamada}.`}
+                  </span>
                   <span className="text-sm text-on-surface">{al.nome}</span>
                 </div>
                 <span className="text-xs text-primary">Selecionar</span>

@@ -4,7 +4,7 @@ import { supabase } from '../../../data/supabase';
 import { ArrowLeft, Printer, FileText, Download, Sparkles, QrCode } from 'lucide-react';
 import QRCode from 'qrcode';
 import type { Avaliacao, Aluno, QrPayload, QuestaoObjetiva } from './tiposCorretorProvas';
-import { LAYOUT_VERSION, valorPorQuestaoObjetiva } from './tiposCorretorProvas';
+import { LAYOUT_VERSION, valorPorQuestaoObjetiva, turmasDoValor, ehGrupoDeTurmas, labelTurmaOuGrupo } from './tiposCorretorProvas';
 import {
   FOLHA_W, FOLHA_H, FOLHA_PAD, FOLHA_MARK, FOLHA_MARK_COL,
   BUBBLE_R as BUBBLE_R_GEO, BUBBLE_GAP, GAP_APOS_CABECALHO, calcularGeometriaQuestoes,
@@ -32,7 +32,7 @@ export function gerarHtmlTextoApoio(avaliacao: Avaliacao): string {
           <td style="padding:6px;vertical-align:middle;">
             <div style="font-size:11pt;font-weight:bold;">${escaparHTML(avaliacao.titulo)}</div>
             <div style="font-size:10pt;">Disciplina: <strong>${escaparHTML(avaliacao.disciplina || 'Educação Física')}</strong> &nbsp;&nbsp; Professor(a): <strong>${escaparHTML(avaliacao.professor || '')}</strong></div>
-            <div style="font-size:10pt;">Turma: <strong>${escaparHTML(avaliacao.turma_id.replace(/\d+/, ''))}</strong></div>
+            <div style="font-size:10pt;">Turma: <strong>${escaparHTML(ehGrupoDeTurmas(avaliacao.turma_id) ? labelTurmaOuGrupo(avaliacao.turma_id) : avaliacao.turma_id.replace(/\d+/, ''))}</strong></div>
             <div style="font-size:10pt;border-top:1px solid #cbd5e1;padding-top:3px;margin-top:3px;">
               Nome: <span style="border-bottom:1px solid #333;display:inline-block;width:260px;">&nbsp;</span>
               &nbsp;&nbsp; N&#186;: <span style="border-bottom:1px solid #333;display:inline-block;width:36px;">&nbsp;</span>
@@ -79,7 +79,10 @@ export function gerarHtmlProva(avaliacao: Avaliacao, aluno: Aluno, opcoes?: Opco
   const qSubj = avaliacao.questoes_subjetivas || {};
   const qtdDisc = avaliacao.quantidade_discursivas || 0;
   const valorDisc = qtdDisc > 0 ? (avaliacao.valor_total_discursivas || 0) / qtdDisc : 0;
-  const serie = avaliacao.turma_id.replace(/(\d+).*/, '$1') + 'º ano';
+  const turmaEfetivaProva = aluno?.turma_id || avaliacao.turma_id;
+  const serie = ehGrupoDeTurmas(turmaEfetivaProva)
+    ? labelTurmaOuGrupo(turmaEfetivaProva)
+    : turmaEfetivaProva.replace(/(\d+).*/, '$1') + 'º ano';
   const professorNome = opcoes?.professorNome?.trim() || avaliacao.professor?.trim() || '';
   const linhaNome = (opcoes?.preencherAluno && aluno)
     ? `Nome: <strong>${escaparHTML(aluno.nome)}</strong> &nbsp;&nbsp; N&#186;: <strong>${aluno.numero_chamada ?? '-'}</strong> &nbsp;&nbsp; Data: ____/____/______`
@@ -127,7 +130,7 @@ export function gerarHtmlProva(avaliacao: Avaliacao, aluno: Aluno, opcoes?: Opco
           <td style="padding:6px;vertical-align:middle;">
             <div style="font-size:11pt;font-weight:bold;margin-bottom:2px;">${escaparHTML(avaliacao.titulo)}</div>
             <div style="font-size:10pt;margin-bottom:1px;">Disciplina: <strong>${escaparHTML(avaliacao.disciplina || 'Educação Física')}</strong> &nbsp;&nbsp; Professor(a): <strong>${escaparHTML(professorNome)}</strong></div>
-            <div style="font-size:10pt;margin-bottom:1px;">S&#233;rie: <strong>${escaparHTML(serie)}</strong> &nbsp;&nbsp; Turma: <strong>${escaparHTML(avaliacao.turma_id.replace(/\d+/, ''))}</strong></div>
+            <div style="font-size:10pt;margin-bottom:1px;">S&#233;rie: <strong>${escaparHTML(serie)}</strong> &nbsp;&nbsp; Turma: <strong>${escaparHTML(ehGrupoDeTurmas(turmaEfetivaProva) ? '-' : turmaEfetivaProva.replace(/\d+/, ''))}</strong></div>
             <div style="font-size:10pt;border-top:1px solid #cbd5e1;padding-top:3px;margin-top:3px;">${linhaNome}</div>
           </td>
         </tr>
@@ -207,7 +210,11 @@ async function desenharFolhaQR(
   const qtdObj = avaliacao.quantidade_objetivas || 0;
   const qtdDisc = avaliacao.quantidade_discursivas || 0;
   const alternativas = avaliacao.alternativas?.length ? avaliacao.alternativas : ['A', 'B', 'C', 'D'];
-  const serieLabel = avaliacao.turma_id.replace(/(\d+).*/, '$1') + 'º Ano';
+  // Usa a turma REAL do aluno (não a da avaliação) — quando a avaliação cobre
+  // um GRUPO de turmas (ex: "6º e 7º Ano" inteiro), avaliacao.turma_id não é
+  // uma turma de verdade, mas cada folha é individual e sabe a turma certa.
+  const turmaEfetiva = aluno.turma_id || avaliacao.turma_id;
+  const serieLabel = turmaEfetiva.replace(/(\d+).*/, '$1') + 'º Ano';
 
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, W, H);
@@ -241,7 +248,7 @@ async function desenharFolhaQR(
   // só a data fica em branco pra escrever à caneta no dia da prova.
   const alunoY = PAD + 70;
   const FIELDS_H = 58;
-  const turmLetra = avaliacao.turma_id.replace(/\d/g, '');
+  const turmLetra = turmaEfetiva.replace(/\d/g, '');
   ctx.fillStyle = '#f8fafc';
   ctx.fillRect(CX, alunoY, CW, FIELDS_H);
   ctx.strokeStyle = '#cbd5e1';
@@ -436,13 +443,14 @@ export function AvaliacaoFolha() {
       const { data: av } = await supabase.from('avaliacoes').select('*').eq('id', id).single();
       setAvaliacao(av);
       if (av) {
+        const turmasReais = turmasDoValor(av.turma_id);
         const { data: especiais } = await supabase.from('alunos_especiais').select('nome');
         const nomesEspeciais = (especiais || []).map((e: { nome: string }) => e.nome.toLowerCase().trim());
 
         const { data: transferidos } = await supabase
           .from('notas')
           .select('nome')
-          .eq('turma', av.turma_id)
+          .in('turma', turmasReais)
           .or('situacao.ilike.%transferi%,situacao.ilike.%remanej%');
         const nomesTransferidos = (transferidos || []).map((e: { nome: string }) => e.nome.toLowerCase().trim());
 
@@ -450,8 +458,9 @@ export function AvaliacaoFolha() {
 
         let query = supabase
           .from('alunos')
-          .select('id, nome, numero_chamada, token_acesso')
-          .eq('turma_id', av.turma_id)
+          .select('id, nome, numero_chamada, turma_id, token_acesso')
+          .in('turma_id', turmasReais)
+          .order('turma_id')
           .order('numero_chamada');
         if (alunosCriticosIds && alunosCriticosIds.length > 0) {
           query = query.in('id', alunosCriticosIds);
@@ -534,10 +543,11 @@ export function AvaliacaoFolha() {
       setGerandoIdx(i);
       const aluno = alunos[i];
       try {
+        const turmaDoAluno = aluno.turma_id || avaliacao.turma_id;
         const { data: folhaRow, error } = await supabase
           .from('folhas_respostas')
           .upsert(
-            { avaliacao_id: avaliacao.id, aluno_id: aluno.id, turma_id: avaliacao.turma_id },
+            { avaliacao_id: avaliacao.id, aluno_id: aluno.id, turma_id: turmaDoAluno },
             { onConflict: 'avaliacao_id,aluno_id' }
           )
           .select('id')
@@ -547,7 +557,7 @@ export function AvaliacaoFolha() {
         const payload: QrPayload = {
           prova_id: avaliacao.id,
           aluno_id: aluno.id,
-          turma_id: avaliacao.turma_id,
+          turma_id: turmaDoAluno,
           folha_id: folhaRow.id,
           layout_version: LAYOUT_VERSION,
         };
@@ -682,7 +692,7 @@ export function AvaliacaoFolha() {
         <div>
           <h1 className="text-base font-bold text-on-surface">{avaliacao.titulo}</h1>
           <p className="text-xs text-on-surface-variant">
-            Turma {avaliacao.turma_id} · {alunos.length} aluno{alunos.length !== 1 ? 's' : ''}
+            {ehGrupoDeTurmas(avaliacao.turma_id) ? labelTurmaOuGrupo(avaliacao.turma_id) : `Turma ${avaliacao.turma_id}`} · {alunos.length} aluno{alunos.length !== 1 ? 's' : ''}
             {alunosCriticosIds ? ' (críticos)' : ''} · {avaliacao.quantidade_objetivas} objetivas
             {avaliacao.quantidade_discursivas > 0 ? ` + ${avaliacao.quantidade_discursivas} discursivas` : ''}
           </p>
