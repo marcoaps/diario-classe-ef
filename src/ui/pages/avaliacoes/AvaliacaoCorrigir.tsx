@@ -502,33 +502,29 @@ export function AvaliacaoCorrigir() {
       });
 
       const numeros = Array.from({ length: avaliacao.quantidade_discursivas }, (_, i) => avaliacao.quantidade_objetivas + i + 1);
-      const enunciados = numeros
-        .map(n => avaliacao.questoes_subjetivas?.[String(n)]?.trim())
-        .filter(Boolean);
-      const temEnunciado = enunciados.length > 0;
       const valorMax = avaliacao.valor_total_discursivas;
+      const valorPorQuestao = arredondar(valorMax / numeros.length, 2);
+      const algumEnunciado = numeros.some(n => avaliacao.questoes_subjetivas?.[String(n)]?.trim());
 
-      const prompt = temEnunciado
-        ? `Você é professor de ${avaliacao.disciplina || 'Educação Física'} do Ensino Fundamental corrigindo as respostas discursivas (manuscritas) de uma prova em papel.
+      // Pede nota+justificativa POR QUESTÃO (mesmo a foto podendo trazer as
+      // duas juntas) — sem isso a IA devolve um parecer só, misturando as
+      // respostas, e o professor não consegue saber o que ela achou de cada
+      // uma. A nota final continua sendo a SOMA das individuais.
+      const prompt = `Você é professor de ${avaliacao.disciplina || 'Educação Física'} do Ensino Fundamental corrigindo as respostas discursivas (manuscritas) de uma prova em papel.
 
-QUESTÕES (valem juntas ${valorMax.toFixed(1)} pontos no total):
-${numeros.map(n => `Q${n}: ${avaliacao.questoes_subjetivas?.[String(n)] || '(sem enunciado cadastrado)'}`).join('\n')}
+QUESTÕES (cada uma vale ${valorPorQuestao.toFixed(1)} ponto${valorPorQuestao !== 1 ? 's' : ''}):
+${numeros.map(n => `Q${n}: ${avaliacao.questoes_subjetivas?.[String(n)]?.trim() || '(sem enunciado cadastrado — só avalie completude/legibilidade, não se está correta)'}`).join('\n')}
 
-Na foto está a resposta manuscrita do aluno para essa(s) questão(ões). Leia a letra manuscrita com atenção, avalie se a resposta tem relação com o tema e responde ao que foi pedido. Respostas sem relação, ilegíveis ou em branco valem 0. Respostas parciais valem proporcionalmente. Seja justo mas rigoroso.
+Na foto está(ão) a(s) resposta(s) manuscrita(s) do aluno pra essa(s) questão(ões) — pode ser que as duas apareçam juntas na mesma foto. Leia a letra manuscrita com atenção e avalie CADA QUESTÃO SEPARADAMENTE (não misture as duas num parecer só). Sem relação com o tema, ilegível ou em branco vale 0. Resposta parcial vale proporcionalmente. Seja justo mas rigoroso.
 
-Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) neste formato: {"nota": <número de 0 a ${valorMax}, até 1 casa decimal>, "justificativa": "<frase curta, até 25 palavras, explicando a nota>"}`
-        : `Você é professor de ${avaliacao.disciplina || 'Educação Física'} do Ensino Fundamental. Na foto está uma resposta discursiva manuscrita de um aluno, mas não há o enunciado da questão cadastrado neste sistema — então você não pode avaliar se está CORRETA, só transcrever e dar um parecer geral de completude/legibilidade.
-
-Essas questões valem juntas ${valorMax.toFixed(1)} pontos no total. Leia a letra manuscrita e avalie apenas se a resposta parece completa, desenvolvida e legível (não se está certa, já que o enunciado não está disponível). Em branco ou ilegível vale 0.
-
-Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) neste formato: {"nota": <número de 0 a ${valorMax}, até 1 casa decimal>, "justificativa": "<frase curta, até 25 palavras, deixando claro que é uma estimativa sem o enunciado> — confira com atenção antes de salvar."}`;
+Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave por número de questão, neste formato: {${numeros.map(n => `"${n}": {"nota": <0 a ${valorPorQuestao}, até 1 casa decimal>, "justificativa": "<frase curta, até 20 palavras>"}`).join(', ')}}`;
 
       const resp = await fetch('/api/claude', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-opus-4-5',
-          max_tokens: 300,
+          max_tokens: 500,
           messages: [{
             role: 'user',
             content: [
@@ -545,9 +541,17 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) neste formato
       const semCercas = texto.replace(/```json|```/gi, '').trim();
       const match = semCercas.match(/\{[\s\S]*\}/);
       const json = JSON.parse(match ? match[0] : semCercas);
-      const nota = Math.min(Math.max(parseFloat(json.nota) || 0, 0), valorMax);
-      setNotaDiscursivaStr(arredondar(nota, 1).toString());
-      setJustificativaIA((temEnunciado ? '' : '⚠️ Sem enunciado cadastrado — confira com atenção. ') + (json.justificativa || ''));
+
+      let somaNotas = 0;
+      const linhas = numeros.map(n => {
+        const item = json[String(n)] || {};
+        const notaQuestao = Math.min(Math.max(parseFloat(item.nota) || 0, 0), valorPorQuestao);
+        somaNotas += notaQuestao;
+        return `Q${n} (${arredondar(notaQuestao, 1).toFixed(1)}/${valorPorQuestao.toFixed(1)}): ${item.justificativa || '—'}`;
+      });
+      const notaFinal = Math.min(arredondar(somaNotas, 1), valorMax);
+      setNotaDiscursivaStr(notaFinal.toString());
+      setJustificativaIA((algumEnunciado ? '' : '⚠️ Sem enunciado cadastrado — confira com atenção.\n') + linhas.join('\n'));
     } catch (e) {
       setErroSugestaoIA('Não consegui sugerir a nota: ' + ((e as Error).message || 'tente de novo.'));
     } finally {
@@ -1044,7 +1048,9 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) neste formato
                 </button>
               </div>
               {justificativaIA && (
-                <p className="text-xs text-on-surface-variant italic">💬 {justificativaIA} — confira antes de salvar.</p>
+                <div className="text-xs text-on-surface-variant italic whitespace-pre-line">💬 {justificativaIA}
+                  <span className="not-italic font-medium"> — confira antes de salvar.</span>
+                </div>
               )}
               {erroSugestaoIA && (
                 <p className="text-xs text-error">{erroSugestaoIA}</p>
