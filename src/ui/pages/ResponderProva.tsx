@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../data/supabase';
 import { getTurmasDoGrupo } from './ProvasOnline';
-import { Search, CheckCircle, Send, BookOpen, AlertCircle, ChevronLeft, ChevronRight, Clock, Brain, Loader } from 'lucide-react';
+import { Search, CheckCircle, Send, BookOpen, AlertCircle, ChevronLeft, ChevronRight, Brain, Loader } from 'lucide-react';
 
 interface SubItem {
   letra: string;
@@ -107,20 +107,7 @@ export function ResponderProva() {
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [questaoAtual, setQuestaoAtual] = useState(0);
-  const [tempo, setTempo] = useState(0);
   const [etapaCorrecao, setEtapaCorrecao] = useState('');
-
-  useEffect(() => {
-    if (step !== 'prova') return;
-    const interval = setInterval(() => setTempo(t => t + 1), 1000);
-    return () => clearInterval(interval);
-  }, [step]);
-
-  const formatarTempo = (s: number) => {
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-  };
 
   const turmasDisponiveis = prova ? getTurmasDoGrupo(prova.turma_id) : [];
 
@@ -382,10 +369,6 @@ export function ResponderProva() {
             </div>
           </div>
           <div className="flex items-center gap-3 shrink-0 ml-2">
-            <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
-              <Clock className="w-3.5 h-3.5 text-blue-600" />
-              <span className="text-blue-700 font-mono text-sm font-black">{formatarTempo(tempo)}</span>
-            </div>
             <span className="text-xs text-gray-400 font-semibold hidden sm:block">
               <span className="text-blue-600 font-black">{respondidas}</span>/{questoes.length}
             </span>
@@ -584,8 +567,6 @@ export function ResponderProva() {
           )}
 
           <div className="flex items-center justify-center gap-4 text-gray-400 text-sm">
-            <span>⏱ {formatarTempo(tempo)}</span>
-            <span>·</span>
             <span>📝 {questoes.length} questões</span>
             <span>·</span>
             <span>✓ {respondidas} respondidas</span>
