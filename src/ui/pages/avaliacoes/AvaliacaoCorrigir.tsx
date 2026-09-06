@@ -81,6 +81,10 @@ export function AvaliacaoCorrigir() {
   const [salvando, setSalvando] = useState(false);
   const [analisando, setAnalisando] = useState(false);
   const [erro, setErro] = useState('');
+  // Diagnóstico ao vivo do conteúdo decodificado do QR -- ajuda a confirmar
+  // se é mesmo o QR desta avaliação (folha antiga de outro formato, folha de
+  // outra avaliação, etc.) sem precisar esperar as 3 tentativas falharem.
+  const [ultimoQrLidoDebug, setUltimoQrLidoDebug] = useState('');
   const [fotoPreview, setFotoPreview] = useState<string>('');
   const [arquivoHash, setArquivoHash] = useState<string>('');
   const [ajustesFeitos, setAjustesFeitos] = useState<Array<{ questao: string; de: string; para: string }>>([]);
@@ -216,6 +220,7 @@ export function AvaliacaoCorrigir() {
           if (code) {
             setQrVisivel(true);
             const chaveLida = code.data;
+            setUltimoQrLidoDebug(chaveLida);
 
             // Avaliação já confirmada por essa MESMA leitura — já está
             // mostrando o card "Avaliação identificada", não reprocessa.
@@ -254,6 +259,7 @@ export function AvaliacaoCorrigir() {
             }
           } else {
             setQrVisivel(false);
+            setUltimoQrLidoDebug('');
             ultimoQrLidoRef.current = null;
             contagemConfirmacaoRef.current = 0;
           }
@@ -761,6 +767,14 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
                     ? (marcadoresVisiveis ? '✅ Marcadores alinhados — pode ler' : '🔎 Aproxime e alinhe nos marcadores')
                     : (qrVisivel ? '✅ QR visível — identificando...' : '🔎 Aproxime até o QR preencher o quadrado')}
                 </span>
+                {/* Diagnóstico temporário — mostra exatamente o que o QR contém, pra
+                    confirmar se bate com o código desta avaliação (folha antiga de
+                    outro formato, ou de outra avaliação, ficam óbvias aqui). */}
+                {etapa === 'identificar' && ultimoQrLidoDebug && (
+                  <div style={{ fontSize: 10, color: '#fde68a', fontFamily: 'monospace', wordBreak: 'break-all', marginTop: 4 }}>
+                    lido: "{ultimoQrLidoDebug.slice(0, 60)}" · esperado: "{avaliacao.codigo_avaliacao}"
+                  </div>
+                )}
               </div>
               <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '10px 14px', background: 'linear-gradient(transparent, rgba(0,0,0,0.65))', display: 'flex', alignItems: 'center', gap: 8 }}>
                 {(statusCamera === 'iniciando' || statusCamera === 'procurando') && (
