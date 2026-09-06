@@ -67,8 +67,8 @@ export interface Aluno {
  * `turma_id` guarda um destes IDs de GRUPO em vez de uma turma real.
  */
 export const GRUPOS_CORRETOR: { id: string; label: string; turmas: string[] }[] = [
-  { id: 'GRUPO_6_7', label: '6º e 7º Ano (todas as turmas)', turmas: ['6F', '7B', '7C', '7D', '7E', '7F'] },
-  { id: 'GRUPO_8_9', label: '8º e 9º Ano (todas as turmas)', turmas: ['8A', '8B', '8C', '8D', '8E', '8F', '9A', '9B', '9C', '9D', '9E', '9F'] },
+  { id: 'GRUPO_6_7', label: '6º e 7º Ano', turmas: ['6F', '7B', '7C', '7D', '7E', '7F'] },
+  { id: 'GRUPO_8_9', label: '8º e 9º Ano', turmas: ['8A', '8B', '8C', '8D', '8E', '8F', '9A', '9B', '9C', '9D', '9E', '9F'] },
 ];
 
 /** Turmas reais cobertas por `turma_id` — devolve a própria turma se não for um grupo. */
