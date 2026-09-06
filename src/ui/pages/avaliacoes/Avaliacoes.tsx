@@ -40,15 +40,17 @@ function questaoVazia(numero: number): QuestaoObjetiva {
   };
 }
 
-/** Extrai questões objetivas de um texto já revisado no Word, no formato
- * "1. Enunciado..." seguido de linhas "A) texto", "B) texto" etc. Não tenta
- * adivinhar a resposta correta -- o Word do professor não marca isso, então
- * o gabarito é preenchido manualmente no app depois de importar (tocando na
- * letra de cada alternativa, igual já funciona pra questão digitada à mão). */
+/** Extrai questões objetivas de um texto já revisado no Word. Aceita tanto
+ * "1. Enunciado..." quanto "QUESTÃO 1" (numa linha própria) pra marcar o
+ * início da questão, e tanto "A) texto" quanto "(A) texto" pras alternativas.
+ * Não tenta adivinhar a resposta correta -- o Word do professor não marca
+ * isso, então o gabarito é preenchido manualmente no app depois de importar
+ * (tocando na letra de cada alternativa, igual já funciona pra questão
+ * digitada à mão). */
 function parseQuestoesDoTexto(texto: string): QuestaoObjetiva[] {
   const linhas = texto.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-  const reQuestao = /^(\d{1,3})[.\)]\s*(.*)$/;
-  const reAlternativa = /^([A-Da-d])[.\)]\s*(.*)$/;
+  const reQuestao = /^(?:quest[ãa]o\s+)?(\d{1,3})\s*[.\):-]?\s*(.*)$/i;
+  const reAlternativa = /^\(?([A-Da-d])[.\)]\s*(.*)$/;
 
   const brutas: { enunciado: string; alternativas: { letra: string; texto: string }[] }[] = [];
   let atual: { enunciado: string; alternativas: { letra: string; texto: string }[] } | null = null;
@@ -75,9 +77,11 @@ function parseQuestoesDoTexto(texto: string): QuestaoObjetiva[] {
   if (atual) brutas.push(atual);
 
   // Normaliza pra sempre ter as 4 alternativas A-D (padrão desta versão) --
-  // preenche vazio o que não foi encontrado, descarta letras extras.
+  // preenche vazio o que não foi encontrado, descarta letras extras. Questão
+  // sem NENHUMA alternativa reconhecida é discursiva (sem A/B/C/D no Word),
+  // não objetiva -- não faz sentido importar como objetiva em branco.
   return brutas
-    .filter(q => q.enunciado)
+    .filter(q => q.enunciado && q.alternativas.length > 0)
     .map((q, i) => ({
       numero: i + 1,
       enunciado: q.enunciado,
