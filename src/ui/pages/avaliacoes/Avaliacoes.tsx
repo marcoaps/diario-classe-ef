@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
-import { ClipboardList, Plus, QrCode, Camera, Trash2, ChevronDown, ChevronUp, BarChart2, Sparkles, Share2, Copy, Check, ListChecks } from 'lucide-react';
+import { ClipboardList, Plus, QrCode, Camera, Trash2, ChevronDown, ChevronUp, BarChart2, Sparkles, Share2, Copy, Check, ListChecks, FileUp } from 'lucide-react';
 import type { Avaliacao, QuestaoObjetiva } from './tiposCorretorProvas';
 import { ALTERNATIVAS_PADRAO, valorPorQuestaoObjetiva, arredondar, GRUPOS_CORRETOR, ehGrupoDeTurmas, labelTurmaOuGrupo } from './tiposCorretorProvas';
 import { getTurmasDoGrupo, getLabelGrupo } from '../ProvasOnline';
@@ -38,6 +38,54 @@ function questaoVazia(numero: number): QuestaoObjetiva {
     enunciado: '',
     alternativas: ALTERNATIVAS_PADRAO.map(letra => ({ letra, texto: '' })),
   };
+}
+
+/** Extrai questões objetivas de um texto já revisado no Word, no formato
+ * "1. Enunciado..." seguido de linhas "A) texto", "B) texto" etc. Não tenta
+ * adivinhar a resposta correta -- o Word do professor não marca isso, então
+ * o gabarito é preenchido manualmente no app depois de importar (tocando na
+ * letra de cada alternativa, igual já funciona pra questão digitada à mão). */
+function parseQuestoesDoTexto(texto: string): QuestaoObjetiva[] {
+  const linhas = texto.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const reQuestao = /^(\d{1,3})[.\)]\s*(.*)$/;
+  const reAlternativa = /^([A-Da-d])[.\)]\s*(.*)$/;
+
+  const brutas: { enunciado: string; alternativas: { letra: string; texto: string }[] }[] = [];
+  let atual: { enunciado: string; alternativas: { letra: string; texto: string }[] } | null = null;
+  let ultimaAlternativa: { letra: string; texto: string } | null = null;
+
+  for (const linha of linhas) {
+    const mQuestao = linha.match(reQuestao);
+    const mAlternativa = !mQuestao ? linha.match(reAlternativa) : null;
+    if (mQuestao) {
+      if (atual) brutas.push(atual);
+      atual = { enunciado: mQuestao[2].trim(), alternativas: [] };
+      ultimaAlternativa = null;
+    } else if (mAlternativa && atual) {
+      ultimaAlternativa = { letra: mAlternativa[1].toUpperCase(), texto: mAlternativa[2].trim() };
+      atual.alternativas.push(ultimaAlternativa);
+    } else if (atual) {
+      // Linha de continuação (quebrou em várias linhas no Word) -- pertence
+      // à última alternativa se já começamos a ler alternativas, senão
+      // ainda é parte do enunciado.
+      if (ultimaAlternativa) ultimaAlternativa.texto = (ultimaAlternativa.texto + ' ' + linha).trim();
+      else atual.enunciado = (atual.enunciado + ' ' + linha).trim();
+    }
+  }
+  if (atual) brutas.push(atual);
+
+  // Normaliza pra sempre ter as 4 alternativas A-D (padrão desta versão) --
+  // preenche vazio o que não foi encontrado, descarta letras extras.
+  return brutas
+    .filter(q => q.enunciado)
+    .map((q, i) => ({
+      numero: i + 1,
+      enunciado: q.enunciado,
+      alternativas: ALTERNATIVAS_PADRAO.map(letra => ({
+        letra,
+        texto: q.alternativas.find(a => a.letra === letra)?.texto || '',
+      })),
+    }));
 }
 
 export function Avaliacoes() {
@@ -81,7 +129,9 @@ export function Avaliacoes() {
   const [gerandoObjetivas, setGerandoObjetivas] = useState(false);
   const [gerandoDiscursivas, setGerandoDiscursivas] = useState(false);
   const [gerandoTexto, setGerandoTexto] = useState(false);
+  const [importandoWord, setImportandoWord] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const inputWordRef = useRef<HTMLInputElement | null>(null);
 
   const qtdObjetivas = Math.max(0, Math.min(MAX_OBJETIVAS, parseInt(qtdObjetivasStr) || 0));
   const qtdDiscursivas = Math.max(0, Math.min(MAX_DISCURSIVAS, parseInt(qtdDiscursivasStr) || 0));
@@ -172,6 +222,42 @@ export function Avaliacoes() {
     } finally {
       setGerandoObjetivas(false);
     }
+  }
+
+  // Importa questões objetivas de um .docx já revisado no Word -- extrai só
+  // o texto (mammoth), reconhece o padrão "1. Enunciado" + "A) alternativa"
+  // e preenche o formulário. NÃO tenta adivinhar a resposta correta (o Word
+  // do professor não marca isso); o gabarito fica em branco pra marcar na
+  // mão depois, igual já funciona pra questão digitada.
+  async function importarWord(file: File) {
+    setErro('');
+    setImportandoWord(true);
+    try {
+      const mammoth = (await import('mammoth/mammoth.browser')).default;
+      const arrayBuffer = await file.arrayBuffer();
+      const resultado = await mammoth.extractRawText({ arrayBuffer });
+      const questoes = parseQuestoesDoTexto(resultado.value).slice(0, MAX_OBJETIVAS);
+      if (questoes.length === 0) {
+        throw new Error('Não consegui reconhecer nenhuma questão no formato "1. Enunciado" seguido de "A) alternativa", "B) alternativa"... Confira a formatação do documento.');
+      }
+      setQtdObjetivasStr(String(questoes.length));
+      setQuestoesObjetivas(questoes);
+      setGabarito({});
+      setAvisoImportacao(
+        `${questoes.length} questão(ões) importada(s) do Word — confira o texto e marque a alternativa correta de cada uma (toque na letra) antes de salvar.`
+      );
+    } catch (e) {
+      setErro('Erro ao importar o Word: ' + (e as Error).message);
+    } finally {
+      setImportandoWord(false);
+    }
+  }
+
+  function handleUploadWord(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    importarWord(file);
+    e.target.value = '';
   }
 
   async function gerarEnunciadosDiscursivasIA() {
@@ -581,14 +667,32 @@ export function Avaliacoes() {
               <p className="text-xs font-semibold text-on-surface-variant">
                 Questões Objetivas (1 a {qtdObjetivas})
               </p>
-              <button
-                onClick={gerarQuestoesObjetivasIA}
-                disabled={gerandoObjetivas || qtdObjetivas < 1}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-semibold disabled:opacity-60"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                {gerandoObjetivas ? 'Gerando...' : 'Gerar com IA'}
-              </button>
+              <div className="flex items-center gap-2">
+                <input
+                  ref={inputWordRef}
+                  type="file"
+                  accept=".docx"
+                  onChange={handleUploadWord}
+                  style={{ display: 'none' }}
+                />
+                <button
+                  onClick={() => inputWordRef.current?.click()}
+                  disabled={importandoWord}
+                  title='Word já formatado, no padrão "1. Enunciado" + "A) alternativa"'
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-secondary-container text-on-secondary-container text-xs font-semibold disabled:opacity-60"
+                >
+                  <FileUp className="w-3.5 h-3.5" />
+                  {importandoWord ? 'Importando...' : 'Importar do Word'}
+                </button>
+                <button
+                  onClick={gerarQuestoesObjetivasIA}
+                  disabled={gerandoObjetivas || qtdObjetivas < 1}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-semibold disabled:opacity-60"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  {gerandoObjetivas ? 'Gerando...' : 'Gerar com IA'}
+                </button>
+              </div>
             </div>
             {gerandoObjetivas && (
               <div className="flex items-center gap-2 text-xs text-on-surface-variant">
