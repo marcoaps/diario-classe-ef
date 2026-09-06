@@ -437,7 +437,7 @@ export function ResponderProva() {
           </div>
 
           <div className="mx-4 lg:mx-8 lg:mt-6 bg-white rounded-2xl shadow-sm border border-gray-100 p-5 lg:p-10 flex flex-col gap-5">
-            <div className="bg-gray-50 border-l-4 border-blue-400 rounded-xl px-4 py-4 lg:px-6 lg:py-5">
+            <div className="bg-gray-50 border-2 border-blue-300 rounded-xl px-4 py-4 lg:px-6 lg:py-5">
               <p className="text-gray-800 text-base lg:text-2xl font-medium leading-relaxed whitespace-pre-line">{q.enunciado}</p>
             </div>
 
