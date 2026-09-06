@@ -185,11 +185,17 @@ export const CSS_PROVA = `
 // o próprio aluno preencher à caneta. Reaproveita as 4 marcas pretas de
 // referência (OMR) e a grade de bolhas calculadas dinamicamente para a
 // quantidade real de questões da avaliação.
+/** "6F" -> "6ºF", "7B" -> "7ºB" -- só formatação visual pro que é impresso. */
+function formatarTurma(turma: string): string {
+  return turma.replace(/(\d+)/, '$1º');
+}
+
 async function desenharFolhaModelo(
   canvas: HTMLCanvasElement,
   avaliacao: Avaliacao,
   qrConteudo: string,
-  layoutVersion: number
+  layoutVersion: number,
+  turmaPreenchida?: string
 ): Promise<void> {
   const W = FOLHA_W;
   const H = FOLHA_H;
@@ -254,9 +260,26 @@ async function desenharFolhaModelo(
     ctx.stroke();
   }
 
+  // TURMA já vem preenchida (o professor escolhe pra qual turma gerar,
+  // antes de imprimir) -- só NOME/Nº/DATA ficam em branco pra escrever à
+  // mão, já que não identificam a turma nem entram no QR.
+  function linhaComValor(rotulo: string, valor: string, x: number, y: number) {
+    ctx.fillStyle = '#334155';
+    ctx.font = 'bold 10px Arial';
+    ctx.fillText(rotulo, x, y);
+    const larguraRotulo = ctx.measureText(rotulo).width;
+    ctx.fillStyle = '#1e293b';
+    ctx.font = 'bold 11px Arial';
+    ctx.fillText(valor, x + larguraRotulo + 6, y);
+  }
+
   linhaPreencher('NOME:', CX + 8, alunoY + 15, CW - 16);
   const ncX = CX + Math.floor(CW / 2);
-  linhaPreencher('TURMA:', CX + 8, alunoY + 35, Math.floor(CW / 2) - 16);
+  if (turmaPreenchida) {
+    linhaComValor('TURMA:', turmaPreenchida, CX + 8, alunoY + 35);
+  } else {
+    linhaPreencher('TURMA:', CX + 8, alunoY + 35, Math.floor(CW / 2) - 16);
+  }
   linhaPreencher('Nº:', ncX, alunoY + 35, Math.floor(CW / 2) - 16);
   linhaPreencher('DATA:', CX + 8, alunoY + 53, 180);
 
@@ -405,6 +428,10 @@ export function AvaliacaoFolha() {
   // nenhum aluno cadastrado.
   const [folhaDataUrl, setFolhaDataUrl] = useState<string>('');
   const [numCopias, setNumCopias] = useState(30);
+  // Turma pra pré-preencher no campo "TURMA:" -- quando a avaliação é um
+  // GRUPO (várias turmas), o professor escolhe pra qual turma gerar/imprimir
+  // agora (gera um lote por vez); numa avaliação de turma só, é sempre ela.
+  const [turmaSelecionada, setTurmaSelecionada] = useState('');
   const [erroGeracao, setErroGeracao] = useState('');
   const [gerandoIA, setGerandoIA] = useState(false);
   const [gerandoTextoApoio, setGerandoTextoApoio] = useState(false);
@@ -416,6 +443,7 @@ export function AvaliacaoFolha() {
       setAvaliacao(av);
       if (av) {
         const turmasReais = turmasDoValor(av.turma_id);
+        setTurmaSelecionada(turmasReais[0] || '');
         const { data: especiais } = await supabase.from('alunos_especiais').select('nome');
         const nomesEspeciais = (especiais || []).map((e: { nome: string }) => e.nome.toLowerCase().trim());
 
@@ -510,7 +538,7 @@ export function AvaliacaoFolha() {
   // AVALIAÇÃO, nunca quem vai responder. O código é gerado na hora (sob
   // demanda) se a avaliação ainda não tiver um -- e persistido, pra ficar
   // estável entre gerações (reimprimir não muda o código já distribuído).
-  async function gerarFolhaModelo() {
+  async function gerarFolhaModelo(turma: string) {
     if (!avaliacao) return;
     setGerando(true);
     setErroGeracao('');
@@ -530,7 +558,7 @@ export function AvaliacaoFolha() {
       }
 
       const canvas = document.createElement('canvas');
-      await desenharFolhaModelo(canvas, avaliacao, codigo, LAYOUT_VERSION);
+      await desenharFolhaModelo(canvas, avaliacao, codigo, LAYOUT_VERSION, turma ? formatarTurma(turma) : undefined);
       setFolhaDataUrl(canvas.toDataURL('image/png'));
     } catch (e) {
       setErroGeracao(`Erro ao gerar a folha-modelo: ${(e as Error).message}`);
@@ -672,17 +700,32 @@ export function AvaliacaoFolha() {
               <p className="text-xs text-on-surface-variant">Código: <strong>{avaliacao.codigo_avaliacao}</strong></p>
             )}
           </div>
-          <button onClick={gerarFolhaModelo} disabled={gerando}
+          <button onClick={() => gerarFolhaModelo(turmaSelecionada)} disabled={gerando}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-semibold disabled:opacity-50">
             <QrCode className="w-3.5 h-3.5" />
             {gerando ? 'Gerando...' : folhaDataUrl ? 'Gerar de novo' : 'Gerar folha-modelo'}
           </button>
         </div>
 
+        {ehGrupoDeTurmas(avaliacao.turma_id) && turmasDoValor(avaliacao.turma_id).length > 1 && (
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-on-surface-variant whitespace-nowrap">Turma deste lote:</label>
+            <select
+              value={turmaSelecionada}
+              onChange={e => { const t = e.target.value; setTurmaSelecionada(t); gerarFolhaModelo(t); }}
+              className="flex-1 px-3 py-1.5 rounded-lg border border-outline-variant bg-background text-sm"
+            >
+              {turmasDoValor(avaliacao.turma_id).map(t => (
+                <option key={t} value={t}>{formatarTurma(t)}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <p className="text-xs text-on-surface-variant">
-          O QR identifica só a <strong>avaliação</strong> — nunca o aluno. É a MESMA folha (e o mesmo QR)
-          em toda cópia: nome e turma ficam em branco pra o próprio aluno preencher à caneta. Não precisa
-          de nenhum aluno cadastrado pra gerar ou imprimir.
+          O QR identifica só a <strong>avaliação</strong> — nunca o aluno. É o MESMO QR em toda cópia; a
+          turma já vem preenchida (escolha acima qual turma gerar agora), só o nome fica em branco pra o
+          próprio aluno preencher à caneta. Não precisa de nenhum aluno cadastrado pra gerar ou imprimir.
         </p>
 
         {erroGeracao && <p className="text-xs text-red-500">{erroGeracao}</p>}
