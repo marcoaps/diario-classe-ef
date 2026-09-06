@@ -321,6 +321,15 @@ export function Avaliacoes() {
    * dentro das tabelas `provas`/`questoes` que o /responder já lê.
    */
   async function publicarOnline(av: Avaliacao) {
+    // Avaliações criadas em "Só o Gabarito" não têm enunciado/alternativas
+    // (só o gabarito, pra imprimir e ler por câmera) -- a Prova Online
+    // precisa mostrar a questão de verdade pro aluno na tela, então publicar
+    // uma dessas resultaria em questões em branco.
+    const semTexto = (av.questoes_objetivas || []).length > 0 && av.questoes_objetivas.every(q => !q.enunciado?.trim());
+    if (semTexto) {
+      setErro('Esta avaliação foi criada em "Só o Gabarito" e não tem o texto das questões — a Prova Online precisa mostrar a questão pro aluno na tela. Crie a avaliação pelo formulário completo (ou pelo Gerador de Questões) pra poder publicar online.');
+      return;
+    }
     setPublicando(av.id);
     setErro('');
     try {
