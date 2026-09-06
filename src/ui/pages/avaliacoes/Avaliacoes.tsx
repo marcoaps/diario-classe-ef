@@ -6,12 +6,24 @@ import type { Avaliacao, QuestaoObjetiva } from './tiposCorretorProvas';
 import { ALTERNATIVAS_PADRAO, valorPorQuestaoObjetiva, arredondar, GRUPOS_CORRETOR, ehGrupoDeTurmas, labelTurmaOuGrupo } from './tiposCorretorProvas';
 import { getTurmasDoGrupo, getLabelGrupo } from '../ProvasOnline';
 
-const GRUPOS_ONLINE = ['6-7', '8', '9'];
+const GRUPOS_ONLINE = ['6-7', '8', '9', '8-9'];
+
+/** GRUPOS_CORRETOR (tiposCorretorProvas.ts) e os grupos de Provas Online
+ * (ProvasOnline.tsx) evoluíram separados e não usam os mesmos ids -- quando
+ * a avaliação já é um GRUPO_CORRETOR inteiro (ex: "GRUPO_8_9", 8º e 9º juntos),
+ * turma_id NÃO é uma turma real, então a busca por turma abaixo nunca acha
+ * nada e sempre caía no primeiro grupo (6º/7º) por engano. Mapeia direto.
+ */
+const GRUPO_CORRETOR_PARA_ONLINE: Record<string, string> = {
+  GRUPO_6_7: '6-7',
+  GRUPO_8_9: '8-9',
+};
 
 /** As Provas Online são compartilhadas por um código único por GRUPO de turmas
  * (não por turma individual) — mesmo modelo já usado quando a prova é criada
  * direto por lá. Aqui só descobrimos a qual grupo a turma da avaliação pertence. */
 function grupoDaTurma(turmaId: string): string {
+  if (GRUPO_CORRETOR_PARA_ONLINE[turmaId]) return GRUPO_CORRETOR_PARA_ONLINE[turmaId];
   return GRUPOS_ONLINE.find(id => getTurmasDoGrupo(id).includes(turmaId)) || GRUPOS_ONLINE[0];
 }
 
