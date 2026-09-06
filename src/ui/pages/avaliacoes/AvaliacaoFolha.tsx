@@ -271,11 +271,6 @@ async function desenharFolhaModelo(
   const qrX = W - PAD - MARK - 8 - qrSize;
   const qrY = alunoY + 36;
   ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
-  ctx.fillStyle = '#64748b';
-  ctx.font = '9px Arial';
-  ctx.textAlign = 'center';
-  ctx.fillText('QR da avaliação — igual em toda cópia', qrX + qrSize / 2, qrY + qrSize + 13);
-  ctx.textAlign = 'left';
 
   // Instruções
   const instrY = alunoY + FIELDS_H + 4;
