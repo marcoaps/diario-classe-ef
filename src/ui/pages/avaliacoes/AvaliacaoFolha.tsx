@@ -362,43 +362,13 @@ async function desenharFolhaModelo(
     ctx.fillRect(colRight, colBottom, MARK_COL, MARK_COL);
   }
 
-  // Questões subjetivas — uma caixa por questão, altura dividida igualmente.
-  if (qtdDisc > 0) {
-    const subjStartY = INICIO_BOLHAS_Y + qtdObj * Q_ROW_H + 34;
-    const boxH = Math.max(70, (H - PAD - MARK - 20 - subjStartY - (qtdDisc - 1) * 12) / qtdDisc);
-    const HDR_H = 22;
-    const GAP = 12;
-    const valorDisc = (avaliacao.valor_total_discursivas || 0) / qtdDisc;
-
-    for (let s = 0; s < qtdDisc; s++) {
-      const qn = qtdObj + s + 1;
-      const bx = CX - 4;
-      const bw = CW + 8;
-      const by = subjStartY + s * (boxH + GAP);
-
-      ctx.strokeStyle = '#1e3a5f';
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(bx, by, bw, boxH);
-      ctx.fillStyle = '#1e3a5f';
-      ctx.fillRect(bx, by, bw, HDR_H);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 11px Arial';
-      ctx.textAlign = 'left';
-      ctx.fillText('Questão ' + qn + ' (' + valorDisc.toFixed(1).replace('.', ',') + ' pt)', bx + 8, by + HDR_H - 6);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(bx, by + HDR_H, bw, boxH - HDR_H);
-      ctx.strokeStyle = '#94a3b8';
-      ctx.lineWidth = 0.7;
-      const linhas = Math.max(2, Math.floor((boxH - HDR_H - 10) / 20));
-      const lineSpacing = (boxH - HDR_H - 16) / linhas;
-      for (let ln = 0; ln < linhas; ln++) {
-        ctx.beginPath();
-        ctx.moveTo(bx + 8, by + HDR_H + 12 + ln * lineSpacing);
-        ctx.lineTo(bx + bw - 8, by + HDR_H + 12 + ln * lineSpacing);
-        ctx.stroke();
-      }
-    }
-  }
+  // As caixas das questões discursivas foram removidas a pedido -- a
+  // folha-modelo agora é só o gabarito objetivo. IMPORTANTE: a geometria das
+  // bolhas continua calculada com o `qtdDisc` REAL (via
+  // calcularGeometriaQuestoes acima), não com 0 -- senão o grid de bolhas
+  // impresso ficaria maior/mais espaçado do que o motor de leitura (OMR)
+  // espera, e a leitura desalinharia. Só a área abaixo do gabarito fica em
+  // branco, sem desenhar nada nela.
 
   // Rodapé
   ctx.fillStyle = '#94a3b8';
