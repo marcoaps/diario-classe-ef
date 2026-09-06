@@ -21,6 +21,10 @@ export interface QuestaoObjetiva {
 
 export interface Avaliacao {
   id: string;
+  /** Código curto e amigável (ex: "AV2026-0001") gerado sob demanda na
+   * primeira vez que a folha-modelo é impressa -- é ISSO que vai dentro do QR
+   * Code, nunca o `id` (uuid) puro. Null até a folha ser gerada pela 1ª vez. */
+  codigo_avaliacao?: string | null;
   titulo: string;
   descricao: string | null;
   disciplina: string;

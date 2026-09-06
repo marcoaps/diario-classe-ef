@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
-import { ClipboardList, Plus, QrCode, Camera, Trash2, ChevronDown, ChevronUp, BarChart2, Sparkles, Share2, Copy, Check } from 'lucide-react';
+import { ClipboardList, Plus, QrCode, Camera, Trash2, ChevronDown, ChevronUp, BarChart2, Sparkles, Share2, Copy, Check, ListChecks } from 'lucide-react';
 import type { Avaliacao, QuestaoObjetiva } from './tiposCorretorProvas';
 import { ALTERNATIVAS_PADRAO, valorPorQuestaoObjetiva, arredondar, GRUPOS_CORRETOR, ehGrupoDeTurmas, labelTurmaOuGrupo } from './tiposCorretorProvas';
 import { getTurmasDoGrupo, getLabelGrupo } from '../ProvasOnline';
@@ -757,35 +757,43 @@ export function Avaliacoes() {
                     ))}
                   </div>
 
-                  <div className="flex gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => navigate(`/avaliacoes/folha/${av.id}`)}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-primary text-on-primary text-xs font-semibold"
+                      className="flex items-center justify-center gap-1.5 py-2 rounded-xl bg-primary text-on-primary text-xs font-semibold"
                     >
                       <QrCode className="w-4 h-4" />
                       Folhas QR
                     </button>
                     <button
                       onClick={() => navigate(`/avaliacoes/corrigir/${av.id}`)}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-secondary-container text-on-secondary-container text-xs font-semibold"
+                      className="flex items-center justify-center gap-1.5 py-2 rounded-xl bg-secondary-container text-on-secondary-container text-xs font-semibold"
                     >
                       <Camera className="w-4 h-4" />
                       Corrigir
                     </button>
                     <button
+                      onClick={() => navigate(`/avaliacoes/correcoes/${av.id}`)}
+                      className="flex items-center justify-center gap-1.5 py-2 rounded-xl bg-surface border border-outline-variant text-on-surface text-xs font-semibold"
+                    >
+                      <ListChecks className="w-4 h-4" />
+                      Correções
+                    </button>
+                    <button
                       onClick={() => navigate(`/avaliacoes/resultados/${av.id}`)}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-surface border border-outline-variant text-on-surface text-xs font-semibold"
+                      className="flex items-center justify-center gap-1.5 py-2 rounded-xl bg-surface border border-outline-variant text-on-surface text-xs font-semibold"
                     >
                       <BarChart2 className="w-4 h-4" />
                       Resultados
                     </button>
-                    <button
-                      onClick={() => excluir(av.id)}
-                      className="p-2 rounded-xl border border-error text-error"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
                   </div>
+                  <button
+                    onClick={() => excluir(av.id)}
+                    className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-xl border border-error text-error text-xs font-semibold"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Excluir avaliação
+                  </button>
 
                   {codigosPublicados[av.id] ? (
                     <div className="flex items-center justify-between gap-2 bg-secondary-container rounded-xl px-3 py-2">

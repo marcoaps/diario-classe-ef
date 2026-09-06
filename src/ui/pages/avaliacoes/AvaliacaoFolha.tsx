@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
 import { ArrowLeft, Printer, FileText, Download, Sparkles, QrCode } from 'lucide-react';
 import QRCode from 'qrcode';
-import type { Avaliacao, Aluno, QrPayload, QuestaoObjetiva } from './tiposCorretorProvas';
+import type { Avaliacao, Aluno, QuestaoObjetiva } from './tiposCorretorProvas';
 import { LAYOUT_VERSION, valorPorQuestaoObjetiva, turmasDoValor, ehGrupoDeTurmas, labelTurmaOuGrupo } from './tiposCorretorProvas';
 import {
   FOLHA_W, FOLHA_H, FOLHA_PAD, FOLHA_MARK, FOLHA_MARK_COL,
@@ -179,26 +179,15 @@ export const CSS_PROVA = `
   .questao-enunc, .alt { text-align: justify; }
 `;
 
-// ─── Assina o payload do QR no backend (a chave nunca chega ao front-end) ────
-async function assinarPayload(payload: QrPayload): Promise<string> {
-  const resp = await fetch('/api/qr-assinar', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ acao: 'assinar', payload }),
-  });
-  const data = await resp.json();
-  if (!resp.ok) throw new Error(data.error || 'Falha ao assinar o QR Code.');
-  return data.assinatura as string;
-}
-
-// ─── Desenha UMA folha de resposta individual (1 por aluno) ─────────────────
-// Reaproveita as 4 marcas pretas de referência (OMR) e a grade de bolhas já
-// existentes no layout original — só que agora calculadas dinamicamente para
-// a quantidade real de questões da avaliação, em vez de uma grade fixa de 8.
-async function desenharFolhaQR(
+// ─── Desenha a FOLHA-MODELO da avaliação (uma só, sem depender de nenhum
+// aluno cadastrado -- o QR identifica só a AVALIAÇÃO, nunca o aluno). O
+// professor imprime quantas cópias precisar; nome/turma ficam em branco pra
+// o próprio aluno preencher à caneta. Reaproveita as 4 marcas pretas de
+// referência (OMR) e a grade de bolhas calculadas dinamicamente para a
+// quantidade real de questões da avaliação.
+async function desenharFolhaModelo(
   canvas: HTMLCanvasElement,
   avaliacao: Avaliacao,
-  aluno: Aluno,
   qrConteudo: string,
   layoutVersion: number
 ): Promise<void> {
@@ -210,11 +199,7 @@ async function desenharFolhaQR(
   const qtdObj = avaliacao.quantidade_objetivas || 0;
   const qtdDisc = avaliacao.quantidade_discursivas || 0;
   const alternativas = avaliacao.alternativas?.length ? avaliacao.alternativas : ['A', 'B', 'C', 'D'];
-  // Usa a turma REAL do aluno (não a da avaliação) — quando a avaliação cobre
-  // um GRUPO de turmas (ex: "6º e 7º Ano" inteiro), avaliacao.turma_id não é
-  // uma turma de verdade, mas cada folha é individual e sabe a turma certa.
-  const turmaEfetiva = aluno.turma_id || avaliacao.turma_id;
-  const serieLabel = turmaEfetiva.replace(/(\d+).*/, '$1') + 'º Ano';
+  const serieLabel = ehGrupoDeTurmas(avaliacao.turma_id) ? labelTurmaOuGrupo(avaliacao.turma_id) : avaliacao.turma_id;
 
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, W, H);
@@ -244,48 +229,36 @@ async function desenharFolhaQR(
   ctx.fillText(serieLabel + ' — Folha ' + layoutVersion, W / 2, PAD + 56);
   ctx.textAlign = 'left';
 
-  // Área do aluno — nome e nº de chamada JÁ PREENCHIDOS (folha individual),
-  // só a data fica em branco pra escrever à caneta no dia da prova.
+  // Área do aluno — folha-modelo (sem depender de nenhum cadastro): nome,
+  // turma e data ficam em BRANCO, pra o próprio aluno preencher à caneta.
+  // Essa informação NUNCA entra no QR nem é lida automaticamente -- serve só
+  // pra associação manual posterior (ver AvaliacaoCorrecoes.tsx).
   const alunoY = PAD + 70;
   const FIELDS_H = 58;
-  const turmLetra = turmaEfetiva.replace(/\d/g, '');
   ctx.fillStyle = '#f8fafc';
   ctx.fillRect(CX, alunoY, CW, FIELDS_H);
   ctx.strokeStyle = '#cbd5e1';
   ctx.lineWidth = 1;
   ctx.strokeRect(CX, alunoY, CW, FIELDS_H);
 
-  ctx.fillStyle = '#334155';
-  ctx.font = 'bold 10px Arial';
-  ctx.fillText('NOME:', CX + 8, alunoY + 15);
-  ctx.fillStyle = '#1e293b';
-  ctx.font = 'bold 12px Arial';
-  ctx.fillText(aluno.nome, CX + 54, alunoY + 15);
+  function linhaPreencher(rotulo: string, x: number, y: number, largura: number) {
+    ctx.fillStyle = '#334155';
+    ctx.font = 'bold 10px Arial';
+    ctx.fillText(rotulo, x, y);
+    const larguraRotulo = ctx.measureText(rotulo).width;
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(x + larguraRotulo + 6, y + 1);
+    ctx.lineTo(x + largura, y + 1);
+    ctx.stroke();
+  }
 
-  ctx.fillStyle = '#334155';
-  ctx.font = 'bold 10px Arial';
-  ctx.fillText('TURMA:', CX + 8, alunoY + 35);
-  ctx.fillStyle = '#1e293b';
-  ctx.font = 'bold 11px Arial';
-  ctx.fillText(turmLetra, CX + 58, alunoY + 35);
-
-  ctx.fillStyle = '#334155';
-  ctx.font = 'bold 10px Arial';
+  linhaPreencher('NOME:', CX + 8, alunoY + 15, CW - 16);
   const ncX = CX + Math.floor(CW / 2);
-  ctx.fillText('Nº CHAMADA:', ncX, alunoY + 35);
-  ctx.fillStyle = '#1e293b';
-  ctx.font = 'bold 11px Arial';
-  ctx.fillText(String(aluno.numero_chamada ?? '-'), ncX + 86, alunoY + 35);
-
-  ctx.fillStyle = '#334155';
-  ctx.font = 'bold 10px Arial';
-  ctx.fillText('DATA:', CX + 8, alunoY + 53);
-  ctx.strokeStyle = '#334155';
-  ctx.lineWidth = 0.8;
-  ctx.beginPath();
-  ctx.moveTo(CX + 46, alunoY + 54);
-  ctx.lineTo(CX + 220, alunoY + 54);
-  ctx.stroke();
+  linhaPreencher('TURMA:', CX + 8, alunoY + 35, Math.floor(CW / 2) - 16);
+  linhaPreencher('Nº:', ncX, alunoY + 35, Math.floor(CW / 2) - 16);
+  linhaPreencher('DATA:', CX + 8, alunoY + 53, 180);
 
   // QR Code — no modo individual, `qrConteudo` é o payload assinado (payload +
   // assinatura HMAC), exclusivo desta folha; no modo 100% anônimo, é só o
@@ -301,7 +274,7 @@ async function desenharFolhaQR(
   ctx.fillStyle = '#64748b';
   ctx.font = '9px Arial';
   ctx.textAlign = 'center';
-  ctx.fillText('QR exclusivo — não fotocopiar', qrX + qrSize / 2, qrY + qrSize + 13);
+  ctx.fillText('QR da avaliação — igual em toda cópia', qrX + qrSize / 2, qrY + qrSize + 13);
   ctx.textAlign = 'left';
 
   // Instruções
@@ -431,17 +404,15 @@ export function AvaliacaoFolha() {
   const [avaliacao, setAvaliacao] = useState<Avaliacao | null>(null);
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [loading, setLoading] = useState(true);
-  const [gerandoIdx, setGerandoIdx] = useState<number | null>(null);
-  const [folhas, setFolhas] = useState<Record<string, string>>({}); // aluno.id -> dataURL da folha
-  const [geradoTodos, setGeradoTodos] = useState(false);
+  const [gerando, setGerando] = useState(false);
+  // Uma FOLHA-MODELO só por avaliação -- o QR identifica a avaliação, nunca
+  // um aluno específico (ver gerarFolhaModelo() abaixo). Não depende de
+  // nenhum aluno cadastrado.
+  const [folhaDataUrl, setFolhaDataUrl] = useState<string>('');
+  const [numCopias, setNumCopias] = useState(30);
   const [erroGeracao, setErroGeracao] = useState('');
   const [gerandoIA, setGerandoIA] = useState(false);
   const [gerandoTextoApoio, setGerandoTextoApoio] = useState(false);
-  // QR 100% anônimo: o código impresso vira só o texto puro da turma/grupo
-  // (ex: "GRUPO_6_7"), sem JSON, sem assinatura, sem nenhuma referência a
-  // aluno -- abre mão de vez da identificação automática (e do vínculo
-  // aluno↔prova até uma etapa futura de associação manual). Ver gerarTodos().
-  const [qrAnonimoPorGrupo, setQrAnonimoPorGrupo] = useState(false);
 
   useEffect(() => {
     async function init() {
@@ -538,72 +509,52 @@ export function AvaliacaoFolha() {
     }
   }
 
-  // Gera uma folha por aluno da turma. Por padrão, QR exclusivo por aluno
-  // (identifica automaticamente quem é quem ao corrigir, payload assinado por
-  // HMAC). Se `qrAnonimoPorGrupo` estiver ligado, o QR vira só o texto puro
-  // da turma/grupo da avaliação (ex: "GRUPO_6_7") -- o MESMO texto em toda
-  // folha, sem assinatura (não precisa chamar o backend nem gravar
-  // folhas_respostas, já que não há mais um token por aluno) -- e a correção
-  // não identifica ninguém automaticamente nem pede pra escolher o aluno na
-  // lista: cada prova lida fica com um código anônimo (ex: PROVA_2026_0001)
-  // até ser associada a um aluno manualmente numa etapa futura.
-  async function gerarTodos() {
-    if (!avaliacao || alunos.length === 0) return;
-    setGeradoTodos(false);
-    setFolhas({});
+  // Gera a FOLHA-MODELO única da avaliação -- não depende de nenhum aluno
+  // cadastrado. O QR carrega SOMENTE avaliacao.codigo_avaliacao (texto puro,
+  // sem JSON, sem assinatura, sem turma_id/aluno_id nenhum): identifica a
+  // AVALIAÇÃO, nunca quem vai responder. O código é gerado na hora (sob
+  // demanda) se a avaliação ainda não tiver um -- e persistido, pra ficar
+  // estável entre gerações (reimprimir não muda o código já distribuído).
+  async function gerarFolhaModelo() {
+    if (!avaliacao) return;
+    setGerando(true);
     setErroGeracao('');
-    const novasFolhas: Record<string, string> = {};
-
-    for (let i = 0; i < alunos.length; i++) {
-      setGerandoIdx(i);
-      const aluno = alunos[i];
-      try {
-        const turmaDoAluno = aluno.turma_id || avaliacao.turma_id;
-        let qrConteudo: string;
-        let layoutVersion: number;
-
-        if (qrAnonimoPorGrupo) {
-          qrConteudo = avaliacao.turma_id;
-          layoutVersion = LAYOUT_VERSION;
-        } else {
-          const { data: folhaRow, error } = await supabase
-            .from('folhas_respostas')
-            .upsert(
-              { avaliacao_id: avaliacao.id, aluno_id: aluno.id, turma_id: turmaDoAluno },
-              { onConflict: 'avaliacao_id,aluno_id' }
-            )
-            .select('id')
-            .single();
-          if (error || !folhaRow) throw new Error(error?.message || 'Falha ao registrar a folha.');
-          const payload: QrPayload = { prova_id: avaliacao.id, aluno_id: aluno.id, turma_id: turmaDoAluno, folha_id: folhaRow.id, layout_version: LAYOUT_VERSION };
-          const assinatura = await assinarPayload(payload);
-          qrConteudo = JSON.stringify({ payload, assinatura });
-          layoutVersion = LAYOUT_VERSION;
-        }
-
-        const canvas = document.createElement('canvas');
-        await desenharFolhaQR(canvas, avaliacao, aluno, qrConteudo, layoutVersion);
-        novasFolhas[aluno.id] = canvas.toDataURL('image/png');
-      } catch (e) {
-        setErroGeracao(`Erro ao gerar a folha de ${aluno.nome}: ${(e as Error).message}`);
+    setFolhaDataUrl('');
+    try {
+      let codigo = avaliacao.codigo_avaliacao;
+      if (!codigo) {
+        const ano = new Date().getFullYear();
+        const { count } = await supabase
+          .from('avaliacoes')
+          .select('id', { count: 'exact', head: true })
+          .not('codigo_avaliacao', 'is', null);
+        codigo = `AV${ano}-${String((count || 0) + 1).padStart(4, '0')}`;
+        const { error } = await supabase.from('avaliacoes').update({ codigo_avaliacao: codigo }).eq('id', avaliacao.id);
+        if (error) throw new Error(error.message);
+        setAvaliacao(prev => prev ? { ...prev, codigo_avaliacao: codigo } : prev);
       }
+
+      const canvas = document.createElement('canvas');
+      await desenharFolhaModelo(canvas, avaliacao, codigo, LAYOUT_VERSION);
+      setFolhaDataUrl(canvas.toDataURL('image/png'));
+    } catch (e) {
+      setErroGeracao(`Erro ao gerar a folha-modelo: ${(e as Error).message}`);
+    } finally {
+      setGerando(false);
     }
-    setFolhas(novasFolhas);
-    setGerandoIdx(null);
-    setGeradoTodos(true);
   }
 
-  function imprimirFolha(alunoId: string, src: string) {
-    if (!avaliacao) return;
-    const aluno = alunos.find(a => a.id === alunoId);
+  function imprimirFolha(copias: number) {
+    if (!avaliacao || !folhaDataUrl) return;
+    const n = Math.max(1, copias || 1);
+    const blocos = Array.from({ length: n }, (_, i) => `<div style="${i === n - 1 ? '' : 'page-break-after: always;'}text-align:center;">
+        <img src="${folhaDataUrl}" style="width:100%;max-width:794px;display:block;margin:0 auto;" />
+      </div>`).join('');
     const html = `<!DOCTYPE html><html><head>
       <meta charset="utf-8">
-      <title>Folha QR — ${aluno?.nome || ''}</title>
+      <title>Folha QR — ${avaliacao.codigo_avaliacao || avaliacao.titulo}</title>
       <style>* { margin:0; padding:0; box-sizing:border-box; } @page { margin:0; size: A4 portrait; } body { background:white; }</style>
-    </head><body>
-      <div style="text-align:center;">
-        <img src="${src}" style="width:100%;max-width:794px;display:block;margin:0 auto;" />
-      </div>
+    </head><body>${blocos}
       <script>setTimeout(function(){ window.print(); }, 600);<\/script>
     </body></html>`;
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
@@ -613,7 +564,7 @@ export function AvaliacaoFolha() {
   }
 
   function imprimirProva() {
-    if (!avaliacao || alunos.length === 0) return;
+    if (!avaliacao) return;
     const textoApoioHtml = gerarHtmlTextoApoio(avaliacao);
     const htmlProva = gerarHtmlProva(avaliacao, alunos[0]);
     const paginaTexto = textoApoioHtml ? `<div style="page-break-after: always;">${textoApoioHtml}</div>` : '';
@@ -632,33 +583,8 @@ export function AvaliacaoFolha() {
     if (win) win.onafterprint = () => URL.revokeObjectURL(url);
   }
 
-  // "Gerar PDF da turma inteira" — um único documento com todas as folhas
-  // individuais, em ordem de número de chamada (alunos já vem ordenado assim).
-  function imprimirTodasAsFolhas() {
-    if (!avaliacao) return;
-    const entradas = alunos.filter(a => folhas[a.id]).map(a => [a.id, folhas[a.id]] as const);
-    if (entradas.length === 0) return;
-    const blocos = entradas.map(([alunoId, src], idx) => {
-      const isLast = idx === entradas.length - 1;
-      return `<div style="${isLast ? '' : 'page-break-after: always;'}text-align:center;">
-        <img src="${src}" style="width:100%;max-width:794px;display:block;margin:0 auto;" />
-      </div>`;
-    }).join('');
-    const html = `<!DOCTYPE html><html><head>
-      <meta charset="utf-8">
-      <title>Folhas QR — ${avaliacao.titulo} — Turma ${avaliacao.turma_id}</title>
-      <style>* { margin:0; padding:0; box-sizing:border-box; } @page { margin:0; size: A4 portrait; } body { background:white; }</style>
-    </head><body>${blocos}
-      <script>setTimeout(function(){ window.print(); }, 600);<\/script>
-    </body></html>`;
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const win = window.open(url, '_blank');
-    if (win) win.onafterprint = () => URL.revokeObjectURL(url);
-  }
-
   async function exportarWord() {
-    if (!avaliacao || alunos.length === 0) return;
+    if (!avaliacao) return;
     const textoApoioHtml = gerarHtmlTextoApoio(avaliacao);
     const htmlProva = gerarHtmlProva(avaliacao, alunos[0]);
     const paginaTexto = textoApoioHtml ? `<div style="page-break-after:always;">${textoApoioHtml}</div>` : '';
@@ -745,48 +671,43 @@ export function AvaliacaoFolha() {
 
       <div className="bg-surface border border-outline-variant rounded-2xl p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold text-on-surface">
-            Folhas de resposta ({qrAnonimoPorGrupo ? 'QR 100% anônimo' : 'QR individual'})
-          </p>
-          <button onClick={gerarTodos} disabled={gerandoIdx !== null || alunos.length === 0}
+          <div>
+            <p className="text-sm font-semibold text-on-surface">Folha-modelo (QR da avaliação)</p>
+            {avaliacao.codigo_avaliacao && (
+              <p className="text-xs text-on-surface-variant">Código: <strong>{avaliacao.codigo_avaliacao}</strong></p>
+            )}
+          </div>
+          <button onClick={gerarFolhaModelo} disabled={gerando}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-semibold disabled:opacity-50">
             <QrCode className="w-3.5 h-3.5" />
-            {gerandoIdx !== null ? `Gerando ${gerandoIdx + 1}/${alunos.length}...` : 'Gerar folhas da turma'}
+            {gerando ? 'Gerando...' : folhaDataUrl ? 'Gerar de novo' : 'Gerar folha-modelo'}
           </button>
         </div>
 
-        <label className="flex items-start gap-2 text-xs text-on-surface-variant">
-          <input
-            type="checkbox"
-            checked={qrAnonimoPorGrupo}
-            onChange={e => setQrAnonimoPorGrupo(e.target.checked)}
-            className="mt-0.5"
-          />
-          <span>
-            <strong>QR 100% anônimo</strong> — o código impresso vira só o identificador da turma/grupo
-            ("{avaliacao?.turma_id}"), igual em todas as folhas, sem nenhuma referência a qual aluno é.
-            Ao corrigir, o app não identifica nem pede pra selecionar o aluno: cada prova lida fica com um
-            código anônimo (ex: PROVA_2026_0001) até ser associada a um aluno manualmente, depois.
-          </span>
-        </label>
+        <p className="text-xs text-on-surface-variant">
+          O QR identifica só a <strong>avaliação</strong> — nunca o aluno. É a MESMA folha (e o mesmo QR)
+          em toda cópia: nome e turma ficam em branco pra o próprio aluno preencher à caneta. Não precisa
+          de nenhum aluno cadastrado pra gerar ou imprimir.
+        </p>
 
         {erroGeracao && <p className="text-xs text-red-500">{erroGeracao}</p>}
 
-        {geradoTodos && Object.keys(folhas).length > 0 && (
+        {folhaDataUrl && (
           <>
-            <button onClick={imprimirTodasAsFolhas}
-              className="w-full flex items-center justify-center gap-1.5 py-3 rounded-xl bg-tertiary-container text-on-tertiary-container text-sm font-bold">
-              <FileText className="w-4 h-4" /> Gerar PDF da turma inteira ({Object.keys(folhas).length} folhas)
-            </button>
-            <div className="max-h-72 overflow-y-auto space-y-1.5 pr-1">
-              {alunos.filter(a => folhas[a.id]).map(a => (
-                <div key={a.id} className="flex items-center justify-between px-3 py-2 rounded-xl bg-background border border-outline-variant">
-                  <span className="text-xs text-on-surface">{a.numero_chamada}. {a.nome}</span>
-                  <button onClick={() => imprimirFolha(a.id, folhas[a.id])} className="text-xs text-primary font-semibold">
-                    Imprimir
-                  </button>
-                </div>
-              ))}
+            <div className="rounded-xl overflow-hidden border border-outline-variant">
+              <img src={folhaDataUrl} alt="Folha-modelo" className="w-full" />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-on-surface-variant whitespace-nowrap">Cópias:</label>
+              <input
+                type="number" min={1} max={500} value={numCopias}
+                onChange={e => setNumCopias(Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-20 px-2 py-1.5 rounded-lg border border-outline-variant bg-background text-sm text-center"
+              />
+              <button onClick={() => imprimirFolha(numCopias)}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-tertiary-container text-on-tertiary-container text-sm font-bold">
+                <FileText className="w-4 h-4" /> Imprimir {numCopias} cópia{numCopias !== 1 ? 's' : ''}
+              </button>
             </div>
           </>
         )}

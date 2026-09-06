@@ -36,6 +36,7 @@ import { Avaliacoes } from './ui/pages/avaliacoes/Avaliacoes';
 import { AvaliacaoFolha } from './ui/pages/avaliacoes/AvaliacaoFolha';
 import { AvaliacaoCorrigir } from './ui/pages/avaliacoes/AvaliacaoCorrigir';
 import { AvaliacaoResultados } from './ui/pages/avaliacoes/AvaliacaoResultados';
+import { AvaliacaoCorrecoes } from './ui/pages/avaliacoes/AvaliacaoCorrecoes';
 import { AvaliacaoFormatar } from './ui/pages/avaliacoes/AvaliacaoFormatar';
 import { ExerciciosFixacao } from './ui/pages/exercicios/ExerciciosFixacao';
 import { ExercicioFormatar } from './ui/pages/exercicios/ExercicioFormatar';
@@ -116,6 +117,7 @@ export default function App() {
           <Route path="/avaliacoes/folha/:id" element={<AvaliacaoFolha />} />
           <Route path="/avaliacoes/corrigir/:id" element={<AvaliacaoCorrigir />} />
           <Route path="/avaliacoes/resultados/:id" element={<AvaliacaoResultados />} />
+          <Route path="/avaliacoes/correcoes/:id" element={<AvaliacaoCorrecoes />} />
           <Route path="/avaliacoes/formatar/:id" element={<AvaliacaoFormatar />} />
           <Route path="/avaliacoes/gerador" element={<GeradorQuestoes />} />
           <Route path="/avaliacoes/gabarito-rapido" element={<AvaliacaoGabaritoRapido />} />

@@ -1,27 +1,27 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase, lancarNotaCorretorProva } from '../../../data/supabase';
-import { ArrowLeft, Upload, Camera, CheckCircle2, AlertCircle, Save, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { supabase } from '../../../data/supabase';
+import { ArrowLeft, Upload, Camera, CheckCircle2, AlertCircle, Save, RefreshCw, ChevronDown, ChevronUp, ListChecks } from 'lucide-react';
 import jsQR from 'jsqr';
-import type { Avaliacao, Aluno, QrPayload } from './tiposCorretorProvas';
-import { arredondar, valorPorQuestaoObjetiva, turmasDoValor, labelTurmaOuGrupo, ehGrupoDeTurmas } from './tiposCorretorProvas';
+import type { Avaliacao } from './tiposCorretorProvas';
+import { arredondar, valorPorQuestaoObjetiva, labelTurmaOuGrupo, ehGrupoDeTurmas } from './tiposCorretorProvas';
 import { processarFolhaOMR, localizarAncorasNaFoto } from '../../../utils/omrEngine';
 import type { MotivoFalhaOMR } from '../../../utils/omrEngine';
 
-interface QrAssinadoLido {
-  payload: QrPayload;
-  assinatura: string;
-}
+// ============================================================================
+// CORRETOR DE PROVAS — modelo ANÔNIMO baseado em AVALIAÇÃO + QR Code.
+//
+// O QR Code identifica SOMENTE A AVALIAÇÃO (avaliacao.codigo_avaliacao, ex:
+// "AV2026-0001") -- nunca um aluno. Por desenho, esta tela NUNCA consulta a
+// tabela `alunos`: funciona mesmo que nenhum aluno esteja cadastrado no
+// banco. Cada folha lida vira uma CORREÇÃO ANÔNIMA com um código sequencial
+// próprio (ex: "COR-000037", coluna avaliacoes_respostas.codigo_anonimo) --
+// a associação com um aluno de verdade fica pra uma etapa futura, separada
+// (ver AvaliacaoCorrecoes.tsx).
+// ============================================================================
 
 type SituacaoQuestao = 'correta' | 'incorreta' | 'branco' | 'dupla';
-type ResultadoDeteccao = 'ok' | 'invalido' | 'adulterado' | 'outra_prova' | 'aluno_nao_encontrado' | 'selecionar_manualmente';
-
-const MENSAGENS_ERRO_QR: Partial<Record<ResultadoDeteccao, string>> = {
-  invalido: 'QR Code inválido — não é de uma folha gerada por este sistema.',
-  adulterado: 'QR Code adulterado ou inválido. A assinatura não confere — use uma folha original.',
-  outra_prova: 'Esta folha pertence a outra avaliação.',
-  aluno_nao_encontrado: 'Aluno da folha não encontrado nesta turma.',
-};
+type ResultadoIdentificacao = 'ok' | 'invalido';
 
 const MENSAGENS_ERRO_OMR: Record<MotivoFalhaOMR, string> = {
   sem_objetivas: 'Esta avaliação não tem questões objetivas para ler.',
@@ -29,17 +29,15 @@ const MENSAGENS_ERRO_OMR: Record<MotivoFalhaOMR, string> = {
   geometria_invalida: 'Os marcadores foram encontrados mas ficaram alinhados de um jeito inválido (foto muito inclinada). Tente fotografar mais de frente.',
 };
 
-/** Frames consecutivos com o MESMO folha_id exigidos antes de identificar o
- * aluno — evita travar num frame borrado no instante exato em que o QR aparece. */
+/** Frames consecutivos com o MESMO conteúdo de QR exigidos antes de confirmar
+ * a avaliação — evita travar num frame borrado no instante em que o QR aparece. */
 const FRAMES_CONFIRMACAO = 2;
 /** Largura máxima do frame usado pra procurar o QR de perto (etapa 1) e pro
  * indicativo "marcadores visíveis" (etapa 2) — mais rápido que processar a
  * resolução cheia da câmera a cada frame. */
 const LARGURA_SCAN = 480;
-/** Depois de N falhas seguidas verificando o MESMO QR, para de tentar
- * automaticamente (evita loop infinito) e mostra um aviso explicando a causa
- * mais provável — geralmente a folha foi gerada com uma chave de assinatura
- * de outro ambiente (ex: teste local vs. produção). */
+/** Depois de N falhas seguidas com o MESMO conteúdo de QR, para de tentar
+ * automaticamente (evita loop infinito) e mostra um aviso. */
 const MAX_FALHAS_CONSECUTIVAS = 3;
 /** A cada quantos frames o indicativo "marcadores visíveis" (etapa 2) roda a
  * busca de âncoras — não precisa ser todo frame, é só um indicativo visual. */
@@ -55,35 +53,26 @@ export function AvaliacaoCorrigir() {
   const streamRef = useRef<MediaStream | null>(null);
   const scanAtivoRef = useRef(false);
   const processandoRef = useRef(false);
-  const ultimoFolhaIdRef = useRef<string | null>(null);
+  const ultimoQrLidoRef = useRef<string | null>(null);
   const contagemConfirmacaoRef = useRef(0);
-  const folhaIgnoradaRef = useRef<string | null>(null);
-  const falhasFolhaRef = useRef<{ folhaId: string | null; count: number }>({ folhaId: null, count: 0 });
+  const qrIgnoradoRef = useRef<string | null>(null);
+  const falhasQrRef = useRef<{ conteudo: string | null; count: number }>({ conteudo: null, count: 0 });
   const framesDesdeChecagemRef = useRef(0);
-  const turmaConfirmadaRef = useRef<string | null>(null);
-  const grupoAnonimoRef = useRef<string | null>(null);
+  const avaliacaoConfirmadaRef = useRef(false);
 
   const loopRef = useRef<() => void>(() => {});
 
   const [avaliacao, setAvaliacao] = useState<Avaliacao | null>(null);
-  const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [loading, setLoading] = useState(true);
-  const [etapa, setEtapa] = useState<'identificar' | 'lendo_bolhas' | 'respostas' | 'ja_corrigida' | 'salvo'>('identificar');
+  const [etapa, setEtapa] = useState<'identificar' | 'lendo_bolhas' | 'respostas' | 'salvo'>('identificar');
   const [qrVisivel, setQrVisivel] = useState(false);
   const [marcadoresVisiveis, setMarcadoresVisiveis] = useState(false);
-  // Preenchido quando o QR lido é de "código compartilhado por turma" (sem
-  // aluno_id) -- a lista de seleção manual fica filtrada só pra essa turma.
-  const [turmaConfirmada, setTurmaConfirmada] = useState<string | null>(null);
-  // Preenchido quando o QR lido é 100% ANÔNIMO (texto puro igual a
-  // avaliacao.turma_id, sem JSON, sem assinatura, sem aluno_id nenhum) --
-  // nesse caso não existe seleção de aluno: a correção segue com um código
-  // sequencial (codigoAnonimo) e o vínculo com o aluno fica pra depois.
-  const [grupoAnonimo, setGrupoAnonimo] = useState<string | null>(null);
-  const [codigoAnonimo, setCodigoAnonimo] = useState<string | null>(null);
+  // true assim que o QR da AVALIAÇÃO é confirmado (não identifica aluno
+  // nenhum) -- mostra o card "Avaliação identificada" + botão Continuar.
+  const [avaliacaoConfirmada, setAvaliacaoConfirmada] = useState(false);
+  const [codigoCorrecao, setCodigoCorrecao] = useState<string | null>(null);
+  const [codigoDigitado, setCodigoDigitado] = useState('');
   const [confiancaPorQuestao, setConfiancaPorQuestao] = useState<Record<string, number>>({});
-  const [alunoDetectado, setAlunoDetectado] = useState<Aluno | null>(null);
-  const [folhaId, setFolhaId] = useState<string | null>(null);
-  const [identificacaoManual, setIdentificacaoManual] = useState(false);
   const [respostas, setRespostas] = useState<Record<string, string>>({});
   const [notaDiscursivaStr, setNotaDiscursivaStr] = useState('');
   const [sugerindoNotaIA, setSugerindoNotaIA] = useState(false);
@@ -92,14 +81,11 @@ export function AvaliacaoCorrigir() {
   const [salvando, setSalvando] = useState(false);
   const [analisando, setAnalisando] = useState(false);
   const [erro, setErro] = useState('');
-  const [diagnosticoQr, setDiagnosticoQr] = useState('');
   const [fotoPreview, setFotoPreview] = useState<string>('');
   const [arquivoHash, setArquivoHash] = useState<string>('');
-  const [correcaoExistente, setCorrecaoExistente] = useState<{ nota_final: number; escaneado_em: string | null } | null>(null);
   const [ajustesFeitos, setAjustesFeitos] = useState<Array<{ questao: string; de: string; para: string }>>([]);
-  const [resultados, setResultados] = useState<Array<{ id: string; label: string; nota_final: number; ordem: number }>>([]);
+  const [resultados, setResultados] = useState<Array<{ codigo: string; nota_final: number }>>([]);
   const [mostrarResultados, setMostrarResultados] = useState(false);
-  const [avisoLancamento, setAvisoLancamento] = useState('');
 
   // Modo de captura: câmera ao vivo (padrão, ganha tempo) ou arquivo/galeria.
   const [modoCamera, setModoCamera] = useState(true);
@@ -113,15 +99,6 @@ export function AvaliacaoCorrigir() {
       if (!id) return;
       const { data: av } = await supabase.from('avaliacoes').select('*').eq('id', id).single();
       setAvaliacao(av);
-      if (av) {
-        const { data: al } = await supabase
-          .from('alunos')
-          .select('id, nome, numero_chamada, turma_id')
-          .in('turma_id', turmasDoValor(av.turma_id))
-          .order('turma_id')
-          .order('numero_chamada');
-        setAlunos(al || []);
-      }
       setLoading(false);
     }
     init();
@@ -133,30 +110,6 @@ export function AvaliacaoCorrigir() {
     return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
-  async function verificarQr(payload: QrPayload, assinatura: string): Promise<boolean> {
-    try {
-      const resp = await fetch('/api/qr-assinar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ acao: 'verificar', payload, assinatura }),
-      });
-      const data = await resp.json();
-      return !!data.valido;
-    } catch {
-      return false;
-    }
-  }
-
-  async function verificarCorrecaoExistente(alunoId: string) {
-    const { data } = await supabase
-      .from('avaliacoes_respostas')
-      .select('nota_final, escaneado_em')
-      .eq('avaliacao_id', id)
-      .eq('aluno_id', alunoId)
-      .maybeSingle();
-    return data;
-  }
-
   // ── Câmera ao vivo — a mesma lógica de decodificar+validar o QR é
   // compartilhada com o upload de arquivo (fluxo de fallback abaixo).
 
@@ -165,25 +118,19 @@ export function AvaliacaoCorrigir() {
     streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
     contagemConfirmacaoRef.current = 0;
-    ultimoFolhaIdRef.current = null;
-    folhaIgnoradaRef.current = null;
-    falhasFolhaRef.current = { folhaId: null, count: 0 };
-    turmaConfirmadaRef.current = null;
-    setTurmaConfirmada(null);
-    // NÃO reseta grupoAnonimo/codigoAnonimo aqui -- pararCamera roda a cada
-    // transição de etapa (inclusive "lendo_bolhas" -> "respostas", onde a
-    // correção anônima ainda precisa saber que é anônima). Só é limpo
-    // explicitamente em cancelarGrupoAnonimo() e proximaFolha().
+    ultimoQrLidoRef.current = null;
+    qrIgnoradoRef.current = null;
+    falhasQrRef.current = { conteudo: null, count: 0 };
     setStatusCamera('parada');
     setQrVisivel(false);
     setMarcadoresVisiveis(false);
   }
 
   // Câmera fica ligada tanto em "identificar" (QR de perto) quanto em
-  // "lendo_bolhas" (aluno já identificado, alinhando nos marcadores da coluna
-  // de respostas) — usar esse booleano evita reiniciar a câmera na transição
-  // entre as duas etapas.
-  const cameraDeveFicarAtiva = modoCamera && (etapa === 'identificar' || etapa === 'lendo_bolhas');
+  // "lendo_bolhas" (avaliação já identificada, alinhando nos marcadores da
+  // coluna de respostas) — usar esse booleano evita reiniciar a câmera na
+  // transição entre as duas etapas.
+  const cameraDeveFicarAtiva = modoCamera && !!avaliacao?.codigo_avaliacao && (etapa === 'identificar' || etapa === 'lendo_bolhas');
 
   // O loop de câmera lê `etapa` a cada frame por uma ref: `cameraDeveFicarAtiva`
   // não muda entre "identificar" e "lendo_bolhas", então o efeito abaixo não
@@ -192,21 +139,13 @@ export function AvaliacaoCorrigir() {
   const etapaRef = useRef(etapa);
   useEffect(() => { etapaRef.current = etapa; }, [etapa]);
 
-  // Mesmo motivo, pra `alunos`: a câmera liga assim que a página monta, antes
-  // da lista de alunos terminar de carregar (chamada assíncrona separada). Sem
-  // essa ref, o loop ficaria pra sempre com a lista vazia de quando foi criado
-  // — mesmo depois dela carregar de verdade — e nunca reconheceria ninguém.
-  const alunosRef = useRef(alunos);
-  useEffect(() => { alunosRef.current = alunos; }, [alunos]);
-  useEffect(() => { turmaConfirmadaRef.current = turmaConfirmada; }, [turmaConfirmada]);
-  useEffect(() => { grupoAnonimoRef.current = grupoAnonimo; }, [grupoAnonimo]);
-
-  // Mesmo motivo de alunosRef: `avaliacao` só é preenchida depois do fetch
-  // assíncrono no init(), mas a câmera já pode ter ligado antes disso. Sem
-  // essa ref, o loop nunca reconheceria o QR 100% anônimo (comparado contra
-  // avaliacao.turma_id) porque ficaria preso pra sempre com avaliacao=null.
+  // Mesmo motivo pra `avaliacao`: a câmera pode ligar antes do fetch
+  // assíncrono do init() terminar. Sem essa ref, o loop nunca reconheceria o
+  // QR (comparado contra avaliacao.codigo_avaliacao) porque ficaria preso
+  // pra sempre com avaliacao=null.
   const avaliacaoRef = useRef(avaliacao);
   useEffect(() => { avaliacaoRef.current = avaliacao; }, [avaliacao]);
+  useEffect(() => { avaliacaoConfirmadaRef.current = avaliacaoConfirmada; }, [avaliacaoConfirmada]);
 
   useEffect(() => {
     if (!cameraDeveFicarAtiva) { pararCamera(); return; }
@@ -276,69 +215,46 @@ export function AvaliacaoCorrigir() {
 
           if (code) {
             setQrVisivel(true);
-            let lido: QrAssinadoLido | null = null;
-            try { lido = JSON.parse(code.data); } catch { lido = null; }
-            // Chave de estabilidade: o conteúdo bruto do QR, não o folha_id --
-            // no modo compartilhado por turma não existe folha_id (fica
-            // ausente pra TODOS os alunos da turma), então usar folha_id
-            // travaria a confirmação por frames instantaneamente sem checar
-            // nada. O conteúdo do QR sempre existe e é único por folha/turma.
             const chaveLida = code.data;
 
-            // Turma já confirmada por essa MESMA leitura — já está mostrando
-            // a lista filtrada, não precisa reprocessar a cada frame.
-            if (lido?.payload && !lido.payload.aluno_id && turmaConfirmadaRef.current === lido.payload.turma_id) {
+            // Avaliação já confirmada por essa MESMA leitura — já está
+            // mostrando o card "Avaliação identificada", não reprocessa.
+            if (avaliacaoConfirmadaRef.current && chaveLida === avaliacaoRef.current?.codigo_avaliacao) {
               loop();
               return;
             }
-            // Grupo anônimo já confirmado por essa MESMA leitura — já está
-            // mostrando a tela "Iniciar Correção", não precisa reprocessar.
-            if (chaveLida === avaliacaoRef.current?.turma_id && grupoAnonimoRef.current === chaveLida) {
-              loop();
-              return;
-            }
+            // Esse conteúdo já falhou demais vezes seguidas — não tenta de
+            // novo sozinho (evita loop infinito), só mostra o aviso já definido.
+            if (chaveLida === qrIgnoradoRef.current) { loop(); return; }
 
-            // Essa folha já falhou demais vezes seguidas — não tenta de novo
-            // sozinho (evita loop infinito), só mostra o aviso já definido.
-            if (chaveLida === folhaIgnoradaRef.current) { loop(); return; }
-
-            if (chaveLida === ultimoFolhaIdRef.current) {
+            if (chaveLida === ultimoQrLidoRef.current) {
               contagemConfirmacaoRef.current += 1;
             } else {
-              ultimoFolhaIdRef.current = chaveLida;
+              ultimoQrLidoRef.current = chaveLida;
               contagemConfirmacaoRef.current = 1;
             }
 
             if (contagemConfirmacaoRef.current >= FRAMES_CONFIRMACAO) {
               processandoRef.current = true;
-              const resultado = chaveLida === avaliacaoRef.current?.turma_id
-                ? await confirmarGrupoAnonimo(chaveLida)
-                : await identificarAluno(lido!);
-              if (resultado === 'selecionar_manualmente') {
-                // Não é falha — já filtrou a lista pra turma, só aguarda o toque no nome.
-                contagemConfirmacaoRef.current = 0;
-                ultimoFolhaIdRef.current = null;
-              } else if (resultado !== 'ok') {
-                if (falhasFolhaRef.current.folhaId === chaveLida) {
-                  falhasFolhaRef.current.count += 1;
+              const resultado = await confirmarAvaliacao(chaveLida);
+              if (resultado !== 'ok') {
+                if (falhasQrRef.current.conteudo === chaveLida) {
+                  falhasQrRef.current.count += 1;
                 } else {
-                  falhasFolhaRef.current = { folhaId: chaveLida, count: 1 };
+                  falhasQrRef.current = { conteudo: chaveLida, count: 1 };
                 }
-                if (falhasFolhaRef.current.count >= MAX_FALHAS_CONSECUTIVAS) {
-                  folhaIgnoradaRef.current = chaveLida;
-                  setErro(
-                    (MENSAGENS_ERRO_QR[resultado] || 'Não foi possível validar esta folha.') +
-                    ' Isso costuma acontecer quando a folha foi gerada com uma chave de assinatura de outro ambiente (ex: teste local vs. produção) — gere uma folha nova aqui, ou selecione o aluno manualmente abaixo.'
-                  );
+                if (falhasQrRef.current.count >= MAX_FALHAS_CONSECUTIVAS) {
+                  qrIgnoradoRef.current = chaveLida;
+                  setErro('Este QR Code não é desta avaliação (ou não foi gerado por este sistema). Confira se está corrigindo a prova certa, ou digite o código da avaliação manualmente abaixo.');
                 }
-                contagemConfirmacaoRef.current = 0;
-                ultimoFolhaIdRef.current = null;
               }
+              contagemConfirmacaoRef.current = 0;
+              ultimoQrLidoRef.current = null;
               processandoRef.current = false;
             }
           } else {
             setQrVisivel(false);
-            ultimoFolhaIdRef.current = null;
+            ultimoQrLidoRef.current = null;
             contagemConfirmacaoRef.current = 0;
           }
         } else if (etapaRef.current === 'lendo_bolhas') {
@@ -366,93 +282,57 @@ export function AvaliacaoCorrigir() {
   // etapa "lendo_bolhas") — a câmera já está ligada, só o que o loop faz muda.
   function voltarParaIdentificar() {
     setEtapa('identificar');
-    setAlunoDetectado(null);
-    setFolhaId(null);
     setErro('');
-    setCorrecaoExistente(null);
     contagemConfirmacaoRef.current = 0;
-    ultimoFolhaIdRef.current = null;
+    ultimoQrLidoRef.current = null;
     processandoRef.current = false;
     loopRef.current();
   }
 
-  // Identifica o aluno pelo QR (assinatura + prova + correção existente) —
-  // NÃO lê nenhuma bolha ainda. A leitura das respostas é um passo separado
-  // (etapa "lendo_bolhas"): pra ler o QR de perto a câmera não enquadra a
-  // coluna de respostas com resolução suficiente, e vice-versa.
-  async function identificarAluno(lido: QrAssinadoLido | null): Promise<ResultadoDeteccao> {
-    if (!lido?.payload || !lido?.assinatura) return 'invalido';
-    const { payload, assinatura } = lido;
-    if (!(await verificarQr(payload, assinatura))) return 'adulterado';
-    if (payload.prova_id !== id) {
-      setDiagnosticoQr(`[DEBUG] QR prova_id=${payload.prova_id} · página atual id=${id}`);
-      return 'outra_prova';
-    }
-
-    // Código compartilhado por turma (sem aluno_id, gerado de propósito em
-    // AvaliacaoFolha.tsx) — a assinatura já confirmou que a folha é legítima
-    // e de qual turma, só falta o professor tocar em qual aluno é.
-    if (!payload.aluno_id) {
-      setDiagnosticoQr('');
-      setErro('');
-      setTurmaConfirmada(payload.turma_id);
-      return 'selecionar_manualmente';
-    }
-
-    const aluno = alunosRef.current.find(a => a.id === payload.aluno_id);
-    if (!aluno) {
-      setDiagnosticoQr(`[DEBUG] QR aluno_id=${payload.aluno_id} · alunos carregados (${alunosRef.current.length}): ${alunosRef.current.map(a => a.id).join(', ')}`);
-      return 'aluno_nao_encontrado';
-    }
-    setDiagnosticoQr('');
-
-    setErro('');
-    setTurmaConfirmada(null);
-    setIdentificacaoManual(false);
-    const existente = await verificarCorrecaoExistente(aluno.id);
-    setAlunoDetectado(aluno);
-    setFolhaId(payload.folha_id ?? null);
-    if (existente) {
-      setCorrecaoExistente(existente);
-      setEtapa('ja_corrigida');
-      return 'ok';
-    }
-    setEtapa('lendo_bolhas');
-    return 'ok';
-  }
-
-  // QR 100% ANÔNIMO: o conteúdo lido é só o texto puro da turma/grupo (ex:
-  // "GRUPO_6_7"), sem JSON, sem assinatura -- por isso não há nada pra
-  // verificar/validar aqui, e (por desenho) NENHUMA consulta à tabela
-  // `alunos`. Só busca quantas provas anônimas essa avaliação já tem pra
-  // sugerir o próximo código sequencial (ex: PROVA_2026_0007) e aguarda o
-  // professor tocar em "Iniciar Correção" -- não avança sozinho pra
-  // "lendo_bolhas", pra dar tempo de mostrar a confirmação na tela.
-  async function confirmarGrupoAnonimo(codigoGrupo: string): Promise<ResultadoDeteccao> {
-    setErro('');
-    setDiagnosticoQr('');
-    setTurmaConfirmada(null);
-    const ano = new Date().getFullYear();
+  // Gera o próximo código sequencial de correção (ex: "COR-000037") pra esta
+  // avaliação -- puramente organizacional, NUNCA identifica aluno.
+  async function proximoCodigoCorrecao(): Promise<string> {
     const { count } = await supabase
       .from('avaliacoes_respostas')
       .select('id', { count: 'exact', head: true })
       .eq('avaliacao_id', id)
       .not('codigo_anonimo', 'is', null);
-    const codigo = `PROVA_${ano}_${String((count || 0) + 1).padStart(4, '0')}`;
-    setGrupoAnonimo(codigoGrupo);
-    setCodigoAnonimo(codigo);
-    return 'selecionar_manualmente'; // não é falha -- só aguarda o toque em "Iniciar Correção".
+    return `COR-${String((count || 0) + 1).padStart(6, '0')}`;
   }
 
-  function cancelarGrupoAnonimo() {
-    setGrupoAnonimo(null);
-    setCodigoAnonimo(null);
+  // Confirma o QR da AVALIAÇÃO (nunca de aluno) — por desenho, NENHUMA
+  // consulta à tabela `alunos` acontece aqui nem em nenhum outro ponto desta
+  // tela. Só compara o texto lido com avaliacao.codigo_avaliacao.
+  async function confirmarAvaliacao(lido: string): Promise<ResultadoIdentificacao> {
+    const av = avaliacaoRef.current;
+    if (!av?.codigo_avaliacao || lido.trim() !== av.codigo_avaliacao) return 'invalido';
+    setErro('');
+    const codigo = await proximoCodigoCorrecao();
+    setCodigoCorrecao(codigo);
+    setAvaliacaoConfirmada(true);
+    return 'ok';
+  }
+
+  function cancelarAvaliacaoConfirmada() {
+    setAvaliacaoConfirmada(false);
+    setCodigoCorrecao(null);
     contagemConfirmacaoRef.current = 0;
-    ultimoFolhaIdRef.current = null;
+    ultimoQrLidoRef.current = null;
   }
 
-  function iniciarCorrecaoAnonima() {
+  function continuarParaLeitura() {
     setEtapa('lendo_bolhas');
+  }
+
+  async function confirmarCodigoDigitado() {
+    if (!codigoDigitado.trim()) return;
+    setErro('');
+    const resultado = await confirmarAvaliacao(codigoDigitado.trim());
+    if (resultado !== 'ok') {
+      setErro('Código não confere com o desta avaliação. Confira em "Folhas QR" qual é o código correto.');
+    } else {
+      setCodigoDigitado('');
+    }
   }
 
   // Passo manual: o professor já aproximou a câmera da coluna de respostas,
@@ -503,8 +383,8 @@ export function AvaliacaoCorrigir() {
   }
 
   // Upload de arquivo/galeria — nesse caminho a foto já é a folha INTEIRA de
-  // uma vez só (veio de fora do app), então identifica e já lê as bolhas
-  // direto, usando as 4 marcas dos CANTOS DA PÁGINA (modo 'pagina').
+  // uma vez só (veio de fora do app), então identifica a avaliação e já lê
+  // as bolhas direto, usando as 4 marcas dos CANTOS DA PÁGINA (modo 'pagina').
   function lerQRDaImagem(file: File) {
     if (!avaliacao) return;
     setErro('');
@@ -521,59 +401,24 @@ export function AvaliacaoCorrigir() {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const code = jsQR(imageData.data, imageData.width, imageData.height);
 
-        function falhar(resultado: ResultadoDeteccao) {
-          setErro(MENSAGENS_ERRO_QR[resultado] || 'Não foi possível validar esta folha.');
+        if (!code || code.data.trim() !== avaliacao.codigo_avaliacao) {
+          setErro('Este QR Code não é desta avaliação (ou não foi encontrado na foto).');
           setFotoPreview(url);
+          return;
         }
+        const codigo = await proximoCodigoCorrecao();
+        setCodigoCorrecao(codigo);
 
-        const avaliacaoAtual = avaliacao!;
-        const alternativas = avaliacaoAtual.alternativas?.length ? avaliacaoAtual.alternativas : ['A', 'B', 'C', 'D'];
-        let aluno: Aluno | null = null;
-
-        // QR 100% anônimo (texto puro igual a avaliacao.turma_id) — sem
-        // aluno pra identificar, gera direto o código sequencial anônimo.
-        if (code?.data === avaliacaoAtual.turma_id) {
-          const ano = new Date().getFullYear();
-          const { count } = await supabase
-            .from('avaliacoes_respostas')
-            .select('id', { count: 'exact', head: true })
-            .eq('avaliacao_id', id)
-            .not('codigo_anonimo', 'is', null);
-          setGrupoAnonimo(code.data);
-          setCodigoAnonimo(`PROVA_${ano}_${String((count || 0) + 1).padStart(4, '0')}`);
-        } else {
-          let lido: QrAssinadoLido | null = null;
-          if (code) { try { lido = JSON.parse(code.data); } catch { lido = null; } }
-          if (!lido?.payload || !lido?.assinatura) { falhar('invalido'); return; }
-          const { payload, assinatura } = lido;
-          if (!(await verificarQr(payload, assinatura))) { falhar('adulterado'); return; }
-          if (payload.prova_id !== id) { falhar('outra_prova'); return; }
-          aluno = alunos.find(a => a.id === payload.aluno_id) || null;
-          if (!aluno) { falhar('aluno_nao_encontrado'); return; }
-
-          setIdentificacaoManual(false);
-          const existente = await verificarCorrecaoExistente(aluno.id);
-          setAlunoDetectado(aluno);
-          setFolhaId(payload.folha_id ?? null);
-          if (existente) {
-            setCorrecaoExistente(existente);
-            setEtapa('ja_corrigida');
-            return;
-          }
-        }
-
+        const alternativas = avaliacao.alternativas?.length ? avaliacao.alternativas : ['A', 'B', 'C', 'D'];
         const resultadoOMR = processarFolhaOMR(canvas, {
-          qtdObjetivas: avaliacaoAtual.quantidade_objetivas,
-          qtdDiscursivas: avaliacaoAtual.quantidade_discursivas,
+          qtdObjetivas: avaliacao.quantidade_objetivas,
+          qtdDiscursivas: avaliacao.quantidade_discursivas,
           alternativas,
         }, 'pagina');
 
         if (!resultadoOMR.ok) {
           setErro(MENSAGENS_ERRO_OMR[resultadoOMR.motivo!] || 'Não foi possível ler as respostas desta foto.');
-          setAlunoDetectado(null);
-          setFolhaId(null);
-          setGrupoAnonimo(null);
-          setCodigoAnonimo(null);
+          setCodigoCorrecao(null);
           setFotoPreview(url);
           return;
         }
@@ -680,41 +525,6 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
     e.target.value = '';
   }
 
-  // Seleção manual — usada quando o QR não pôde ser lido (nem confirmar uma
-  // folha compartilhada). Fica marcada como "identificação manual" no
-  // registro salvo, e preenche as respostas em branco pra digitação na mão.
-  function selecionarAlunoManual(aluno: Aluno) {
-    if (!avaliacao) return;
-    setModoCamera(false);
-    setAlunoDetectado(aluno);
-    setFolhaId(null);
-    setIdentificacaoManual(true);
-    setRespostas(Object.fromEntries(Array.from({ length: avaliacao.quantidade_objetivas }, (_, i) => [String(i + 1), ''])));
-    setEtapa('respostas');
-  }
-
-  // Escolha do aluno depois de um QR compartilhado por turma já confirmado
-  // (assinatura válida, turma certa) — diferente de selecionarAlunoManual:
-  // aqui o QR JÁ validou a legitimidade da folha, só o aluno específico não
-  // dava pra saber sozinho. Por isso não marca "identificação manual" e segue
-  // pro fluxo normal de leitura das bolhas (etapa "lendo_bolhas"), não pro
-  // preenchimento totalmente manual.
-  async function confirmarAlunoDaTurma(aluno: Aluno) {
-    if (!avaliacao) return;
-    setErro('');
-    setTurmaConfirmada(null);
-    setIdentificacaoManual(false);
-    const existente = await verificarCorrecaoExistente(aluno.id);
-    setAlunoDetectado(aluno);
-    setFolhaId(null);
-    if (existente) {
-      setCorrecaoExistente(existente);
-      setEtapa('ja_corrigida');
-      return;
-    }
-    setEtapa('lendo_bolhas');
-  }
-
   function alterarResposta(questao: string, letra: string) {
     setRespostas(prev => {
       const anterior = prev[questao] || '';
@@ -758,9 +568,21 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
 
   const { acertos, erros, brancas, ambiguas, notaObjetiva, notaDiscursiva, notaFinal } = calcular();
 
+  // Lista "corrigidos até agora" mostrada na etapa "salvo" -- puramente pelo
+  // codigo_anonimo, já que nenhuma correção tem aluno vinculado ainda.
+  async function atualizarResultadosSessao() {
+    if (!id) return;
+    const { data: res } = await supabase.from('avaliacoes_respostas').select('codigo_anonimo, nota_final').eq('avaliacao_id', id).not('codigo_anonimo', 'is', null);
+    if (!res) return;
+    const novos = res
+      .filter(r => r.codigo_anonimo)
+      .map(r => ({ codigo: r.codigo_anonimo as string, nota_final: r.nota_final || 0 }))
+      .sort((a, b) => a.codigo.localeCompare(b.codigo));
+    setResultados(novos);
+  }
+
   async function salvar() {
-    if (!avaliacao || !id) return;
-    if (!alunoDetectado && !grupoAnonimo) return;
+    if (!avaliacao || !id || !codigoCorrecao) return;
     setSalvando(true);
     setErro('');
 
@@ -768,45 +590,13 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
       ? 1 - (ambiguas + brancas) / avaliacao.quantidade_objetivas
       : 1;
 
-    // Correção 100% ANÔNIMA: não há aluno_id nenhum -- salva com o código
-    // sequencial (codigoAnonimo) e o código do grupo lido do QR, e NÃO lança
-    // nota nenhuma no Diário (não sabe de quem é ainda). A associação com o
-    // aluno fica pra uma etapa futura, separada desta tela.
-    if (grupoAnonimo) {
-      const { error } = await supabase.from('avaliacoes_respostas').insert({
-        avaliacao_id: avaliacao.id,
-        aluno_id: null,
-        codigo_anonimo: codigoAnonimo,
-        grupo_codigo: grupoAnonimo,
-        respostas,
-        acertos,
-        erros,
-        brancas,
-        ambiguas,
-        nota_objetiva: notaObjetiva,
-        nota_discursiva: notaDiscursiva,
-        nota_final: notaFinal,
-        nota: notaFinal,
-        confianca: arredondar(confiancaMedia, 2),
-        revisada: true,
-        identificacao_manual: false,
-        arquivo_hash: arquivoHash || null,
-        metodo_scan: 'qr_anonimo',
-        escaneado_em: new Date().toISOString(),
-      });
-      if (error) { setSalvando(false); setErro('Erro ao salvar: ' + error.message); return; }
-      setAvisoLancamento(`Corrigido anonimamente (${codigoAnonimo}) — associe a um aluno depois. Nota não lançada no Diário até essa associação.`);
-      setSalvando(false);
-      await atualizarResultadosSessao();
-      setEtapa('salvo');
-      return;
-    }
-    if (!alunoDetectado) { setSalvando(false); return; }
-
-    const { error } = await supabase.from('avaliacoes_respostas').upsert({
+    // Correção 100% ANÔNIMA -- sem aluno_id nenhum. A associação com o aluno
+    // é uma etapa futura e separada (ver AvaliacaoCorrecoes.tsx).
+    const { error } = await supabase.from('avaliacoes_respostas').insert({
       avaliacao_id: avaliacao.id,
-      aluno_id: alunoDetectado.id,
-      folha_id: folhaId,
+      aluno_id: null,
+      codigo_anonimo: codigoCorrecao,
+      grupo_codigo: avaliacao.turma_id,
       respostas,
       acertos,
       erros,
@@ -818,11 +608,11 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
       nota: notaFinal, // campo legado, mantido para telas antigas
       confianca: arredondar(confiancaMedia, 2),
       revisada: true,
-      identificacao_manual: identificacaoManual,
+      identificacao_manual: false,
       arquivo_hash: arquivoHash || null,
-      metodo_scan: identificacaoManual ? 'manual' : 'qr',
+      metodo_scan: 'qr',
       escaneado_em: new Date().toISOString(),
-    }, { onConflict: 'avaliacao_id,aluno_id' });
+    });
 
     if (error) { setSalvando(false); setErro('Erro ao salvar: ' + error.message); return; }
 
@@ -830,31 +620,12 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
       await supabase.from('avaliacoes_respostas_ajustes').insert(
         ajustesFeitos.map(a => ({
           avaliacao_id: avaliacao.id,
-          aluno_id: alunoDetectado.id,
+          aluno_id: null,
           questao: a.questao,
           resposta_anterior: a.de,
           resposta_nova: a.para,
         }))
       );
-    }
-    if (folhaId) {
-      await supabase.from('folhas_respostas').update({ status: 'corrigida' }).eq('id', folhaId);
-    }
-
-    if (avaliacao.bimestre) {
-      try {
-        await lancarNotaCorretorProva(
-          avaliacao.turma_id,
-          Number(avaliacao.bimestre),
-          { numero: alunoDetectado.numero_chamada, nome: alunoDetectado.nome },
-          notaFinal
-        );
-        setAvisoLancamento(`Nota lançada no Diário — ${avaliacao.bimestre}º bimestre, turma ${avaliacao.turma_id}.`);
-      } catch (e: any) {
-        setAvisoLancamento('Corrigido, mas não consegui lançar no Diário (Notas Bimestrais): ' + e.message);
-      }
-    } else {
-      setAvisoLancamento('Corrigido, mas esta avaliação não tem bimestre definido — a nota não foi lançada no Diário. Edite a avaliação e defina o bimestre para lançar automaticamente.');
     }
 
     setSalvando(false);
@@ -862,45 +633,20 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
     setEtapa('salvo');
   }
 
-  // Lista "corrigidos até agora" mostrada na etapa "salvo" — inclui tanto
-  // alunos identificados normalmente quanto provas anônimas (rotuladas pelo
-  // próprio codigo_anonimo, já que não têm aluno vinculado ainda).
-  async function atualizarResultadosSessao() {
-    if (!id) return;
-    const { data: res } = await supabase.from('avaliacoes_respostas').select('aluno_id, codigo_anonimo, nota_final').eq('avaliacao_id', id);
-    if (!res) return;
-    const novos = res.map(r => {
-      if (r.aluno_id) {
-        const al = alunos.find(a => a.id === r.aluno_id);
-        return al ? { id: al.id, label: `${al.numero_chamada}. ${al.nome}`, ordem: al.numero_chamada, nota_final: r.nota_final || 0 } : null;
-      }
-      if (r.codigo_anonimo) {
-        return { id: r.codigo_anonimo, label: r.codigo_anonimo, ordem: Number.MAX_SAFE_INTEGER, nota_final: r.nota_final || 0 };
-      }
-      return null;
-    }).filter(Boolean) as Array<{ id: string; label: string; ordem: number; nota_final: number }>;
-    setResultados(novos.sort((a, b) => a.ordem - b.ordem));
-  }
-
   function proximaFolha(manterCamera = true) {
     setEtapa('identificar');
-    setAlunoDetectado(null);
-    setFolhaId(null);
-    setGrupoAnonimo(null);
-    setCodigoAnonimo(null);
-    grupoAnonimoRef.current = null;
-    setIdentificacaoManual(false);
+    setAvaliacaoConfirmada(false);
+    setCodigoCorrecao(null);
+    setCodigoDigitado('');
     setRespostas({});
     setFotoPreview('');
     setArquivoHash('');
-    setCorrecaoExistente(null);
     setAjustesFeitos([]);
     setErro('');
     setConfiancaPorQuestao({});
     setNotaDiscursivaStr('');
     setJustificativaIA('');
     setErroSugestaoIA('');
-    setAvisoLancamento('');
     if (inputRef.current) inputRef.current.value = '';
     setModoCamera(manterCamera);
   }
@@ -915,7 +661,27 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
     <div className="py-8 text-center text-sm text-on-surface-variant">Avaliação não encontrada.</div>
   );
 
+  if (!avaliacao.codigo_avaliacao) return (
+    <div className="py-4 space-y-4">
+      <div className="flex items-center gap-2">
+        <button onClick={() => navigate('/avaliacoes')} className="p-1 rounded-lg text-on-surface-variant">
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <h1 className="text-base font-bold text-on-surface">Corrigir Prova</h1>
+      </div>
+      <div className="bg-amber-50 border border-amber-200 text-amber-700 rounded-2xl p-4 text-sm">
+        Esta avaliação ainda não tem um código gerado. Vá em <strong>Folhas QR</strong> e gere a
+        folha-modelo primeiro — é lá que o código da avaliação (e o QR) são criados.
+      </div>
+      <button onClick={() => navigate(`/avaliacoes/folha/${avaliacao.id}`)} className="w-full py-3 rounded-2xl bg-primary text-on-primary font-semibold">
+        Ir para Folhas QR
+      </button>
+    </div>
+  );
+
   const alternativas = avaliacao.alternativas?.length ? avaliacao.alternativas : ['A', 'B', 'C', 'D'];
+  const totalQuestoes = avaliacao.quantidade_objetivas + avaliacao.quantidade_discursivas;
+  const valorTotal = (avaliacao.valor_total_objetivas || 0) + (avaliacao.valor_total_discursivas || 0);
 
   return (
     <div className={['py-4 space-y-4', (etapa === 'identificar' || etapa === 'lendo_bolhas') && modoCamera ? 'pb-24' : ''].join(' ')}>
@@ -924,9 +690,9 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div>
-          <h1 className="text-base font-bold text-on-surface">Corrigir folhas</h1>
+          <h1 className="text-base font-bold text-on-surface">Corrigir Prova</h1>
           <p className="text-xs text-on-surface-variant">
-            {avaliacao.titulo} · {ehGrupoDeTurmas(avaliacao.turma_id) ? labelTurmaOuGrupo(avaliacao.turma_id) : `Turma ${avaliacao.turma_id}`}
+            {avaliacao.titulo} · {ehGrupoDeTurmas(avaliacao.turma_id) ? labelTurmaOuGrupo(avaliacao.turma_id) : `Turma ${avaliacao.turma_id}`} · {avaliacao.codigo_avaliacao}
           </p>
         </div>
       </div>
@@ -940,14 +706,12 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
             <p className="text-sm font-medium text-on-secondary-container">
               {etapa === 'lendo_bolhas'
                 ? 'Não precisa do cabeçalho (nome/turma) — aproxime só da coluna de bolhas, do marcador preto de cima até o de baixo.'
-                : modoCamera ? 'Aproxime até o QR preencher o quadrado da mira — bem de perto.' : 'Escolha a foto da folha preenchida do aluno.'}
+                : modoCamera ? 'Escaneie o QR Code da avaliação — bem de perto.' : 'Escolha a foto da folha preenchida.'}
             </p>
             <p className="text-xs text-on-secondary-container mt-1">
               {etapa === 'lendo_bolhas'
-                ? (grupoAnonimo
-                    ? `${codigoAnonimo} (${labelTurmaOuGrupo(grupoAnonimo)}) — leitura anônima, as respostas são lidas na hora, sem enviar nada pra IA.`
-                    : `${alunoDetectado?.numero_chamada ?? ''}. ${alunoDetectado?.nome ?? ''} — as respostas são lidas na hora, sem enviar nada pra IA.`)
-                : 'Depois de identificar o aluno (ou o grupo, no modo anônimo), o app pede pra alinhar na coluna de respostas.'}
+                ? `${codigoCorrecao} — as respostas são lidas na hora, sem enviar nada pra IA.`
+                : 'O QR identifica a avaliação (não o aluno). Depois o app pede pra alinhar na coluna de respostas.'}
             </p>
           </div>
 
@@ -1018,18 +782,10 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
                   tela, a mensagem de erro (lá embaixo da página) fica escondida atrás do
                   botão fixo e do menu do app, e parece que "nada acontece" ao tocar no botão. */}
               {erro && !analisando && (
-                <div style={{ position: 'absolute', left: 8, right: 8, bottom: 8, background: 'rgba(127,29,29,0.95)', borderRadius: 12, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                    <AlertCircle style={{ width: 16, height: 16, color: '#fff', flexShrink: 0, marginTop: 2 }} />
-                    <span style={{ fontSize: 12, color: '#fff', fontWeight: 500, flex: 1 }}>{erro}</span>
-                    <button onClick={() => { setErro(''); setDiagnosticoQr(''); }} style={{ color: '#fff', fontSize: 16, lineHeight: 1, padding: 2 }}>✕</button>
-                  </div>
-                  {/* Diagnóstico temporário — remover depois de resolver a divergência de IDs. */}
-                  {diagnosticoQr && (
-                    <div style={{ fontSize: 10, color: '#fecaca', fontFamily: 'monospace', wordBreak: 'break-all', borderTop: '1px solid rgba(255,255,255,0.3)', paddingTop: 6 }}>
-                      {diagnosticoQr}
-                    </div>
-                  )}
+                <div style={{ position: 'absolute', left: 8, right: 8, bottom: 8, background: 'rgba(127,29,29,0.95)', borderRadius: 12, padding: '10px 12px', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  <AlertCircle style={{ width: 16, height: 16, color: '#fff', flexShrink: 0, marginTop: 2 }} />
+                  <span style={{ fontSize: 12, color: '#fff', fontWeight: 500, flex: 1 }}>{erro}</span>
+                  <button onClick={() => setErro('')} style={{ color: '#fff', fontSize: 16, lineHeight: 1, padding: 2 }}>✕</button>
                 </div>
               )}
             </div>
@@ -1086,58 +842,46 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
           </p>
           )}
 
-          {/* QR 100% ANÔNIMO — confirmação simples, sem nome, sem lista de
-              alunos, sem consulta à tabela alunos: só grupo + código da prova. */}
-          {etapa === 'identificar' && grupoAnonimo && (
-            <div className="bg-tertiary-container rounded-2xl p-4 space-y-3 text-center">
-              <p className="text-xs font-bold tracking-wide text-on-tertiary-container">QR CODE LIDO</p>
-              <p className="text-sm text-on-tertiary-container">Grupo: <strong>{labelTurmaOuGrupo(grupoAnonimo)}</strong></p>
-              <p className="text-sm text-on-tertiary-container">Prova: <strong>{codigoAnonimo}</strong></p>
-              <p className="text-xs text-on-tertiary-container">✓ Leitura anônima — nenhum aluno identificado</p>
+          {/* ETAPA 4 do fluxo: "Avaliação identificada" -- SEM nome, SEM
+              lista de alunos, SEM seleção nenhuma. Só confirma qual avaliação
+              e mostra o botão pra continuar pra leitura do cartão-resposta. */}
+          {etapa === 'identificar' && avaliacaoConfirmada && (
+            <div className="bg-tertiary-container rounded-2xl p-4 space-y-3">
+              <p className="text-xs font-bold tracking-wide text-on-tertiary-container text-center">✅ AVALIAÇÃO IDENTIFICADA</p>
+              <div className="text-sm text-on-tertiary-container space-y-1">
+                <p>Avaliação: <strong>{avaliacao.titulo}</strong></p>
+                <p>Grupo: <strong>{ehGrupoDeTurmas(avaliacao.turma_id) ? labelTurmaOuGrupo(avaliacao.turma_id) : avaliacao.turma_id}</strong></p>
+                <p>Questões: <strong>{totalQuestoes}</strong></p>
+                <p>Valor: <strong>{valorTotal.toFixed(1)} pontos</strong></p>
+              </div>
               <div className="flex gap-2">
-                <button onClick={cancelarGrupoAnonimo} className="px-4 py-2.5 rounded-xl border border-outline-variant text-on-tertiary-container text-xs font-semibold">
+                <button onClick={cancelarAvaliacaoConfirmada} className="px-4 py-2.5 rounded-xl border border-outline-variant text-on-tertiary-container text-xs font-semibold">
                   Cancelar
                 </button>
-                <button onClick={iniciarCorrecaoAnonima} className="flex-1 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-semibold">
-                  Iniciar Correção
+                <button onClick={continuarParaLeitura} className="flex-1 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-semibold">
+                  CONTINUAR
                 </button>
               </div>
             </div>
           )}
 
-          {etapa === 'identificar' && turmaConfirmada && !grupoAnonimo && (
-            <div className="bg-tertiary-container rounded-2xl p-4 flex items-center justify-between gap-2">
-              <p className="text-sm font-medium text-on-tertiary-container">
-                ✅ QR confirmado (turma {turmaConfirmada}) — toque no nome do aluno abaixo.
-              </p>
-              <button onClick={() => setTurmaConfirmada(null)} className="text-xs text-on-tertiary-container underline shrink-0">
-                Cancelar
-              </button>
+          {/* Fallback manual — nunca lista aluno nenhum, só o código da avaliação. */}
+          {etapa === 'identificar' && !avaliacaoConfirmada && (
+            <div className="space-y-2">
+              <div className="text-center"><span className="text-xs text-on-surface-variant">ou, se o QR não puder ser lido</span></div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={codigoDigitado}
+                  onChange={e => setCodigoDigitado(e.target.value)}
+                  placeholder={`Digite o código (ex: ${avaliacao.codigo_avaliacao})`}
+                  className="flex-1 px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm"
+                />
+                <button onClick={confirmarCodigoDigitado} className="px-4 py-2 rounded-xl bg-secondary-container text-on-secondary-container text-xs font-semibold">
+                  Confirmar
+                </button>
+              </div>
             </div>
-          )}
-
-          {etapa === 'identificar' && !turmaConfirmada && !grupoAnonimo && (
-          <div className="text-center"><span className="text-xs text-on-surface-variant">ou, se o QR não puder ser lido</span></div>
-          )}
-
-          {etapa === 'identificar' && !grupoAnonimo && (
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            <p className="text-xs font-semibold text-on-surface-variant px-1">
-              {turmaConfirmada ? `Alunos da turma ${turmaConfirmada}:` : 'Selecionar aluno manualmente:'}
-            </p>
-            {(turmaConfirmada ? alunos.filter(al => al.turma_id === turmaConfirmada) : alunos).map(al => (
-              <button key={al.id} onClick={() => (turmaConfirmada ? confirmarAlunoDaTurma(al) : selecionarAlunoManual(al))}
-                className="w-full flex items-center justify-between px-4 py-3 bg-surface border border-outline-variant rounded-xl text-left">
-                <div>
-                  <span className="text-xs text-on-surface-variant mr-2">
-                    {ehGrupoDeTurmas(avaliacao.turma_id) && !turmaConfirmada ? `${al.turma_id} ${al.numero_chamada}.` : `${al.numero_chamada}.`}
-                  </span>
-                  <span className="text-sm text-on-surface">{al.nome}</span>
-                </div>
-                <span className="text-xs text-primary">Selecionar</span>
-              </button>
-            ))}
-          </div>
           )}
 
           {/* Já mostrado como overlay em cima da câmera quando modoCamera — aqui só no modo galeria/upload. */}
@@ -1149,43 +893,14 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
         </div>
       )}
 
-      {/* ETAPA: JÁ CORRIGIDA — não sobrescreve silenciosamente */}
-      {etapa === 'ja_corrigida' && alunoDetectado && correcaoExistente && (
-        <div className="space-y-4">
-          <div className="bg-error-container rounded-2xl p-4 space-y-2">
-            <p className="text-sm font-bold text-on-error-container">Esta folha já foi corrigida</p>
-            <p className="text-xs text-on-error-container">{alunoDetectado.numero_chamada}. {alunoDetectado.nome}</p>
-            <p className="text-xs text-on-error-container">
-              Nota registrada: <strong>{Number(correcaoExistente.nota_final).toFixed(1)}</strong>
-              {correcaoExistente.escaneado_em ? ` · em ${new Date(correcaoExistente.escaneado_em).toLocaleString('pt-BR')}` : ''}
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={() => proximaFolha()} className="flex-1 py-3 rounded-2xl border border-outline-variant text-on-surface-variant text-sm">
-              Voltar
-            </button>
-            <button
-              onClick={voltarParaIdentificar}
-              className="flex-1 py-3 rounded-2xl bg-primary text-on-primary text-sm font-semibold"
-            >
-              Refazer correção
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* ETAPA: REVISAR RESPOSTAS */}
-      {etapa === 'respostas' && (alunoDetectado || grupoAnonimo) && (
+      {etapa === 'respostas' && codigoCorrecao && (
         <div className="space-y-4">
           <div className="bg-secondary-container rounded-2xl px-4 py-3 flex items-center gap-3">
             <CheckCircle2 className="w-5 h-5 text-on-secondary-container flex-shrink-0" />
             <div>
-              <p className="text-xs text-on-secondary-container">
-                {grupoAnonimo ? 'Leitura anônima — sem aluno identificado' : identificacaoManual ? 'Aluno selecionado manualmente' : 'Aluno identificado pelo QR Code'}
-              </p>
-              <p className="text-sm font-bold text-on-secondary-container">
-                {grupoAnonimo ? `${codigoAnonimo} · ${labelTurmaOuGrupo(grupoAnonimo)}` : `${alunoDetectado!.numero_chamada}. ${alunoDetectado!.nome}`}
-              </p>
+              <p className="text-xs text-on-secondary-container">Correção anônima — sem aluno identificado</p>
+              <p className="text-sm font-bold text-on-secondary-container">{codigoCorrecao}</p>
             </div>
           </div>
 
@@ -1304,39 +1019,42 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
             </button>
             <button onClick={salvar} disabled={salvando}
               className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-on-primary font-semibold disabled:opacity-60">
-              <Save className="w-4 h-4" /> {salvando ? 'Salvando...' : 'Confirmar e lançar nota'}
+              <Save className="w-4 h-4" /> {salvando ? 'Salvando...' : 'Confirmar e salvar'}
             </button>
           </div>
         </div>
       )}
 
-      {/* ETAPA: SALVO */}
-      {etapa === 'salvo' && (alunoDetectado || grupoAnonimo) && (
+      {/* ETAPA: SALVO — "PROVA CORRIGIDA", sem nome de aluno nenhum. */}
+      {etapa === 'salvo' && codigoCorrecao && (
         <div className="space-y-4">
-          <div className="text-center py-6 space-y-2">
+          <div className="bg-surface border border-outline-variant rounded-2xl p-5 text-center space-y-2">
             <CheckCircle2 className="w-14 h-14 text-green-500 mx-auto" />
-            <p className="text-base font-bold text-on-surface">Nota salva!</p>
-            <p className="text-sm text-on-surface-variant">{grupoAnonimo ? `${codigoAnonimo} · ${labelTurmaOuGrupo(grupoAnonimo)}` : alunoDetectado!.nome}</p>
+            <p className="text-base font-bold text-on-surface">PROVA CORRIGIDA</p>
+            <p className="text-xs text-on-surface-variant">{avaliacao.titulo} · {avaliacao.codigo_avaliacao}</p>
+            <div className="grid grid-cols-3 gap-2 py-2 text-xs text-on-surface-variant">
+              <span>Acertos <strong className="block text-on-surface">{acertos}</strong></span>
+              <span>Erros <strong className="block text-on-surface">{erros}</strong></span>
+              <span>Em branco <strong className="block text-on-surface">{brancas}</strong></span>
+            </div>
             <p className="text-3xl font-bold text-primary">{notaFinal.toFixed(1)}</p>
-            <p className="text-xs text-on-surface-variant">de {(avaliacao.valor_total_objetivas + avaliacao.valor_total_discursivas).toFixed(1)} pts</p>
+            <p className="text-xs text-on-surface-variant">de {valorTotal.toFixed(1)} pts</p>
+            <p className="text-xs text-on-surface-variant pt-2 border-t border-outline-variant">
+              Código da correção: <strong className="text-on-surface">{codigoCorrecao}</strong>
+            </p>
           </div>
 
-          {avisoLancamento && (
-            <div className={[
-              'rounded-2xl px-4 py-3 text-xs flex items-start gap-2',
-              avisoLancamento.startsWith('Nota lançada')
-                ? 'bg-green-50 text-green-700 border border-green-200'
-                : 'bg-amber-50 text-amber-700 border border-amber-200',
-            ].join(' ')}>
-              {avisoLancamento.startsWith('Nota lançada')
-                ? <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-                : <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />}
-              <span>{avisoLancamento}</span>
-            </div>
-          )}
+          <div className="bg-amber-50 border border-amber-200 text-amber-700 rounded-2xl px-4 py-3 text-xs">
+            Corrigido sem nome de aluno. A associação com um aluno é feita depois, manualmente, em "Correções realizadas".
+          </div>
 
           <button onClick={() => proximaFolha()} className="w-full py-3 rounded-2xl bg-primary text-on-primary font-semibold">
-            📷 Próxima folha (câmera já ligada)
+            📷 Nova Correção (câmera já ligada)
+          </button>
+
+          <button onClick={() => { pararCamera(); navigate(`/avaliacoes/correcoes/${avaliacao.id}`); }}
+            className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-2xl bg-secondary-container text-on-secondary-container text-sm font-semibold">
+            <ListChecks className="w-4 h-4" /> Ver Resultados
           </button>
 
           {resultados.length > 0 && (
@@ -1348,8 +1066,8 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
               {mostrarResultados && (
                 <div className="border-t border-outline-variant divide-y divide-outline-variant">
                   {resultados.map(r => (
-                    <div key={r.id} className="flex items-center justify-between px-4 py-2">
-                      <span className="text-xs text-on-surface">{r.label}</span>
+                    <div key={r.codigo} className="flex items-center justify-between px-4 py-2">
+                      <span className="text-xs text-on-surface">{r.codigo}</span>
                       <span className="text-xs font-bold text-primary">{r.nota_final.toFixed(1)} pts</span>
                     </div>
                   ))}
