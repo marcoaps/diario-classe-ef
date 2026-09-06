@@ -210,17 +210,15 @@ async function desenharFolhaModelo(
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, W, H);
 
+  // Os 4 marcadores dos CANTOS DA PÁGINA foram removidos a pedido -- só
+  // ficam os marcadores da COLUNA de respostas (ao redor do gabarito), que
+  // são os únicos usados pela leitura em duas etapas (câmera ao vivo). MARK/
+  // PAD continuam definindo a margem segura do layout (sem risco de corte),
+  // só não desenham mais o quadrado preto.
   const MARK = FOLHA_MARK;
   const PAD = FOLHA_PAD;
   const CX = PAD + MARK + 8;
   const CW = W - 2 * (PAD + MARK + 8);
-
-  // Marcadores OMR — 4 cantos, perto das bordas seguras (sem risco de corte).
-  ctx.fillStyle = '#000000';
-  ctx.fillRect(PAD, PAD, MARK, MARK);
-  ctx.fillRect(W - PAD - MARK, PAD, MARK, MARK);
-  ctx.fillRect(PAD, H - PAD - MARK, MARK, MARK);
-  ctx.fillRect(W - PAD - MARK, H - PAD - MARK, MARK, MARK);
 
   // Cabeçalho
   ctx.fillStyle = '#e8edf2';
