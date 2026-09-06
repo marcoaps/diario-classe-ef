@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../data/supabase';
+import { getTurmasDoGrupo } from './ProvasOnline';
 import { Search, CheckCircle, Send, BookOpen, AlertCircle, ChevronLeft, ChevronRight, Clock, Brain, Loader } from 'lucide-react';
 
 interface SubItem {
@@ -34,17 +35,6 @@ interface CorrecaoDissertativa {
   pontos_total: number;
   percentual: number;
   justificativa: string;
-}
-
-const GRUPOS: Record<string, string[]> = {
-  '6-7': ['6F','7A','7B','7C','7D','7E','7F'],
-  '8':   ['8A','8B','8C','8D','8E','8F'],
-  '9':   ['9A','9B','9C','9D','9E','9F'],
-};
-
-function getTurmasDoGrupo(grupoId: string): string[] {
-  if (!GRUPOS[grupoId]) return [grupoId];
-  return GRUPOS[grupoId];
 }
 
 const LETRAS = ['A', 'B', 'C', 'D', 'E'];
