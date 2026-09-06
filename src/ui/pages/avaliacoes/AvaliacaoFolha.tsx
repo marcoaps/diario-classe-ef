@@ -199,8 +199,8 @@ async function desenharFolhaQR(
   canvas: HTMLCanvasElement,
   avaliacao: Avaliacao,
   aluno: Aluno,
-  payload: QrPayload,
-  assinatura: string
+  qrConteudo: string,
+  layoutVersion: number
 ): Promise<void> {
   const W = FOLHA_W;
   const H = FOLHA_H;
@@ -241,7 +241,7 @@ async function desenharFolhaQR(
   ctx.font = '11px Arial';
   ctx.fillText((avaliacao.disciplina || 'Educação Física') + ' — ' + avaliacao.titulo, W / 2, PAD + 40);
   ctx.font = 'bold 12px Arial';
-  ctx.fillText(serieLabel + ' — Folha ' + payload.layout_version, W / 2, PAD + 56);
+  ctx.fillText(serieLabel + ' — Folha ' + layoutVersion, W / 2, PAD + 56);
   ctx.textAlign = 'left';
 
   // Área do aluno — nome e nº de chamada JÁ PREENCHIDOS (folha individual),
@@ -287,9 +287,10 @@ async function desenharFolhaQR(
   ctx.lineTo(CX + 220, alunoY + 54);
   ctx.stroke();
 
-  // QR Code — payload assinado (payload + assinatura HMAC), exclusivo desta
-  // folha (folha_id). O gabarito NUNCA vai dentro do QR.
-  const qrConteudo = JSON.stringify({ payload, assinatura });
+  // QR Code — no modo individual, `qrConteudo` é o payload assinado (payload +
+  // assinatura HMAC), exclusivo desta folha; no modo 100% anônimo, é só o
+  // texto puro da turma/grupo (ex: "GRUPO_6_7"), igual em toda folha do grupo.
+  // O gabarito NUNCA vai dentro do QR, nos dois modos.
   const qrDataUrl = await QRCode.toDataURL(qrConteudo, { width: 150, margin: 1, errorCorrectionLevel: 'M' });
   const qrImg = new Image();
   await new Promise<void>(res => { qrImg.onload = () => res(); qrImg.src = qrDataUrl; });
@@ -436,9 +437,11 @@ export function AvaliacaoFolha() {
   const [erroGeracao, setErroGeracao] = useState('');
   const [gerandoIA, setGerandoIA] = useState(false);
   const [gerandoTextoApoio, setGerandoTextoApoio] = useState(false);
-  // Código compartilhado por turma: abre mão da identificação automática do
-  // aluno de propósito (ex: turmas muito grandes) -- ver gerarTodos() abaixo.
-  const [qrCompartilhadoPorTurma, setQrCompartilhadoPorTurma] = useState(false);
+  // QR 100% anônimo: o código impresso vira só o texto puro da turma/grupo
+  // (ex: "GRUPO_6_7"), sem JSON, sem assinatura, sem nenhuma referência a
+  // aluno -- abre mão de vez da identificação automática (e do vínculo
+  // aluno↔prova até uma etapa futura de associação manual). Ver gerarTodos().
+  const [qrAnonimoPorGrupo, setQrAnonimoPorGrupo] = useState(false);
 
   useEffect(() => {
     async function init() {
@@ -536,37 +539,32 @@ export function AvaliacaoFolha() {
   }
 
   // Gera uma folha por aluno da turma. Por padrão, QR exclusivo por aluno
-  // (identifica automaticamente quem é quem ao corrigir). Se
-  // `qrCompartilhadoPorTurma` estiver ligado, reaproveita o MESMO QR
-  // assinado pra todos os alunos de cada turma -- menos chamadas de
-  // assinatura (rápido mesmo com muitos alunos), mas a correção passa a
-  // pedir que o professor escolha o aluno na lista (sem identificação
-  // automática), já que o QR não carrega mais quem é o aluno.
+  // (identifica automaticamente quem é quem ao corrigir, payload assinado por
+  // HMAC). Se `qrAnonimoPorGrupo` estiver ligado, o QR vira só o texto puro
+  // da turma/grupo da avaliação (ex: "GRUPO_6_7") -- o MESMO texto em toda
+  // folha, sem assinatura (não precisa chamar o backend nem gravar
+  // folhas_respostas, já que não há mais um token por aluno) -- e a correção
+  // não identifica ninguém automaticamente nem pede pra escolher o aluno na
+  // lista: cada prova lida fica com um código anônimo (ex: PROVA_2026_0001)
+  // até ser associada a um aluno manualmente numa etapa futura.
   async function gerarTodos() {
     if (!avaliacao || alunos.length === 0) return;
     setGeradoTodos(false);
     setFolhas({});
     setErroGeracao('');
     const novasFolhas: Record<string, string> = {};
-    const assinadosPorTurma = new Map<string, { payload: QrPayload; assinatura: string }>();
 
     for (let i = 0; i < alunos.length; i++) {
       setGerandoIdx(i);
       const aluno = alunos[i];
       try {
         const turmaDoAluno = aluno.turma_id || avaliacao.turma_id;
-        let payload: QrPayload;
-        let assinatura: string;
+        let qrConteudo: string;
+        let layoutVersion: number;
 
-        if (qrCompartilhadoPorTurma) {
-          const emCache = assinadosPorTurma.get(turmaDoAluno);
-          if (emCache) {
-            ({ payload, assinatura } = emCache);
-          } else {
-            payload = { prova_id: avaliacao.id, turma_id: turmaDoAluno, layout_version: LAYOUT_VERSION };
-            assinatura = await assinarPayload(payload);
-            assinadosPorTurma.set(turmaDoAluno, { payload, assinatura });
-          }
+        if (qrAnonimoPorGrupo) {
+          qrConteudo = avaliacao.turma_id;
+          layoutVersion = LAYOUT_VERSION;
         } else {
           const { data: folhaRow, error } = await supabase
             .from('folhas_respostas')
@@ -577,12 +575,14 @@ export function AvaliacaoFolha() {
             .select('id')
             .single();
           if (error || !folhaRow) throw new Error(error?.message || 'Falha ao registrar a folha.');
-          payload = { prova_id: avaliacao.id, aluno_id: aluno.id, turma_id: turmaDoAluno, folha_id: folhaRow.id, layout_version: LAYOUT_VERSION };
-          assinatura = await assinarPayload(payload);
+          const payload: QrPayload = { prova_id: avaliacao.id, aluno_id: aluno.id, turma_id: turmaDoAluno, folha_id: folhaRow.id, layout_version: LAYOUT_VERSION };
+          const assinatura = await assinarPayload(payload);
+          qrConteudo = JSON.stringify({ payload, assinatura });
+          layoutVersion = LAYOUT_VERSION;
         }
 
         const canvas = document.createElement('canvas');
-        await desenharFolhaQR(canvas, avaliacao, aluno, payload, assinatura);
+        await desenharFolhaQR(canvas, avaliacao, aluno, qrConteudo, layoutVersion);
         novasFolhas[aluno.id] = canvas.toDataURL('image/png');
       } catch (e) {
         setErroGeracao(`Erro ao gerar a folha de ${aluno.nome}: ${(e as Error).message}`);
@@ -746,7 +746,7 @@ export function AvaliacaoFolha() {
       <div className="bg-surface border border-outline-variant rounded-2xl p-4 space-y-3">
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold text-on-surface">
-            Folhas de resposta ({qrCompartilhadoPorTurma ? 'QR compartilhado por turma' : 'QR individual'})
+            Folhas de resposta ({qrAnonimoPorGrupo ? 'QR 100% anônimo' : 'QR individual'})
           </p>
           <button onClick={gerarTodos} disabled={gerandoIdx !== null || alunos.length === 0}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-semibold disabled:opacity-50">
@@ -758,14 +758,15 @@ export function AvaliacaoFolha() {
         <label className="flex items-start gap-2 text-xs text-on-surface-variant">
           <input
             type="checkbox"
-            checked={qrCompartilhadoPorTurma}
-            onChange={e => setQrCompartilhadoPorTurma(e.target.checked)}
+            checked={qrAnonimoPorGrupo}
+            onChange={e => setQrAnonimoPorGrupo(e.target.checked)}
             className="mt-0.5"
           />
           <span>
-            <strong>Código compartilhado por turma</strong> (sem identificação automática) — mais rápido de
-            gerar quando há muitos alunos, mas ao corrigir você vai precisar tocar no nome do aluno numa
-            lista já filtrada pra turma dele, em vez do app reconhecer sozinho.
+            <strong>QR 100% anônimo</strong> — o código impresso vira só o identificador da turma/grupo
+            ("{avaliacao?.turma_id}"), igual em todas as folhas, sem nenhuma referência a qual aluno é.
+            Ao corrigir, o app não identifica nem pede pra selecionar o aluno: cada prova lida fica com um
+            código anônimo (ex: PROVA_2026_0001) até ser associada a um aluno manualmente, depois.
           </span>
         </label>
 

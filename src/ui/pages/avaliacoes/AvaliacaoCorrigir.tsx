@@ -61,6 +61,7 @@ export function AvaliacaoCorrigir() {
   const falhasFolhaRef = useRef<{ folhaId: string | null; count: number }>({ folhaId: null, count: 0 });
   const framesDesdeChecagemRef = useRef(0);
   const turmaConfirmadaRef = useRef<string | null>(null);
+  const grupoAnonimoRef = useRef<string | null>(null);
 
   const loopRef = useRef<() => void>(() => {});
 
@@ -73,6 +74,12 @@ export function AvaliacaoCorrigir() {
   // Preenchido quando o QR lido é de "código compartilhado por turma" (sem
   // aluno_id) -- a lista de seleção manual fica filtrada só pra essa turma.
   const [turmaConfirmada, setTurmaConfirmada] = useState<string | null>(null);
+  // Preenchido quando o QR lido é 100% ANÔNIMO (texto puro igual a
+  // avaliacao.turma_id, sem JSON, sem assinatura, sem aluno_id nenhum) --
+  // nesse caso não existe seleção de aluno: a correção segue com um código
+  // sequencial (codigoAnonimo) e o vínculo com o aluno fica pra depois.
+  const [grupoAnonimo, setGrupoAnonimo] = useState<string | null>(null);
+  const [codigoAnonimo, setCodigoAnonimo] = useState<string | null>(null);
   const [confiancaPorQuestao, setConfiancaPorQuestao] = useState<Record<string, number>>({});
   const [alunoDetectado, setAlunoDetectado] = useState<Aluno | null>(null);
   const [folhaId, setFolhaId] = useState<string | null>(null);
@@ -90,7 +97,7 @@ export function AvaliacaoCorrigir() {
   const [arquivoHash, setArquivoHash] = useState<string>('');
   const [correcaoExistente, setCorrecaoExistente] = useState<{ nota_final: number; escaneado_em: string | null } | null>(null);
   const [ajustesFeitos, setAjustesFeitos] = useState<Array<{ questao: string; de: string; para: string }>>([]);
-  const [resultados, setResultados] = useState<Array<{ aluno: Aluno; nota_final: number }>>([]);
+  const [resultados, setResultados] = useState<Array<{ id: string; label: string; nota_final: number; ordem: number }>>([]);
   const [mostrarResultados, setMostrarResultados] = useState(false);
   const [avisoLancamento, setAvisoLancamento] = useState('');
 
@@ -163,6 +170,10 @@ export function AvaliacaoCorrigir() {
     falhasFolhaRef.current = { folhaId: null, count: 0 };
     turmaConfirmadaRef.current = null;
     setTurmaConfirmada(null);
+    // NÃO reseta grupoAnonimo/codigoAnonimo aqui -- pararCamera roda a cada
+    // transição de etapa (inclusive "lendo_bolhas" -> "respostas", onde a
+    // correção anônima ainda precisa saber que é anônima). Só é limpo
+    // explicitamente em cancelarGrupoAnonimo() e proximaFolha().
     setStatusCamera('parada');
     setQrVisivel(false);
     setMarcadoresVisiveis(false);
@@ -188,6 +199,14 @@ export function AvaliacaoCorrigir() {
   const alunosRef = useRef(alunos);
   useEffect(() => { alunosRef.current = alunos; }, [alunos]);
   useEffect(() => { turmaConfirmadaRef.current = turmaConfirmada; }, [turmaConfirmada]);
+  useEffect(() => { grupoAnonimoRef.current = grupoAnonimo; }, [grupoAnonimo]);
+
+  // Mesmo motivo de alunosRef: `avaliacao` só é preenchida depois do fetch
+  // assíncrono no init(), mas a câmera já pode ter ligado antes disso. Sem
+  // essa ref, o loop nunca reconheceria o QR 100% anônimo (comparado contra
+  // avaliacao.turma_id) porque ficaria preso pra sempre com avaliacao=null.
+  const avaliacaoRef = useRef(avaliacao);
+  useEffect(() => { avaliacaoRef.current = avaliacao; }, [avaliacao]);
 
   useEffect(() => {
     if (!cameraDeveFicarAtiva) { pararCamera(); return; }
@@ -272,6 +291,12 @@ export function AvaliacaoCorrigir() {
               loop();
               return;
             }
+            // Grupo anônimo já confirmado por essa MESMA leitura — já está
+            // mostrando a tela "Iniciar Correção", não precisa reprocessar.
+            if (chaveLida === avaliacaoRef.current?.turma_id && grupoAnonimoRef.current === chaveLida) {
+              loop();
+              return;
+            }
 
             // Essa folha já falhou demais vezes seguidas — não tenta de novo
             // sozinho (evita loop infinito), só mostra o aviso já definido.
@@ -286,7 +311,9 @@ export function AvaliacaoCorrigir() {
 
             if (contagemConfirmacaoRef.current >= FRAMES_CONFIRMACAO) {
               processandoRef.current = true;
-              const resultado = await identificarAluno(lido!);
+              const resultado = chaveLida === avaliacaoRef.current?.turma_id
+                ? await confirmarGrupoAnonimo(chaveLida)
+                : await identificarAluno(lido!);
               if (resultado === 'selecionar_manualmente') {
                 // Não é falha — já filtrou a lista pra turma, só aguarda o toque no nome.
                 contagemConfirmacaoRef.current = 0;
@@ -394,6 +421,40 @@ export function AvaliacaoCorrigir() {
     return 'ok';
   }
 
+  // QR 100% ANÔNIMO: o conteúdo lido é só o texto puro da turma/grupo (ex:
+  // "GRUPO_6_7"), sem JSON, sem assinatura -- por isso não há nada pra
+  // verificar/validar aqui, e (por desenho) NENHUMA consulta à tabela
+  // `alunos`. Só busca quantas provas anônimas essa avaliação já tem pra
+  // sugerir o próximo código sequencial (ex: PROVA_2026_0007) e aguarda o
+  // professor tocar em "Iniciar Correção" -- não avança sozinho pra
+  // "lendo_bolhas", pra dar tempo de mostrar a confirmação na tela.
+  async function confirmarGrupoAnonimo(codigoGrupo: string): Promise<ResultadoDeteccao> {
+    setErro('');
+    setDiagnosticoQr('');
+    setTurmaConfirmada(null);
+    const ano = new Date().getFullYear();
+    const { count } = await supabase
+      .from('avaliacoes_respostas')
+      .select('id', { count: 'exact', head: true })
+      .eq('avaliacao_id', id)
+      .not('codigo_anonimo', 'is', null);
+    const codigo = `PROVA_${ano}_${String((count || 0) + 1).padStart(4, '0')}`;
+    setGrupoAnonimo(codigoGrupo);
+    setCodigoAnonimo(codigo);
+    return 'selecionar_manualmente'; // não é falha -- só aguarda o toque em "Iniciar Correção".
+  }
+
+  function cancelarGrupoAnonimo() {
+    setGrupoAnonimo(null);
+    setCodigoAnonimo(null);
+    contagemConfirmacaoRef.current = 0;
+    ultimoFolhaIdRef.current = null;
+  }
+
+  function iniciarCorrecaoAnonima() {
+    setEtapa('lendo_bolhas');
+  }
+
   // Passo manual: o professor já aproximou a câmera da coluna de respostas,
   // alinhando nos 4 marcadores pretos ao redor dela, e toca no botão —
   // congela ESSE frame (resolução cheia) e lê as bolhas por Visão Computacional.
@@ -465,27 +526,42 @@ export function AvaliacaoCorrigir() {
           setFotoPreview(url);
         }
 
-        let lido: QrAssinadoLido | null = null;
-        if (code) { try { lido = JSON.parse(code.data); } catch { lido = null; } }
-        if (!lido?.payload || !lido?.assinatura) { falhar('invalido'); return; }
-        const { payload, assinatura } = lido;
-        if (!(await verificarQr(payload, assinatura))) { falhar('adulterado'); return; }
-        if (payload.prova_id !== id) { falhar('outra_prova'); return; }
-        const aluno = alunos.find(a => a.id === payload.aluno_id);
-        if (!aluno) { falhar('aluno_nao_encontrado'); return; }
-
-        setIdentificacaoManual(false);
-        const existente = await verificarCorrecaoExistente(aluno.id);
-        setAlunoDetectado(aluno);
-        setFolhaId(payload.folha_id);
-        if (existente) {
-          setCorrecaoExistente(existente);
-          setEtapa('ja_corrigida');
-          return;
-        }
-
         const avaliacaoAtual = avaliacao!;
         const alternativas = avaliacaoAtual.alternativas?.length ? avaliacaoAtual.alternativas : ['A', 'B', 'C', 'D'];
+        let aluno: Aluno | null = null;
+
+        // QR 100% anônimo (texto puro igual a avaliacao.turma_id) — sem
+        // aluno pra identificar, gera direto o código sequencial anônimo.
+        if (code?.data === avaliacaoAtual.turma_id) {
+          const ano = new Date().getFullYear();
+          const { count } = await supabase
+            .from('avaliacoes_respostas')
+            .select('id', { count: 'exact', head: true })
+            .eq('avaliacao_id', id)
+            .not('codigo_anonimo', 'is', null);
+          setGrupoAnonimo(code.data);
+          setCodigoAnonimo(`PROVA_${ano}_${String((count || 0) + 1).padStart(4, '0')}`);
+        } else {
+          let lido: QrAssinadoLido | null = null;
+          if (code) { try { lido = JSON.parse(code.data); } catch { lido = null; } }
+          if (!lido?.payload || !lido?.assinatura) { falhar('invalido'); return; }
+          const { payload, assinatura } = lido;
+          if (!(await verificarQr(payload, assinatura))) { falhar('adulterado'); return; }
+          if (payload.prova_id !== id) { falhar('outra_prova'); return; }
+          aluno = alunos.find(a => a.id === payload.aluno_id) || null;
+          if (!aluno) { falhar('aluno_nao_encontrado'); return; }
+
+          setIdentificacaoManual(false);
+          const existente = await verificarCorrecaoExistente(aluno.id);
+          setAlunoDetectado(aluno);
+          setFolhaId(payload.folha_id ?? null);
+          if (existente) {
+            setCorrecaoExistente(existente);
+            setEtapa('ja_corrigida');
+            return;
+          }
+        }
+
         const resultadoOMR = processarFolhaOMR(canvas, {
           qtdObjetivas: avaliacaoAtual.quantidade_objetivas,
           qtdDiscursivas: avaliacaoAtual.quantidade_discursivas,
@@ -496,6 +572,8 @@ export function AvaliacaoCorrigir() {
           setErro(MENSAGENS_ERRO_OMR[resultadoOMR.motivo!] || 'Não foi possível ler as respostas desta foto.');
           setAlunoDetectado(null);
           setFolhaId(null);
+          setGrupoAnonimo(null);
+          setCodigoAnonimo(null);
           setFotoPreview(url);
           return;
         }
@@ -681,13 +759,49 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
   const { acertos, erros, brancas, ambiguas, notaObjetiva, notaDiscursiva, notaFinal } = calcular();
 
   async function salvar() {
-    if (!avaliacao || !alunoDetectado || !id) return;
+    if (!avaliacao || !id) return;
+    if (!alunoDetectado && !grupoAnonimo) return;
     setSalvando(true);
     setErro('');
 
     const confiancaMedia = avaliacao.quantidade_objetivas > 0
       ? 1 - (ambiguas + brancas) / avaliacao.quantidade_objetivas
       : 1;
+
+    // Correção 100% ANÔNIMA: não há aluno_id nenhum -- salva com o código
+    // sequencial (codigoAnonimo) e o código do grupo lido do QR, e NÃO lança
+    // nota nenhuma no Diário (não sabe de quem é ainda). A associação com o
+    // aluno fica pra uma etapa futura, separada desta tela.
+    if (grupoAnonimo) {
+      const { error } = await supabase.from('avaliacoes_respostas').insert({
+        avaliacao_id: avaliacao.id,
+        aluno_id: null,
+        codigo_anonimo: codigoAnonimo,
+        grupo_codigo: grupoAnonimo,
+        respostas,
+        acertos,
+        erros,
+        brancas,
+        ambiguas,
+        nota_objetiva: notaObjetiva,
+        nota_discursiva: notaDiscursiva,
+        nota_final: notaFinal,
+        nota: notaFinal,
+        confianca: arredondar(confiancaMedia, 2),
+        revisada: true,
+        identificacao_manual: false,
+        arquivo_hash: arquivoHash || null,
+        metodo_scan: 'qr_anonimo',
+        escaneado_em: new Date().toISOString(),
+      });
+      if (error) { setSalvando(false); setErro('Erro ao salvar: ' + error.message); return; }
+      setAvisoLancamento(`Corrigido anonimamente (${codigoAnonimo}) — associe a um aluno depois. Nota não lançada no Diário até essa associação.`);
+      setSalvando(false);
+      await atualizarResultadosSessao();
+      setEtapa('salvo');
+      return;
+    }
+    if (!alunoDetectado) { setSalvando(false); return; }
 
     const { error } = await supabase.from('avaliacoes_respostas').upsert({
       avaliacao_id: avaliacao.id,
@@ -744,21 +858,37 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
     }
 
     setSalvando(false);
-    const { data: res } = await supabase.from('avaliacoes_respostas').select('aluno_id, nota_final').eq('avaliacao_id', id);
-    if (res) {
-      const novos = res.map(r => {
-        const al = alunos.find(a => a.id === r.aluno_id);
-        return al ? { aluno: al, nota_final: r.nota_final || 0 } : null;
-      }).filter(Boolean) as Array<{ aluno: Aluno; nota_final: number }>;
-      setResultados(novos.sort((a, b) => a.aluno.numero_chamada - b.aluno.numero_chamada));
-    }
+    await atualizarResultadosSessao();
     setEtapa('salvo');
+  }
+
+  // Lista "corrigidos até agora" mostrada na etapa "salvo" — inclui tanto
+  // alunos identificados normalmente quanto provas anônimas (rotuladas pelo
+  // próprio codigo_anonimo, já que não têm aluno vinculado ainda).
+  async function atualizarResultadosSessao() {
+    if (!id) return;
+    const { data: res } = await supabase.from('avaliacoes_respostas').select('aluno_id, codigo_anonimo, nota_final').eq('avaliacao_id', id);
+    if (!res) return;
+    const novos = res.map(r => {
+      if (r.aluno_id) {
+        const al = alunos.find(a => a.id === r.aluno_id);
+        return al ? { id: al.id, label: `${al.numero_chamada}. ${al.nome}`, ordem: al.numero_chamada, nota_final: r.nota_final || 0 } : null;
+      }
+      if (r.codigo_anonimo) {
+        return { id: r.codigo_anonimo, label: r.codigo_anonimo, ordem: Number.MAX_SAFE_INTEGER, nota_final: r.nota_final || 0 };
+      }
+      return null;
+    }).filter(Boolean) as Array<{ id: string; label: string; ordem: number; nota_final: number }>;
+    setResultados(novos.sort((a, b) => a.ordem - b.ordem));
   }
 
   function proximaFolha(manterCamera = true) {
     setEtapa('identificar');
     setAlunoDetectado(null);
     setFolhaId(null);
+    setGrupoAnonimo(null);
+    setCodigoAnonimo(null);
+    grupoAnonimoRef.current = null;
     setIdentificacaoManual(false);
     setRespostas({});
     setFotoPreview('');
@@ -814,8 +944,10 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
             </p>
             <p className="text-xs text-on-secondary-container mt-1">
               {etapa === 'lendo_bolhas'
-                ? `${alunoDetectado?.numero_chamada ?? ''}. ${alunoDetectado?.nome ?? ''} — as respostas são lidas na hora, sem enviar nada pra IA.`
-                : 'Depois de identificar o aluno, o app pede pra alinhar na coluna de respostas.'}
+                ? (grupoAnonimo
+                    ? `${codigoAnonimo} (${labelTurmaOuGrupo(grupoAnonimo)}) — leitura anônima, as respostas são lidas na hora, sem enviar nada pra IA.`
+                    : `${alunoDetectado?.numero_chamada ?? ''}. ${alunoDetectado?.nome ?? ''} — as respostas são lidas na hora, sem enviar nada pra IA.`)
+                : 'Depois de identificar o aluno (ou o grupo, no modo anônimo), o app pede pra alinhar na coluna de respostas.'}
             </p>
           </div>
 
@@ -954,7 +1086,26 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
           </p>
           )}
 
-          {etapa === 'identificar' && turmaConfirmada && (
+          {/* QR 100% ANÔNIMO — confirmação simples, sem nome, sem lista de
+              alunos, sem consulta à tabela alunos: só grupo + código da prova. */}
+          {etapa === 'identificar' && grupoAnonimo && (
+            <div className="bg-tertiary-container rounded-2xl p-4 space-y-3 text-center">
+              <p className="text-xs font-bold tracking-wide text-on-tertiary-container">QR CODE LIDO</p>
+              <p className="text-sm text-on-tertiary-container">Grupo: <strong>{labelTurmaOuGrupo(grupoAnonimo)}</strong></p>
+              <p className="text-sm text-on-tertiary-container">Prova: <strong>{codigoAnonimo}</strong></p>
+              <p className="text-xs text-on-tertiary-container">✓ Leitura anônima — nenhum aluno identificado</p>
+              <div className="flex gap-2">
+                <button onClick={cancelarGrupoAnonimo} className="px-4 py-2.5 rounded-xl border border-outline-variant text-on-tertiary-container text-xs font-semibold">
+                  Cancelar
+                </button>
+                <button onClick={iniciarCorrecaoAnonima} className="flex-1 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-semibold">
+                  Iniciar Correção
+                </button>
+              </div>
+            </div>
+          )}
+
+          {etapa === 'identificar' && turmaConfirmada && !grupoAnonimo && (
             <div className="bg-tertiary-container rounded-2xl p-4 flex items-center justify-between gap-2">
               <p className="text-sm font-medium text-on-tertiary-container">
                 ✅ QR confirmado (turma {turmaConfirmada}) — toque no nome do aluno abaixo.
@@ -965,11 +1116,11 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
             </div>
           )}
 
-          {etapa === 'identificar' && !turmaConfirmada && (
+          {etapa === 'identificar' && !turmaConfirmada && !grupoAnonimo && (
           <div className="text-center"><span className="text-xs text-on-surface-variant">ou, se o QR não puder ser lido</span></div>
           )}
 
-          {etapa === 'identificar' && (
+          {etapa === 'identificar' && !grupoAnonimo && (
           <div className="space-y-2 max-h-64 overflow-y-auto">
             <p className="text-xs font-semibold text-on-surface-variant px-1">
               {turmaConfirmada ? `Alunos da turma ${turmaConfirmada}:` : 'Selecionar aluno manualmente:'}
@@ -1024,15 +1175,17 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
       )}
 
       {/* ETAPA: REVISAR RESPOSTAS */}
-      {etapa === 'respostas' && alunoDetectado && (
+      {etapa === 'respostas' && (alunoDetectado || grupoAnonimo) && (
         <div className="space-y-4">
           <div className="bg-secondary-container rounded-2xl px-4 py-3 flex items-center gap-3">
             <CheckCircle2 className="w-5 h-5 text-on-secondary-container flex-shrink-0" />
             <div>
               <p className="text-xs text-on-secondary-container">
-                {identificacaoManual ? 'Aluno selecionado manualmente' : 'Aluno identificado pelo QR Code'}
+                {grupoAnonimo ? 'Leitura anônima — sem aluno identificado' : identificacaoManual ? 'Aluno selecionado manualmente' : 'Aluno identificado pelo QR Code'}
               </p>
-              <p className="text-sm font-bold text-on-secondary-container">{alunoDetectado.numero_chamada}. {alunoDetectado.nome}</p>
+              <p className="text-sm font-bold text-on-secondary-container">
+                {grupoAnonimo ? `${codigoAnonimo} · ${labelTurmaOuGrupo(grupoAnonimo)}` : `${alunoDetectado!.numero_chamada}. ${alunoDetectado!.nome}`}
+              </p>
             </div>
           </div>
 
@@ -1158,12 +1311,12 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
       )}
 
       {/* ETAPA: SALVO */}
-      {etapa === 'salvo' && alunoDetectado && (
+      {etapa === 'salvo' && (alunoDetectado || grupoAnonimo) && (
         <div className="space-y-4">
           <div className="text-center py-6 space-y-2">
             <CheckCircle2 className="w-14 h-14 text-green-500 mx-auto" />
             <p className="text-base font-bold text-on-surface">Nota salva!</p>
-            <p className="text-sm text-on-surface-variant">{alunoDetectado.nome}</p>
+            <p className="text-sm text-on-surface-variant">{grupoAnonimo ? `${codigoAnonimo} · ${labelTurmaOuGrupo(grupoAnonimo)}` : alunoDetectado!.nome}</p>
             <p className="text-3xl font-bold text-primary">{notaFinal.toFixed(1)}</p>
             <p className="text-xs text-on-surface-variant">de {(avaliacao.valor_total_objetivas + avaliacao.valor_total_discursivas).toFixed(1)} pts</p>
           </div>
@@ -1195,8 +1348,8 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
               {mostrarResultados && (
                 <div className="border-t border-outline-variant divide-y divide-outline-variant">
                   {resultados.map(r => (
-                    <div key={r.aluno.id} className="flex items-center justify-between px-4 py-2">
-                      <span className="text-xs text-on-surface">{r.aluno.numero_chamada}. {r.aluno.nome}</span>
+                    <div key={r.id} className="flex items-center justify-between px-4 py-2">
+                      <span className="text-xs text-on-surface">{r.label}</span>
                       <span className="text-xs font-bold text-primary">{r.nota_final.toFixed(1)} pts</span>
                     </div>
                   ))}
