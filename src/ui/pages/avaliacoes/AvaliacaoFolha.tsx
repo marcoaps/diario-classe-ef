@@ -548,7 +548,7 @@ export function AvaliacaoFolha() {
       </div>`).join('');
     const html = `<!DOCTYPE html><html><head>
       <meta charset="utf-8">
-      <title>Folha QR — ${avaliacao.codigo_avaliacao || avaliacao.titulo}</title>
+      <title>${turmaSelecionada ? formatarTurma(turmaSelecionada) : 'Folha QR'} — ${avaliacao.codigo_avaliacao || avaliacao.titulo}</title>
       <style>* { margin:0; padding:0; box-sizing:border-box; } @page { margin:0; size: A4 portrait; } body { background:white; }</style>
     </head><body>${blocos}
       <script>setTimeout(function(){ window.print(); }, 600);<\/script>
