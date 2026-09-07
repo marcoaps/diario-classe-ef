@@ -204,7 +204,6 @@ async function desenharFolhaModelo(
   const qtdObj = avaliacao.quantidade_objetivas || 0;
   const qtdDisc = avaliacao.quantidade_discursivas || 0;
   const alternativas = avaliacao.alternativas?.length ? avaliacao.alternativas : ['A', 'B', 'C', 'D'];
-  const serieLabel = ehGrupoDeTurmas(avaliacao.turma_id) ? labelTurmaOuGrupo(avaliacao.turma_id) : avaliacao.turma_id;
 
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, W, H);
@@ -354,7 +353,8 @@ async function desenharFolhaModelo(
   // só desenha dentro do que já foi reservado, sem invadir a área das bolhas.
   if (qtdDisc > 0) {
     const subjStartY = INICIO_BOLHAS_Y + qtdObj * Q_ROW_H + 30;
-    const bottomLimit = H - PAD - MARK - 20;
+    // Sem rodapé -- só a margem segura até a borda física da folha (~1cm).
+    const bottomLimit = H - PAD - MARK;
     const totalAlturaDisc = bottomLimit - subjStartY;
     const GAP_DISC = 14;
     const boxH = Math.max(90, (totalAlturaDisc - (qtdDisc - 1) * GAP_DISC) / qtdDisc);
@@ -369,7 +369,7 @@ async function desenharFolhaModelo(
 
       const linhasY0 = by + LABEL_H + 14;
       const espacoLinhas = boxH - LABEL_H - 14;
-      const numLinhas = Math.max(3, Math.floor(espacoLinhas / 24));
+      const numLinhas = Math.max(3, Math.floor(espacoLinhas / 18));
       const lineSpacing = espacoLinhas / numLinhas;
       ctx.strokeStyle = '#94a3b8';
       ctx.lineWidth = 0.7;
@@ -382,14 +382,6 @@ async function desenharFolhaModelo(
       }
     }
   }
-
-  // Rodapé
-  ctx.fillStyle = '#94a3b8';
-  ctx.font = '9px Arial';
-  ctx.fillText('E.E. Instituto Odilon Pratagi', CX + 8, H - PAD - MARK - 6);
-  ctx.textAlign = 'right';
-  ctx.fillText(serieLabel, W - PAD - MARK - 16, H - PAD - MARK - 6);
-  ctx.textAlign = 'left';
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
