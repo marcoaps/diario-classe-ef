@@ -105,7 +105,6 @@ export function Avaliacoes() {
   const [erro, setErro] = useState('');
   const [avisoImportacao, setAvisoImportacao] = useState('');
   const [publicando, setPublicando] = useState<string | null>(null);
-  const [codigosPublicados, setCodigosPublicados] = useState<Record<string, string>>({});
   const [copiadoOnline, setCopiadoOnline] = useState<string | null>(null);
 
   // Dados gerais
@@ -414,6 +413,10 @@ export function Avaliacoes() {
    * dentro das tabelas `provas`/`questoes` que o /responder já lê.
    */
   async function publicarOnline(av: Avaliacao) {
+    // Já publicada antes -- reaproveita o código salvo em vez de criar uma
+    // prova nova (era isso que gerava um código diferente a cada clique ou
+    // a cada recarregamento da página, deixando linhas órfãs em `provas`).
+    if (av.prova_online_codigo) return;
     // Avaliações criadas em "Só o Gabarito" não têm enunciado/alternativas
     // (só o gabarito, pra imprimir e ler por câmera) -- a Prova Online
     // precisa mostrar a questão de verdade pro aluno na tela, então publicar
@@ -469,7 +472,12 @@ export function Avaliacoes() {
       const { error: errQ } = await supabase.from('questoes').insert([...questoesObjetivasInsert, ...questoesDiscursivasInsert]);
       if (errQ) throw errQ;
 
-      setCodigosPublicados(prev => ({ ...prev, [av.id]: codigo }));
+      const { error: errAv } = await supabase.from('avaliacoes')
+        .update({ prova_online_id: prova.id, prova_online_codigo: codigo })
+        .eq('id', av.id);
+      if (errAv) throw errAv;
+
+      setLista(prev => prev.map(a => a.id === av.id ? { ...a, prova_online_id: prova.id, prova_online_codigo: codigo } : a));
     } catch (e: any) {
       setErro('Erro ao publicar prova online: ' + e.message);
     } finally {
@@ -954,14 +962,14 @@ export function Avaliacoes() {
                     Excluir avaliação
                   </button>
 
-                  {codigosPublicados[av.id] ? (
+                  {av.prova_online_codigo ? (
                     <div className="flex items-center justify-between gap-2 bg-secondary-container rounded-xl px-3 py-2">
                       <div>
                         <p className="text-xs text-on-secondary-container">Prova online publicada — código:</p>
-                        <p className="text-sm font-black tracking-widest text-on-secondary-container">{codigosPublicados[av.id]}</p>
+                        <p className="text-sm font-black tracking-widest text-on-secondary-container">{av.prova_online_codigo}</p>
                       </div>
                       <button
-                        onClick={() => copiarMensagemOnline(av, codigosPublicados[av.id])}
+                        onClick={() => copiarMensagemOnline(av, av.prova_online_codigo!)}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-semibold shrink-0"
                       >
                         {copiadoOnline === av.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}

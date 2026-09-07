@@ -44,6 +44,11 @@ export interface Avaliacao {
   texto_apoio: string | null;
   layout_version: number;
   criado_em: string;
+  /** Preenchidos quando a avaliação é publicada como Prova Online -- se já
+   * tiver código, "Publicar" reaproveita em vez de criar uma prova nova
+   * (evita gerar um código diferente a cada clique/recarregamento). */
+  prova_online_id?: string | null;
+  prova_online_codigo?: string | null;
   /** campos legados, mantidos só para não quebrar leituras antigas */
   num_questoes?: number;
   valor_questao?: number;
