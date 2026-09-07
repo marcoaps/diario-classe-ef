@@ -502,9 +502,10 @@ export function ResponderProva() {
           <ChevronLeft className="w-4 h-4" /> Anterior
         </button>
 
-        <div className="flex-1 flex gap-1.5 justify-center overflow-x-auto scrollbar-none">
+        <div className="flex-1 flex gap-1.5 overflow-x-auto scrollbar-none">
           {questoes.map((qq, i) => (
             <button key={qq.id} onClick={() => setQuestaoAtual(i)}
+              ref={i === questaoAtual ? (el => el?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })) : undefined}
               className={`w-8 h-8 rounded-lg text-xs font-black shrink-0 transition-all border ${
                 i === questaoAtual ? 'bg-blue-600 border-blue-600 text-white'
                   : questaoRespondida(qq) ? 'bg-green-100 border-green-400 text-green-700'
