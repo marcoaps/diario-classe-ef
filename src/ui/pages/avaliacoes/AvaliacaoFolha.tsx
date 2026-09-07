@@ -4,10 +4,10 @@ import { supabase } from '../../../data/supabase';
 import { ArrowLeft, Printer, FileText, Download, Sparkles, QrCode } from 'lucide-react';
 import QRCode from 'qrcode';
 import type { Avaliacao, Aluno, QuestaoObjetiva } from './tiposCorretorProvas';
-import { LAYOUT_VERSION, valorPorQuestaoObjetiva, turmasDoValor, ehGrupoDeTurmas, labelTurmaOuGrupo } from './tiposCorretorProvas';
+import { valorPorQuestaoObjetiva, turmasDoValor, ehGrupoDeTurmas, labelTurmaOuGrupo } from './tiposCorretorProvas';
 import {
   FOLHA_W, FOLHA_H, FOLHA_PAD, FOLHA_MARK, FOLHA_MARK_COL,
-  BUBBLE_R as BUBBLE_R_GEO, BUBBLE_GAP, GAP_APOS_CABECALHO, calcularGeometriaQuestoes,
+  BUBBLE_R as BUBBLE_R_GEO, BUBBLE_GAP, GAP_APOS_CABECALHO, HEADER_H, ALUNO_FIELDS_H, calcularGeometriaQuestoes,
 } from './geometriaFolha';
 
 export type { Avaliacao, Aluno } from './tiposCorretorProvas';
@@ -194,7 +194,6 @@ async function desenharFolhaModelo(
   canvas: HTMLCanvasElement,
   avaliacao: Avaliacao,
   qrConteudo: string,
-  layoutVersion: number,
   turmaPreenchida?: string
 ): Promise<void> {
   const W = FOLHA_W;
@@ -220,30 +219,32 @@ async function desenharFolhaModelo(
   const CX = PAD + MARK + 8;
   const CW = W - 2 * (PAD + MARK + 8);
 
-  // Cabeçalho
+  // Cabeçalho — só 2 linhas (nome da escola + disciplina/título), pra
+  // sobrar mais espaço útil pro gabarito e as discursivas.
   ctx.fillStyle = '#e8edf2';
-  ctx.fillRect(CX, PAD, CW, 60);
+  ctx.fillRect(CX, PAD, CW, HEADER_H);
   ctx.fillStyle = '#1e293b';
   ctx.font = 'bold 14px Arial';
   ctx.textAlign = 'center';
-  ctx.fillText('E.E. INSTITUTO ODILON PRATAGI', W / 2, PAD + 22);
+  ctx.fillText('E.E. INSTITUTO ODILON PRATAGI', W / 2, PAD + 20);
   ctx.font = '11px Arial';
-  ctx.fillText((avaliacao.disciplina || 'Educação Física') + ' — ' + avaliacao.titulo, W / 2, PAD + 40);
-  ctx.font = 'bold 12px Arial';
-  ctx.fillText(serieLabel + ' — Folha ' + layoutVersion, W / 2, PAD + 56);
+  ctx.fillText((avaliacao.disciplina || 'Educação Física') + ' — ' + avaliacao.titulo, W / 2, PAD + 36);
   ctx.textAlign = 'left';
 
-  // Área do aluno — folha-modelo (sem depender de nenhum cadastro): nome,
-  // turma e data ficam em BRANCO, pra o próprio aluno preencher à caneta.
-  // Essa informação NUNCA entra no QR nem é lida automaticamente -- serve só
-  // pra associação manual posterior (ver AvaliacaoCorrecoes.tsx).
-  const alunoY = PAD + 70;
-  const FIELDS_H = 58;
+  // Área do aluno — folha-modelo (sem depender de nenhum cadastro): nome e
+  // data ficam em BRANCO, pra o próprio aluno preencher à caneta. Essa
+  // informação NUNCA entra no QR nem é lida automaticamente -- serve só pra
+  // associação manual posterior (ver AvaliacaoCorrecoes.tsx). O QR fica
+  // encaixado dentro dessa mesma caixa, à direita.
+  const alunoY = PAD + HEADER_H + 10;
+  const qrSize = 90;
   ctx.fillStyle = '#f8fafc';
-  ctx.fillRect(CX, alunoY, CW, FIELDS_H);
+  ctx.fillRect(CX, alunoY, CW, ALUNO_FIELDS_H);
   ctx.strokeStyle = '#cbd5e1';
   ctx.lineWidth = 1;
-  ctx.strokeRect(CX, alunoY, CW, FIELDS_H);
+  ctx.strokeRect(CX, alunoY, CW, ALUNO_FIELDS_H);
+
+  const larguraCampos = CW - 16 - qrSize - 24;
 
   function linhaPreencher(rotulo: string, x: number, y: number, largura: number) {
     ctx.fillStyle = '#334155';
@@ -271,15 +272,15 @@ async function desenharFolhaModelo(
     ctx.fillText(valor, x + larguraRotulo + 6, y);
   }
 
-  linhaPreencher('NOME:', CX + 8, alunoY + 15, CW - 16);
-  const ncX = CX + Math.floor(CW / 2);
+  linhaPreencher('NOME:', CX + 8, alunoY + 24, larguraCampos);
+  const ncX = CX + Math.floor(larguraCampos / 2) + 8;
   if (turmaPreenchida) {
-    linhaComValor('TURMA:', turmaPreenchida, CX + 8, alunoY + 35);
+    linhaComValor('TURMA:', turmaPreenchida, CX + 8, alunoY + 54);
   } else {
-    linhaPreencher('TURMA:', CX + 8, alunoY + 35, Math.floor(CW / 2) - 16);
+    linhaPreencher('TURMA:', CX + 8, alunoY + 54, Math.floor(larguraCampos / 2) - 8);
   }
-  linhaPreencher('Nº:', ncX, alunoY + 35, Math.floor(CW / 2) - 16);
-  linhaPreencher('DATA:', CX + 8, alunoY + 53, 180);
+  linhaPreencher('Nº:', ncX, alunoY + 54, Math.floor(larguraCampos / 2) - 16);
+  linhaPreencher('DATA:', CX + 8, alunoY + 80, 180);
 
   // QR Code — no modo individual, `qrConteudo` é o payload assinado (payload +
   // assinatura HMAC), exclusivo desta folha; no modo 100% anônimo, é só o
@@ -288,21 +289,9 @@ async function desenharFolhaModelo(
   const qrDataUrl = await QRCode.toDataURL(qrConteudo, { width: 150, margin: 1, errorCorrectionLevel: 'M' });
   const qrImg = new Image();
   await new Promise<void>(res => { qrImg.onload = () => res(); qrImg.src = qrDataUrl; });
-  const qrSize = 130;
-  const qrX = W - PAD - MARK - 8 - qrSize;
-  const qrY = alunoY + 36;
+  const qrX = CX + CW - 8 - qrSize;
+  const qrY = alunoY + (ALUNO_FIELDS_H - qrSize) / 2;
   ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
-
-  // Instruções
-  const instrY = alunoY + FIELDS_H + 4;
-  ctx.fillStyle = '#1e293b';
-  ctx.font = 'bold 11px Arial';
-  ctx.fillText('INSTRUÇÕES:', CX + 8, instrY + 16);
-  ctx.font = '10px Arial';
-  ctx.fillStyle = '#475569';
-  ctx.fillText('• Preencha completamente o círculo da alternativa escolhida.', CX + 8, instrY + 32);
-  ctx.fillText('• Use caneta azul ou preta. Não use corretivo.', CX + 8, instrY + 48);
-  ctx.fillText('• Marque apenas UMA alternativa por questão.', CX + 8, instrY + 64);
 
   // Questões objetivas — grade calculada pela quantidade real, nunca fixa.
   // Geometria compartilhada com src/utils/omrEngine.ts (via geometriaFolha.ts)
@@ -326,10 +315,6 @@ async function desenharFolhaModelo(
 
     for (let i = 0; i < qtdObj; i++) {
       const qy = INICIO_BOLHAS_Y + i * Q_ROW_H + Q_ROW_H / 2;
-      if (i % 2 === 0) {
-        ctx.fillStyle = '#f8fafc';
-        ctx.fillRect(Q_START_X - 4, qy - Q_ROW_H / 2 + 2, qrX - Q_START_X - 8, Q_ROW_H - 4);
-      }
       ctx.fillStyle = '#1e293b';
       ctx.font = 'bold 14px Arial';
       ctx.fillText(String(i + 1), Q_START_X + 2, qy + 5);
@@ -362,13 +347,41 @@ async function desenharFolhaModelo(
     ctx.fillRect(colRight, colBottom, MARK_COL, MARK_COL);
   }
 
-  // As caixas das questões discursivas foram removidas a pedido -- a
-  // folha-modelo agora é só o gabarito objetivo. IMPORTANTE: a geometria das
-  // bolhas continua calculada com o `qtdDisc` REAL (via
-  // calcularGeometriaQuestoes acima), não com 0 -- senão o grid de bolhas
-  // impresso ficaria maior/mais espaçado do que o motor de leitura (OMR)
-  // espera, e a leitura desalinharia. Só a área abaixo do gabarito fica em
-  // branco, sem desenhar nada nela.
+  // Questões discursivas — só rótulo + linhas pautadas (sem caixa colorida),
+  // preenchendo TODO o espaço restante da folha até o rodapé, dividido
+  // igualmente entre as questões. A geometria das bolhas acima já reserva
+  // esse espaço (via calcularGeometriaQuestoes, com o qtdDisc REAL) -- aqui
+  // só desenha dentro do que já foi reservado, sem invadir a área das bolhas.
+  if (qtdDisc > 0) {
+    const subjStartY = INICIO_BOLHAS_Y + qtdObj * Q_ROW_H + 30;
+    const bottomLimit = H - PAD - MARK - 20;
+    const totalAlturaDisc = bottomLimit - subjStartY;
+    const GAP_DISC = 14;
+    const boxH = Math.max(90, (totalAlturaDisc - (qtdDisc - 1) * GAP_DISC) / qtdDisc);
+    const LABEL_H = 22;
+
+    for (let s = 0; s < qtdDisc; s++) {
+      const qn = qtdObj + s + 1;
+      const by = subjStartY + s * (boxH + GAP_DISC);
+      ctx.fillStyle = '#1e293b';
+      ctx.font = 'bold 12px Arial';
+      ctx.fillText('QUESTÃO DISCURSIVA ' + String(qn).padStart(2, '0'), CX + 4, by + LABEL_H - 8);
+
+      const linhasY0 = by + LABEL_H + 14;
+      const espacoLinhas = boxH - LABEL_H - 14;
+      const numLinhas = Math.max(3, Math.floor(espacoLinhas / 24));
+      const lineSpacing = espacoLinhas / numLinhas;
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 0.7;
+      for (let ln = 0; ln < numLinhas; ln++) {
+        const ly = linhasY0 + ln * lineSpacing;
+        ctx.beginPath();
+        ctx.moveTo(CX, ly);
+        ctx.lineTo(W - PAD - MARK - 8, ly);
+        ctx.stroke();
+      }
+    }
+  }
 
   // Rodapé
   ctx.fillStyle = '#94a3b8';
@@ -526,7 +539,7 @@ export function AvaliacaoFolha() {
       }
 
       const canvas = document.createElement('canvas');
-      await desenharFolhaModelo(canvas, avaliacao, codigo, LAYOUT_VERSION, turma ? formatarTurma(turma) : undefined);
+      await desenharFolhaModelo(canvas, avaliacao, codigo, turma ? formatarTurma(turma) : undefined);
       setFolhaDataUrl(canvas.toDataURL('image/png'));
     } catch (e) {
       setErroGeracao(`Erro ao gerar a folha-modelo: ${(e as Error).message}`);

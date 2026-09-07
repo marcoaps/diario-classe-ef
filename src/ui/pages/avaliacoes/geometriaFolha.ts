@@ -30,10 +30,16 @@ export const FOLHA_MARK = 24;
 export const FOLHA_MARK_COL = 20;
 
 // Geometria das bolhas — idêntica aos valores usados em desenharFolhaQR().
-export const BUBBLE_R = 15;
-export const BUBBLE_GAP = 46;
+export const BUBBLE_R = 17;
+export const BUBBLE_GAP = 56;
 /** Espaço entre a linha "QUESTÕES OBJETIVAS" e a 1ª bolha. */
 export const GAP_APOS_CABECALHO = 30;
+/** Altura do cabeçalho (nome da escola + disciplina/título) e da caixa de
+ * identificação do aluno (nome/turma/nº/data + QR) -- únicas em geometriaFolha.ts
+ * pra a leitura nunca poder desalinhar do que é impresso (mesmo raciocínio das
+ * constantes de bolha acima). */
+export const HEADER_H = 44;
+export const ALUNO_FIELDS_H = 100;
 
 export interface GeometriaQuestoes {
   Q_START_X: number;
@@ -63,18 +69,16 @@ export function calcularGeometriaQuestoes(
   const H = FOLHA_H;
   const CX = PAD + MARK + 8;
 
-  const alunoY = PAD + 70;
-  const FIELDS_H = 58;
-  const instrY = alunoY + FIELDS_H + 4;
+  const alunoY = PAD + HEADER_H + 10;
 
   const Q_START_X = CX + 8;
-  const Q_START_Y = instrY + 90;
+  const Q_START_Y = alunoY + ALUNO_FIELDS_H + 26;
   const INICIO_BOLHAS_Y = Q_START_Y + GAP_APOS_CABECALHO;
 
   const areaDisponivelAltura = H - PAD - MARK - 20 - INICIO_BOLHAS_Y - (qtdDisc > 0 ? 24 : 0);
   const alturaReservadaDiscursivas = qtdDisc * 95 + (qtdDisc > 0 ? 12 : 0);
   const alturaParaObjetivas = Math.max(0, areaDisponivelAltura - alturaReservadaDiscursivas);
-  const Q_ROW_H = qtdObj > 0 ? Math.max(30, Math.min(52, alturaParaObjetivas / qtdObj)) : 0;
+  const Q_ROW_H = qtdObj > 0 ? Math.max(36, Math.min(58, alturaParaObjetivas / qtdObj)) : 0;
 
   const ULTIMA_COLUNA_X = Q_START_X + 46 + (qtdAlternativas - 1) * BUBBLE_GAP;
 
