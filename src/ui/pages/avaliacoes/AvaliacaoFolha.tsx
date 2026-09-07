@@ -4,7 +4,7 @@ import { supabase } from '../../../data/supabase';
 import { ArrowLeft, Printer, FileText, Download, Sparkles, QrCode } from 'lucide-react';
 import QRCode from 'qrcode';
 import type { Avaliacao, Aluno, QuestaoObjetiva } from './tiposCorretorProvas';
-import { valorPorQuestaoObjetiva, turmasDoValor, ehGrupoDeTurmas, labelTurmaOuGrupo } from './tiposCorretorProvas';
+import { valorPorQuestaoObjetiva, turmasDoValor, ehGrupoDeTurmas, labelTurmaOuGrupo, GRUPOS_CORRETOR } from './tiposCorretorProvas';
 import {
   FOLHA_W, FOLHA_H, FOLHA_PAD, FOLHA_MARK, FOLHA_MARK_COL,
   BUBBLE_R as BUBBLE_R_GEO, BUBBLE_GAP, GAP_APOS_CABECALHO, HEADER_H, ALUNO_FIELDS_H, calcularGeometriaQuestoes,
@@ -188,6 +188,20 @@ export const CSS_PROVA = `
 /** "6F" -> "6ºF", "7B" -> "7ºB" -- só formatação visual pro que é impresso. */
 function formatarTurma(turma: string): string {
   return turma.replace(/(\d+)/, '$1º');
+}
+
+/** Turmas a incluir no arquivo combinado (1 folha por turma, só troca o
+ *  campo TURMA): se `turma_id` já for um GRUPO (ex. GRUPO_8_9), usa as
+ *  turmas do grupo; senão, deduz as turmas da MESMA SÉRIE a partir do
+ *  dígito inicial (ex. turma_id "8A" -> só as turmas que começam com "8",
+ *  sem misturar com o 9º ano, mesmo que GRUPO_8_9 junte os dois). */
+function turmasParaLoteCombinado(turmaId: string): string[] {
+  if (ehGrupoDeTurmas(turmaId)) return turmasDoValor(turmaId);
+  const serie = turmaId.match(/^(\d+)/)?.[1];
+  if (!serie) return [turmaId];
+  const todasTurmas = GRUPOS_CORRETOR.flatMap(g => g.turmas);
+  const mesmaSerie = todasTurmas.filter(t => t.startsWith(serie));
+  return mesmaSerie.length ? mesmaSerie : [turmaId];
 }
 
 async function desenharFolhaModelo(
@@ -563,7 +577,7 @@ export function AvaliacaoFolha() {
         setAvaliacao(prev => prev ? { ...prev, codigo_avaliacao: codigo } : prev);
       }
 
-      const turmas = turmasDoValor(avaliacao.turma_id);
+      const turmas = turmasParaLoteCombinado(avaliacao.turma_id);
       const paginas: string[] = [];
       for (const turma of turmas) {
         const canvas = document.createElement('canvas');
@@ -755,13 +769,13 @@ export function AvaliacaoFolha() {
 
         {erroGeracao && <p className="text-xs text-red-500">{erroGeracao}</p>}
 
-        {ehGrupoDeTurmas(avaliacao.turma_id) && turmasDoValor(avaliacao.turma_id).length > 1 && (
+        {turmasParaLoteCombinado(avaliacao.turma_id).length > 1 && (
           <button onClick={gerarEImprimirTodasTurmas} disabled={gerandoTodas}
             className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-bold disabled:opacity-50">
             <Printer className="w-4 h-4" />
             {gerandoTodas
               ? 'Gerando todas as turmas...'
-              : `Gerar arquivo com as ${turmasDoValor(avaliacao.turma_id).length} turmas (1 página cada)`}
+              : `Gerar arquivo com as turmas ${turmasParaLoteCombinado(avaliacao.turma_id).map(formatarTurma).join(', ')} (1 página cada)`}
           </button>
         )}
 
