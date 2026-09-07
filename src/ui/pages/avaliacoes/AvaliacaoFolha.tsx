@@ -578,10 +578,18 @@ export function AvaliacaoFolha() {
       }
 
       const turmas = turmasParaLoteCombinado(avaliacao.turma_id);
+      // O título costuma vir com a letra da turma em que a avaliação foi
+      // criada originalmente (ex: "AVA-8ºANO-A") -- no arquivo combinado
+      // isso ficaria errado nas páginas das outras turmas, já que o
+      // cabeçalho é o mesmo em todas. Tira essa letra só aqui; a folha
+      // individual (fora do lote) continua mostrando o título como foi
+      // digitado.
+      const tituloSemLetraDeTurma = avaliacao.titulo.replace(/-[A-Fa-f]$/, '').trim();
+      const avaliacaoParaLote = { ...avaliacao, titulo: tituloSemLetraDeTurma };
       const paginas: string[] = [];
       for (const turma of turmas) {
         const canvas = document.createElement('canvas');
-        await desenharFolhaModelo(canvas, avaliacao, codigo, formatarTurma(turma));
+        await desenharFolhaModelo(canvas, avaliacaoParaLote, codigo, formatarTurma(turma));
         paginas.push(canvas.toDataURL('image/png'));
       }
 
