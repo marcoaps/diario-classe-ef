@@ -42,7 +42,10 @@ function questaoVazia(numero: number): QuestaoObjetiva {
 
 /** Extrai questões objetivas de um texto já revisado no Word. Aceita tanto
  * "1. Enunciado..." quanto "QUESTÃO 1" (numa linha própria) pra marcar o
- * início da questão, e tanto "A) texto" quanto "(A) texto" pras alternativas.
+ * início da questão, e tanto "A) texto" quanto "(A) texto" pras alternativas
+ * -- só MAIÚSCULA: letra minúscula ("a)", "b)") é o padrão comum pra
+ * sub-itens de questão DISCURSIVA (ex: "a) Explique...", "b) Descreva..."),
+ * não uma alternativa de múltipla escolha, e não pode ser confundida com uma.
  * Não tenta adivinhar a resposta correta -- o Word do professor não marca
  * isso, então o gabarito é preenchido manualmente no app depois de importar
  * (tocando na letra de cada alternativa, igual já funciona pra questão
@@ -50,7 +53,7 @@ function questaoVazia(numero: number): QuestaoObjetiva {
 function parseQuestoesDoTexto(texto: string): QuestaoObjetiva[] {
   const linhas = texto.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const reQuestao = /^(?:quest[ãa]o\s+)?(\d{1,3})\s*[.\):-]?\s*(.*)$/i;
-  const reAlternativa = /^\(?([A-Da-d])[.\)]\s*(.*)$/;
+  const reAlternativa = /^\(?([A-D])[.\)]\s*(.*)$/;
 
   const brutas: { enunciado: string; alternativas: { letra: string; texto: string }[] }[] = [];
   let atual: { enunciado: string; alternativas: { letra: string; texto: string }[] } | null = null;
@@ -500,6 +503,26 @@ export function Avaliacoes() {
       : q));
   }
 
+  // Remove uma questão objetiva (ex: reconhecida errado ao importar do
+  // Word) e renumera as seguintes -- mantém o gabarito coerente com a nova
+  // numeração em vez de simplesmente descartar as marcações.
+  function removerQuestaoObjetiva(numero: number) {
+    setQuestoesObjetivas(prev => {
+      const restantes = prev.filter(q => q.numero !== numero).map((q, i) => ({ ...q, numero: i + 1 }));
+      setQtdObjetivasStr(String(restantes.length));
+      return restantes;
+    });
+    setGabarito((prev: Record<string, string>) => {
+      const novo: Record<string, string> = {};
+      Object.entries(prev).forEach(([key, letra]) => {
+        const n = Number(key);
+        if (n === numero) return;
+        novo[String(n > numero ? n - 1 : n)] = letra;
+      });
+      return novo;
+    });
+  }
+
   return (
     <div className="py-4 space-y-4">
       {/* Cabecalho */}
@@ -716,6 +739,13 @@ export function Avaliacoes() {
                       placeholder="Enunciado da questão..."
                       className="flex-1 px-2 py-1.5 rounded-lg border border-outline-variant bg-surface text-sm text-on-surface resize-none"
                     />
+                    <button
+                      onClick={() => removerQuestaoObjetiva(q.numero)}
+                      title="Remover esta questão"
+                      className="p-1.5 rounded-lg text-error hover:bg-error-container shrink-0"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                   <div className="space-y-1.5 pl-6">
                     {q.alternativas.map(alt => (
