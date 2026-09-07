@@ -408,6 +408,7 @@ export function AvaliacaoFolha() {
   const [erroGeracao, setErroGeracao] = useState('');
   const [gerandoIA, setGerandoIA] = useState(false);
   const [gerandoTextoApoio, setGerandoTextoApoio] = useState(false);
+  const [gerandoTodas, setGerandoTodas] = useState(false);
 
   useEffect(() => {
     async function init() {
@@ -537,6 +538,59 @@ export function AvaliacaoFolha() {
       setErroGeracao(`Erro ao gerar a folha-modelo: ${(e as Error).message}`);
     } finally {
       setGerando(false);
+    }
+  }
+
+  // Gera a folha de CADA turma do grupo (mesmo cabeçalho/QR/conteúdo, só
+  // muda o campo TURMA pré-preenchido) e manda tudo num único trabalho de
+  // impressão -- evita ter que trocar a turma no seletor e imprimir uma por
+  // uma quando o professor já sabe que quer todas.
+  async function gerarEImprimirTodasTurmas() {
+    if (!avaliacao) return;
+    setGerandoTodas(true);
+    setErroGeracao('');
+    try {
+      let codigo = avaliacao.codigo_avaliacao;
+      if (!codigo) {
+        const ano = new Date().getFullYear();
+        const { count } = await supabase
+          .from('avaliacoes')
+          .select('id', { count: 'exact', head: true })
+          .not('codigo_avaliacao', 'is', null);
+        codigo = `AV${ano}-${String((count || 0) + 1).padStart(4, '0')}`;
+        const { error } = await supabase.from('avaliacoes').update({ codigo_avaliacao: codigo }).eq('id', avaliacao.id);
+        if (error) throw new Error(error.message);
+        setAvaliacao(prev => prev ? { ...prev, codigo_avaliacao: codigo } : prev);
+      }
+
+      const turmas = turmasDoValor(avaliacao.turma_id);
+      const n = Math.max(1, numCopias || 1);
+      const paginas: string[] = [];
+      for (const turma of turmas) {
+        const canvas = document.createElement('canvas');
+        await desenharFolhaModelo(canvas, avaliacao, codigo, formatarTurma(turma));
+        const dataUrl = canvas.toDataURL('image/png');
+        for (let i = 0; i < n; i++) paginas.push(dataUrl);
+      }
+
+      const blocos = paginas.map((url, i) => `<div style="${i === paginas.length - 1 ? '' : 'page-break-after: always;'}text-align:center;">
+        <img src="${url}" style="width:100%;max-width:794px;display:block;margin:0 auto;" />
+      </div>`).join('');
+      const html = `<!DOCTYPE html><html><head>
+        <meta charset="utf-8">
+        <title>Todas as turmas — ${codigo || avaliacao.titulo}</title>
+        <style>* { margin:0; padding:0; box-sizing:border-box; } @page { margin:0; size: A4 portrait; } body { background:white; }</style>
+      </head><body>${blocos}
+        <script>setTimeout(function(){ window.print(); }, 600);<\/script>
+      </body></html>`;
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const win = window.open(url, '_blank');
+      if (win) win.onafterprint = () => URL.revokeObjectURL(url);
+    } catch (e) {
+      setErroGeracao(`Erro ao gerar as folhas de todas as turmas: ${(e as Error).message}`);
+    } finally {
+      setGerandoTodas(false);
     }
   }
 
@@ -703,24 +757,35 @@ export function AvaliacaoFolha() {
 
         {erroGeracao && <p className="text-xs text-red-500">{erroGeracao}</p>}
 
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-on-surface-variant whitespace-nowrap">Cópias por turma:</label>
+          <input
+            type="number" min={1} max={500} value={numCopias}
+            onChange={e => setNumCopias(Math.max(1, parseInt(e.target.value) || 1))}
+            className="w-20 px-2 py-1.5 rounded-lg border border-outline-variant bg-background text-sm text-center"
+          />
+        </div>
+
         {folhaDataUrl && (
           <>
             <div className="rounded-xl overflow-hidden border border-outline-variant">
               <img src={folhaDataUrl} alt="Folha-modelo" className="w-full" />
             </div>
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-on-surface-variant whitespace-nowrap">Cópias:</label>
-              <input
-                type="number" min={1} max={500} value={numCopias}
-                onChange={e => setNumCopias(Math.max(1, parseInt(e.target.value) || 1))}
-                className="w-20 px-2 py-1.5 rounded-lg border border-outline-variant bg-background text-sm text-center"
-              />
-              <button onClick={() => imprimirFolha(numCopias)}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-tertiary-container text-on-tertiary-container text-sm font-bold">
-                <FileText className="w-4 h-4" /> Imprimir {numCopias} cópia{numCopias !== 1 ? 's' : ''}
-              </button>
-            </div>
+            <button onClick={() => imprimirFolha(numCopias)}
+              className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-tertiary-container text-on-tertiary-container text-sm font-bold">
+              <FileText className="w-4 h-4" /> Imprimir {numCopias} cópia{numCopias !== 1 ? 's' : ''} — {turmaSelecionada ? formatarTurma(turmaSelecionada) : 'esta turma'}
+            </button>
           </>
+        )}
+
+        {ehGrupoDeTurmas(avaliacao.turma_id) && turmasDoValor(avaliacao.turma_id).length > 1 && (
+          <button onClick={gerarEImprimirTodasTurmas} disabled={gerandoTodas}
+            className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-bold disabled:opacity-50">
+            <Printer className="w-4 h-4" />
+            {gerandoTodas
+              ? 'Gerando todas as turmas...'
+              : `Gerar e imprimir todas as turmas (${turmasDoValor(avaliacao.turma_id).length}× ${numCopias} cópias)`}
+          </button>
         )}
       </div>
     </div>
