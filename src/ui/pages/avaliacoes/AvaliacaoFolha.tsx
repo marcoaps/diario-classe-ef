@@ -541,10 +541,10 @@ export function AvaliacaoFolha() {
     }
   }
 
-  // Gera a folha de CADA turma do grupo (mesmo cabeçalho/QR/conteúdo, só
-  // muda o campo TURMA pré-preenchido) e manda tudo num único trabalho de
-  // impressão -- evita ter que trocar a turma no seletor e imprimir uma por
-  // uma quando o professor já sabe que quer todas.
+  // Gera UMA folha de CADA turma do grupo (mesmo cabeçalho/QR/conteúdo, só
+  // muda o campo TURMA pré-preenchido) num único arquivo -- 1 página por
+  // turma, sem repetição. Se precisar de mais exemplares de alguma turma,
+  // o professor tira fotocópia da página dela depois.
   async function gerarEImprimirTodasTurmas() {
     if (!avaliacao) return;
     setGerandoTodas(true);
@@ -564,13 +564,11 @@ export function AvaliacaoFolha() {
       }
 
       const turmas = turmasDoValor(avaliacao.turma_id);
-      const n = Math.max(1, numCopias || 1);
       const paginas: string[] = [];
       for (const turma of turmas) {
         const canvas = document.createElement('canvas');
         await desenharFolhaModelo(canvas, avaliacao, codigo, formatarTurma(turma));
-        const dataUrl = canvas.toDataURL('image/png');
-        for (let i = 0; i < n; i++) paginas.push(dataUrl);
+        paginas.push(canvas.toDataURL('image/png'));
       }
 
       const blocos = paginas.map((url, i) => `<div style="${i === paginas.length - 1 ? '' : 'page-break-after: always;'}text-align:center;">
@@ -757,8 +755,18 @@ export function AvaliacaoFolha() {
 
         {erroGeracao && <p className="text-xs text-red-500">{erroGeracao}</p>}
 
+        {ehGrupoDeTurmas(avaliacao.turma_id) && turmasDoValor(avaliacao.turma_id).length > 1 && (
+          <button onClick={gerarEImprimirTodasTurmas} disabled={gerandoTodas}
+            className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-bold disabled:opacity-50">
+            <Printer className="w-4 h-4" />
+            {gerandoTodas
+              ? 'Gerando todas as turmas...'
+              : `Gerar arquivo com as ${turmasDoValor(avaliacao.turma_id).length} turmas (1 página cada)`}
+          </button>
+        )}
+
         <div className="flex items-center gap-2">
-          <label className="text-xs text-on-surface-variant whitespace-nowrap">Cópias por turma:</label>
+          <label className="text-xs text-on-surface-variant whitespace-nowrap">Cópias desta turma:</label>
           <input
             type="number" min={1} max={500} value={numCopias}
             onChange={e => setNumCopias(Math.max(1, parseInt(e.target.value) || 1))}
@@ -776,16 +784,6 @@ export function AvaliacaoFolha() {
               <FileText className="w-4 h-4" /> Imprimir {numCopias} cópia{numCopias !== 1 ? 's' : ''} — {turmaSelecionada ? formatarTurma(turmaSelecionada) : 'esta turma'}
             </button>
           </>
-        )}
-
-        {ehGrupoDeTurmas(avaliacao.turma_id) && turmasDoValor(avaliacao.turma_id).length > 1 && (
-          <button onClick={gerarEImprimirTodasTurmas} disabled={gerandoTodas}
-            className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-bold disabled:opacity-50">
-            <Printer className="w-4 h-4" />
-            {gerandoTodas
-              ? 'Gerando todas as turmas...'
-              : `Gerar e imprimir todas as turmas (${turmasDoValor(avaliacao.turma_id).length}× ${numCopias} cópias)`}
-          </button>
         )}
       </div>
     </div>
