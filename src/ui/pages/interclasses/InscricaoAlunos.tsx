@@ -31,6 +31,10 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
   const [editingId, setEditingId] = useState<string | null>(null);
   const [alunoIdVinculado, setAlunoIdVinculado] = useState<string | null>(null);
   const [alunosDaTurma, setAlunosDaTurma] = useState<AlunoOficial[]>([]);
+  // Seleção múltipla — aluno.id -> nº de camisa (texto) — usada quando a turma
+  // tem alunos cadastrados oficialmente (permite marcar vários de uma vez em
+  // vez de inscrever um por um).
+  const [selecionados, setSelecionados] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [sucesso, setSucesso] = useState<string | null>(null);
@@ -42,13 +46,13 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
 
   // Sugestões feitas na mão em vez de <datalist> nativo — no Chrome Android
   // o datalist nativo às vezes sobrepõe/esconde o texto digitado.
-  const [sugestoesAlunoAbertas, setSugestoesAlunoAbertas] = useState(false);
   const [sugestoesTimeAbertas, setSugestoesTimeAbertas] = useState(false);
 
   const formRef = useRef<HTMLDivElement>(null);
 
-  // Alunos já cadastrados oficialmente na turma selecionada — usados para
-  // sugerir o nome e autopreencher o nº de chamada.
+  // Alunos já cadastrados oficialmente na turma selecionada — usados para a
+  // lista de seleção múltipla (ou, se a turma não tiver cadastro oficial,
+  // ficam vazios e cai no modo de digitação manual).
   useEffect(() => {
     if (!form.turmaId) { setAlunosDaTurma([]); return; }
     let mounted = true;
@@ -58,26 +62,14 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
     return () => { mounted = false; };
   }, [form.turmaId]);
 
+  // A cada troca de turma, a seleção múltipla anterior não faz mais sentido.
+  useEffect(() => { setSelecionados({}); }, [form.turmaId]);
+
+  const usaListaOficial = !editingId && alunosDaTurma.length > 0;
+
   function handleTurmaChange(turmaId: string) {
     setForm(f => ({ ...f, turmaId, nomeCompleto: '', numeroChamada: '' }));
     setAlunoIdVinculado(null);
-  }
-
-  function handleNomeChange(nome: string) {
-    setForm(f => ({ ...f, nomeCompleto: nome }));
-    const match = alunosDaTurma.find(a => a.nome.trim().toLowerCase() === nome.trim().toLowerCase());
-    if (match) {
-      setAlunoIdVinculado(match.id);
-      if (match.numero_chamada) setForm(f => ({ ...f, nomeCompleto: nome, numeroChamada: String(match.numero_chamada) }));
-    } else {
-      setAlunoIdVinculado(null);
-    }
-  }
-
-  function selecionarAlunoSugestao(aluno: AlunoOficial) {
-    setForm(f => ({ ...f, nomeCompleto: aluno.nome, numeroChamada: aluno.numero_chamada ? String(aluno.numero_chamada) : f.numeroChamada }));
-    setAlunoIdVinculado(aluno.id);
-    setSugestoesAlunoAbertas(false);
   }
 
   function selecionarTimeSugestao(nome: string) {
@@ -85,18 +77,14 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
     setSugestoesTimeAbertas(false);
   }
 
-  const sugestoesAluno = useMemo(() => {
-    const termo = form.nomeCompleto.trim().toLowerCase();
-    // Sem limite artificial — uma turma inteira (até ~36 alunos) cabe numa
-    // lista rolável, e cortar a lista escondia quem vinha depois do 8º.
-    return alunosDaTurma.filter(a => !termo || a.nome.toLowerCase().includes(termo));
-  }, [alunosDaTurma, form.nomeCompleto]);
-
+  // Não reseta turmaId/nomeTime — depois de inscrever, o professor continua
+  // adicionando mais alunos da mesma turma pro mesmo time, sem ter que
+  // reselecionar tudo de novo a cada aluno.
   function limparFormulario() {
-    setForm(FORM_VAZIO);
+    setForm(f => ({ ...FORM_VAZIO, turmaId: f.turmaId, nomeTime: f.nomeTime }));
     setEditingId(null);
     setAlunoIdVinculado(null);
-    setAlunosDaTurma([]);
+    setSelecionados({});
   }
 
   function iniciarEdicao(insc: InscricaoInterclasses) {
@@ -112,6 +100,42 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
     setErro(null);
     setSucesso(null);
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // Camisas já usadas nesse time (edição atual) — usado tanto pra sugerir o
+  // próximo número livre quanto pra barrar duplicidade.
+  function camisasUsadasNoTime(nomeTime: string, ignorarId?: string | null): Set<number> {
+    const norm = nomeTime.trim().toLowerCase();
+    const usadas = new Set<number>();
+    inscricoes.forEach(i => {
+      if (i.id !== ignorarId && i.nome_time.trim().toLowerCase() === norm) usadas.add(i.numero_camisa);
+    });
+    return usadas;
+  }
+
+  function proximaCamisaLivre(usadas: Set<number>): number {
+    let n = 1;
+    while (usadas.has(n)) n++;
+    return n;
+  }
+
+  const alunosDisponiveis = useMemo(
+    () => alunosDaTurma.filter(a => !inscricoes.some(i => i.aluno_id === a.id)),
+    [alunosDaTurma, inscricoes]
+  );
+
+  function toggleSelecionado(aluno: AlunoOficial) {
+    setSelecionados(prev => {
+      const next = { ...prev };
+      if (aluno.id in next) {
+        delete next[aluno.id];
+      } else {
+        const usadas = camisasUsadasNoTime(form.nomeTime);
+        Object.values(next).forEach(v => { const n = parseInt(v, 10); if (!isNaN(n)) usadas.add(n); });
+        next[aluno.id] = String(proximaCamisaLivre(usadas));
+      }
+      return next;
+    });
   }
 
   function validar(): string | null {
@@ -148,6 +172,8 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
     return null;
   }
 
+  // Envio de UM registro por vez — usado pra editar uma inscrição existente,
+  // ou pra inscrever manualmente em turmas sem cadastro oficial de alunos.
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const msgErro = validar();
@@ -178,6 +204,71 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
       setTimeout(() => setSucesso(null), 3500);
     } catch (e: any) {
       setErro('Erro ao salvar inscrição: ' + (e?.message || 'tente novamente.'));
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  // Envio de VÁRIOS alunos marcados na lista oficial da turma de uma vez só.
+  async function handleSubmitLote(e: FormEvent) {
+    e.preventDefault();
+    setErro(null);
+    setSucesso(null);
+
+    const nomeTime = form.nomeTime.trim();
+    if (!nomeTime) { setErro('Informe o nome do time.'); return; }
+    const ids = Object.keys(selecionados);
+    if (ids.length === 0) { setErro('Selecione ao menos um aluno da lista.'); return; }
+
+    const usadas = camisasUsadasNoTime(nomeTime);
+    const vistoNoLote = new Set<number>();
+    const erros: string[] = [];
+    const validos: { aluno: AlunoOficial; camisa: number }[] = [];
+
+    for (const id of ids) {
+      const aluno = alunosDaTurma.find(a => a.id === id);
+      if (!aluno) continue;
+      if (!aluno.numero_chamada || aluno.numero_chamada <= 0) {
+        erros.push(`${aluno.nome}: sem número de chamada cadastrado`);
+        continue;
+      }
+      const camisa = parseInt(selecionados[id], 10);
+      if (!Number.isInteger(camisa) || camisa <= 0) {
+        erros.push(`${aluno.nome}: número de camisa inválido`);
+        continue;
+      }
+      if (usadas.has(camisa) || vistoNoLote.has(camisa)) {
+        erros.push(`${aluno.nome}: camisa ${camisa} já em uso no time`);
+        continue;
+      }
+      vistoNoLote.add(camisa);
+      validos.push({ aluno, camisa });
+    }
+
+    if (validos.length === 0) { setErro(erros.join(' | ') || 'Nenhum aluno válido para inscrever.'); return; }
+
+    setSalvando(true);
+    try {
+      for (const { aluno, camisa } of validos) {
+        await criarInscricaoInterclasses({
+          edicao,
+          aluno_id: aluno.id,
+          nome_completo: aluno.nome,
+          turma_id: form.turmaId,
+          numero_chamada: aluno.numero_chamada!,
+          numero_camisa: camisa,
+          nome_time: nomeTime,
+          modalidade,
+          categoria: categoriaFromTurma(form.turmaId),
+        });
+      }
+      await onRefetch();
+      setSelecionados({});
+      setSucesso(`${validos.length} aluno(s) inscrito(s) com sucesso!${erros.length ? ` ${erros.length} ignorado(s).` : ''}`);
+      setTimeout(() => setSucesso(null), 4500);
+      if (erros.length) setErro(erros.join(' | '));
+    } catch (e: any) {
+      setErro('Erro ao inscrever alunos: ' + (e?.message || 'tente novamente.'));
     } finally {
       setSalvando(false);
     }
@@ -251,7 +342,7 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
           )}
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <form onSubmit={usaListaOficial ? handleSubmitLote : handleSubmit} className="flex flex-col gap-3">
           <div>
             <label className="text-xs font-semibold text-gray-500 mb-1 block">Turma/Série *</label>
             <select
@@ -266,66 +357,6 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
             {turmas.length === 0 && (
               <p className="text-[11px] text-gray-400 mt-1">Nenhuma turma encontrada no cadastro de alunos.</p>
             )}
-          </div>
-
-          <div className="relative">
-            <label className="text-xs font-semibold text-gray-500 mb-1 block">Nome completo do aluno *</label>
-            <input
-              type="text"
-              autoComplete="off"
-              value={form.nomeCompleto}
-              onChange={e => { handleNomeChange(e.target.value); setSugestoesAlunoAbertas(true); }}
-              onFocus={() => setSugestoesAlunoAbertas(true)}
-              onBlur={() => setTimeout(() => setSugestoesAlunoAbertas(false), 150)}
-              placeholder={form.turmaId ? 'Digite ou selecione o aluno da turma' : 'Selecione a turma primeiro'}
-              required
-              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-on-surface outline-none focus:border-primary"
-            />
-            {sugestoesAlunoAbertas && form.turmaId && sugestoesAluno.length > 0 && (
-              <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-52 overflow-y-auto">
-                {sugestoesAluno.map(a => (
-                  <button
-                    key={a.id}
-                    type="button"
-                    onMouseDown={() => selecionarAlunoSugestao(a)}
-                    className="w-full text-left px-3 py-2 text-sm text-on-surface hover:bg-gray-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-0"
-                  >
-                    <span className="truncate">{a.nome}</span>
-                    {a.numero_chamada != null && <span className="text-gray-400 text-xs flex-shrink-0">#{a.numero_chamada}</span>}
-                  </button>
-                ))}
-              </div>
-            )}
-            {alunoIdVinculado && (
-              <p className="text-[11px] text-secondary mt-1 flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3" /> Aluno reconhecido no cadastro da turma — nº de chamada preenchido automaticamente.
-              </p>
-            )}
-          </div>
-
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="text-xs font-semibold text-gray-500 mb-1 block">Nº da chamada *</label>
-              <input
-                type="number" min="1" step="1"
-                value={form.numeroChamada}
-                onChange={e => setForm(f => ({ ...f, numeroChamada: e.target.value }))}
-                placeholder="Ex: 12"
-                required
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-on-surface outline-none focus:border-primary"
-              />
-            </div>
-            <div className="flex-1">
-              <label className="text-xs font-semibold text-gray-500 mb-1 block">Nº da camisa *</label>
-              <input
-                type="number" min="1" step="1"
-                value={form.numeroCamisa}
-                onChange={e => setForm(f => ({ ...f, numeroCamisa: e.target.value }))}
-                placeholder="Ex: 10"
-                required
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-on-surface outline-none focus:border-primary"
-              />
-            </div>
           </div>
 
           <div className="relative">
@@ -360,6 +391,84 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
             </p>
           </div>
 
+          {usaListaOficial ? (
+            <div>
+              <label className="text-xs font-semibold text-gray-500 mb-1 block">
+                Alunos da turma * (selecione um ou mais — {Object.keys(selecionados).length} selecionado{Object.keys(selecionados).length !== 1 ? 's' : ''})
+              </label>
+              <div className="border border-gray-200 rounded-xl divide-y divide-gray-50 max-h-72 overflow-y-auto">
+                {alunosDisponiveis.map(a => {
+                  const marcado = a.id in selecionados;
+                  return (
+                    <label key={a.id} className={cn('flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50', marcado && 'bg-primary/5')}>
+                      <input
+                        type="checkbox"
+                        checked={marcado}
+                        onChange={() => toggleSelecionado(a)}
+                        className="w-4 h-4 accent-primary flex-shrink-0"
+                      />
+                      <span className="flex-1 text-sm text-on-surface truncate">{a.nome}</span>
+                      {a.numero_chamada != null && <span className="text-gray-400 text-xs flex-shrink-0">chamada #{a.numero_chamada}</span>}
+                      {marcado && (
+                        <input
+                          type="number" min="1"
+                          value={selecionados[a.id]}
+                          onChange={e => setSelecionados(prev => ({ ...prev, [a.id]: e.target.value }))}
+                          onClick={e => e.stopPropagation()}
+                          title="Número da camisa"
+                          className="w-14 text-center text-xs border border-gray-200 rounded-lg px-1 py-1 outline-none focus:border-primary flex-shrink-0"
+                        />
+                      )}
+                    </label>
+                  );
+                })}
+                {alunosDisponiveis.length === 0 && (
+                  <div className="px-3 py-4 text-xs text-gray-400 text-center">Todos os alunos desta turma já estão inscritos no Interclasses {edicao}.</div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className="text-xs font-semibold text-gray-500 mb-1 block">Nome completo do aluno *</label>
+                <input
+                  type="text"
+                  autoComplete="off"
+                  value={form.nomeCompleto}
+                  onChange={e => setForm(f => ({ ...f, nomeCompleto: e.target.value }))}
+                  placeholder={form.turmaId ? 'Digite o nome do aluno' : 'Selecione a turma primeiro'}
+                  required
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-on-surface outline-none focus:border-primary"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-xs font-semibold text-gray-500 mb-1 block">Nº da chamada *</label>
+                  <input
+                    type="number" min="1" step="1"
+                    value={form.numeroChamada}
+                    onChange={e => setForm(f => ({ ...f, numeroChamada: e.target.value }))}
+                    placeholder="Ex: 12"
+                    required
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-on-surface outline-none focus:border-primary"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs font-semibold text-gray-500 mb-1 block">Nº da camisa *</label>
+                  <input
+                    type="number" min="1" step="1"
+                    value={form.numeroCamisa}
+                    onChange={e => setForm(f => ({ ...f, numeroCamisa: e.target.value }))}
+                    placeholder="Ex: 10"
+                    required
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-on-surface outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
           {erro && (
             <div className="bg-error-container/60 border border-error/30 rounded-xl px-3 py-2 text-error text-xs font-medium">
               ⚠️ {erro}
@@ -373,11 +482,17 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
 
           <button
             type="submit"
-            disabled={salvando}
+            disabled={salvando || (usaListaOficial && Object.keys(selecionados).length === 0)}
             className="w-full py-3 rounded-xl bg-primary hover:bg-primary-dark disabled:opacity-50 text-white text-sm font-bold transition-colors flex items-center justify-center gap-2"
           >
             {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-            {salvando ? 'Salvando...' : editingId ? 'Salvar Alterações' : 'Inscrever Aluno'}
+            {salvando
+              ? 'Salvando...'
+              : editingId
+                ? 'Salvar Alterações'
+                : usaListaOficial
+                  ? `Inscrever ${Object.keys(selecionados).length} Aluno${Object.keys(selecionados).length === 1 ? '' : 's'}`
+                  : 'Inscrever Aluno'}
           </button>
         </form>
       </div>
