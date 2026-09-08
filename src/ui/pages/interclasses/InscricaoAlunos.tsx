@@ -10,7 +10,10 @@ interface AlunoOficial {
   nome: string;
   turma_id: string;
   numero_chamada: number | null;
+  sexo: 'M' | 'F' | null;
 }
+
+const LABEL_GENERO: Record<'M' | 'F', string> = { M: '👦 Meninos', F: '👧 Meninas' };
 
 interface Props {
   edicao: string;
@@ -25,6 +28,29 @@ interface Props {
 }
 
 const FORM_VAZIO = { nomeCompleto: '', turmaId: '', numeroChamada: '', numeroCamisa: '', nomeTime: '' };
+
+function LinhaAlunoSelecao({ aluno, marcado, valorCamisa, onToggle, onCamisaChange }: {
+  aluno: AlunoOficial; marcado: boolean; valorCamisa?: string;
+  onToggle: () => void; onCamisaChange: (v: string) => void;
+}) {
+  return (
+    <label className={cn('flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50', marcado && 'bg-primary/5')}>
+      <input type="checkbox" checked={marcado} onChange={onToggle} className="w-4 h-4 accent-primary flex-shrink-0" />
+      <span className="flex-1 text-sm text-on-surface truncate">{aluno.nome}</span>
+      {aluno.numero_chamada != null && <span className="text-gray-400 text-xs flex-shrink-0">chamada #{aluno.numero_chamada}</span>}
+      {marcado && (
+        <input
+          type="number" min="1"
+          value={valorCamisa ?? ''}
+          onChange={e => onCamisaChange(e.target.value)}
+          onClick={e => e.stopPropagation()}
+          title="Número da camisa"
+          className="w-14 text-center text-xs border border-gray-200 rounded-lg px-1 py-1 outline-none focus:border-primary flex-shrink-0"
+        />
+      )}
+    </label>
+  );
+}
 
 export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loading, onRefetch, modoPublico = false }: Props) {
   const [form, setForm] = useState(FORM_VAZIO);
@@ -43,6 +69,7 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
   const [busca, setBusca] = useState('');
   const [filtroTurma, setFiltroTurma] = useState('TODAS');
   const [filtroTime, setFiltroTime] = useState('TODOS');
+  const [filtroGenero, setFiltroGenero] = useState('TODOS');
 
   // Sugestões feitas na mão em vez de <datalist> nativo — no Chrome Android
   // o datalist nativo às vezes sobrepõe/esconde o texto digitado.
@@ -124,15 +151,37 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
     [alunosDaTurma, inscricoes]
   );
 
+  const alunosPorGenero = useMemo(() => ({
+    M: alunosDisponiveis.filter(a => a.sexo === 'M'),
+    F: alunosDisponiveis.filter(a => a.sexo === 'F'),
+    semGenero: alunosDisponiveis.filter(a => !a.sexo),
+  }), [alunosDisponiveis]);
+
+  function marcarComProximaCamisa(prev: Record<string, string>, aluno: AlunoOficial): Record<string, string> {
+    const usadas = camisasUsadasNoTime(form.nomeTime);
+    Object.values(prev).forEach(v => { const n = parseInt(v, 10); if (!isNaN(n)) usadas.add(n); });
+    return { ...prev, [aluno.id]: String(proximaCamisaLivre(usadas)) };
+  }
+
   function toggleSelecionado(aluno: AlunoOficial) {
     setSelecionados(prev => {
-      const next = { ...prev };
-      if (aluno.id in next) {
+      if (aluno.id in prev) {
+        const next = { ...prev };
         delete next[aluno.id];
+        return next;
+      }
+      return marcarComProximaCamisa(prev, aluno);
+    });
+  }
+
+  function alternarGrupo(alunosDoGrupo: AlunoOficial[]) {
+    const todosMarcados = alunosDoGrupo.length > 0 && alunosDoGrupo.every(a => a.id in selecionados);
+    setSelecionados(prev => {
+      let next = { ...prev };
+      if (todosMarcados) {
+        alunosDoGrupo.forEach(a => { delete next[a.id]; });
       } else {
-        const usadas = camisasUsadasNoTime(form.nomeTime);
-        Object.values(next).forEach(v => { const n = parseInt(v, 10); if (!isNaN(n)) usadas.add(n); });
-        next[aluno.id] = String(proximaCamisaLivre(usadas));
+        alunosDoGrupo.forEach(a => { if (!(a.id in next)) next = marcarComProximaCamisa(next, a); });
       }
       return next;
     });
@@ -260,6 +309,7 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
           nome_time: nomeTime,
           modalidade,
           categoria: categoriaFromTurma(form.turmaId),
+          genero: aluno.sexo,
         });
       }
       await onRefetch();
@@ -321,11 +371,12 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
     return inscricoes.filter(i =>
       (!buscaNorm || i.nome_completo.toLowerCase().includes(buscaNorm)) &&
       (filtroTurma === 'TODAS' || i.turma_id === filtroTurma) &&
-      (filtroTime === 'TODOS' || i.nome_time.trim().toLowerCase() === filtroTimeNorm)
+      (filtroTime === 'TODOS' || i.nome_time.trim().toLowerCase() === filtroTimeNorm) &&
+      (filtroGenero === 'TODOS' || i.genero === filtroGenero)
     );
-  }, [inscricoes, busca, filtroTurma, filtroTime]);
+  }, [inscricoes, busca, filtroTurma, filtroTime, filtroGenero]);
 
-  const filtrosAtivos = busca.trim() !== '' || filtroTurma !== 'TODAS' || filtroTime !== 'TODOS';
+  const filtrosAtivos = busca.trim() !== '' || filtroTurma !== 'TODAS' || filtroTime !== 'TODOS' || filtroGenero !== 'TODOS';
 
   return (
     <div className="flex flex-col gap-4">
@@ -396,32 +447,42 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
               <label className="text-xs font-semibold text-gray-500 mb-1 block">
                 Alunos da turma * (selecione um ou mais — {Object.keys(selecionados).length} selecionado{Object.keys(selecionados).length !== 1 ? 's' : ''})
               </label>
-              <div className="border border-gray-200 rounded-xl divide-y divide-gray-50 max-h-72 overflow-y-auto">
-                {alunosDisponiveis.map(a => {
-                  const marcado = a.id in selecionados;
+              <div className="border border-gray-200 rounded-xl overflow-hidden max-h-80 overflow-y-auto">
+                {(['M', 'F'] as const).map(genero => {
+                  const alunosDoGrupo = alunosPorGenero[genero];
+                  if (alunosDoGrupo.length === 0) return null;
+                  const todosMarcados = alunosDoGrupo.every(a => a.id in selecionados);
                   return (
-                    <label key={a.id} className={cn('flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50', marcado && 'bg-primary/5')}>
-                      <input
-                        type="checkbox"
-                        checked={marcado}
-                        onChange={() => toggleSelecionado(a)}
-                        className="w-4 h-4 accent-primary flex-shrink-0"
-                      />
-                      <span className="flex-1 text-sm text-on-surface truncate">{a.nome}</span>
-                      {a.numero_chamada != null && <span className="text-gray-400 text-xs flex-shrink-0">chamada #{a.numero_chamada}</span>}
-                      {marcado && (
-                        <input
-                          type="number" min="1"
-                          value={selecionados[a.id]}
-                          onChange={e => setSelecionados(prev => ({ ...prev, [a.id]: e.target.value }))}
-                          onClick={e => e.stopPropagation()}
-                          title="Número da camisa"
-                          className="w-14 text-center text-xs border border-gray-200 rounded-lg px-1 py-1 outline-none focus:border-primary flex-shrink-0"
-                        />
-                      )}
-                    </label>
+                    <div key={genero}>
+                      <div className="flex items-center justify-between px-3 py-1.5 bg-gray-50 border-b border-gray-100">
+                        <span className="text-xs font-bold text-gray-600">{LABEL_GENERO[genero]}</span>
+                        <button type="button" onClick={() => alternarGrupo(alunosDoGrupo)} className="text-[11px] text-primary font-semibold hover:underline">
+                          {todosMarcados ? 'Desmarcar todos' : 'Marcar todos'}
+                        </button>
+                      </div>
+                      <div className="divide-y divide-gray-50">
+                        {alunosDoGrupo.map(a => (
+                          <LinhaAlunoSelecao key={a.id} aluno={a} marcado={a.id in selecionados} valorCamisa={selecionados[a.id]}
+                            onToggle={() => toggleSelecionado(a)} onCamisaChange={v => setSelecionados(prev => ({ ...prev, [a.id]: v }))} />
+                        ))}
+                      </div>
+                    </div>
                   );
                 })}
+                {alunosPorGenero.semGenero.length > 0 && (
+                  <div>
+                    <div className="px-3 py-1.5 bg-amber-50 border-b border-amber-100">
+                      <span className="text-xs font-bold text-amber-700">⚠️ Sem gênero marcado</span>
+                      <p className="text-[10px] text-amber-600 mt-0.5">Use a tela "Marcar Gênero" (aba Turmas) pra classificar — por enquanto aparecem aqui.</p>
+                    </div>
+                    <div className="divide-y divide-gray-50">
+                      {alunosPorGenero.semGenero.map(a => (
+                        <LinhaAlunoSelecao key={a.id} aluno={a} marcado={a.id in selecionados} valorCamisa={selecionados[a.id]}
+                          onToggle={() => toggleSelecionado(a)} onCamisaChange={v => setSelecionados(prev => ({ ...prev, [a.id]: v }))} />
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {alunosDisponiveis.length === 0 && (
                   <div className="px-3 py-4 text-xs text-gray-400 text-center">Todos os alunos desta turma já estão inscritos no Interclasses {edicao}.</div>
                 )}
@@ -540,9 +601,18 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
             <option value="TODOS">Todos os times</option>
             {timesUnicos.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
+          <select
+            value={filtroGenero}
+            onChange={e => setFiltroGenero(e.target.value)}
+            className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs text-on-surface outline-none focus:border-primary"
+          >
+            <option value="TODOS">Meninos e meninas</option>
+            <option value="M">👦 Meninos</option>
+            <option value="F">👧 Meninas</option>
+          </select>
           {filtrosAtivos && (
             <button
-              onClick={() => { setBusca(''); setFiltroTurma('TODAS'); setFiltroTime('TODOS'); }}
+              onClick={() => { setBusca(''); setFiltroTurma('TODAS'); setFiltroTime('TODOS'); setFiltroGenero('TODOS'); }}
               className="text-xs text-gray-500 hover:text-primary px-2 whitespace-nowrap"
             >
               Limpar filtros

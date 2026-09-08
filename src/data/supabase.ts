@@ -495,6 +495,7 @@ export interface InscricaoInterclassesPayload {
   nome_time: string;
   modalidade: string;
   categoria: string;
+  genero?: string | null;
 }
 
 export async function criarInscricaoInterclasses(payload: InscricaoInterclassesPayload): Promise<InscricaoInterclasses> {
