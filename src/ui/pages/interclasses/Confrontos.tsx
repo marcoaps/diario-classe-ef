@@ -236,10 +236,10 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
                     {t.label}
                   </button>
                 ))}
-                <button onClick={excluirTudo} title="Excluir campeonato" className="px-3 text-gray-400 hover:text-error">
-                  <RefreshCw className="w-3.5 h-3.5" />
-                </button>
               </div>
+              <button onClick={excluirTudo} className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-error/30 text-error text-xs font-bold hover:bg-error/5 transition-colors">
+                <RefreshCw className="w-3.5 h-3.5" /> Excluir este campeonato e recomeçar
+              </button>
 
               {aba === 'jogos' && (
                 <div className="flex flex-col gap-4">
