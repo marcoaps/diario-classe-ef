@@ -83,7 +83,7 @@ export default function InterclassesIOP() {
   );
 }
 
-function ModalidadeSeletor({ modalidade, onSelecionar }: { modalidade: Modalidade; onSelecionar: (m: Modalidade) => void }) {
+export function ModalidadeSeletor({ modalidade, onSelecionar }: { modalidade: Modalidade; onSelecionar: (m: Modalidade) => void }) {
   return (
     <div className="flex gap-1.5 overflow-x-auto pt-2">
       {MODALIDADES.map(m => (

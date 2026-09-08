@@ -12,9 +12,9 @@ export interface ModalidadeConfig {
 
 export const MODALIDADES: ModalidadeConfig[] = [
   { id: 'futsal',   label: 'Futsal',   icone: '⚽', cor: '#0058bc', disponivel: true },
-  { id: 'voleibol', label: 'Voleibol', icone: '🏐', cor: '#006a6a', disponivel: false },
-  { id: 'handebol', label: 'Handebol', icone: '🤾', cor: '#9e3d00', disponivel: false },
-  { id: 'queimada', label: 'Queimada', icone: '🔥', cor: '#ba1a1a', disponivel: false },
+  { id: 'voleibol', label: 'Voleibol', icone: '🏐', cor: '#006a6a', disponivel: true },
+  { id: 'handebol', label: 'Handebol', icone: '🤾', cor: '#9e3d00', disponivel: true },
+  { id: 'queimada', label: 'Queimada', icone: '🔥', cor: '#ba1a1a', disponivel: true },
 ];
 
 export function modalidadeConfig(id: string | null): ModalidadeConfig {
