@@ -66,7 +66,7 @@ export default function InterclassesIOP() {
     <div className="flex flex-col gap-4 pb-6 font-sans">
       <ModalidadeSeletor modalidade={modalidade} onSelecionar={selecionarModalidade} />
       <SubTabBar tab={tab} setTab={setTab} />
-      {tab === 'visao' && <VisaoGeral inscricoes={inscricoesModalidade} turmas={turmas} loading={loading} />}
+      {tab === 'visao' && <VisaoGeral inscricoes={inscricoesModalidade} turmas={turmas} loading={loading} modalidade={modalidade} />}
       {tab === 'inscricao' && (
         <InscricaoAlunos
           edicao={EDICAO_ATUAL}

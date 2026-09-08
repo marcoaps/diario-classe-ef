@@ -45,10 +45,37 @@ export function unirTurmas(turmasDoBanco: string[]): string[] {
 }
 
 // Um time só é considerado "completo" (pronto pra entrar em confrontos) com
-// pelo menos esse número de jogadores inscritos.
-export const MINIMO_JOGADORES_TIME = 5;
-// Acima disso a inscrição de novos jogadores nesse time é bloqueada.
+// pelo menos esse número de jogadores inscritos — varia por modalidade
+// porque a exigência mínima de jogadores em quadra é diferente em cada
+// esporte (ex: vôlei precisa de mais gente em quadra que futsal).
+export const MINIMO_JOGADORES_POR_MODALIDADE: Record<Modalidade, number> = {
+  futsal: 5,
+  voleibol: 6,
+  handebol: 7,
+  queimada: 10,
+};
+
+// Mantido pra quem ainda não passa a modalidade (compatibilidade) — mesmo
+// valor de sempre, usado como padrão do Futsal.
+export const MINIMO_JOGADORES_TIME = MINIMO_JOGADORES_POR_MODALIDADE.futsal;
+// Acima disso a inscrição de novos jogadores nesse time é bloqueada — mesmo
+// teto pra todas as modalidades por enquanto.
 export const MAXIMO_JOGADORES_TIME = 10;
+
+export function minimoJogadoresPara(modalidade: string | null | undefined): number {
+  if (modalidade && modalidade in MINIMO_JOGADORES_POR_MODALIDADE) {
+    return MINIMO_JOGADORES_POR_MODALIDADE[modalidade as Modalidade];
+  }
+  return MINIMO_JOGADORES_TIME;
+}
+
+// Mensagem de bloqueio exibida quando o time ainda não atingiu o mínimo da
+// sua modalidade — mesmo texto em todo o módulo de inscrição.
+export function mensagemMinimoNaoAtingido(modalidade: string | null | undefined): string {
+  const nomeModalidade = MODALIDADES.find(m => m.id === modalidade)?.label ?? 'equipe';
+  const minimo = minimoJogadoresPara(modalidade);
+  return `⚠️ Inscrição não permitida. A equipe de ${nomeModalidade} deve possuir no mínimo ${minimo} jogadores.`;
+}
 
 export interface InscricaoInterclasses {
   id: string;
@@ -73,6 +100,7 @@ export interface EquipeInterclasses {
   nomeTime: string;
   turmas: string[];
   alunos: InscricaoInterclasses[];
+  minimoJogadores: number;
   completo: boolean;
   cheio: boolean;
 }
@@ -95,12 +123,19 @@ export function agruparPorTime(inscricoes: InscricaoInterclasses[]): EquipeInter
     mapa.get(chave)!.alunos.push(i);
   });
   return Array.from(mapa.values())
-    .map(({ nomeExibicao, alunos }) => ({
-      nomeTime: nomeExibicao,
-      turmas: Array.from(new Set(alunos.map(a => a.turma_id))).sort(),
-      alunos: [...alunos].sort((a, b) => a.numero_camisa - b.numero_camisa),
-      completo: alunos.length >= MINIMO_JOGADORES_TIME,
-      cheio: alunos.length >= MAXIMO_JOGADORES_TIME,
-    }))
+    .map(({ nomeExibicao, alunos }) => {
+      // Todos os alunos de uma mesma equipe pertencem à mesma modalidade (a
+      // lista já chega filtrada por modalidade em todo lugar ativo do app),
+      // então basta olhar o primeiro pra saber qual mínimo vale aqui.
+      const minimo = minimoJogadoresPara(alunos[0]?.modalidade);
+      return {
+        nomeTime: nomeExibicao,
+        turmas: Array.from(new Set(alunos.map(a => a.turma_id))).sort(),
+        alunos: [...alunos].sort((a, b) => a.numero_camisa - b.numero_camisa),
+        minimoJogadores: minimo,
+        completo: alunos.length >= minimo,
+        cheio: alunos.length >= MAXIMO_JOGADORES_TIME,
+      };
+    })
     .sort((a, b) => a.nomeTime.localeCompare(b.nomeTime, 'pt-BR'));
 }

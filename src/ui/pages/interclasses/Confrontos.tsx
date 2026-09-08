@@ -7,8 +7,8 @@ import {
   type CampeonatoInterclasses, type JogoInterclasses,
 } from '../../../data/supabase';
 import {
-  agruparPorTime, categoriaFromTurma, CATEGORIA_6_7, CATEGORIA_8_9,
-  type Modalidade, type InscricaoInterclasses,
+  agruparPorTime, categoriaFromTurma, CATEGORIA_6_7, CATEGORIA_8_9, mensagemMinimoNaoAtingido,
+  type Modalidade, type InscricaoInterclasses, type EquipeInterclasses,
 } from '../../../domain/interclasses';
 import {
   ADAPTERS, REGRAS_PADRAO, FORMATOS, gerarJogosIniciais, aplicarResultado, aplicarResultadoDuplo, calcSt, genElim, genSwiss,
@@ -234,7 +234,7 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
           <Loader2 className="w-4 h-4 animate-spin" /> Carregando...
         </div>
       ) : !campeonato ? (
-        <SetupCampeonato equipesProntas={equipesProntas} onIniciar={iniciarCampeonato} criando={criandoCampeonato} />
+        <SetupCampeonato equipesProntas={equipesProntas} equipesIncompletas={equipes.filter(e => !e.completo)} onIniciar={iniciarCampeonato} criando={criandoCampeonato} />
       ) : (
         <div className="flex flex-col gap-4">
           {campeonato.campeao ? (
@@ -301,7 +301,9 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
   );
 }
 
-function SetupCampeonato({ equipesProntas, onIniciar, criando }: { equipesProntas: string[]; onIniciar: (formato: string) => void; criando?: boolean }) {
+function SetupCampeonato({ equipesProntas, equipesIncompletas, onIniciar, criando }: {
+  equipesProntas: string[]; equipesIncompletas: EquipeInterclasses[]; onIniciar: (formato: string) => void; criando?: boolean;
+}) {
   const [formato, setFormato] = useState('round_robin');
   const podeIniciar = equipesProntas.length >= (FORMATOS.find(f => f.id === formato)?.min ?? 3);
 
@@ -317,6 +319,15 @@ function SetupCampeonato({ equipesProntas, onIniciar, criando }: { equipesPronta
           </span>
         ))}
       </div>
+      {equipesIncompletas.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 mb-3 flex flex-col gap-1">
+          {equipesIncompletas.map(eq => (
+            <p key={eq.nomeTime} className="text-amber-700 text-[11px] font-medium">
+              <span className="font-bold">{eq.nomeTime}</span> ({eq.alunos.length}/{eq.minimoJogadores}): {mensagemMinimoNaoAtingido(eq.alunos[0]?.modalidade)}
+            </p>
+          ))}
+        </div>
+      )}
       <div className="flex flex-col gap-2 mb-4">
         {FORMATOS.map(f => (
           <div

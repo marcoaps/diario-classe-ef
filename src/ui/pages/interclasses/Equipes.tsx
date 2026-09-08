@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Loader2, Pencil, Check, X } from 'lucide-react';
-import { agruparPorTime, MINIMO_JOGADORES_TIME, MAXIMO_JOGADORES_TIME } from '../../../domain/interclasses';
+import { agruparPorTime, MAXIMO_JOGADORES_TIME, mensagemMinimoNaoAtingido } from '../../../domain/interclasses';
 import type { InscricaoInterclasses } from '../../../domain/interclasses';
 import { renomearTimeInterclasses } from '../../../data/supabase';
 
@@ -88,7 +88,7 @@ export function Equipes({ inscricoes, loading, onRefetch }: Props) {
             <div className="flex items-center gap-1.5 flex-shrink-0">
               <span className="text-[11px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{eq.turmas.join(', ')}</span>
               <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${eq.cheio ? 'bg-gray-200 text-gray-600' : eq.completo ? 'bg-secondary-container text-on-secondary-container' : 'bg-amber-100 text-amber-700'}`}>
-                {eq.cheio ? `🔒 Cheio (${eq.alunos.length}/${MAXIMO_JOGADORES_TIME})` : eq.completo ? `✅ Completo (${eq.alunos.length}/${MAXIMO_JOGADORES_TIME})` : `⏳ Faltam ${MINIMO_JOGADORES_TIME - eq.alunos.length}`}
+                {eq.cheio ? `🔒 Cheio (${eq.alunos.length}/${MAXIMO_JOGADORES_TIME})` : eq.completo ? `✅ Completo (${eq.alunos.length}/${MAXIMO_JOGADORES_TIME})` : `⏳ Faltam ${eq.minimoJogadores - eq.alunos.length}`}
               </span>
             </div>
           </div>
@@ -103,6 +103,11 @@ export function Equipes({ inscricoes, loading, onRefetch }: Props) {
             ))}
           </div>
           <div className="text-[11px] text-gray-400 mt-2">{eq.alunos.length} jogador{eq.alunos.length !== 1 ? 'es' : ''}</div>
+          {!eq.completo && (
+            <div className="mt-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-amber-700 text-[11px] font-medium">
+              {mensagemMinimoNaoAtingido(eq.alunos[0]?.modalidade)}
+            </div>
+          )}
         </div>
       ))}
       <datalist id="times-existentes-equipes">

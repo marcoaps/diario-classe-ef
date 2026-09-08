@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, type FormEvent } from 'react';
 import { CheckCircle2, Loader2, Pencil, Trash2, X } from 'lucide-react';
 import { cn } from '../../AppLayout';
 import { buscarAlunos, criarInscricaoInterclasses, atualizarInscricaoInterclasses, excluirInscricaoInterclasses, limparInscricoesInterclasses } from '../../../data/supabase';
-import { agruparPorTime, categoriaFromTurma, MINIMO_JOGADORES_TIME, MAXIMO_JOGADORES_TIME } from '../../../domain/interclasses';
+import { agruparPorTime, categoriaFromTurma, MAXIMO_JOGADORES_TIME, minimoJogadoresPara } from '../../../domain/interclasses';
 import type { InscricaoInterclasses, Modalidade } from '../../../domain/interclasses';
 
 interface AlunoOficial {
@@ -438,7 +438,7 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
               </div>
             )}
             <p className="text-[11px] text-gray-400 mt-1">
-              Não precisa ser igual ao nome da turma. Cada time deve ter entre {MINIMO_JOGADORES_TIME} e {MAXIMO_JOGADORES_TIME} jogadores. {timesUnicos.length > 0 && 'Se o time já existe, selecione a sugestão em vez de digitar de novo — evita duplicar o time por erro de digitação.'}
+              Não precisa ser igual ao nome da turma. Cada time deve ter entre {minimoJogadoresPara(modalidade)} e {MAXIMO_JOGADORES_TIME} jogadores. {timesUnicos.length > 0 && 'Se o time já existe, selecione a sugestão em vez de digitar de novo — evita duplicar o time por erro de digitação.'}
             </p>
           </div>
 

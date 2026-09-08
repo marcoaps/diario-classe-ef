@@ -1,20 +1,22 @@
 import { useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
-import { agruparPorTime, MINIMO_JOGADORES_TIME } from '../../../domain/interclasses';
-import type { InscricaoInterclasses } from '../../../domain/interclasses';
+import { agruparPorTime, minimoJogadoresPara } from '../../../domain/interclasses';
+import type { InscricaoInterclasses, Modalidade } from '../../../domain/interclasses';
 
 interface Props {
   inscricoes: InscricaoInterclasses[];
   turmas: string[];
   loading: boolean;
+  modalidade: Modalidade;
 }
 
-export function VisaoGeral({ inscricoes, loading }: Props) {
+export function VisaoGeral({ inscricoes, loading, modalidade }: Props) {
   const totalAlunos = inscricoes.length;
   const equipes = useMemo(() => agruparPorTime(inscricoes), [inscricoes]);
   const totalTimes = equipes.length;
   const timesCompletos = equipes.filter(e => e.completo).length;
   const turmasParticipando = new Set(inscricoes.map(i => i.turma_id)).size;
+  const minimo = minimoJogadoresPara(modalidade);
 
   return (
     <div className="flex flex-col gap-4">
@@ -34,7 +36,7 @@ export function VisaoGeral({ inscricoes, loading }: Props) {
             <StatCard label="Alunos inscritos" value={totalAlunos} />
             <StatCard label="Turmas participando" value={turmasParticipando} />
             <StatCard label="Times formados" value={totalTimes} />
-            <StatCard label={`Times completos (${MINIMO_JOGADORES_TIME}+ jogadores)`} value={timesCompletos} />
+            <StatCard label={`Times completos (${minimo}+ jogadores)`} value={timesCompletos} />
           </div>
           {totalAlunos === 0 && (
             <div className="text-center text-gray-500 py-10 font-medium px-4">
@@ -43,7 +45,7 @@ export function VisaoGeral({ inscricoes, loading }: Props) {
           )}
           {totalAlunos > 0 && timesCompletos < 2 && (
             <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-amber-700 text-xs font-medium">
-              ⏳ É preciso de pelo menos 2 times completos ({MINIMO_JOGADORES_TIME}+ jogadores cada) para montar os confrontos. Você tem {timesCompletos} agora.
+              ⏳ É preciso de pelo menos 2 times completos ({minimo}+ jogadores cada) para montar os confrontos. Você tem {timesCompletos} agora.
             </div>
           )}
         </>
