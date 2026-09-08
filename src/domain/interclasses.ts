@@ -1,5 +1,38 @@
 export const EDICAO_PADRAO = '2026';
 
+export type Modalidade = 'futsal' | 'voleibol' | 'handebol' | 'queimada';
+
+export interface ModalidadeConfig {
+  id: Modalidade;
+  label: string;
+  icone: string;
+  cor: string;
+  disponivel: boolean; // false = aparece como "Em breve" na tela de seleção
+}
+
+export const MODALIDADES: ModalidadeConfig[] = [
+  { id: 'futsal',   label: 'Futsal',   icone: '⚽', cor: '#0058bc', disponivel: true },
+  { id: 'voleibol', label: 'Voleibol', icone: '🏐', cor: '#006a6a', disponivel: false },
+  { id: 'handebol', label: 'Handebol', icone: '🤾', cor: '#9e3d00', disponivel: false },
+  { id: 'queimada', label: 'Queimada', icone: '🔥', cor: '#ba1a1a', disponivel: false },
+];
+
+export function modalidadeConfig(id: string | null): ModalidadeConfig {
+  return MODALIDADES.find(m => m.id === id) ?? MODALIDADES[0];
+}
+
+// Categoria é derivada automaticamente da turma (não pede escolha manual do
+// professor, que já erraria menos digitando a turma real do aluno).
+export const CATEGORIA_6_7 = '6º e 7º anos';
+export const CATEGORIA_8_9 = '8º e 9º anos';
+
+export function categoriaFromTurma(turmaId: string): string {
+  const serie = turmaId.trim().charAt(0);
+  if (serie === '6' || serie === '7') return CATEGORIA_6_7;
+  if (serie === '8' || serie === '9') return CATEGORIA_8_9;
+  return CATEGORIA_6_7;
+}
+
 // Turmas que disputam o Interclasses mas não têm alunos cadastrados neste
 // app (o professor de Educação Física não dá aula nelas) — somadas às turmas
 // reais do banco pra aparecerem no seletor. Sem cadastro local, o aluno

@@ -1,15 +1,16 @@
-import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { LayoutGrid, ClipboardPlus, Users2, Trophy } from 'lucide-react';
 import { cn } from '../AppLayout';
 import { buscarInscricoesInterclasses, buscarTurmasDisponiveis } from '../../data/supabase';
-import { EDICAO_PADRAO, unirTurmas } from '../../domain/interclasses';
-import type { InscricaoInterclasses } from '../../domain/interclasses';
+import { EDICAO_PADRAO, unirTurmas, MODALIDADES } from '../../domain/interclasses';
+import type { InscricaoInterclasses, Modalidade } from '../../domain/interclasses';
 import { VisaoGeral } from './interclasses/VisaoGeral';
 import { InscricaoAlunos } from './interclasses/InscricaoAlunos';
 import { Equipes } from './interclasses/Equipes';
-import Torneio from './Torneio';
+import { Confrontos } from './interclasses/Confrontos';
 
 const EDICAO_ATUAL = EDICAO_PADRAO;
+const MODALIDADE_STORAGE_KEY = 'interclasses_modalidade_ativa';
 
 type SubTab = 'visao' | 'inscricao' | 'equipes' | 'confrontos';
 
@@ -22,9 +23,17 @@ const SUB_TABS: { id: SubTab; label: string; icon: ReactNode }[] = [
 
 export default function InterclassesIOP() {
   const [tab, setTab] = useState<SubTab>('inscricao');
+  const [modalidade, setModalidade] = useState<Modalidade>(() => {
+    try { return (localStorage.getItem(MODALIDADE_STORAGE_KEY) as Modalidade) || 'futsal'; } catch { return 'futsal'; }
+  });
   const [inscricoes, setInscricoes] = useState<InscricaoInterclasses[]>([]);
   const [turmas, setTurmas] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+
+  function selecionarModalidade(m: Modalidade) {
+    setModalidade(m);
+    try { localStorage.setItem(MODALIDADE_STORAGE_KEY, m); } catch { /* ignore */ }
+  }
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -44,31 +53,56 @@ export default function InterclassesIOP() {
 
   useEffect(() => { carregar(); }, [carregar]);
 
-  // A aba "Torneios/Confrontos" reaproveita a página Torneio original —
-  // suas funcionalidades (chaves, grupos, placares) continuam intactas.
-  if (tab === 'confrontos') {
-    return (
-      <div className="flex flex-col">
-        <SubTabBar tab={tab} setTab={setTab} />
-        <Torneio />
-      </div>
-    );
-  }
+  // Cada modalidade só enxerga suas próprias inscrições — isolamento total,
+  // mesmo quando o mesmo nome de time/turma existe em mais de uma modalidade.
+  // Filtrando aqui uma vez, VisaoGeral/Equipes recebem a lista já isolada e
+  // não precisam saber nada sobre modalidade.
+  const inscricoesModalidade = useMemo(
+    () => inscricoes.filter(i => (i.modalidade ?? 'futsal') === modalidade),
+    [inscricoes, modalidade]
+  );
 
   return (
     <div className="flex flex-col gap-4 pb-6 font-sans">
+      <ModalidadeSeletor modalidade={modalidade} onSelecionar={selecionarModalidade} />
       <SubTabBar tab={tab} setTab={setTab} />
-      {tab === 'visao' && <VisaoGeral inscricoes={inscricoes} turmas={turmas} loading={loading} />}
+      {tab === 'visao' && <VisaoGeral inscricoes={inscricoesModalidade} turmas={turmas} loading={loading} />}
       {tab === 'inscricao' && (
         <InscricaoAlunos
           edicao={EDICAO_ATUAL}
-          inscricoes={inscricoes}
+          modalidade={modalidade}
+          inscricoes={inscricoesModalidade}
           turmas={turmas}
           loading={loading}
           onRefetch={carregar}
         />
       )}
-      {tab === 'equipes' && <Equipes inscricoes={inscricoes} loading={loading} onRefetch={carregar} />}
+      {tab === 'equipes' && <Equipes inscricoes={inscricoesModalidade} loading={loading} onRefetch={carregar} />}
+      {tab === 'confrontos' && <Confrontos modalidade={modalidade} inscricoes={inscricoesModalidade} />}
+    </div>
+  );
+}
+
+function ModalidadeSeletor({ modalidade, onSelecionar }: { modalidade: Modalidade; onSelecionar: (m: Modalidade) => void }) {
+  return (
+    <div className="flex gap-1.5 overflow-x-auto pt-2">
+      {MODALIDADES.map(m => (
+        <button
+          key={m.id}
+          onClick={() => m.disponivel && onSelecionar(m.id)}
+          disabled={!m.disponivel}
+          className={cn(
+            "flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex-shrink-0",
+            !m.disponivel ? "bg-gray-50 text-gray-300 cursor-not-allowed" :
+            modalidade === m.id ? "text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+          )}
+          style={modalidade === m.id && m.disponivel ? { background: m.cor } : undefined}
+        >
+          <span>{m.icone}</span>
+          {m.label}
+          {!m.disponivel && <span className="text-[9px] opacity-70">(em breve)</span>}
+        </button>
+      ))}
     </div>
   );
 }

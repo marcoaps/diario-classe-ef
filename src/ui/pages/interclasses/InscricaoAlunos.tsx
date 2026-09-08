@@ -2,8 +2,8 @@ import { useState, useEffect, useMemo, useRef, type FormEvent } from 'react';
 import { CheckCircle2, Loader2, Pencil, Trash2, X } from 'lucide-react';
 import { cn } from '../../AppLayout';
 import { buscarAlunos, criarInscricaoInterclasses, atualizarInscricaoInterclasses, excluirInscricaoInterclasses, limparInscricoesInterclasses } from '../../../data/supabase';
-import { agruparPorTime, MINIMO_JOGADORES_TIME, MAXIMO_JOGADORES_TIME } from '../../../domain/interclasses';
-import type { InscricaoInterclasses } from '../../../domain/interclasses';
+import { agruparPorTime, categoriaFromTurma, MINIMO_JOGADORES_TIME, MAXIMO_JOGADORES_TIME } from '../../../domain/interclasses';
+import type { InscricaoInterclasses, Modalidade } from '../../../domain/interclasses';
 
 interface AlunoOficial {
   id: string;
@@ -14,6 +14,7 @@ interface AlunoOficial {
 
 interface Props {
   edicao: string;
+  modalidade: Modalidade;
   inscricoes: InscricaoInterclasses[];
   turmas: string[];
   loading: boolean;
@@ -25,7 +26,7 @@ interface Props {
 
 const FORM_VAZIO = { nomeCompleto: '', turmaId: '', numeroChamada: '', numeroCamisa: '', nomeTime: '' };
 
-export function InscricaoAlunos({ edicao, inscricoes, turmas, loading, onRefetch, modoPublico = false }: Props) {
+export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loading, onRefetch, modoPublico = false }: Props) {
   const [form, setForm] = useState(FORM_VAZIO);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [alunoIdVinculado, setAlunoIdVinculado] = useState<string | null>(null);
@@ -162,6 +163,8 @@ export function InscricaoAlunos({ edicao, inscricoes, turmas, loading, onRefetch
         numero_chamada: parseInt(form.numeroChamada, 10),
         numero_camisa: parseInt(form.numeroCamisa, 10),
         nome_time: form.nomeTime.trim(),
+        modalidade,
+        categoria: categoriaFromTurma(form.turmaId),
       };
       if (editingId) {
         await atualizarInscricaoInterclasses(editingId, payload);

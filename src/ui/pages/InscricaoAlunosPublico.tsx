@@ -40,7 +40,8 @@ export function InscricaoAlunosPublico() {
       <div className="max-w-lg mx-auto p-4">
         <InscricaoAlunos
           edicao={EDICAO_PADRAO}
-          inscricoes={inscricoes}
+          modalidade="futsal"
+          inscricoes={inscricoes.filter(i => (i.modalidade ?? 'futsal') === 'futsal')}
           turmas={turmas}
           loading={loading}
           onRefetch={carregar}

@@ -493,6 +493,8 @@ export interface InscricaoInterclassesPayload {
   numero_chamada: number;
   numero_camisa: number;
   nome_time: string;
+  modalidade: string;
+  categoria: string;
 }
 
 export async function criarInscricaoInterclasses(payload: InscricaoInterclassesPayload): Promise<InscricaoInterclasses> {
@@ -540,5 +542,122 @@ export async function renomearTimeInterclasses(ids: string[], nomeNovo: string) 
 // de teste antes de abrir pra valer.
 export async function limparInscricoesInterclasses(edicao: string) {
   const { error } = await supabase.from('interclasses_inscricoes').delete().eq('edicao', edicao);
+  if (error) throw error;
+}
+
+// Interclasses IOP — campeonatos/jogos (motor de competição, isolado por
+// modalidade + categoria)
+// ------------------------------------------------------------
+
+export interface CampeonatoInterclasses {
+  id: string;
+  edicao: string;
+  modalidade: string;
+  categoria: string;
+  formato: string;
+  fase: string;
+  swiss_round: number;
+  playoffs_n: number | null;
+  config: Record<string, unknown>;
+  campeao: string | null;
+  vice: string | null;
+  terceiro: string | null;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export interface JogoInterclasses {
+  id: string;
+  campeonato_id: string;
+  equipe_a: string;
+  equipe_b: string | null;
+  grupo_nome: string | null;
+  fase: string;
+  rodada: number;
+  bracket_idx: number | null;
+  is_bye: boolean;
+  jogado: boolean;
+  vencedor: string | null;
+  resultado: Record<string, unknown> | null;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export async function buscarCampeonato(
+  edicao: string, modalidade: string, categoria: string
+): Promise<CampeonatoInterclasses | null> {
+  const { data, error } = await supabase
+    .from('interclasses_campeonatos')
+    .select('*')
+    .eq('edicao', edicao).eq('modalidade', modalidade).eq('categoria', categoria)
+    .maybeSingle();
+  if (error) throw error;
+  return data as CampeonatoInterclasses | null;
+}
+
+export async function criarCampeonato(payload: {
+  edicao: string; modalidade: string; categoria: string; formato: string; playoffs_n?: number | null;
+}): Promise<CampeonatoInterclasses> {
+  const { data, error } = await supabase
+    .from('interclasses_campeonatos')
+    .insert(payload)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as CampeonatoInterclasses;
+}
+
+export async function atualizarCampeonato(
+  id: string, patch: Partial<Pick<CampeonatoInterclasses, 'fase' | 'swiss_round' | 'campeao' | 'vice' | 'terceiro' | 'config'>>
+): Promise<void> {
+  const { error } = await supabase
+    .from('interclasses_campeonatos')
+    .update({ ...patch, atualizado_em: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+export async function excluirCampeonato(id: string) {
+  const { error } = await supabase.from('interclasses_campeonatos').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function buscarJogos(campeonatoId: string): Promise<JogoInterclasses[]> {
+  const { data, error } = await supabase
+    .from('interclasses_jogos')
+    .select('*')
+    .eq('campeonato_id', campeonatoId)
+    .order('rodada', { ascending: true });
+  if (error) throw error;
+  return (data || []) as JogoInterclasses[];
+}
+
+export async function criarJogos(
+  campeonatoId: string,
+  jogos: Omit<JogoInterclasses, 'id' | 'campeonato_id' | 'criado_em' | 'atualizado_em'>[]
+): Promise<JogoInterclasses[]> {
+  if (jogos.length === 0) return [];
+  const rows = jogos.map(j => ({ ...j, campeonato_id: campeonatoId }));
+  const { data, error } = await supabase.from('interclasses_jogos').insert(rows).select();
+  if (error) throw error;
+  return (data || []) as JogoInterclasses[];
+}
+
+export async function salvarResultadoJogo(
+  jogoId: string,
+  patch: { jogado: boolean; vencedor: string | null; resultado: Record<string, unknown> }
+): Promise<void> {
+  const { error } = await supabase
+    .from('interclasses_jogos')
+    .update({ ...patch, atualizado_em: new Date().toISOString() })
+    .eq('id', jogoId);
+  if (error) throw error;
+}
+
+export async function atualizarJogo(jogoId: string, patch: Partial<JogoInterclasses>): Promise<void> {
+  const { error } = await supabase
+    .from('interclasses_jogos')
+    .update({ ...patch, atualizado_em: new Date().toISOString() })
+    .eq('id', jogoId);
   if (error) throw error;
 }
