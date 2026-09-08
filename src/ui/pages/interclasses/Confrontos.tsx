@@ -353,31 +353,36 @@ function CardJogo({ jogo, adapter, onLancar, compacto }: {
     setEditando(false);
   }
 
+  const mostraNumeros = !ehVencedorOnly && jogo.jogado && jogo.resultado;
+
   return (
-    <div className={cn('bg-white rounded-2xl border border-gray-100 shadow-sm flex items-center gap-2 relative', compacto ? 'p-2.5' : 'p-3.5')}>
-      <div className="flex-1 flex items-center justify-end gap-2 min-w-0">
-        <span className={cn('text-sm truncate text-right', vencedorA ? 'font-bold text-on-surface' : 'text-gray-600')}>{jogo.equipeA ?? 'A definir'}</span>
-        {jogo.equipeA && <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: corDaEquipe(jogo.equipeA) }} />}
+    <div className={cn('bg-white rounded-2xl border border-gray-100 shadow-sm relative', compacto ? 'p-3' : 'p-4')}>
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <div className="flex items-center gap-2 min-w-0">
+          {jogo.equipeA && <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: corDaEquipe(jogo.equipeA) }} />}
+          <span className={cn('text-sm truncate', vencedorA ? 'font-bold text-on-surface' : 'text-gray-600')}>{jogo.equipeA ?? 'A definir'}</span>
+        </div>
+        {mostraNumeros && <span className={cn('text-base font-bold flex-shrink-0', vencedorA ? 'text-on-surface' : 'text-gray-400')}>{adapter.valorA(jogo.resultado!)}</span>}
+      </div>
+      <div className="flex items-center justify-between gap-2 mb-2.5">
+        <div className="flex items-center gap-2 min-w-0">
+          {jogo.equipeB && <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: corDaEquipe(jogo.equipeB) }} />}
+          <span className={cn('text-sm truncate', vencedorB ? 'font-bold text-on-surface' : 'text-gray-600')}>{jogo.equipeB ?? 'A definir'}</span>
+        </div>
+        {mostraNumeros && <span className={cn('text-base font-bold flex-shrink-0', vencedorB ? 'text-on-surface' : 'text-gray-400')}>{adapter.valorB(jogo.resultado!)}</span>}
       </div>
 
-      <div className="flex-shrink-0">
-        {jogo.jogado && jogo.resultado ? (
-          <button onClick={() => setEditando(e => !e)} className="text-sm font-bold text-on-surface bg-gray-100 px-3 py-1.5 rounded-lg hover:bg-gray-200 transition-colors" title="Toque para editar o placar">
-            {adapter.formatarPlacar(jogo.resultado)}
-          </button>
-        ) : jogo.equipeA && jogo.equipeB ? (
-          <button onClick={() => setEditando(e => !e)} className="text-xs font-bold text-white bg-primary hover:bg-primary-dark px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
-            📝 Lançar placar
-          </button>
-        ) : (
-          <span className="text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded">vs</span>
-        )}
-      </div>
-
-      <div className="flex-1 flex items-center gap-2 min-w-0">
-        {jogo.equipeB && <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: corDaEquipe(jogo.equipeB) }} />}
-        <span className={cn('text-sm truncate', vencedorB ? 'font-bold text-on-surface' : 'text-gray-600')}>{jogo.equipeB ?? 'A definir'}</span>
-      </div>
+      {jogo.jogado && jogo.resultado ? (
+        <button onClick={() => setEditando(e => !e)} className="w-full text-center text-xs text-gray-500 hover:text-primary font-medium py-1 border-t border-gray-50">
+          {ehVencedorOnly ? adapter.formatarPlacar(jogo.resultado) : 'Editar placar'}
+        </button>
+      ) : jogo.equipeA && jogo.equipeB ? (
+        <button onClick={() => setEditando(e => !e)} className="w-full text-xs font-bold text-white bg-primary hover:bg-primary-dark py-2 rounded-lg transition-colors">
+          📝 Lançar placar
+        </button>
+      ) : (
+        <div className="text-center text-xs text-gray-400 py-1">aguardando definição</div>
+      )}
 
       {editando && jogo.equipeA && jogo.equipeB && (
         <ModalPlacar
