@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, type FormEvent } from 'react';
-import { CheckCircle2, Loader2, Pencil, Trash2, X } from 'lucide-react';
+import { CheckCircle2, Loader2, Pencil, Trash2, X, Link2, Check } from 'lucide-react';
 import { cn } from '../../AppLayout';
 import { buscarAlunos, criarInscricaoInterclasses, atualizarInscricaoInterclasses, excluirInscricaoInterclasses, limparInscricoesInterclasses } from '../../../data/supabase';
 import { agruparPorTime, categoriaFromTurma, MAXIMO_JOGADORES_TIME, minimoJogadoresPara } from '../../../domain/interclasses';
@@ -339,6 +339,20 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
   }
 
   const [limpandoTudo, setLimpandoTudo] = useState(false);
+  const [linkCopiado, setLinkCopiado] = useState(false);
+
+  const linkInscricaoPublico = typeof window !== 'undefined' ? `${window.location.origin}/interclasses/inscricao` : '';
+  const linkResultadosPublico = typeof window !== 'undefined' ? `${window.location.origin}/interclasses/resultados` : '';
+
+  async function copiarLinkInscricao() {
+    try {
+      await navigator.clipboard.writeText(linkInscricaoPublico);
+      setLinkCopiado(true);
+      setTimeout(() => setLinkCopiado(false), 2500);
+    } catch {
+      alert('Não foi possível copiar. Copie manualmente:\n\n' + linkInscricaoPublico);
+    }
+  }
 
   async function limparTudo() {
     if (inscricoes.length === 0) return;
@@ -380,6 +394,35 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
 
   return (
     <div className="flex flex-col gap-4">
+      {!modoPublico && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <h3 className="font-bold text-on-surface text-sm mb-1 flex items-center gap-1.5">
+            <Link2 className="w-4 h-4 text-primary" /> Link público de inscrição
+          </h3>
+          <p className="text-xs text-gray-500 mb-3">
+            Compartilhe esse link com os alunos — eles se inscrevem sozinhos, sem precisar de login. Cada aluno escolhe a modalidade dentro da página.
+          </p>
+          <div className="flex items-center gap-2 mb-2">
+            <input
+              readOnly
+              value={linkInscricaoPublico}
+              onFocus={e => e.target.select()}
+              className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-600 outline-none"
+            />
+            <button
+              onClick={copiarLinkInscricao}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary-dark text-white text-xs font-bold transition-colors flex-shrink-0"
+            >
+              {linkCopiado ? <Check className="w-3.5 h-3.5" /> : <Link2 className="w-3.5 h-3.5" />}
+              {linkCopiado ? 'Copiado!' : 'Copiar'}
+            </button>
+          </div>
+          <p className="text-[11px] text-gray-400">
+            Pra acompanhar jogos e classificação sem login: <span className="text-gray-600 font-medium">{linkResultadosPublico}</span>
+          </p>
+        </div>
+      )}
+
       {/* Formulário */}
       <div ref={formRef} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
         <div className="flex items-center justify-between mb-3">
