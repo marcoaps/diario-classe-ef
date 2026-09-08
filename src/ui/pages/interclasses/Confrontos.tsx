@@ -56,6 +56,7 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
   const [campeonato, setCampeonato] = useState<CampeonatoInterclasses | null>(null);
   const [jogos, setJogos] = useState<Jogo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [criandoCampeonato, setCriandoCampeonato] = useState(false);
   const [aba, setAba] = useState<'jogos' | 'classificacao' | 'grupos' | 'chave'>('jogos');
 
   const adapter = ADAPTERS[modalidade];
@@ -96,13 +97,24 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
   }, [jogos]);
 
   async function iniciarCampeonato(formato: string) {
+    if (criandoCampeonato) return; // trava contra duplo clique
+    setCriandoCampeonato(true);
     try {
       const camp = await criarCampeonato({ edicao: EDICAO, modalidade, categoria: categoriaAtiva, formato });
       const { jogos: iniciais } = gerarJogosIniciais(equipesProntas, formato);
       await criarJogos(camp.id, iniciais.map(jogoParaLinha));
       await carregar();
     } catch (e: any) {
-      alert('Erro ao iniciar o campeonato: ' + (e?.message || 'tente novamente.'));
+      if (e?.code === '23505') {
+        // já existe um campeonato pra essa categoria (provavelmente um duplo
+        // clique criou de verdade em segundo plano) -- só recarrega em vez de
+        // mostrar um erro cru de banco de dados.
+        await carregar();
+      } else {
+        alert('Erro ao iniciar o campeonato: ' + (e?.message || 'tente novamente.'));
+      }
+    } finally {
+      setCriandoCampeonato(false);
     }
   }
 
@@ -222,7 +234,7 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
           <Loader2 className="w-4 h-4 animate-spin" /> Carregando...
         </div>
       ) : !campeonato ? (
-        <SetupCampeonato equipesProntas={equipesProntas} onIniciar={iniciarCampeonato} />
+        <SetupCampeonato equipesProntas={equipesProntas} onIniciar={iniciarCampeonato} criando={criandoCampeonato} />
       ) : (
         <div className="flex flex-col gap-4">
           {campeonato.campeao ? (
@@ -289,7 +301,7 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
   );
 }
 
-function SetupCampeonato({ equipesProntas, onIniciar }: { equipesProntas: string[]; onIniciar: (formato: string) => void }) {
+function SetupCampeonato({ equipesProntas, onIniciar, criando }: { equipesProntas: string[]; onIniciar: (formato: string) => void; criando?: boolean }) {
   const [formato, setFormato] = useState('round_robin');
   const podeIniciar = equipesProntas.length >= (FORMATOS.find(f => f.id === formato)?.min ?? 3);
 
@@ -322,10 +334,10 @@ function SetupCampeonato({ equipesProntas, onIniciar }: { equipesProntas: string
       </div>
       <button
         onClick={() => onIniciar(formato)}
-        disabled={!podeIniciar}
+        disabled={!podeIniciar || criando}
         className="w-full py-3 rounded-xl bg-primary hover:bg-primary-dark disabled:opacity-40 text-white text-sm font-bold transition-colors"
       >
-        {podeIniciar ? '🚀 Iniciar Campeonato' : `Faltam times (mín. ${FORMATOS.find(f => f.id === formato)?.min})`}
+        {criando ? 'Criando...' : podeIniciar ? '🚀 Iniciar Campeonato' : `Faltam times (mín. ${FORMATOS.find(f => f.id === formato)?.min})`}
       </button>
     </div>
   );
