@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, type FormEvent } from 'react';
 import { CheckCircle2, Loader2, Pencil, Trash2, X, Link2, Check } from 'lucide-react';
 import { cn } from '../../AppLayout';
 import { buscarAlunos, criarInscricaoInterclasses, atualizarInscricaoInterclasses, excluirInscricaoInterclasses, limparInscricoesInterclasses } from '../../../data/supabase';
-import { agruparPorTime, categoriaFromTurma, MAXIMO_JOGADORES_TIME, minimoJogadoresPara } from '../../../domain/interclasses';
+import { agruparPorTime, categoriaFromTurma, MAXIMO_JOGADORES_TIME, minimoJogadoresPara, modalidadeConfig } from '../../../domain/interclasses';
 import type { InscricaoInterclasses, Modalidade } from '../../../domain/interclasses';
 
 interface AlunoOficial {
@@ -29,15 +29,15 @@ interface Props {
 
 const FORM_VAZIO = { nomeCompleto: '', turmaId: '', numeroChamada: '', numeroCamisa: '', nomeTime: '' };
 
-function LinhaAlunoSelecao({ aluno, marcado, valorCamisa, onToggle, onCamisaChange }: {
+function LinhaAlunoSelecao({ aluno, marcado, valorCamisa, onToggle, onCamisaChange, grande }: {
   aluno: AlunoOficial; marcado: boolean; valorCamisa?: string;
-  onToggle: () => void; onCamisaChange: (v: string) => void;
+  onToggle: () => void; onCamisaChange: (v: string) => void; grande?: boolean;
 }) {
   return (
-    <label className={cn('flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50', marcado && 'bg-primary/5')}>
-      <input type="checkbox" checked={marcado} onChange={onToggle} className="w-4 h-4 accent-primary flex-shrink-0" />
-      <span className="flex-1 text-sm text-on-surface truncate">{aluno.nome}</span>
-      {aluno.numero_chamada != null && <span className="text-gray-400 text-xs flex-shrink-0">chamada #{aluno.numero_chamada}</span>}
+    <label className={cn('flex items-center gap-2 cursor-pointer hover:bg-gray-50', marcado && 'bg-primary/5', grande ? 'px-4 py-3.5' : 'px-3 py-2')}>
+      <input type="checkbox" checked={marcado} onChange={onToggle} className={cn('accent-primary flex-shrink-0', grande ? 'w-6 h-6' : 'w-4 h-4')} />
+      <span className={cn('flex-1 text-on-surface truncate', grande ? 'text-lg' : 'text-sm')}>{aluno.nome}</span>
+      {aluno.numero_chamada != null && <span className={cn('text-gray-400 flex-shrink-0', grande ? 'text-sm' : 'text-xs')}>chamada #{aluno.numero_chamada}</span>}
       {marcado && (
         <input
           type="number" min="1"
@@ -45,7 +45,7 @@ function LinhaAlunoSelecao({ aluno, marcado, valorCamisa, onToggle, onCamisaChan
           onChange={e => onCamisaChange(e.target.value)}
           onClick={e => e.stopPropagation()}
           title="Número da camisa"
-          className="w-14 text-center text-xs border border-gray-200 rounded-lg px-1 py-1 outline-none focus:border-primary flex-shrink-0"
+          className={cn('text-center border border-gray-200 rounded-lg outline-none focus:border-primary flex-shrink-0', grande ? 'w-16 text-base py-1.5' : 'w-14 text-xs py-1')}
         />
       )}
     </label>
@@ -391,6 +391,8 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
   }, [inscricoes, busca, filtroTurma, filtroTime, filtroGenero]);
 
   const filtrosAtivos = busca.trim() !== '' || filtroTurma !== 'TODAS' || filtroTime !== 'TODOS' || filtroGenero !== 'TODOS';
+  const corModalidade = modalidadeConfig(modalidade).cor;
+  const equipesFiltradas = useMemo(() => agruparPorTime(listaFiltrada), [listaFiltrada]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -424,10 +426,10 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
       )}
 
       {/* Formulário */}
-      <div ref={formRef} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+      <div ref={formRef} className={cn('bg-white rounded-2xl border border-gray-100 shadow-sm', modoPublico ? 'p-5' : 'p-4')}>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-bold text-on-surface text-sm">
-            {editingId ? '✎ Editar inscrição' : `📝 Inscrição de Alunos — Interclasses ${edicao}`}
+          <h3 className={cn('font-bold', modoPublico ? 'text-xl' : 'text-sm text-on-surface')} style={modoPublico ? { color: corModalidade } : undefined}>
+            {editingId ? '✎ Editar inscrição' : modoPublico ? '📝 Inscreva-se!' : `📝 Inscrição de Alunos — Interclasses ${edicao}`}
           </h3>
           {editingId && (
             <button onClick={limparFormulario} className="text-xs text-gray-500 hover:text-error flex items-center gap-1">
@@ -438,12 +440,12 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
 
         <form onSubmit={usaListaOficial ? handleSubmitLote : handleSubmit} className="flex flex-col gap-3">
           <div>
-            <label className="text-xs font-semibold text-gray-500 mb-1 block">Turma/Série *</label>
+            <label className={cn('font-semibold text-gray-500 mb-1 block', modoPublico ? 'text-sm' : 'text-xs')}>Turma/Série *</label>
             <select
               value={form.turmaId}
               onChange={e => handleTurmaChange(e.target.value)}
               required
-              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-on-surface outline-none focus:border-primary"
+              className={cn('w-full bg-gray-50 border border-gray-200 rounded-xl text-on-surface outline-none focus:border-primary', modoPublico ? 'px-4 py-3.5 text-lg' : 'px-3 py-2.5 text-sm')}
             >
               <option value="" disabled>Selecione a turma</option>
               {turmas.map(t => <option key={t} value={t}>{t}</option>)}
@@ -454,7 +456,7 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
           </div>
 
           <div className="relative">
-            <label className="text-xs font-semibold text-gray-500 mb-1 block">Nome do time *</label>
+            <label className={cn('font-semibold text-gray-500 mb-1 block', modoPublico ? 'text-sm' : 'text-xs')}>Nome do time *</label>
             <input
               type="text"
               autoComplete="off"
@@ -464,7 +466,7 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
               onBlur={() => setTimeout(() => setSugestoesTimeAbertas(false), 150)}
               placeholder="Ex: Os Pernas de Pau"
               required
-              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-on-surface outline-none focus:border-primary"
+              className={cn('w-full bg-gray-50 border border-gray-200 rounded-xl text-on-surface outline-none focus:border-primary', modoPublico ? 'px-4 py-3.5 text-lg' : 'px-3 py-2.5 text-sm')}
             />
             {sugestoesTimeAbertas && sugestoesTime.length > 0 && (
               <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-52 overflow-y-auto">
@@ -487,7 +489,7 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
 
           {usaListaOficial ? (
             <div>
-              <label className="text-xs font-semibold text-gray-500 mb-1 block">
+              <label className={cn('font-semibold text-gray-500 mb-1 block', modoPublico ? 'text-sm' : 'text-xs')}>
                 Alunos da turma * (selecione um ou mais — {Object.keys(selecionados).length} selecionado{Object.keys(selecionados).length !== 1 ? 's' : ''})
               </label>
               <div className="border border-gray-200 rounded-xl overflow-hidden max-h-80 overflow-y-auto">
@@ -497,15 +499,15 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
                   const todosMarcados = alunosDoGrupo.every(a => a.id in selecionados);
                   return (
                     <div key={genero}>
-                      <div className="flex items-center justify-between px-3 py-1.5 bg-gray-50 border-b border-gray-100">
-                        <span className="text-xs font-bold text-gray-600">{LABEL_GENERO[genero]}</span>
-                        <button type="button" onClick={() => alternarGrupo(alunosDoGrupo)} className="text-[11px] text-primary font-semibold hover:underline">
+                      <div className={cn('flex items-center justify-between bg-gray-50 border-b border-gray-100', modoPublico ? 'px-4 py-2.5' : 'px-3 py-1.5')}>
+                        <span className={cn('font-bold text-gray-600', modoPublico ? 'text-base' : 'text-xs')}>{LABEL_GENERO[genero]}</span>
+                        <button type="button" onClick={() => alternarGrupo(alunosDoGrupo)} className={cn('text-primary font-semibold hover:underline', modoPublico ? 'text-sm' : 'text-[11px]')}>
                           {todosMarcados ? 'Desmarcar todos' : 'Marcar todos'}
                         </button>
                       </div>
                       <div className="divide-y divide-gray-50">
                         {alunosDoGrupo.map(a => (
-                          <LinhaAlunoSelecao key={a.id} aluno={a} marcado={a.id in selecionados} valorCamisa={selecionados[a.id]}
+                          <LinhaAlunoSelecao key={a.id} aluno={a} marcado={a.id in selecionados} valorCamisa={selecionados[a.id]} grande={modoPublico}
                             onToggle={() => toggleSelecionado(a)} onCamisaChange={v => setSelecionados(prev => ({ ...prev, [a.id]: v }))} />
                         ))}
                       </div>
@@ -520,7 +522,7 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
                     </div>
                     <div className="divide-y divide-gray-50">
                       {alunosPorGenero.semGenero.map(a => (
-                        <LinhaAlunoSelecao key={a.id} aluno={a} marcado={a.id in selecionados} valorCamisa={selecionados[a.id]}
+                        <LinhaAlunoSelecao key={a.id} aluno={a} marcado={a.id in selecionados} valorCamisa={selecionados[a.id]} grande={modoPublico}
                           onToggle={() => toggleSelecionado(a)} onCamisaChange={v => setSelecionados(prev => ({ ...prev, [a.id]: v }))} />
                       ))}
                     </div>
@@ -587,7 +589,11 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
           <button
             type="submit"
             disabled={salvando || (usaListaOficial && Object.keys(selecionados).length === 0)}
-            className="w-full py-3 rounded-xl bg-primary hover:bg-primary-dark disabled:opacity-50 text-white text-sm font-bold transition-colors flex items-center justify-center gap-2"
+            className={cn(
+              'w-full rounded-xl disabled:opacity-50 text-white font-bold transition-colors flex items-center justify-center gap-2',
+              modoPublico ? 'py-4 text-lg' : 'py-3 text-sm bg-primary hover:bg-primary-dark'
+            )}
+            style={modoPublico ? { background: corModalidade } : undefined}
           >
             {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             {salvando
@@ -602,9 +608,9 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
       </div>
 
       {/* Lista + filtros */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+      <div className={cn('bg-white rounded-2xl border border-gray-100 shadow-sm', modoPublico ? 'p-5' : 'p-4')}>
         <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
-          <h3 className="font-bold text-on-surface text-sm">Alunos Inscritos — Interclasses {edicao}</h3>
+          <h3 className={cn('font-bold text-on-surface', modoPublico ? 'text-lg' : 'text-sm')}>{modoPublico ? 'Times inscritos' : `Alunos Inscritos — Interclasses ${edicao}`}</h3>
           <div className="flex items-center gap-2">
             <span className="text-[11px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{listaFiltrada.length}/{inscricoes.length}</span>
             {!modoPublico && inscricoes.length > 0 && (
@@ -674,6 +680,31 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
             {inscricoes.length === 0
               ? 'Nenhum aluno inscrito ainda. Use o formulário acima para começar.'
               : 'Nenhuma inscrição encontrada com esses filtros.'}
+          </div>
+        ) : modoPublico ? (
+          <div className="flex flex-col gap-3">
+            {equipesFiltradas.map(eq => (
+              <div key={eq.nomeTime} className="rounded-2xl border border-gray-100 overflow-hidden">
+                <div className="flex items-center justify-between gap-2 px-4 py-2.5" style={{ background: `${corModalidade}14` }}>
+                  <span className="font-bold text-base text-on-surface truncate">{eq.nomeTime}</span>
+                  <span className={cn(
+                    'text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0',
+                    eq.completo ? 'bg-secondary-container text-on-secondary-container' : 'bg-amber-100 text-amber-700'
+                  )}>
+                    {eq.completo ? `✅ ${eq.alunos.length}/${MAXIMO_JOGADORES_TIME}` : `⏳ ${eq.alunos.length}/${eq.minimoJogadores}`}
+                  </span>
+                </div>
+                <div className="divide-y divide-gray-50">
+                  {eq.alunos.map(a => (
+                    <div key={a.id} className="flex items-center gap-3 px-4 py-2.5">
+                      <span className="text-primary font-mono text-sm w-9 flex-shrink-0">#{a.numero_camisa}</span>
+                      <span className="flex-1 text-base text-on-surface truncate">{a.nome_completo}</span>
+                      <span className="text-gray-400 text-sm flex-shrink-0">{a.turma_id}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
           <div className="overflow-x-auto -mx-1">
