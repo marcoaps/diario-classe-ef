@@ -154,7 +154,10 @@ export function genElim(equipes: (string | null)[], prefix = 'se'): Jogo[] {
 }
 
 export function genGroups(equipes: string[]): { grupos: Grupo[]; jogos: Jogo[] } {
-  const n = equipes.length; const numG = n <= 5 ? 2 : n <= 9 ? 3 : 4;
+  // Grupos pequenos demais (ex: 2 times, 1 jogo só) fazem a fase de grupos
+  // parecer inútil — só divide em mais de um grupo quando dá pra manter
+  // pelo menos ~4 times por grupo.
+  const n = equipes.length; const numG = n <= 5 ? 1 : n <= 8 ? 2 : n <= 12 ? 3 : 4;
   const grupos: Grupo[] = Array.from({ length: numG }, (_, i) => ({ nome: String.fromCharCode(65 + i), equipes: [] }));
   shuffle([...equipes]).forEach((e, i) => grupos[i % numG].equipes.push(e));
   const jogos: Jogo[] = [];

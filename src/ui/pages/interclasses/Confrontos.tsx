@@ -162,7 +162,9 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
   async function iniciarMataMataDosGrupos() {
     if (!campeonato || campeonato.fase !== 'groups') return;
     const grupos = Array.from(new Set(jogos.map(j => j.grupo).filter(Boolean))) as string[];
-    const classificados = grupos.map(g => calcSt(equipesDoCampeonato, jogos, adapter, regras, g)[0]?.equipe).filter(Boolean) as string[];
+    // Classificam os 2 primeiros de cada grupo (padrão de campeonato de
+    // verdade) — com 1 grupo só, os 2 primeiros já formam a final.
+    const classificados = grupos.flatMap(g => calcSt(equipesDoCampeonato, jogos, adapter, regras, g).slice(0, 2).map(s => s.equipe));
     if (classificados.length < 2) { alert('Termine os jogos dos grupos antes de iniciar o mata-mata.'); return; }
     const novos = genElim(classificados, 'ko');
     await criarJogos(campeonato.id, novos.map(jogoParaLinha));
@@ -357,11 +359,19 @@ function CardJogo({ jogo, adapter, onLancar, compacto }: {
 
   return (
     <div className={cn('bg-white rounded-2xl border border-gray-100 shadow-sm relative', compacto ? 'p-3' : 'p-4')}>
-      {jogo.grupo && (
-        <div className="flex justify-center mb-2">
-          <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full text-white" style={{ background: corDaEquipe(`grupo-${jogo.grupo}`) }}>
-            Grupo {jogo.grupo}
-          </span>
+      {(jogo.grupo || jogo.fase === 'league' || jogo.fase === 'swiss' || !FASES_LIGA.has(jogo.fase)) && (
+        <div className="flex justify-center items-center gap-1.5 mb-2">
+          {jogo.grupo && (
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full text-white" style={{ background: corDaEquipe(`grupo-${jogo.grupo}`) }}>
+              Grupo {jogo.grupo}
+            </span>
+          )}
+          {(jogo.fase === 'league' || jogo.fase === 'swiss') && (
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Rodada {jogo.rodada}</span>
+          )}
+          {!FASES_LIGA.has(jogo.fase) && (
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{jogo.fase}</span>
+          )}
         </div>
       )}
       <div className="flex items-center justify-center gap-1.5 text-center flex-wrap mb-2.5">
