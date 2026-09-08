@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../../store';
 import { cn } from '../AppLayout';
-import { Save, Loader2 } from 'lucide-react';
+import { Save, Loader2, Wand2 } from 'lucide-react';
 import { supabase } from '../../data/supabase';
+import { inferirGenero } from '../../domain/generoPorNome';
 
 interface AlunoSupabase {
   id: string;
@@ -77,6 +78,23 @@ export function MarcarGenero() {
     });
   };
 
+  // Pré-preenche pelo primeiro nome (dicionário de nomes comuns + palpite por
+  // terminação) — só sugestão: os botões M/F continuam abertos pra corrigir
+  // antes de salvar, nada é gravado sozinho.
+  const handleDetectarAutomaticamente = () => {
+    setSexos(prev => {
+      const novos = { ...prev };
+      let detectados = 0;
+      alunos.forEach(a => {
+        if (novos[a.id]) return; // não sobrescreve o que já estava marcado
+        const palpite = inferirGenero(a.nome);
+        if (palpite) { novos[a.id] = palpite; detectados++; }
+      });
+      if (detectados === 0) alert('Não consegui identificar nenhum nome novo automaticamente.');
+      return novos;
+    });
+  };
+
   const handleSave = async () => {
     if (alunos.length === 0) return;
     setSaving(true);
@@ -105,6 +123,13 @@ export function MarcarGenero() {
         <p className="text-sm text-gray-500 mb-3">
           Usado pra separar meninos e meninas nas Fichas de Grupo, quando várias turmas do mesmo horário são juntadas. {totalMarcados}/{alunos.length} marcados.
         </p>
+        <button
+          onClick={handleDetectarAutomaticamente}
+          disabled={loading || alunos.length === 0}
+          className="w-full h-10 mb-2 rounded-xl font-bold text-sm bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          <Wand2 className="w-4 h-4" /> Detectar automaticamente pelo nome
+        </button>
         <div className="flex gap-2 items-center">
           <button
             onClick={() => handleMarcarTodos('M')}
