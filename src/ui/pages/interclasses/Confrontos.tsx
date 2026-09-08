@@ -324,11 +324,13 @@ function LinhaJogo({ jogo, adapter, onLancar }: { jogo: Jogo; adapter: import('.
       <span className="flex-1 text-sm text-right text-gray-700 truncate">{jogo.equipeA ?? 'A definir'}</span>
       <div className="mx-3 flex flex-col items-center gap-1">
         {jogo.jogado && jogo.resultado ? (
-          <button onClick={() => setEditando(e => !e)} className="text-xs font-bold text-gray-700 bg-gray-100 px-3 py-1 rounded hover:bg-gray-200">
+          <button onClick={() => setEditando(e => !e)} className="text-sm font-bold text-on-surface bg-gray-100 px-3 py-1.5 rounded-lg hover:bg-gray-200 transition-colors" title="Toque para editar o placar">
             {adapter.formatarPlacar(jogo.resultado)}
           </button>
         ) : (
-          <button onClick={() => setEditando(e => !e)} className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">vs</button>
+          <button onClick={() => setEditando(e => !e)} className="text-xs font-bold text-white bg-primary hover:bg-primary-dark px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
+            📝 Lançar placar
+          </button>
         )}
       </div>
       <span className="flex-1 text-sm text-gray-700 truncate">{jogo.equipeB ?? 'A definir'}</span>
