@@ -570,7 +570,7 @@ export interface CampeonatoInterclasses {
 export interface JogoInterclasses {
   id: string;
   campeonato_id: string;
-  equipe_a: string;
+  equipe_a: string | null;
   equipe_b: string | null;
   grupo_nome: string | null;
   fase: string;

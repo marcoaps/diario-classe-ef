@@ -38,7 +38,7 @@ function linhaParaJogo(row: JogoInterclasses): Jogo {
 
 function jogoParaLinha(j: Jogo): Omit<JogoInterclasses, 'id' | 'campeonato_id' | 'criado_em' | 'atualizado_em'> {
   return {
-    equipe_a: j.equipeA!, equipe_b: j.equipeB, grupo_nome: j.grupo, fase: j.fase, rodada: j.rodada,
+    equipe_a: j.equipeA, equipe_b: j.equipeB, grupo_nome: j.grupo, fase: j.fase, rodada: j.rodada,
     bracket_idx: j.bracketIdx ?? null, is_bye: !!j.isBye, jogado: j.jogado, vencedor: j.vencedor,
     resultado: j.resultado,
   };

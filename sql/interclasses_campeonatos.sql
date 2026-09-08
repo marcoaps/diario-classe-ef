@@ -28,8 +28,8 @@ create table if not exists interclasses_campeonatos (
 create table if not exists interclasses_jogos (
   id uuid primary key default gen_random_uuid(),
   campeonato_id uuid not null references interclasses_campeonatos(id) on delete cascade,
-  equipe_a text not null,                        -- nome_time (mesmo nome usado em interclasses_inscricoes)
-  equipe_b text,                                 -- null só em bye
+  equipe_a text,                                 -- nome_time (mesmo nome usado em interclasses_inscricoes)
+  equipe_b text,                                 -- ambos podem ser null: bye, ou jogo de rodada futura ainda não definida
   grupo_nome text,
   fase text not null,                            -- 'league' | 'group' | 'swiss' | 'Rodada 1' | 'Semifinal' | 'Final' ...
   rodada int not null default 0,
