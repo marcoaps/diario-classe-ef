@@ -12,6 +12,8 @@ export type ResultadoSets = { tipo: 'sets'; setsA: number; setsB: number };
 export type ResultadoVencedor = { tipo: 'vencedor'; vencedor: 'A' | 'B' };
 export type Resultado = ResultadoGols | ResultadoSets | ResultadoVencedor;
 
+export interface DestinoJogo { jogoId: string; slot: 'A' | 'B'; }
+
 export interface Jogo {
   id: string;
   equipeA: string | null;
@@ -24,6 +26,20 @@ export interface Jogo {
   grupo: string | null;
   bracketIdx?: number;
   isBye?: boolean;
+  // Só usados no mata-mata duplo: pra onde o vencedor/perdedor deste jogo
+  // avança (a rotina genérica de "round/bracketIdx" dos outros formatos não
+  // dá conta de duas chaves — vencedores e perdedores — correndo em
+  // paralelo, então aqui cada jogo já nasce sabendo pra onde manda os dois).
+  chave?: 'W' | 'L' | 'GF';
+  destinoVencedor?: DestinoJogo;
+  destinoPerdedor?: DestinoJogo;
+  // Só no mata-mata duplo: esse lado nunca vai receber ninguém (a fonte dele
+  // era um bye sem perdedor real, ou uma cadeia de byes). Só passa a importar
+  // quando o OUTRO lado enfim chegar — nesse momento o jogo avança sozinho,
+  // mesmo que isso só aconteça depois de uma partida de verdade ter sido
+  // disputada em outro lugar da chave (não dá pra saber tudo isso só na
+  // hora de gerar a chave).
+  ladoAusenteFixo?: 'A' | 'B';
 }
 
 export interface Grupo { nome: string; equipes: string[]; }
@@ -100,6 +116,7 @@ export const FORMATOS: FormatoOption[] = [
   { id: 'single_elim', nome: 'Mata-Mata', desc: 'Eliminação direta — perdeu, saiu', icone: '⚡', min: 3 },
   { id: 'groups_ko', nome: 'Grupos + Mata-Mata', desc: 'Fase de grupos + eliminatória', icone: '🏆', min: 4 },
   { id: 'swiss', nome: 'Sistema Suíço', desc: 'Emparelhamento dinâmico', icone: '🇨🇭', min: 4 },
+  { id: 'double_elim', nome: 'Mata-Mata Duplo', desc: 'Só é eliminado na 2ª derrota', icone: '🔥', min: 3 },
 ];
 
 const nextPow2 = (n: number) => { let p = 1; while (p < n) p *= 2; return p; };
@@ -151,6 +168,151 @@ export function genElim(equipes: (string | null)[], prefix = 'se'): Jogo[] {
     if (nx) { if ((j.bracketIdx ?? 0) % 2 === 0) nx.equipeA = j.vencedor!; else nx.equipeB = j.vencedor!; }
   });
   return todos;
+}
+
+// Mata-mata duplo: chave de vencedores (W) + chave de perdedores (L) +
+// grande final única (GF) — o time só está eliminado depois da 2ª derrota.
+// Cada jogo já nasce sabendo pra onde manda o vencedor E o perdedor
+// (destinoVencedor/destinoPerdedor), porque com duas chaves em paralelo o
+// truque de "rodada+1, bracketIdx/2" do mata-mata simples não é suficiente.
+export function genDoubleElim(equipes: string[]): Jogo[] {
+  const size = nextPow2(equipes.length);
+  const rounds = Math.log2(size);
+  const seeded = [...equipes]; while (seeded.length < size) seeded.push(null);
+
+  const todos: Jogo[] = [];
+  const wb: Jogo[][] = [];
+
+  // Chave de vencedores (W) — mesma semeadura do mata-mata simples.
+  const r1: Jogo[] = [];
+  for (let i = 0; i < size / 2; i++) {
+    const a = seeded[i], b = seeded[size - 1 - i] ?? null;
+    const isBye = !a || !b;
+    r1.push({ id: `de_wb_r1_m${i}_${uid()}`, equipeA: a, equipeB: b, jogado: isBye, vencedor: isBye ? (a || b) : null, resultado: null, rodada: 1, fase: 'W · Rodada 1', grupo: null, bracketIdx: i, isBye, chave: 'W' });
+  }
+  wb.push(r1);
+  for (let r = 2; r <= rounds; r++) {
+    const cnt = size / Math.pow(2, r);
+    const rr: Jogo[] = [];
+    for (let m = 0; m < cnt; m++) {
+      const fase = r === rounds ? 'W · Final' : r === rounds - 1 ? 'W · Semifinal' : `W · Rodada ${r}`;
+      rr.push({ id: `de_wb_r${r}_m${m}_${uid()}`, equipeA: null, equipeB: null, jogado: false, vencedor: null, resultado: null, rodada: r, fase, grupo: null, bracketIdx: m, chave: 'W' });
+    }
+    wb.push(rr);
+  }
+  for (let r = 1; r < rounds; r++) {
+    wb[r - 1].forEach((m, i) => {
+      const alvo = wb[r][Math.floor(i / 2)];
+      m.destinoVencedor = { jogoId: alvo.id, slot: i % 2 === 0 ? 'A' : 'B' };
+    });
+  }
+  wb.forEach(rr => todos.push(...rr));
+
+  // Chave de perdedores (L) — nível m agrupa duas rodadas: uma "menor" (só
+  // sobreviventes da própria chave L jogando entre si) e uma "maior" (esses
+  // sobreviventes recebendo os perdedores frescos da chave W daquele nível).
+  const lb: Jogo[][] = []; // lb[2*(m-1)] = rodada menor do nível m, lb[2*(m-1)+1] = rodada maior
+  for (let m = 1; m <= rounds - 1; m++) {
+    const cnt = size / Math.pow(2, m + 1);
+    const menor: Jogo[] = [];
+    const maior: Jogo[] = [];
+    for (let i = 0; i < cnt; i++) {
+      menor.push({ id: `de_lb_r${2 * m - 1}_m${i}_${uid()}`, equipeA: null, equipeB: null, jogado: false, vencedor: null, resultado: null, rodada: rounds + (2 * m - 1), fase: `L · Rodada ${2 * m - 1}`, grupo: null, bracketIdx: i, chave: 'L' });
+      maior.push({ id: `de_lb_r${2 * m}_m${i}_${uid()}`, equipeA: null, equipeB: null, jogado: false, vencedor: null, resultado: null, rodada: rounds + (2 * m), fase: `L · Rodada ${2 * m}`, grupo: null, bracketIdx: i, chave: 'L' });
+    }
+    lb.push(menor, maior);
+  }
+
+  // Nível 1: perdedores da W-Rodada 1 caem direto na L-Rodada 1 (menor).
+  const nivel1Menor = lb[0];
+  wb[0].forEach((m, i) => {
+    const alvo = nivel1Menor[Math.floor(i / 2)];
+    m.destinoPerdedor = { jogoId: alvo.id, slot: i % 2 === 0 ? 'A' : 'B' };
+  });
+
+  for (let m = 1; m <= rounds - 1; m++) {
+    const menor = lb[2 * (m - 1)];
+    const maior = lb[2 * (m - 1) + 1];
+    // vencedores da rodada "menor" entram na "maior" (slot A) daquele mesmo nível
+    menor.forEach((j, i) => { j.destinoVencedor = { jogoId: maior[i].id, slot: 'A' }; });
+    // perdedores da W-Rodada (m+1) entram na "maior" daquele nível (slot B)
+    wb[m].forEach((j, i) => { j.destinoPerdedor = { jogoId: maior[i].id, slot: 'B' }; });
+    // vencedores da rodada "maior" alimentam a "menor" do próximo nível (pareados 2 a 2)
+    if (m < rounds - 1) {
+      const proximaMenor = lb[2 * m];
+      maior.forEach((j, i) => {
+        const alvo = proximaMenor[Math.floor(i / 2)];
+        j.destinoVencedor = { jogoId: alvo.id, slot: i % 2 === 0 ? 'A' : 'B' };
+      });
+    }
+  }
+  lb.forEach(rr => todos.push(...rr));
+
+  // Grande final: campeão da W x campeão da L. Único jogo, decide o título.
+  const wbFinal = wb[rounds - 1][0];
+  const lbFinal = lb[lb.length - 1][0];
+  const grandeFinal: Jogo = {
+    id: `de_gf_${uid()}`, equipeA: null, equipeB: null, jogado: false, vencedor: null, resultado: null,
+    rodada: rounds + (2 * (rounds - 1)) + 1, fase: 'Grande Final', grupo: null, chave: 'GF',
+  };
+  wbFinal.destinoVencedor = { jogoId: grandeFinal.id, slot: 'A' };
+  lbFinal.destinoVencedor = { jogoId: grandeFinal.id, slot: 'B' };
+  todos.push(grandeFinal);
+
+  // Propaga os byes pela árvore inteira (W e L), em ponto fixo, porque com o
+  // nº de times longe de uma potência de 2 um bye pode gerar outro bye em
+  // cascata (na W) e até "matar" um confronto da L inteiro — quando os DOIS
+  // lados dele vêm de byes, então nunca existe um perdedor real pra chegar
+  // ali. Um jogo "morto" desses nunca é jogado e some da lista final; quem
+  // dependia dele simplesmente recebe um bye também (ou morre também, se os
+  // dois lados dele também ficarem confirmados ausentes).
+  const fonteDe = (alvoId: string, slot: 'A' | 'B') =>
+    todos.find(x =>
+      (x.destinoVencedor?.jogoId === alvoId && x.destinoVencedor.slot === slot) ||
+      (x.destinoPerdedor?.jogoId === alvoId && x.destinoPerdedor.slot === slot)
+    );
+
+  const ausente = new Set<string>(); // "jogoId:A" | "jogoId:B" -- confirmado que nunca vai chegar ninguém ali
+  const mortos = new Set<string>();  // jogos que nunca vão existir de verdade (os dois lados ausentes)
+
+  let mudou = true;
+  while (mudou) {
+    mudou = false;
+    todos.forEach(j => {
+      if (j.jogado || mortos.has(j.id) || j.chave === 'GF') return;
+
+      (['A', 'B'] as const).forEach(lado => {
+        const preenchido = lado === 'A' ? j.equipeA !== null : j.equipeB !== null;
+        if (preenchido || ausente.has(`${j.id}:${lado}`)) return;
+        const fonte = fonteDe(j.id, lado);
+        if (!fonte) return;
+        if (mortos.has(fonte.id)) { ausente.add(`${j.id}:${lado}`); j.ladoAusenteFixo = lado; mudou = true; return; }
+        if (!fonte.jogado) return; // fonte ainda não resolvida -- espera
+        const viaPerdedor = fonte.destinoPerdedor?.jogoId === j.id && fonte.destinoPerdedor.slot === lado;
+        if (viaPerdedor) {
+          if (fonte.isBye) { ausente.add(`${j.id}:${lado}`); j.ladoAusenteFixo = lado; mudou = true; }
+          // se a fonte não foi bye, o perdedor de verdade só chega quando o
+          // jogo for jogado de verdade (aplicarResultadoDuplo), não aqui.
+          return;
+        }
+        if (fonte.vencedor) {
+          if (lado === 'A') j.equipeA = fonte.vencedor; else j.equipeB = fonte.vencedor;
+          mudou = true;
+        }
+      });
+
+      if (mortos.has(j.id)) return;
+      const ausenteA = ausente.has(`${j.id}:A`), ausenteB = ausente.has(`${j.id}:B`);
+      if (ausenteA && ausenteB) { mortos.add(j.id); mudou = true; return; }
+      const temA = j.equipeA !== null, temB = j.equipeB !== null;
+      if ((temA && ausenteB) || (temB && ausenteA)) {
+        j.isBye = true; j.jogado = true; j.vencedor = temA ? j.equipeA : j.equipeB;
+        mudou = true;
+      }
+    });
+  }
+
+  return todos.filter(j => !mortos.has(j.id));
 }
 
 export function genGroups(equipes: string[]): { grupos: Grupo[]; jogos: Jogo[] } {
@@ -221,6 +383,7 @@ export function genSwiss(equipes: string[], jogosAnteriores: Jogo[], rodada: num
 export function gerarJogosIniciais(equipes: string[], formato: string): { jogos: Jogo[]; grupos: Grupo[] | null; fase: string } {
   if (formato === 'round_robin') return { jogos: genRR(equipes), grupos: null, fase: 'league' };
   if (formato === 'single_elim') return { jogos: genElim(equipes, 'se'), grupos: null, fase: 'elimination' };
+  if (formato === 'double_elim') return { jogos: genDoubleElim(equipes), grupos: null, fase: 'elimination' };
   if (formato === 'groups_ko') { const r = genGroups(equipes); return { jogos: r.jogos, grupos: r.grupos, fase: 'groups' }; }
   if (formato === 'swiss') {
     const sh = shuffle([...equipes]); const jogos: Jogo[] = [];
@@ -270,5 +433,61 @@ export function aplicarResultado(
   // liga/grupos/suíço: só grava o placar; campeão é decidido por quem chama
   // (depende de quando a última rodada termina, específico de cada formato).
   js[idx] = { ...js[idx], resultado, jogado: true, vencedor: nomeVencedor };
+  return { jogos: js };
+}
+
+// Entrega um time num jogo de destino e, se isso deixar esse jogo com um lado
+// preenchido e o outro permanentemente vazio (ladoAusenteFixo), avança quem
+// chegou automaticamente — sem precisar que alguém "jogue" essa partida — e
+// repete a checagem em cascata pro próximo destino. Isso só pode acontecer
+// depois de uma partida de verdade (não dá pra saber tudo na hora de gerar a
+// chave, quando a chave é bem irregular por causa de byes).
+function entregarECascatear(jogos: Jogo[], jogoId: string, slot: 'A' | 'B', time: string) {
+  const alvo = jogos.find(x => x.id === jogoId);
+  if (!alvo || alvo.jogado) return;
+  if (slot === 'A') alvo.equipeA = time; else alvo.equipeB = time;
+
+  const outroSlot: 'A' | 'B' = slot === 'A' ? 'B' : 'A';
+  const outroPreenchido = outroSlot === 'A' ? alvo.equipeA !== null : alvo.equipeB !== null;
+  if (outroPreenchido) return; // virou um confronto de verdade, alguém vai jogar
+
+  if (alvo.ladoAusenteFixo === outroSlot) {
+    alvo.jogado = true; alvo.isBye = true; alvo.vencedor = time;
+    if (alvo.destinoVencedor) entregarECascatear(jogos, alvo.destinoVencedor.jogoId, alvo.destinoVencedor.slot, time);
+    // bye não gera perdedor de verdade, então destinoPerdedor (se existir) nunca dispara aqui.
+  }
+}
+
+// Mata-mata duplo: cada jogo já sabe pra onde manda o vencedor E o perdedor
+// (gravado na hora da geração da chave, ver genDoubleElim), então aplicar um
+// resultado é só rotear os dois (com a cascata de byes acima) e checar se a
+// Grande Final acabou de ser decidida.
+export function aplicarResultadoDuplo(
+  jogos: Jogo[],
+  jogoId: string,
+  resultado: Resultado,
+  adapter: ResultadoAdapter
+): { jogos: Jogo[]; campeao?: string } {
+  const j = jogos.find(x => x.id === jogoId);
+  if (!j) return { jogos };
+  const js = jogos.map(x => ({ ...x }));
+  const atual = js.find(x => x.id === jogoId)!;
+  const venc = adapter.vencedor(resultado);
+  const nomeVencedor = venc === 'A' ? j.equipeA : venc === 'B' ? j.equipeB : null;
+  const nomePerdedor = venc === 'A' ? j.equipeB : venc === 'B' ? j.equipeA : null;
+
+  atual.resultado = resultado; atual.jogado = true; atual.vencedor = nomeVencedor;
+
+  if (nomeVencedor && atual.destinoVencedor) {
+    entregarECascatear(js, atual.destinoVencedor.jogoId, atual.destinoVencedor.slot, nomeVencedor);
+  }
+  if (nomePerdedor && atual.destinoPerdedor) {
+    entregarECascatear(js, atual.destinoPerdedor.jogoId, atual.destinoPerdedor.slot, nomePerdedor);
+  }
+
+  const gf = js.find(x => x.chave === 'GF');
+  if (gf?.jogado && gf.vencedor) {
+    return { jogos: js, campeao: gf.vencedor };
+  }
   return { jogos: js };
 }

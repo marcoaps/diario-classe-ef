@@ -11,7 +11,7 @@ import {
   type Modalidade, type InscricaoInterclasses,
 } from '../../../domain/interclasses';
 import {
-  ADAPTERS, REGRAS_PADRAO, FORMATOS, gerarJogosIniciais, aplicarResultado, calcSt, genElim, genSwiss,
+  ADAPTERS, REGRAS_PADRAO, FORMATOS, gerarJogosIniciais, aplicarResultado, aplicarResultadoDuplo, calcSt, genElim, genSwiss,
   type Jogo, type Resultado, type Standing, type ResultadoAdapter,
 } from '../../../domain/interclassesCampeonato';
 
@@ -114,16 +114,24 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
   }
 
   async function lancarPlacar(jogoId: string, resultado: Resultado) {
-    const r = aplicarResultado(jogos, jogoId, resultado, adapter, { formato: campeonato!.formato, equipes: equipesDoCampeonato, regras });
+    const ehDuplo = campeonato!.formato === 'double_elim';
+    const r = ehDuplo
+      ? aplicarResultadoDuplo(jogos, jogoId, resultado, adapter)
+      : aplicarResultado(jogos, jogoId, resultado, adapter, { formato: campeonato!.formato, equipes: equipesDoCampeonato, regras });
     setJogos(r.jogos);
 
     const jogoAtualizado = r.jogos.find(j => j.id === jogoId)!;
     await salvarResultadoJogo(jogoId, { jogado: true, vencedor: jogoAtualizado.vencedor, resultado: jogoAtualizado.resultado as any });
 
-    if (!FASES_LIGA.has(jogoAtualizado.fase)) {
-      const bIdx = jogoAtualizado.bracketIdx ?? 0;
-      const proximo = r.jogos.find(j => j.rodada === jogoAtualizado.rodada + 1 && j.bracketIdx === Math.floor(bIdx / 2));
-      if (proximo) await atualizarJogo(proximo.id, { equipe_a: proximo.equipeA, equipe_b: proximo.equipeB });
+    // Persiste qualquer outro jogo cujas equipes mudaram (avanço de
+    // vencedor/perdedor) — no mata-mata simples é só o próximo confronto, no
+    // duplo pode ser até dois (chave de vencedores + chave de perdedores).
+    for (const jNovo of r.jogos) {
+      if (jNovo.id === jogoId) continue;
+      const jAntigo = jogos.find(x => x.id === jNovo.id);
+      if (jAntigo && (jAntigo.equipeA !== jNovo.equipeA || jAntigo.equipeB !== jNovo.equipeB)) {
+        await atualizarJogo(jNovo.id, { equipe_a: jNovo.equipeA, equipe_b: jNovo.equipeB });
+      }
     }
 
     if (r.campeao) {
