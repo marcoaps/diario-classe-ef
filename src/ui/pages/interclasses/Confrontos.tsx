@@ -21,13 +21,13 @@ const CATEGORIAS = [CATEGORIA_6_7, CATEGORIA_8_9];
 // Cor determinística por nome de equipe — mesma equipe sempre com a mesma
 // cor, sem precisar guardar isso em lugar nenhum.
 const PALETA_CORES = ['#6366F1', '#22C55E', '#F59E0B', '#EF4444', '#06B6D4', '#8B5CF6', '#10B981', '#F97316', '#3B82F6', '#EC4899', '#14B8A6', '#84CC16'];
-function corDaEquipe(nome: string): string {
+export function corDaEquipe(nome: string): string {
   let h = 0;
   for (let i = 0; i < nome.length; i++) h = (h * 31 + nome.charCodeAt(i)) >>> 0;
   return PALETA_CORES[h % PALETA_CORES.length];
 }
 
-function linhaParaJogo(row: JogoInterclasses): Jogo {
+export function linhaParaJogo(row: JogoInterclasses): Jogo {
   return {
     id: row.id, equipeA: row.equipe_a, equipeB: row.equipe_b, jogado: row.jogado,
     vencedor: row.vencedor, resultado: row.resultado as Resultado | null,
@@ -44,7 +44,7 @@ function jogoParaLinha(j: Jogo): Omit<JogoInterclasses, 'id' | 'campeonato_id' |
   };
 }
 
-const FASES_LIGA = new Set(['league', 'group', 'swiss']);
+export const FASES_LIGA = new Set(['league', 'group', 'swiss']);
 
 interface Props {
   modalidade: Modalidade;
@@ -354,22 +354,22 @@ function SetupCampeonato({ equipesProntas, equipesIncompletas, onIniciar, criand
   );
 }
 
-function ListaJogos({ titulo, jogos, adapter, onLancar, mostrarGrupo }: {
-  titulo: string; jogos: Jogo[]; adapter: ResultadoAdapter; onLancar: (id: string, r: Resultado) => void; mostrarGrupo?: boolean;
+export function ListaJogos({ titulo, jogos, adapter, onLancar, mostrarGrupo, somenteLeitura }: {
+  titulo: string; jogos: Jogo[]; adapter: ResultadoAdapter; onLancar?: (id: string, r: Resultado) => void; mostrarGrupo?: boolean; somenteLeitura?: boolean;
 }) {
   if (jogos.length === 0) return null;
   return (
     <div>
       <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 px-1">{titulo}</div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {jogos.map(j => <CardJogo key={j.id} jogo={j} adapter={adapter} onLancar={onLancar} mostrarGrupo={mostrarGrupo} />)}
+        {jogos.map(j => <CardJogo key={j.id} jogo={j} adapter={adapter} onLancar={onLancar} mostrarGrupo={mostrarGrupo} somenteLeitura={somenteLeitura} />)}
       </div>
     </div>
   );
 }
 
-function CardJogo({ jogo, adapter, onLancar, compacto, mostrarGrupo = true }: {
-  jogo: Jogo; adapter: ResultadoAdapter; onLancar: (id: string, r: Resultado) => void; compacto?: boolean; mostrarGrupo?: boolean;
+export function CardJogo({ jogo, adapter, onLancar, compacto, mostrarGrupo = true, somenteLeitura = false }: {
+  jogo: Jogo; adapter: ResultadoAdapter; onLancar?: (id: string, r: Resultado) => void; compacto?: boolean; mostrarGrupo?: boolean; somenteLeitura?: boolean;
 }) {
   const [editando, setEditando] = useState(false);
   const [a, setA] = useState(jogo.resultado ? String(adapter.valorA(jogo.resultado)) : '');
@@ -379,6 +379,7 @@ function CardJogo({ jogo, adapter, onLancar, compacto, mostrarGrupo = true }: {
   const vencedorB = jogo.jogado && !!jogo.vencedor && jogo.vencedor === jogo.equipeB;
 
   function confirmar(vencedorForcado?: 'A' | 'B') {
+    if (!onLancar) return;
     let resultado: Resultado;
     if (ehVencedorOnly) {
       resultado = adapter.criarResultado(vencedorForcado === 'A' ? 1 : 0, vencedorForcado === 'B' ? 1 : 0);
@@ -420,7 +421,17 @@ function CardJogo({ jogo, adapter, onLancar, compacto, mostrarGrupo = true }: {
         {jogo.equipeB && <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: corDaEquipe(jogo.equipeB) }} />}
       </div>
 
-      {jogo.jogado && jogo.resultado ? (
+      {somenteLeitura ? (
+        jogo.jogado && jogo.resultado ? (
+          ehVencedorOnly && (
+            <div className="text-center text-xs text-gray-500 font-medium py-1 border-t border-gray-50">{adapter.formatarPlacar(jogo.resultado)}</div>
+          )
+        ) : !jogo.equipeA || !jogo.equipeB ? (
+          <div className="text-center text-xs text-gray-400 py-1">aguardando definição</div>
+        ) : (
+          <div className="text-center text-xs text-gray-400 py-1">a jogar</div>
+        )
+      ) : jogo.jogado && jogo.resultado ? (
         <button onClick={() => setEditando(e => !e)} className="w-full text-center text-xs text-gray-500 hover:text-primary font-medium py-1 border-t border-gray-50">
           {ehVencedorOnly ? adapter.formatarPlacar(jogo.resultado) : 'Editar placar'}
         </button>
@@ -432,7 +443,7 @@ function CardJogo({ jogo, adapter, onLancar, compacto, mostrarGrupo = true }: {
         <div className="text-center text-xs text-gray-400 py-1">aguardando definição</div>
       )}
 
-      {editando && jogo.equipeA && jogo.equipeB && (
+      {!somenteLeitura && editando && jogo.equipeA && jogo.equipeB && (
         <ModalPlacar
           equipeA={jogo.equipeA} equipeB={jogo.equipeB} adapter={adapter}
           a={a} b={b} setA={setA} setB={setB} ehVencedorOnly={ehVencedorOnly}
@@ -492,7 +503,7 @@ function formaRecente(equipe: string, jogos: Jogo[], adapter: ResultadoAdapter, 
   });
 }
 
-function Classificacao({ standings, adapter, jogos, compacto, destacarTopN }: {
+export function Classificacao({ standings, adapter, jogos, compacto, destacarTopN }: {
   standings: Standing[]; adapter: ResultadoAdapter; jogos: Jogo[]; compacto?: boolean; destacarTopN?: number;
 }) {
   const mostraGols = adapter.labelA !== '';
@@ -555,7 +566,7 @@ function Classificacao({ standings, adapter, jogos, compacto, destacarTopN }: {
   );
 }
 
-function Chave({ jogos, adapter, onLancar }: { jogos: Jogo[]; adapter: ResultadoAdapter; onLancar: (id: string, r: Resultado) => void }) {
+export function Chave({ jogos, adapter, onLancar, somenteLeitura }: { jogos: Jogo[]; adapter: ResultadoAdapter; onLancar?: (id: string, r: Resultado) => void; somenteLeitura?: boolean }) {
   const jogosChave = jogos.filter(j => !FASES_LIGA.has(j.fase));
   const rodadas = Array.from(new Set(jogosChave.map(j => j.rodada))).sort((x, y) => x - y);
 
@@ -579,7 +590,7 @@ function Chave({ jogos, adapter, onLancar }: { jogos: Jogo[]; adapter: Resultado
                       {j.equipeA} avança (bye)
                     </div>
                   )
-                  : <CardJogo key={j.id} jogo={j} adapter={adapter} onLancar={onLancar} compacto />
+                  : <CardJogo key={j.id} jogo={j} adapter={adapter} onLancar={onLancar} compacto somenteLeitura={somenteLeitura} />
               ))}
             </div>
           </div>
