@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Loader2, Trophy, RefreshCw } from 'lucide-react';
+import { cn } from '../../AppLayout';
 import {
   buscarCampeonato, criarCampeonato, atualizarCampeonato, excluirCampeonato,
   buscarJogos, criarJogos, salvarResultadoJogo, atualizarJogo,
@@ -11,11 +12,20 @@ import {
 } from '../../../domain/interclasses';
 import {
   ADAPTERS, REGRAS_PADRAO, FORMATOS, gerarJogosIniciais, aplicarResultado, calcSt, genElim, genSwiss,
-  type Jogo, type Resultado,
+  type Jogo, type Resultado, type Standing, type ResultadoAdapter,
 } from '../../../domain/interclassesCampeonato';
 
 const EDICAO = '2026';
 const CATEGORIAS = [CATEGORIA_6_7, CATEGORIA_8_9];
+
+// Cor determinística por nome de equipe — mesma equipe sempre com a mesma
+// cor, sem precisar guardar isso em lugar nenhum.
+const PALETA_CORES = ['#6366F1', '#22C55E', '#F59E0B', '#EF4444', '#06B6D4', '#8B5CF6', '#10B981', '#F97316', '#3B82F6', '#EC4899', '#14B8A6', '#84CC16'];
+function corDaEquipe(nome: string): string {
+  let h = 0;
+  for (let i = 0; i < nome.length; i++) h = (h * 31 + nome.charCodeAt(i)) >>> 0;
+  return PALETA_CORES[h % PALETA_CORES.length];
+}
 
 function linhaParaJogo(row: JogoInterclasses): Jogo {
   return {
@@ -34,6 +44,8 @@ function jogoParaLinha(j: Jogo): Omit<JogoInterclasses, 'id' | 'campeonato_id' |
   };
 }
 
+const FASES_LIGA = new Set(['league', 'group', 'swiss']);
+
 interface Props {
   modalidade: Modalidade;
   inscricoes: InscricaoInterclasses[];
@@ -44,7 +56,7 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
   const [campeonato, setCampeonato] = useState<CampeonatoInterclasses | null>(null);
   const [jogos, setJogos] = useState<Jogo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [aba, setAba] = useState<'jogos' | 'classificacao' | 'grupos'>('jogos');
+  const [aba, setAba] = useState<'jogos' | 'classificacao' | 'grupos' | 'chave'>('jogos');
 
   const adapter = ADAPTERS[modalidade];
   const regras = REGRAS_PADRAO[modalidade];
@@ -75,6 +87,7 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
   }, [modalidade, categoriaAtiva]);
 
   useEffect(() => { carregar(); }, [carregar]);
+  useEffect(() => { setAba('jogos'); }, [categoriaAtiva]);
 
   const equipesDoCampeonato = useMemo(() => {
     const nomes = new Set<string>();
@@ -95,7 +108,7 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
 
   async function excluirTudo() {
     if (!campeonato) return;
-    if (!window.confirm(`Excluir o campeonato de ${adapter === ADAPTERS.futsal ? 'Futsal' : modalidade} — ${categoriaAtiva}? Isso apaga todos os jogos e placares lançados.`)) return;
+    if (!window.confirm(`Excluir este campeonato — ${categoriaAtiva}? Isso apaga todos os jogos e placares lançados.`)) return;
     await excluirCampeonato(campeonato.id);
     await carregar();
   }
@@ -107,8 +120,7 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
     const jogoAtualizado = r.jogos.find(j => j.id === jogoId)!;
     await salvarResultadoJogo(jogoId, { jogado: true, vencedor: jogoAtualizado.vencedor, resultado: jogoAtualizado.resultado as any });
 
-    // mata-mata: persiste o próximo confronto que recebeu o vencedor
-    if (jogoAtualizado.fase !== 'league' && jogoAtualizado.fase !== 'group' && jogoAtualizado.fase !== 'swiss') {
+    if (!FASES_LIGA.has(jogoAtualizado.fase)) {
       const bIdx = jogoAtualizado.bracketIdx ?? 0;
       const proximo = r.jogos.find(j => j.rodada === jogoAtualizado.rodada + 1 && j.bracketIdx === Math.floor(bIdx / 2));
       if (proximo) await atualizarJogo(proximo.id, { equipe_a: proximo.equipeA, equipe_b: proximo.equipeB });
@@ -120,7 +132,6 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
       return;
     }
 
-    // liga/grupos: campeão quando round robin termina
     if (campeonato!.formato === 'round_robin') {
       const todosJogados = r.jogos.every(j => j.jogado);
       if (todosJogados) {
@@ -129,7 +140,6 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
       }
     }
 
-    // suíço: avança de rodada ou finaliza
     if (campeonato!.formato === 'swiss') {
       const rodadaAtual = campeonato!.swiss_round;
       const jogosRodada = r.jogos.filter(j => j.rodada === rodadaAtual);
@@ -163,26 +173,29 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
   const jogosPendentes = jogos.filter(j => !j.jogado && !j.isBye && j.equipeA && j.equipeB);
   const jogosJogados = jogos.filter(j => j.jogado && !j.isBye && j.equipeA && j.equipeB);
   const grupos = Array.from(new Set(jogos.map(j => j.grupo).filter(Boolean))) as string[];
-  // Só oferece iniciar o mata-mata enquanto o campeonato ainda está na fase de
-  // grupos — depois de clicado, a fase vira 'knockout' e o botão some, senão
-  // cada clique extra criaria outra final duplicada (e nenhum campeão nunca
-  // seria detectado, já que a lógica exige exatamente uma final pendente).
   const gruposCompletos = campeonato?.formato === 'groups_ko' && campeonato.fase === 'groups' && grupos.length > 0 &&
     jogos.filter(j => j.grupo).every(j => j.jogado);
+  const temChave = jogos.some(j => !FASES_LIGA.has(j.fase));
   const standings = useMemo(
     () => campeonato ? calcSt(equipesDoCampeonato, jogos, adapter, regras) : [],
     [campeonato, equipesDoCampeonato, jogos, adapter, regras]
   );
 
+  const tabs = useMemo(() => {
+    const t: { id: typeof aba; label: string }[] = [{ id: 'jogos', label: 'Jogos' }, { id: 'classificacao', label: 'Classificação' }];
+    if (campeonato?.formato === 'groups_ko') t.push({ id: 'grupos', label: 'Grupos' });
+    if (temChave) t.push({ id: 'chave', label: 'Chave' });
+    return t;
+  }, [campeonato, temChave]);
+
   return (
     <div className="flex flex-col gap-4">
-      {/* Seletor de categoria */}
       <div className="flex gap-1.5">
         {CATEGORIAS.map(c => (
           <button
             key={c}
             onClick={() => setCategoriaAtiva(c)}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${categoriaAtiva === c ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            className={cn('flex-1 py-2 rounded-xl text-xs font-bold transition-all', categoriaAtiva === c ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}
           >
             {c}
           </button>
@@ -198,10 +211,13 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
       ) : (
         <div className="flex flex-col gap-4">
           {campeonato.campeao ? (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 text-center">
-              <Trophy className="w-10 h-10 text-yellow-500 mx-auto mb-2" />
+            <div className="bg-gradient-to-br from-yellow-50 to-white rounded-2xl border border-yellow-200 shadow-sm p-6 text-center">
+              <Trophy className="w-12 h-12 text-yellow-500 mx-auto mb-2" />
               <div className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Campeão — {categoriaAtiva}</div>
-              <div className="text-2xl font-bold text-on-surface mt-1">{campeonato.campeao}</div>
+              <div className="text-2xl font-bold text-on-surface mt-1 flex items-center justify-center gap-2">
+                <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: corDaEquipe(campeonato.campeao) }} />
+                {campeonato.campeao}
+              </div>
               <button onClick={excluirTudo} className="mt-4 text-xs text-error/70 hover:text-error font-medium">
                 Excluir e recomeçar
               </button>
@@ -209,13 +225,13 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
           ) : (
             <>
               <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
-                {(['jogos', 'classificacao', ...(campeonato.formato === 'groups_ko' ? ['grupos'] as const : [])] as const).map(t => (
+                {tabs.map(t => (
                   <button
-                    key={t}
-                    onClick={() => setAba(t)}
-                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${aba === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+                    key={t.id}
+                    onClick={() => setAba(t.id)}
+                    className={cn('flex-1 py-2 rounded-lg text-xs font-bold transition-all', aba === t.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500')}
                   >
-                    {t === 'jogos' ? 'Jogos' : t === 'classificacao' ? 'Classificação' : 'Grupos'}
+                    {t.label}
                   </button>
                 ))}
                 <button onClick={excluirTudo} title="Excluir campeonato" className="px-3 text-gray-400 hover:text-error">
@@ -230,24 +246,26 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
                       🏆 Iniciar mata-mata (classificados dos grupos)
                     </button>
                   )}
-                  <JogosLista titulo={`Pendentes (${jogosPendentes.length})`} jogos={jogosPendentes} adapter={adapter} onLancar={lancarPlacar} />
-                  <JogosLista titulo={`Realizados (${jogosJogados.length})`} jogos={jogosJogados} adapter={adapter} onLancar={lancarPlacar} />
+                  <ListaJogos titulo={`Pendentes (${jogosPendentes.length})`} jogos={jogosPendentes} adapter={adapter} onLancar={lancarPlacar} />
+                  <ListaJogos titulo={`Realizados (${jogosJogados.length})`} jogos={jogosJogados} adapter={adapter} onLancar={lancarPlacar} />
                   {jogos.length === 0 && <div className="text-center text-gray-400 text-sm py-8">Nenhum jogo gerado.</div>}
                 </div>
               )}
 
-              {aba === 'classificacao' && <Classificacao standings={standings} adapter={adapter} />}
+              {aba === 'classificacao' && <Classificacao standings={standings} adapter={adapter} jogos={jogos} />}
 
               {aba === 'grupos' && (
-                <div className="flex flex-col gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {grupos.map(g => (
                     <div key={g} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                       <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100 text-sm font-bold text-gray-700">Grupo {g}</div>
-                      <Classificacao standings={calcSt(equipesDoCampeonato, jogos, adapter, regras, g)} adapter={adapter} compacto />
+                      <Classificacao standings={calcSt(equipesDoCampeonato, jogos, adapter, regras, g)} adapter={adapter} jogos={jogos} compacto destacarTopN={1} />
                     </div>
                   ))}
                 </div>
               )}
+
+              {aba === 'chave' && <Chave jogos={jogos} adapter={adapter} onLancar={lancarPlacar} />}
             </>
           )}
         </div>
@@ -263,17 +281,25 @@ function SetupCampeonato({ equipesProntas, onIniciar }: { equipesProntas: string
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
       <h3 className="font-bold text-on-surface text-sm mb-1">Nenhum campeonato criado ainda</h3>
-      <p className="text-xs text-gray-500 mb-3">{equipesProntas.length} time(s) completo(s) disponíve(is): {equipesProntas.join(', ') || '—'}</p>
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {equipesProntas.length === 0 && <span className="text-xs text-gray-400">Nenhum time completo ainda.</span>}
+        {equipesProntas.map(e => (
+          <span key={e} className="flex items-center gap-1.5 text-xs text-gray-700 bg-gray-50 border border-gray-100 px-2 py-1 rounded-full">
+            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: corDaEquipe(e) }} />
+            {e}
+          </span>
+        ))}
+      </div>
       <div className="flex flex-col gap-2 mb-4">
         {FORMATOS.map(f => (
           <div
             key={f.id}
             onClick={() => setFormato(f.id)}
-            className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${formato === f.id ? 'bg-primary/10 border-primary' : 'bg-gray-50 border-gray-100 hover:border-gray-300'}`}
+            className={cn('flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all', formato === f.id ? 'bg-primary/10 border-primary' : 'bg-gray-50 border-gray-100 hover:border-gray-300')}
           >
             <span className="text-xl">{f.icone}</span>
             <div className="flex-1">
-              <div className={`text-sm font-medium ${formato === f.id ? 'text-primary' : 'text-on-surface'}`}>{f.nome}</div>
+              <div className={cn('text-sm font-medium', formato === f.id ? 'text-primary' : 'text-on-surface')}>{f.nome}</div>
               <div className="text-xs text-gray-500">{f.desc} · mín. {f.min} times</div>
             </div>
           </div>
@@ -290,25 +316,29 @@ function SetupCampeonato({ equipesProntas, onIniciar }: { equipesProntas: string
   );
 }
 
-function JogosLista({ titulo, jogos, adapter, onLancar }: {
-  titulo: string; jogos: Jogo[];
-  adapter: import('../../../domain/interclassesCampeonato').ResultadoAdapter;
-  onLancar: (id: string, r: Resultado) => void;
+function ListaJogos({ titulo, jogos, adapter, onLancar }: {
+  titulo: string; jogos: Jogo[]; adapter: ResultadoAdapter; onLancar: (id: string, r: Resultado) => void;
 }) {
   if (jogos.length === 0) return null;
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">{titulo}</div>
-      {jogos.map(j => <LinhaJogo key={j.id} jogo={j} adapter={adapter} onLancar={onLancar} />)}
+    <div>
+      <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 px-1">{titulo}</div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {jogos.map(j => <CardJogo key={j.id} jogo={j} adapter={adapter} onLancar={onLancar} />)}
+      </div>
     </div>
   );
 }
 
-function LinhaJogo({ jogo, adapter, onLancar }: { jogo: Jogo; adapter: import('../../../domain/interclassesCampeonato').ResultadoAdapter; onLancar: (id: string, r: Resultado) => void }) {
+function CardJogo({ jogo, adapter, onLancar, compacto }: {
+  jogo: Jogo; adapter: ResultadoAdapter; onLancar: (id: string, r: Resultado) => void; compacto?: boolean;
+}) {
   const [editando, setEditando] = useState(false);
   const [a, setA] = useState(jogo.resultado ? String(adapter.valorA(jogo.resultado)) : '');
   const [b, setB] = useState(jogo.resultado ? String(adapter.valorB(jogo.resultado)) : '');
   const ehVencedorOnly = adapter.labelA === '';
+  const vencedorA = jogo.jogado && !!jogo.vencedor && jogo.vencedor === jogo.equipeA;
+  const vencedorB = jogo.jogado && !!jogo.vencedor && jogo.vencedor === jogo.equipeB;
 
   function confirmar(vencedorForcado?: 'A' | 'B') {
     let resultado: Resultado;
@@ -324,20 +354,30 @@ function LinhaJogo({ jogo, adapter, onLancar }: { jogo: Jogo; adapter: import('.
   }
 
   return (
-    <div className="flex items-center px-4 py-3 border-b border-gray-50 last:border-0">
-      <span className="flex-1 text-sm text-right text-gray-700 truncate">{jogo.equipeA ?? 'A definir'}</span>
-      <div className="mx-3 flex flex-col items-center gap-1">
+    <div className={cn('bg-white rounded-2xl border border-gray-100 shadow-sm flex items-center gap-2 relative', compacto ? 'p-2.5' : 'p-3.5')}>
+      <div className="flex-1 flex items-center justify-end gap-2 min-w-0">
+        <span className={cn('text-sm truncate text-right', vencedorA ? 'font-bold text-on-surface' : 'text-gray-600')}>{jogo.equipeA ?? 'A definir'}</span>
+        {jogo.equipeA && <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: corDaEquipe(jogo.equipeA) }} />}
+      </div>
+
+      <div className="flex-shrink-0">
         {jogo.jogado && jogo.resultado ? (
           <button onClick={() => setEditando(e => !e)} className="text-sm font-bold text-on-surface bg-gray-100 px-3 py-1.5 rounded-lg hover:bg-gray-200 transition-colors" title="Toque para editar o placar">
             {adapter.formatarPlacar(jogo.resultado)}
           </button>
-        ) : (
+        ) : jogo.equipeA && jogo.equipeB ? (
           <button onClick={() => setEditando(e => !e)} className="text-xs font-bold text-white bg-primary hover:bg-primary-dark px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
             📝 Lançar placar
           </button>
+        ) : (
+          <span className="text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded">vs</span>
         )}
       </div>
-      <span className="flex-1 text-sm text-gray-700 truncate">{jogo.equipeB ?? 'A definir'}</span>
+
+      <div className="flex-1 flex items-center gap-2 min-w-0">
+        {jogo.equipeB && <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: corDaEquipe(jogo.equipeB) }} />}
+        <span className={cn('text-sm truncate', vencedorB ? 'font-bold text-on-surface' : 'text-gray-600')}>{jogo.equipeB ?? 'A definir'}</span>
+      </div>
 
       {editando && jogo.equipeA && jogo.equipeB && (
         <ModalPlacar
@@ -351,7 +391,7 @@ function LinhaJogo({ jogo, adapter, onLancar }: { jogo: Jogo; adapter: import('.
 }
 
 function ModalPlacar({ equipeA, equipeB, adapter, a, b, setA, setB, ehVencedorOnly, onConfirmar, onFechar }: {
-  equipeA: string; equipeB: string; adapter: import('../../../domain/interclassesCampeonato').ResultadoAdapter;
+  equipeA: string; equipeB: string; adapter: ResultadoAdapter;
   a: string; b: string; setA: (v: string) => void; setB: (v: string) => void;
   ehVencedorOnly: boolean; onConfirmar: (v?: 'A' | 'B') => void; onFechar: () => void;
 }) {
@@ -386,41 +426,112 @@ function ModalPlacar({ equipeA, equipeB, adapter, a, b, setA, setB, ehVencedorOn
   );
 }
 
-function Classificacao({ standings, adapter, compacto }: {
-  standings: ReturnType<typeof calcSt>; adapter: import('../../../domain/interclassesCampeonato').ResultadoAdapter; compacto?: boolean;
+// Últimos N resultados de uma equipe (V/E/D), na ordem em que foram jogados.
+function formaRecente(equipe: string, jogos: Jogo[], adapter: ResultadoAdapter, limite = 5): ('V' | 'E' | 'D')[] {
+  const relevantes = jogos
+    .filter(j => j.jogado && !j.isBye && j.resultado && (j.equipeA === equipe || j.equipeB === equipe))
+    .sort((x, y) => x.rodada - y.rodada);
+  return relevantes.slice(-limite).map(j => {
+    const souA = j.equipeA === equipe;
+    const venc = adapter.vencedor(j.resultado!);
+    if (venc === null) return 'E';
+    return (venc === 'A') === souA ? 'V' : 'D';
+  });
+}
+
+function Classificacao({ standings, adapter, jogos, compacto, destacarTopN }: {
+  standings: Standing[]; adapter: ResultadoAdapter; jogos: Jogo[]; compacto?: boolean; destacarTopN?: number;
 }) {
   const mostraGols = adapter.labelA !== '';
   return (
     <div className={compacto ? '' : 'bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden'}>
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="text-left text-gray-500 border-b border-gray-100">
-            <th className="py-2 px-3 font-semibold">Equipe</th>
-            <th className="py-2 px-2 font-semibold text-center">P</th>
-            <th className="py-2 px-2 font-semibold text-center">J</th>
-            <th className="py-2 px-2 font-semibold text-center">V</th>
-            <th className="py-2 px-2 font-semibold text-center">E</th>
-            <th className="py-2 px-2 font-semibold text-center">D</th>
-            {mostraGols && <th className="py-2 px-2 font-semibold text-center">SG</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {standings.map((s, i) => (
-            <tr key={s.equipe} className="border-b border-gray-50 last:border-0">
-              <td className="py-2 px-3 font-medium text-on-surface">{i + 1}. {s.equipe}</td>
-              <td className="py-2 px-2 text-center font-bold">{s.P}</td>
-              <td className="py-2 px-2 text-center text-gray-500">{s.J}</td>
-              <td className="py-2 px-2 text-center text-gray-500">{s.V}</td>
-              <td className="py-2 px-2 text-center text-gray-500">{s.E}</td>
-              <td className="py-2 px-2 text-center text-gray-500">{s.D}</td>
-              {mostraGols && <td className="py-2 px-2 text-center text-gray-500">{s.SG > 0 ? `+${s.SG}` : s.SG}</td>}
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-left text-gray-500 border-b border-gray-100">
+              <th className="py-2 px-3 font-semibold">Equipe</th>
+              <th className="py-2 px-2 font-semibold text-center">P</th>
+              <th className="py-2 px-2 font-semibold text-center">J</th>
+              <th className="py-2 px-2 font-semibold text-center">V</th>
+              <th className="py-2 px-2 font-semibold text-center">E</th>
+              <th className="py-2 px-2 font-semibold text-center">D</th>
+              {mostraGols && <th className="py-2 px-2 font-semibold text-center">SG</th>}
+              <th className="py-2 px-3 font-semibold text-right">Forma</th>
             </tr>
-          ))}
-          {standings.length === 0 && (
-            <tr><td colSpan={7} className="text-center text-gray-400 py-6">Nenhuma equipe.</td></tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {standings.map((s, i) => {
+              const lider = i === 0 && s.J > 0;
+              const classifica = !lider && destacarTopN != null && i < destacarTopN;
+              return (
+                <tr key={s.equipe} className={cn('border-b border-gray-50 last:border-0', lider && 'bg-yellow-50', classifica && 'bg-green-50')}>
+                  <td className="py-2 px-3 font-medium text-on-surface">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-gray-400 w-4 flex-shrink-0">{i + 1}.</span>
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: corDaEquipe(s.equipe) }} />
+                      <span className="truncate">{s.equipe}</span>
+                      {lider && <Trophy className="w-3.5 h-3.5 text-yellow-500 flex-shrink-0" />}
+                    </div>
+                  </td>
+                  <td className="py-2 px-2 text-center font-bold">{s.P}</td>
+                  <td className="py-2 px-2 text-center text-gray-500">{s.J}</td>
+                  <td className="py-2 px-2 text-center text-gray-500">{s.V}</td>
+                  <td className="py-2 px-2 text-center text-gray-500">{s.E}</td>
+                  <td className="py-2 px-2 text-center text-gray-500">{s.D}</td>
+                  {mostraGols && <td className="py-2 px-2 text-center text-gray-500">{s.SG > 0 ? `+${s.SG}` : s.SG}</td>}
+                  <td className="py-2 px-3">
+                    <div className="flex items-center justify-end gap-1">
+                      {formaRecente(s.equipe, jogos, adapter).map((r, idx) => (
+                        <span key={idx} className={cn(
+                          'w-2 h-2 rounded-full flex-shrink-0',
+                          r === 'V' ? 'bg-green-500' : r === 'D' ? 'bg-red-400' : 'bg-gray-300'
+                        )} title={r === 'V' ? 'Vitória' : r === 'D' ? 'Derrota' : 'Empate'} />
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+            {standings.length === 0 && (
+              <tr><td colSpan={8} className="text-center text-gray-400 py-6">Nenhuma equipe.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function Chave({ jogos, adapter, onLancar }: { jogos: Jogo[]; adapter: ResultadoAdapter; onLancar: (id: string, r: Resultado) => void }) {
+  const jogosChave = jogos.filter(j => !FASES_LIGA.has(j.fase));
+  const rodadas = Array.from(new Set(jogosChave.map(j => j.rodada))).sort((x, y) => x - y);
+
+  if (rodadas.length === 0) {
+    return <div className="text-center text-gray-400 text-sm py-8">Chave ainda não gerada.</div>;
+  }
+
+  return (
+    <div className="flex gap-4 overflow-x-auto pb-2 -mx-1 px-1">
+      {rodadas.map(r => {
+        const jogosRodada = jogosChave.filter(j => j.rodada === r).sort((x, y) => (x.bracketIdx ?? 0) - (y.bracketIdx ?? 0));
+        const faseLabel = jogosRodada[0]?.fase ?? `Rodada ${r}`;
+        return (
+          <div key={r} className="flex flex-col gap-3 min-w-[240px] flex-shrink-0">
+            <div className="text-xs font-bold text-gray-500 uppercase tracking-wider text-center">{faseLabel}</div>
+            <div className="flex flex-col gap-3 justify-around flex-1">
+              {jogosRodada.map(j => (
+                j.isBye
+                  ? (
+                    <div key={j.id} className="bg-gray-50 rounded-2xl border border-dashed border-gray-200 p-3 text-center text-xs text-gray-400">
+                      {j.equipeA} avança (bye)
+                    </div>
+                  )
+                  : <CardJogo key={j.id} jogo={j} adapter={adapter} onLancar={onLancar} compacto />
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
