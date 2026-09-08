@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../data/supabase';
 import { getPeriodoBimestre, type Bimestre } from './useRelatorioFrequencia';
+import { pontosPorRegistro, type Participacao } from './frequenciaPontos';
 
 export interface AlunoPortal {
   id: string;
@@ -142,7 +143,7 @@ export function usePortalAluno(token: string | undefined) {
         const fimAno = `${ano}-12-31`;
         const { data: freqData, error: freqErr } = await supabase
           .from('frequencia')
-          .select('data, presente')
+          .select('data, presente, participacao')
           .eq('aluno_id', alunoRow.id)
           .gte('data', inicioAno)
           .lte('data', fimAno);
@@ -156,6 +157,7 @@ export function usePortalAluno(token: string | undefined) {
             if (dataInBimestre(r.data, b, ano)) {
               if (r.presente) freqAcc[b].presentes += 1;
               else freqAcc[b].ausentes += 1;
+              freqAcc[b].pontos += pontosPorRegistro(r.presente, (r.participacao ?? null) as Participacao);
               break;
             }
           }
@@ -163,7 +165,7 @@ export function usePortalAluno(token: string | undefined) {
         for (const b of BIMESTRES) {
           const acc = freqAcc[b];
           acc.total = acc.presentes + acc.ausentes;
-          acc.pontos = +(acc.presentes * 0.5).toFixed(2);
+          acc.pontos = +acc.pontos.toFixed(2);
           acc.percentual = acc.total > 0 ? +((acc.presentes / acc.total) * 100).toFixed(2) : 0;
         }
 

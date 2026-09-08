@@ -1,0 +1,801 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Copy, ImagePlus, Pencil, Trash2, Upload } from 'lucide-react';
+import {
+  layoutQuaseQuadrado,
+  recortarImagemComCaixas,
+  redimensionarImagemParaDataUrl,
+  type CaixaRecortePercentual,
+  type ImagemRedimensionada,
+} from './imagemQuadroUtils';
+import { montarPromptImagemUnico } from './promptImagemCharges';
+import type { AtividadeCharge, ImagemQuadro, ImagemUnica, QuestaoChargeIA } from './tiposCharges';
+
+export interface GeradorChargesCardProps {
+  atividade: AtividadeCharge;
+  onEditarQuestao: (indice: number, alteracoes: Partial<QuestaoChargeIA>) => void;
+  onImagemQuadro: (quadro: number, imagem: ImagemQuadro | null) => void;
+  onImagemUnica: (imagem: ImagemUnica | null) => void;
+}
+
+/**
+ * Controle de upload/preview de imagem reutilizável — usado tanto para a
+ * imagem de um quadro individual quanto para a imagem única da tira
+ * completa. Cuida do redimensionamento (via `redimensionarImagemParaDataUrl`)
+ * e devolve o resultado bruto; quem chama decide como encaixar no tipo certo
+ * (`ImagemQuadro` ou `ImagemUnica`).
+ */
+function UploadImagemControle({
+  rotulo,
+  imagemDataUrl,
+  altTexto,
+  onImagem,
+  destaque = false,
+}: {
+  rotulo: string;
+  imagemDataUrl: string | undefined | null;
+  altTexto: string;
+  onImagem: (resultado: ImagemRedimensionada | null) => void;
+  /** Deixa o botão "Enviar imagem" com visual de destaque (preenchido, maior) — usado na Imagem única, que fica no meio de vários outros botões "Enviar imagem" iguais (um por Quadro) e precisa ser fácil de achar. */
+  destaque?: boolean;
+}) {
+  const [processando, setProcessando] = useState(false);
+  const [erro, setErro] = useState('');
+  const inputArquivoRef = useRef<HTMLInputElement>(null);
+
+  async function selecionarArquivo(e: React.ChangeEvent<HTMLInputElement>) {
+    const arquivo = e.target.files?.[0];
+    e.target.value = ''; // permite selecionar o mesmo arquivo de novo depois de remover
+    if (!arquivo) return;
+
+    setErro('');
+    setProcessando(true);
+    try {
+      const resultado = await redimensionarImagemParaDataUrl(arquivo);
+      onImagem(resultado);
+    } catch (err) {
+      setErro((err as Error).message);
+    } finally {
+      setProcessando(false);
+    }
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-semibold text-on-surface-variant">{rotulo}</p>
+        <input ref={inputArquivoRef} type="file" accept="image/*" onChange={selecionarArquivo} className="hidden" />
+        {!imagemDataUrl && (
+          <button
+            onClick={() => inputArquivoRef.current?.click()}
+            disabled={processando}
+            className={
+              destaque
+                ? 'flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-bold shadow-sm disabled:opacity-60'
+                : 'flex items-center gap-1 text-[11px] text-primary font-semibold disabled:opacity-60'
+            }
+          >
+            <Upload className={destaque ? 'w-3.5 h-3.5' : 'w-3 h-3'} /> {processando ? 'Processando...' : 'Enviar imagem'}
+          </button>
+        )}
+      </div>
+
+      {erro && <p className="text-[11px] text-on-error-container bg-error-container rounded-lg px-2 py-1">{erro}</p>}
+
+      {imagemDataUrl ? (
+        <div className="space-y-1.5">
+          <img src={imagemDataUrl} alt={altTexto} className="w-full max-w-sm rounded-xl border border-outline-variant" />
+          <div className="flex gap-2">
+            <button onClick={() => inputArquivoRef.current?.click()} className="flex items-center gap-1 text-[11px] text-primary font-semibold">
+              <ImagePlus className="w-3 h-3" /> Trocar imagem
+            </button>
+            <button onClick={() => onImagem(null)} className="flex items-center gap-1 text-[11px] text-on-error-container font-semibold">
+              <Trash2 className="w-3 h-3" /> Remover
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p className="text-[11px] text-on-surface-variant italic">
+          Gere a imagem numa ferramenta externa (ChatGPT Images, Leonardo, etc.) usando o prompt abaixo, baixe o arquivo e envie aqui — ela será usada na exportação em vez do texto do prompt.
+        </p>
+      )}
+    </div>
+  );
+}
+
+interface LayoutRecorte {
+  /** Quantidade de painéis em cada fileira, de cima pra baixo — nem toda fileira precisa ter o mesmo tanto (grade "quase quadrada" com a última fileira mais curta, alinhada à esquerda). */
+  colunasPorLinha: number[];
+  label: string;
+}
+
+function labelColunasPorLinha(colunasPorLinha: number[]): string {
+  if (colunasPorLinha.length === 1) return `1 linha × ${colunasPorLinha[0]} colunas (lado a lado)`;
+  if (colunasPorLinha.every(c => c === 1)) return `${colunasPorLinha.length} linhas × 1 coluna (empilhados)`;
+  if (colunasPorLinha.every(c => c === colunasPorLinha[0])) return `${colunasPorLinha.length} linhas × ${colunasPorLinha[0]} colunas (grade)`;
+  return `${colunasPorLinha.length} fileiras desiguais (${colunasPorLinha.join(' + ')} painéis)`;
+}
+
+/**
+ * Layouts de grade oferecidos por número de quadros (1 a 10) — a 1ª opção
+ * (padrão) é sempre a grade "quase quadrada" que também foi pedida no prompt
+ * de imagem, com "lado a lado" e "empilhados" como alternativas manuais caso
+ * a IA de imagem tenha ignorado o pedido e organizado diferente.
+ */
+function layoutsDeRecorteParaNumeroQuadros(numeroQuadros: number): LayoutRecorte[] {
+  if (numeroQuadros <= 1) return [{ colunasPorLinha: [1], label: '1 quadro (imagem inteira)' }];
+
+  const quaseQuadrado = layoutQuaseQuadrado(numeroQuadros);
+  const layouts: LayoutRecorte[] = [{ colunasPorLinha: quaseQuadrado, label: `${labelColunasPorLinha(quaseQuadrado)} — recomendado` }];
+
+  const ladoALado = [numeroQuadros];
+  const empilhados = Array.from({ length: numeroQuadros }, () => 1);
+  if (labelColunasPorLinha(ladoALado) !== layouts[0].label.replace(' — recomendado', '')) {
+    layouts.push({ colunasPorLinha: ladoALado, label: labelColunasPorLinha(ladoALado) });
+  }
+  if (labelColunasPorLinha(empilhados) !== layouts[0].label.replace(' — recomendado', '')) {
+    layouts.push({ colunasPorLinha: empilhados, label: labelColunasPorLinha(empilhados) });
+  }
+  return layouts;
+}
+
+/**
+ * Recorta a "Imagem única da tira completa" em pedaços — um por Quadro — para
+ * ilustrar cada seção de Quadro individualmente na exportação, sem o
+ * professor precisar gerar/enviar uma imagem por quadro à parte. O recorte é
+ * uma divisão geométrica simples (grade uniforme); só funciona bem se a
+ * ferramenta de imagem realmente organizou os painéis numa grade regular com
+ * esse número de linhas/colunas — por isso o professor escolhe o layout que
+ * bate com o que foi gerado, em vez do app adivinhar.
+ */
+/**
+ * Gera as caixas de recorte iniciais (em %) a partir de um layout — ponto de
+ * partida tanto pro recorte automático quanto pro ajuste manual. Cada fileira
+ * tem sua própria altura (100 / nº de fileiras) e divide sua LARGURA pelo
+ * número de painéis daquela fileira especificamente — por isso uma fileira
+ * mais curta (grade "quase quadrada" com resto) fica com painéis mais
+ * largos nela, alinhados à esquerda, em vez de esticar por engano até onde
+ * a fileira de cima termina.
+ */
+function gerarCaixasIniciais(layout: LayoutRecorte, numeroQuadros: number): CaixaRecortePercentual[] {
+  const h = 100 / layout.colunasPorLinha.length;
+  const caixas: CaixaRecortePercentual[] = [];
+  let n = 1;
+  layout.colunasPorLinha.forEach((colunasNaLinha, linha) => {
+    const w = 100 / colunasNaLinha;
+    for (let coluna = 0; coluna < colunasNaLinha && n <= numeroQuadros; coluna++) {
+      caixas.push({ quadro: n, x: coluna * w, y: linha * h, w, h });
+      n++;
+    }
+  });
+  return caixas;
+}
+
+const TAMANHO_MINIMO_CAIXA_PERCENT = 4;
+const clampPercent = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+
+interface ArrastoAtivo {
+  quadro: number;
+  modo: 'mover' | 'redimensionar';
+  mouseInicioX: number;
+  mouseInicioY: number;
+  caixaInicio: CaixaRecortePercentual;
+}
+
+/**
+ * Mostra a imagem única com uma caixa arrastável/redimensionável por quadro,
+ * sobreposta — o recorte automático em grade nem sempre bate com os limites
+ * reais dos painéis (a IA de imagem raramente gera uma grade perfeitamente
+ * uniforme), então isso deixa o professor ajustar cada caixa manualmente
+ * antes de aplicar. Coordenadas guardadas em % da imagem (não em pixels),
+ * pra funcionar em qualquer tamanho de tela sem recalcular nada.
+ */
+function AjusteVisualRecorte({
+  imagemDataUrl,
+  caixas,
+  onCaixasChange,
+}: {
+  imagemDataUrl: string;
+  caixas: CaixaRecortePercentual[];
+  onCaixasChange: (caixas: CaixaRecortePercentual[]) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [arrasto, setArrasto] = useState<ArrastoAtivo | null>(null);
+
+  useEffect(() => {
+    if (!arrasto) return;
+
+    function aoMoverMouse(e: MouseEvent) {
+      const container = containerRef.current;
+      if (!container || !arrasto) return;
+      const rect = container.getBoundingClientRect();
+      const deltaX = ((e.clientX - arrasto.mouseInicioX) / rect.width) * 100;
+      const deltaY = ((e.clientY - arrasto.mouseInicioY) / rect.height) * 100;
+
+      onCaixasChange(
+        caixas.map(c => {
+          if (c.quadro !== arrasto.quadro) return c;
+          if (arrasto.modo === 'mover') {
+            return {
+              ...c,
+              x: clampPercent(arrasto.caixaInicio.x + deltaX, 0, 100 - c.w),
+              y: clampPercent(arrasto.caixaInicio.y + deltaY, 0, 100 - c.h),
+            };
+          }
+          return {
+            ...c,
+            w: clampPercent(arrasto.caixaInicio.w + deltaX, TAMANHO_MINIMO_CAIXA_PERCENT, 100 - c.x),
+            h: clampPercent(arrasto.caixaInicio.h + deltaY, TAMANHO_MINIMO_CAIXA_PERCENT, 100 - c.y),
+          };
+        })
+      );
+    }
+
+    function aoSoltarMouse() {
+      setArrasto(null);
+    }
+
+    window.addEventListener('mousemove', aoMoverMouse);
+    window.addEventListener('mouseup', aoSoltarMouse);
+    return () => {
+      window.removeEventListener('mousemove', aoMoverMouse);
+      window.removeEventListener('mouseup', aoSoltarMouse);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arrasto]);
+
+  function iniciarArrasto(quadro: number, modo: 'mover' | 'redimensionar', e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const caixaAtual = caixas.find(c => c.quadro === quadro);
+    if (!caixaAtual) return;
+    setArrasto({ quadro, modo, mouseInicioX: e.clientX, mouseInicioY: e.clientY, caixaInicio: caixaAtual });
+  }
+
+  return (
+    <div ref={containerRef} className="relative w-full select-none" style={{ touchAction: 'none' }}>
+      <img src={imagemDataUrl} alt="Imagem única — ajuste as caixas de cada quadro" className="w-full h-auto block rounded-lg" draggable={false} />
+      {caixas.map(c => (
+        <div
+          key={c.quadro}
+          onMouseDown={e => iniciarArrasto(c.quadro, 'mover', e)}
+          className="absolute border-2 border-primary bg-primary/10 cursor-move"
+          style={{ left: `${c.x}%`, top: `${c.y}%`, width: `${c.w}%`, height: `${c.h}%` }}
+        >
+          <span className="absolute top-0.5 left-0.5 bg-primary text-on-primary text-[10px] font-bold px-1.5 py-0.5 rounded">{c.quadro}</span>
+          <div
+            onMouseDown={e => iniciarArrasto(c.quadro, 'redimensionar', e)}
+            className="absolute -right-1.5 -bottom-1.5 w-4 h-4 bg-primary rounded-full cursor-nwse-resize border-2 border-surface"
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RecorteImagemUnicaControle({
+  imagemUnicaDataUrl,
+  numeroQuadros,
+  onRecorte,
+}: {
+  imagemUnicaDataUrl: string;
+  numeroQuadros: number;
+  onRecorte: (quadro: number, imagem: ImagemQuadro | null) => void;
+}) {
+  const layouts = useMemo(() => layoutsDeRecorteParaNumeroQuadros(numeroQuadros), [numeroQuadros]);
+  const [layoutEscolhido, setLayoutEscolhido] = useState(0);
+  const [processando, setProcessando] = useState(false);
+  const [erro, setErro] = useState('');
+  const [sucesso, setSucesso] = useState(false);
+  const [ajusteAberto, setAjusteAberto] = useState(false);
+  const [caixas, setCaixas] = useState<CaixaRecortePercentual[] | null>(null);
+
+  if (numeroQuadros <= 1) return null;
+
+  async function recortar() {
+    const layout = layouts[layoutEscolhido];
+    setErro('');
+    setSucesso(false);
+    setProcessando(true);
+    try {
+      const caixasIniciais = gerarCaixasIniciais(layout, numeroQuadros);
+      const recortes = await recortarImagemComCaixas(imagemUnicaDataUrl, caixasIniciais);
+      recortes.forEach(r => {
+        if (r.quadro <= numeroQuadros) {
+          onRecorte(r.quadro, { quadro: r.quadro, dataUrl: r.dataUrl, larguraOriginal: r.largura, alturaOriginal: r.altura });
+        }
+      });
+      setSucesso(true);
+    } catch (err) {
+      setErro((err as Error).message);
+    } finally {
+      setProcessando(false);
+    }
+  }
+
+  function abrirAjusteManual() {
+    setCaixas(gerarCaixasIniciais(layouts[layoutEscolhido], numeroQuadros));
+    setAjusteAberto(true);
+    setErro('');
+    setSucesso(false);
+  }
+
+  async function aplicarRecortesManual() {
+    if (!caixas) return;
+    setErro('');
+    setSucesso(false);
+    setProcessando(true);
+    try {
+      const recortes = await recortarImagemComCaixas(imagemUnicaDataUrl, caixas);
+      recortes.forEach(r => {
+        onRecorte(r.quadro, { quadro: r.quadro, dataUrl: r.dataUrl, larguraOriginal: r.largura, alturaOriginal: r.altura });
+      });
+      setSucesso(true);
+      setAjusteAberto(false);
+    } catch (err) {
+      setErro((err as Error).message);
+    } finally {
+      setProcessando(false);
+    }
+  }
+
+  return (
+    <div className="bg-background border border-outline-variant rounded-xl p-2 space-y-1.5">
+      <p className="text-[11px] font-semibold text-on-surface-variant">Recortar automaticamente para os Quadros abaixo</p>
+      <p className="text-[11px] text-on-surface-variant">
+        Escolha o layout que bate com a grade que a ferramenta de imagem gerou, para dividir esta imagem em {numeroQuadros} pedaços — um por Quadro.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={layoutEscolhido}
+          onChange={e => { setLayoutEscolhido(Number(e.target.value)); setSucesso(false); setAjusteAberto(false); }}
+          disabled={processando}
+          className="px-2 py-1.5 rounded-lg border border-outline-variant bg-surface text-xs text-on-surface"
+        >
+          {layouts.map((l, i) => <option key={i} value={i}>{l.label}</option>)}
+        </select>
+        <button
+          onClick={recortar}
+          disabled={processando}
+          className="px-3 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-semibold disabled:opacity-60"
+        >
+          {processando ? 'Recortando...' : 'Recortar'}
+        </button>
+        <button
+          onClick={ajusteAberto ? () => setAjusteAberto(false) : abrirAjusteManual}
+          disabled={processando}
+          className="px-3 py-1.5 rounded-xl bg-secondary-container text-on-secondary-container text-xs font-semibold disabled:opacity-60"
+        >
+          {ajusteAberto ? 'Fechar ajuste manual' : 'Ajustar manualmente'}
+        </button>
+      </div>
+      {erro && <p className="text-[11px] text-on-error-container bg-error-container rounded-lg px-2 py-1">{erro}</p>}
+      {sucesso && !erro && (
+        <p className="text-[11px] text-on-surface-variant">
+          Recortes aplicados aos Quadros abaixo — se ainda não bateu certinho, use "Ajustar manualmente" pra corrigir cada caixa.
+        </p>
+      )}
+
+      {ajusteAberto && caixas && (
+        <div className="space-y-2 pt-2 border-t border-outline-variant">
+          <p className="text-[11px] text-on-surface-variant">
+            Arraste cada caixa numerada até alinhar com o quadro real da imagem. Use a bolinha no canto inferior direito de cada caixa para redimensionar. Se a IA desenhou um numerinho no canto do quadro (útil como referência na avaliação), confira se ele ficou dentro da caixa — se estiver cortando, arraste a borda um pouco pra fora.
+          </p>
+          <AjusteVisualRecorte imagemDataUrl={imagemUnicaDataUrl} caixas={caixas} onCaixasChange={setCaixas} />
+          <div className="flex gap-2">
+            <button
+              onClick={aplicarRecortesManual}
+              disabled={processando}
+              className="px-3 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-semibold disabled:opacity-60"
+            >
+              {processando ? 'Aplicando...' : 'Aplicar recortes ajustados'}
+            </button>
+            <button
+              onClick={() => setCaixas(gerarCaixasIniciais(layouts[layoutEscolhido], numeroQuadros))}
+              disabled={processando}
+              className="px-3 py-1.5 rounded-xl bg-secondary-container text-on-secondary-container text-xs font-semibold disabled:opacity-60"
+            >
+              Resetar para grade
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Envia várias imagens de uma vez (uma por arquivo selecionado) e distribui
+ * automaticamente pelos Quadros 1..numeroQuadros — evita o professor ter que
+ * clicar "Enviar imagem" quadro por quadro quando já gerou todas de uma vez
+ * numa ferramenta externa. A ordem de atribuição segue o nome do arquivo
+ * (ordenação alfabética/numérica), não a ordem de seleção no picker do SO,
+ * que varia entre navegadores/sistemas e não é confiável.
+ */
+function UploadEmLoteQuadros({
+  numeroQuadros,
+  onImagem,
+}: {
+  numeroQuadros: number;
+  onImagem: (quadro: number, imagem: ImagemQuadro | null) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [processando, setProcessando] = useState(false);
+  const [erro, setErro] = useState('');
+  const [resultado, setResultado] = useState('');
+
+  async function selecionarArquivos(e: React.ChangeEvent<HTMLInputElement>) {
+    const arquivos: File[] = e.target.files ? Array.from(e.target.files) : [];
+    e.target.value = '';
+    if (arquivos.length === 0) return;
+
+    setErro('');
+    setResultado('');
+    setProcessando(true);
+    try {
+      const ordenados = [...arquivos].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+      const aAtribuir = ordenados.slice(0, numeroQuadros);
+      for (let i = 0; i < aAtribuir.length; i++) {
+        const redimensionada = await redimensionarImagemParaDataUrl(aAtribuir[i]);
+        onImagem(i + 1, { quadro: i + 1, dataUrl: redimensionada.dataUrl, larguraOriginal: redimensionada.largura, alturaOriginal: redimensionada.altura });
+      }
+      const ignorados = ordenados.length - aAtribuir.length;
+      setResultado(
+        `${aAtribuir.length} imagem(ns) atribuída(s) aos Quadros 1-${aAtribuir.length}, na ordem dos nomes dos arquivos.` +
+        (ignorados > 0 ? ` ${ignorados} arquivo(s) a mais foram ignorados (só há ${numeroQuadros} quadro(s)).` : '')
+      );
+    } catch (err) {
+      setErro((err as Error).message);
+    } finally {
+      setProcessando(false);
+    }
+  }
+
+  return (
+    <div className="bg-background border border-outline-variant rounded-xl p-2 space-y-1.5">
+      <p className="text-[11px] font-semibold text-on-surface-variant">Enviar imagens em lote (todos os Quadros de uma vez)</p>
+      <p className="text-[11px] text-on-surface-variant">
+        Selecione várias imagens de uma vez — são atribuídas aos Quadros 1 a {numeroQuadros} seguindo a ordem alfabética/numérica do nome do arquivo (ex: "quadro1.jpg", "quadro2.jpg"...). Renomeie os arquivos antes de enviar se precisar controlar a ordem.
+      </p>
+      <input ref={inputRef} type="file" accept="image/*" multiple onChange={selecionarArquivos} className="hidden" />
+      <button
+        onClick={() => inputRef.current?.click()}
+        disabled={processando}
+        className="flex items-center gap-1 text-[11px] text-primary font-semibold disabled:opacity-60"
+      >
+        <Upload className="w-3 h-3" /> {processando ? 'Processando...' : 'Selecionar imagens'}
+      </button>
+      {erro && <p className="text-[11px] text-on-error-container bg-error-container rounded-lg px-2 py-1">{erro}</p>}
+      {resultado && !erro && <p className="text-[11px] text-on-surface-variant">{resultado}</p>}
+    </div>
+  );
+}
+
+function QuestaoItem({
+  questao,
+  indice,
+  onEditar,
+  numeroQuadros,
+  imagemDoQuadro,
+}: {
+  questao: QuestaoChargeIA;
+  indice: number;
+  onEditar: (alteracoes: Partial<QuestaoChargeIA>) => void;
+  numeroQuadros: number;
+  imagemDoQuadro: ImagemQuadro | undefined;
+}) {
+  const [editando, setEditando] = useState(false);
+  const [rascunho, setRascunho] = useState(questao.enunciado);
+
+  function salvar() {
+    onEditar({ enunciado: rascunho });
+    setEditando(false);
+  }
+
+  return (
+    <div className="border border-outline-variant rounded-xl p-3 space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-semibold text-on-surface-variant">
+          Questão {indice + 1} · {questao.tipo === 'objetiva' ? 'Objetiva' : 'Discursiva'}
+        </p>
+        <button onClick={() => setEditando(v => !v)} className="text-on-surface-variant shrink-0">
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <label className="text-[11px] text-on-surface-variant shrink-0">Quadro relacionado (ilustra a questão na exportação):</label>
+        <select
+          value={questao.quadroReferenciado ?? ''}
+          onChange={e => onEditar({ quadroReferenciado: e.target.value === '' ? null : Number(e.target.value) })}
+          className="px-2 py-1 rounded-lg border border-outline-variant bg-background text-xs text-on-surface"
+        >
+          <option value="">Nenhum (charge inteira)</option>
+          {Array.from({ length: numeroQuadros }, (_, i) => i + 1).map(n => (
+            <option key={n} value={n}>Quadro {n}</option>
+          ))}
+        </select>
+      </div>
+      {imagemDoQuadro && (
+        <img src={imagemDoQuadro.dataUrl} alt={`Ilustração do quadro ${questao.quadroReferenciado}`} className="w-32 rounded-lg border border-outline-variant" />
+      )}
+
+      {editando ? (
+        <div className="space-y-2">
+          <textarea
+            value={rascunho}
+            onChange={e => setRascunho(e.target.value)}
+            rows={3}
+            className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface resize-none"
+          />
+          <div className="flex gap-2">
+            <button onClick={salvar} className="px-3 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-semibold">Salvar</button>
+            <button onClick={() => { setEditando(false); setRascunho(questao.enunciado); }} className="px-3 py-1.5 rounded-xl bg-secondary-container text-on-secondary-container text-xs font-semibold">Cancelar</button>
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-on-surface">{questao.enunciado}</p>
+      )}
+
+      {questao.alternativas ? (
+        <div className="space-y-1.5">
+          {questao.alternativas.map(alt => (
+            <div
+              key={alt.letra}
+              className={[
+                'text-sm px-3 py-2 rounded-xl border',
+                alt.correta ? 'border-primary bg-primary/10 font-semibold text-on-surface' : 'border-outline-variant text-on-surface-variant',
+              ].join(' ')}
+            >
+              ({alt.letra}) {alt.texto}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-sm px-3 py-2 rounded-xl border border-primary bg-primary/10 text-on-surface">
+          <span className="font-semibold">Resposta esperada: </span>{questao.respostaEsperada}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QuadroItem({
+  quadro,
+  prompt,
+  imagem,
+  onImagem,
+}: {
+  quadro: AtividadeCharge['roteiro']['quadros'][number];
+  prompt: string | undefined;
+  imagem: ImagemQuadro | undefined;
+  onImagem: (imagem: ImagemQuadro | null) => void;
+}) {
+  const [expandido, setExpandido] = useState(true);
+  const [copiado, setCopiado] = useState(false);
+
+  async function copiarPrompt() {
+    if (!prompt) return;
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    } catch {
+      // Clipboard indisponível (ex: contexto não seguro) — o professor pode selecionar o texto manualmente.
+    }
+  }
+
+  return (
+    <div className="border border-outline-variant rounded-xl p-3 space-y-2">
+      <button onClick={() => setExpandido(v => !v)} className="w-full flex items-center justify-between gap-2 text-left">
+        <p className="text-sm font-semibold text-on-surface">Quadro {quadro.numero}</p>
+        {expandido ? <ChevronUp className="w-4 h-4 text-on-surface-variant" /> : <ChevronDown className="w-4 h-4 text-on-surface-variant" />}
+      </button>
+
+      {expandido && (
+        <div className="space-y-2">
+          <p className="text-sm text-on-surface">{quadro.descricaoCena}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {quadro.personagensPresentes.map(nome => (
+              <span key={nome} className="text-[10px] px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-semibold">
+                {nome}{quadro.expressoesFaciais[nome] ? ` · ${quadro.expressoesFaciais[nome]}` : ''}
+              </span>
+            ))}
+          </div>
+          <p className="text-[11px] text-on-surface-variant">Ângulo de câmera: {quadro.anguloCamera}</p>
+          {quadro.elementosCenario.length > 0 && (
+            <p className="text-[11px] text-on-surface-variant">Cenário: {quadro.elementosCenario.join(', ')}</p>
+          )}
+          {quadro.textoBalao && quadro.textoBalao.length > 0 && (
+            <div className="space-y-1">
+              {quadro.textoBalao.map((b, i) => (
+                <p key={i} className="text-xs italic text-on-surface-variant border-l-2 border-outline-variant pl-2">
+                  {b.personagem}: "{b.fala}"
+                </p>
+              ))}
+            </div>
+          )}
+
+          <UploadImagemControle
+            rotulo="Imagem do quadro"
+            imagemDataUrl={imagem?.dataUrl}
+            altTexto={`Ilustração do quadro ${quadro.numero}`}
+            onImagem={resultado =>
+              onImagem(resultado ? { quadro: quadro.numero, dataUrl: resultado.dataUrl, larguraOriginal: resultado.largura, alturaOriginal: resultado.altura } : null)
+            }
+          />
+
+          {prompt && (
+            <div className="bg-background border border-outline-variant rounded-xl p-2 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-semibold text-on-surface-variant">Prompt para gerar a imagem</p>
+                <button onClick={copiarPrompt} className="flex items-center gap-1 text-[11px] text-primary font-semibold">
+                  <Copy className="w-3 h-3" /> {copiado ? 'Copiado!' : 'Copiar'}
+                </button>
+              </div>
+              <p className="text-[11px] text-on-surface-variant whitespace-pre-wrap">{prompt}</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function GeradorChargesCard({ atividade, onEditarQuestao, onImagemQuadro, onImagemUnica }: GeradorChargesCardProps) {
+  const promptsPorQuadro = new Map(atividade.promptsImagem.map(p => [p.quadro, p.prompt]));
+  const imagensPorQuadro = new Map(atividade.imagensQuadros.map(i => [i.quadro, i]));
+  const [copiadoUnico, setCopiadoUnico] = useState(false);
+
+  const promptUnico = useMemo(() => montarPromptImagemUnico({
+    roteiro: atividade.roteiro,
+    personagensUsados: atividade.personagensUsados,
+    tipoImagem: atividade.parametros.tipoImagem,
+    estiloIlustracao: atividade.parametros.estiloIlustracao,
+    conteudo: atividade.parametros.conteudo,
+  }), [atividade.roteiro, atividade.personagensUsados, atividade.parametros.tipoImagem, atividade.parametros.estiloIlustracao, atividade.parametros.conteudo]);
+
+  async function copiarPromptUnico() {
+    try {
+      await navigator.clipboard.writeText(promptUnico);
+      setCopiadoUnico(true);
+      setTimeout(() => setCopiadoUnico(false), 2000);
+    } catch {
+      // Clipboard indisponível — o professor pode selecionar o texto manualmente.
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-surface border border-outline-variant rounded-2xl p-4 space-y-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="text-sm font-bold text-on-surface">{atividade.roteiro.tituloRoteiro}</p>
+          {atividade.statusRevisao === 'aprovada' && (
+            <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-primary text-on-primary font-semibold">
+              <CheckCircle2 className="w-3 h-3" /> Aprovada
+            </span>
+          )}
+          {atividade.statusRevisao === 'requer_revisao_manual' && (
+            <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-error-container text-on-error-container font-semibold">
+              <AlertTriangle className="w-3 h-3" /> Requer revisão manual
+            </span>
+          )}
+        </div>
+        <p className="text-sm text-on-surface-variant">{atividade.roteiro.sinopse}</p>
+
+        {atividade.statusRevisao === 'requer_revisao_manual' && (
+          <div className="text-[11px] text-on-error-container bg-error-container rounded-xl p-2">
+            <p className="font-semibold mb-1">Motivos da última reprovação automática:</p>
+            <ul className="list-disc list-inside space-y-0.5">
+              {(atividade.historicoRevisao[atividade.historicoRevisao.length - 1]?.motivosFalha ?? []).map((m, i) => <li key={i}>{m}</li>)}
+            </ul>
+            <p className="mt-1">Revise manualmente o roteiro/questões abaixo antes de usar em sala.</p>
+          </div>
+        )}
+      </div>
+
+      <div className="bg-surface border border-outline-variant rounded-2xl p-4 space-y-2">
+        <p className="text-sm font-semibold text-on-surface">Imagem única da tira completa</p>
+        <p className="text-[11px] text-on-surface-variant">
+          Alternativa a enviar uma imagem por quadro: gere a tira INTEIRA (todos os quadros já combinados numa grade) numa única chamada de IA de imagem, usando o prompt abaixo, e envie o resultado aqui. Se enviada, ela tem prioridade sobre as imagens individuais dos quadros na exportação.
+        </p>
+        <UploadImagemControle
+          rotulo="Imagem da tira completa"
+          imagemDataUrl={atividade.imagemUnica?.dataUrl}
+          altTexto="Tira completa com todos os quadros"
+          onImagem={resultado =>
+            onImagemUnica(resultado ? { dataUrl: resultado.dataUrl, larguraOriginal: resultado.largura, alturaOriginal: resultado.altura } : null)
+          }
+          destaque
+        />
+        {atividade.imagemUnica && (
+          <RecorteImagemUnicaControle
+            imagemUnicaDataUrl={atividade.imagemUnica.dataUrl}
+            numeroQuadros={atividade.parametros.numeroQuadros}
+            onRecorte={onImagemQuadro}
+          />
+        )}
+        <div className="bg-background border border-outline-variant rounded-xl p-2 space-y-1.5">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-semibold text-on-surface-variant">Prompt para gerar a tira completa</p>
+            <button onClick={copiarPromptUnico} className="flex items-center gap-1 text-[11px] text-primary font-semibold">
+              <Copy className="w-3 h-3" /> {copiadoUnico ? 'Copiado!' : 'Copiar'}
+            </button>
+          </div>
+          <p className="text-[11px] text-on-surface-variant whitespace-pre-wrap">{promptUnico}</p>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <p className="text-sm font-semibold text-on-surface">
+          Quadros{atividade.imagemUnica && atividade.imagensQuadros.length === 0 ? ' (a imagem única acima já ilustra todos — ou recorte-a acima para ilustrar cada um individualmente)' : ''}
+        </p>
+        {atividade.roteiro.quadros.length > 1 && (
+          <UploadEmLoteQuadros numeroQuadros={atividade.roteiro.quadros.length} onImagem={onImagemQuadro} />
+        )}
+        {atividade.roteiro.quadros.map(quadro => (
+          <QuadroItem
+            key={quadro.numero}
+            quadro={quadro}
+            prompt={promptsPorQuadro.get(quadro.numero)}
+            imagem={imagensPorQuadro.get(quadro.numero)}
+            onImagem={imagem => onImagemQuadro(quadro.numero, imagem)}
+          />
+        ))}
+      </div>
+
+      {atividade.roteiro.textoApoio && (
+        <div className="bg-surface border border-outline-variant rounded-2xl p-4 space-y-1">
+          <p className="text-sm font-semibold text-on-surface">Texto de apoio</p>
+          <p className="text-sm text-on-surface-variant">{atividade.roteiro.textoApoio}</p>
+        </div>
+      )}
+
+      <div className="space-y-3">
+        <p className="text-sm font-semibold text-on-surface">Questões</p>
+        {atividade.questoes.map((questao, indice) => (
+          <QuestaoItem
+            key={indice}
+            questao={questao}
+            indice={indice}
+            onEditar={alteracoes => onEditarQuestao(indice, alteracoes)}
+            numeroQuadros={atividade.parametros.numeroQuadros}
+            imagemDoQuadro={questao.quadroReferenciado != null ? imagensPorQuadro.get(questao.quadroReferenciado) : undefined}
+          />
+        ))}
+      </div>
+
+      <div className="bg-surface border border-outline-variant rounded-2xl p-4 space-y-3">
+        {atividade.competencias.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-on-surface-variant mb-1">Competências</p>
+            <ul className="list-disc list-inside text-sm text-on-surface space-y-0.5">
+              {atividade.competencias.map((c, i) => <li key={i}>{c}</li>)}
+            </ul>
+          </div>
+        )}
+        {atividade.habilidades.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-on-surface-variant mb-1">Habilidades trabalhadas</p>
+            <ul className="list-disc list-inside text-sm text-on-surface space-y-0.5">
+              {atividade.habilidades.map((h, i) => <li key={i}>{h}</li>)}
+            </ul>
+          </div>
+        )}
+        {atividade.objetivos.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-on-surface-variant mb-1">Objetivos</p>
+            <ul className="list-disc list-inside text-sm text-on-surface space-y-0.5">
+              {atividade.objetivos.map((o, i) => <li key={i}>{o}</li>)}
+            </ul>
+          </div>
+        )}
+        {atividade.observacoesProfessor && (
+          <div>
+            <p className="text-xs font-semibold text-on-surface-variant mb-1">Observações para o professor</p>
+            <p className="text-sm text-on-surface-variant">{atividade.observacoesProfessor}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

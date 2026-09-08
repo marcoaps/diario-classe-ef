@@ -1,6 +1,8 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { TorneioAdmin } from './TorneioAdmin';
-import { supabase } from '../../data/supabase';
+import { supabase, buscarInscricoesInterclasses } from '../../data/supabase';
+import { agruparPorTime, EDICAO_PADRAO, MINIMO_JOGADORES_TIME } from '../../domain/interclasses';
+import type { EquipeInterclasses } from '../../domain/interclasses';
 
 // ─── TIPOS ───────────────────────────────────────────────────────────────────
 
@@ -173,8 +175,39 @@ function SetupWizard({onDone,onCancel}:SetupWizardProps){
   const [preview,setPreview]=useState<{parsed:ParsedPlayer[];found:string[];notFound:string[];noTeam:ParsedPlayer[]}|null>(null);
   const [createMissing,setCreateMissing]=useState<Record<string,boolean>>({});
   const [importedPlayers,setImportedPlayers]=useState<Player[]>([]);
+  const [equipesInterclasses,setEquipesInterclasses]=useState<EquipeInterclasses[]|null>(null);
+
+  useEffect(()=>{
+    let mounted=true;
+    buscarInscricoesInterclasses(EDICAO_PADRAO)
+      .then(rows=>{if(mounted)setEquipesInterclasses(agruparPorTime(rows));})
+      .catch(()=>{if(mounted)setEquipesInterclasses([]);});
+    return()=>{mounted=false;};
+  },[]);
+
+  // Só times com o mínimo de jogadores entram nos confrontos — um time
+  // incompleto não pode "abrir vaga" pra disputa.
+  const equipesCompletas=useMemo(()=>(equipesInterclasses??[]).filter(e=>e.completo),[equipesInterclasses]);
 
   const updateCount=(n:number)=>{setTeamCount(n);setTeamNames(prev=>{const nx=[...prev];while(nx.length<n)nx.push(DEFAULT_NAMES[nx.length]??`Time ${nx.length+1}`);return nx.slice(0,n);});};
+
+  // Usa os times já cadastrados na Inscrição de Alunos em vez de digitar tudo de novo.
+  const importarTimesInterclasses=()=>{
+    if(equipesCompletas.length<2)return;
+    const nomes=equipesCompletas.map(e=>e.nomeTime);
+    setTeamNames(nomes);setTeamCount(nomes.length);
+  };
+  // Importa times + jogadores (com nº de camisa) de uma vez só — o atalho principal.
+  const importarTudoInterclasses=()=>{
+    if(equipesCompletas.length<2)return;
+    const nomes=equipesCompletas.map(e=>e.nomeTime);
+    setTeamNames(nomes);setTeamCount(nomes.length);
+    const players:Player[]=[];
+    equipesCompletas.forEach((eq,idx)=>{
+      eq.alunos.forEach(a=>{players.push({id:`pl_${uid()}`,name:a.nome_completo,teamId:`_t${idx}`,number:String(a.numero_camisa)});});
+    });
+    setImportedPlayers(prev=>[...prev,...players]);
+  };
 
   const handleProcess=()=>{
     if(!importText.trim())return;
@@ -242,6 +275,15 @@ function SetupWizard({onDone,onCancel}:SetupWizardProps){
         {/* Passo 2 - Times */}
         {step===2&&(
           <div>
+            {equipesCompletas.length>=2?(
+              <button onClick={importarTimesInterclasses} className="w-full mb-4 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-900/40 border border-indigo-600/40 text-indigo-300 text-xs font-bold hover:bg-indigo-900/60 transition-colors">
+                📥 Usar os {equipesCompletas.length} times completos do Interclasses {EDICAO_PADRAO}
+              </button>
+            ):!!equipesInterclasses?.length&&(
+              <div className="mb-4 px-3 py-2.5 rounded-xl bg-amber-900/20 border border-amber-700/30 text-amber-400 text-xs">
+                ⏳ Só há {equipesCompletas.length} time{equipesCompletas.length!==1?'s':''} completo{equipesCompletas.length!==1?'s':''} ({MINIMO_JOGADORES_TIME}+ jogadores) no Interclasses {EDICAO_PADRAO} — são necessários pelo menos 2 pra montar confrontos.
+              </div>
+            )}
             <div className="bg-slate-900 rounded-xl p-4 mb-4">
               <div className="flex justify-between items-center mb-3"><span className="text-slate-400 text-sm">Quantidade de times</span><span className="text-indigo-400 text-2xl font-bold">{teamCount}</span></div>
               <input type="range" min={3} max={17} value={teamCount} onChange={e=>updateCount(Number(e.target.value))} className="w-full accent-indigo-500"/>
@@ -298,6 +340,15 @@ function SetupWizard({onDone,onCancel}:SetupWizardProps){
             )}
             {!preview?(
               <div>
+                {equipesCompletas.length>=2?(
+                  <button onClick={importarTudoInterclasses} className="w-full mb-3 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-green-900/30 border border-green-600/40 text-green-300 text-xs font-bold hover:bg-green-900/50 transition-colors">
+                    📥 Importar times e jogadores do Interclasses {EDICAO_PADRAO} ({equipesCompletas.reduce((s,e)=>s+e.alunos.length,0)} alunos em {equipesCompletas.length} times completos)
+                  </button>
+                ):!!equipesInterclasses?.length&&(
+                  <div className="mb-3 px-3 py-2.5 rounded-xl bg-amber-900/20 border border-amber-700/30 text-amber-400 text-xs">
+                    ⏳ Só há {equipesCompletas.length} time{equipesCompletas.length!==1?'s':''} completo{equipesCompletas.length!==1?'s':''} ({MINIMO_JOGADORES_TIME}+ jogadores) no Interclasses {EDICAO_PADRAO} — são necessários pelo menos 2 pra montar confrontos.
+                  </div>
+                )}
                 <div className="bg-slate-900 rounded-xl border border-slate-700 p-3 mb-3">
                   <div className="text-slate-300 text-xs font-semibold mb-1.5">📌 Formato (um por linha):</div>
                   <div className="font-mono text-xs text-slate-400 space-y-0.5">

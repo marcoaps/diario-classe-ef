@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../data/supabase';
 import { Loader2, BarChart3, AlertTriangle, FileSpreadsheet, FileText, ShieldCheck, Users, Percent, Award, Trash2, Calendar, X, BookOpen, ClipboardList } from 'lucide-react';
 import { cn } from '../AppLayout';
-import { useRelatorioFrequencia, type Bimestre, PONTOS_MAXIMOS, getPeriodoBimestre } from '../../domain/useRelatorioFrequencia';
+import { useRelatorioFrequencia, type Bimestre, PONTOS_MAXIMOS, getPeriodoBimestre, bimestreAtual } from '../../domain/useRelatorioFrequencia';
 import { exportarExcel, exportarPDF } from '../../domain/exportarFrequencia';
 import { exportarDiario } from '../../domain/exportarDiario';
 import { exportarDiarioOficial } from '../../domain/exportarDiarioOficial';
@@ -48,7 +48,7 @@ export function AttendanceReport() {
   React.useEffect(() => {
     async function carregarExcluidos() {
       const { data: aee } = await supabase.from('alunos_especiais').select('nome');
-      const { data: transf } = await supabase.from('notas').select('nome').ilike('situacao', '%transferi%');
+      const { data: transf } = await supabase.from('notas').select('nome').or('situacao.ilike.%transferi%,situacao.ilike.%remanej%');
       const aeeSet = new Set<string>((aee || []).map((e: any) => (e.nome as string).toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'')));
       const transfSet = new Set<string>((transf || []).map((e: any) => (e.nome as string).toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'')));
       setNomesAEE(aeeSet);
@@ -66,7 +66,7 @@ export function AttendanceReport() {
   );
 
   const [turmaId, setTurmaId] = useState<string>(uniqueClassRooms[0]?.name ?? '');
-  const [bimestre, setBimestre] = useState<Bimestre>(1);
+  const [bimestre, setBimestre] = useState<Bimestre>(() => bimestreAtual());
 
   React.useEffect(() => {
     if (!turmaId && uniqueClassRooms.length > 0) setTurmaId(uniqueClassRooms[0].name);
@@ -76,12 +76,35 @@ export function AttendanceReport() {
     turmaId || null, bimestre, undefined, dataFiltro || null,
   );
 
+  const [notasTrabalhosPorAluno, setNotasTrabalhosPorAluno] = useState<Record<string, number>>({});
+
+  React.useEffect(() => {
+    let mounted = true;
+    async function carregarNotasTrabalhos() {
+      if (!turmaId) { setNotasTrabalhosPorAluno({}); return; }
+      const turmaNorm = normalizarTurma(turmaId);
+      const { data: trabalhosData } = await supabase
+        .from('trabalhos').select('id').eq('turma', turmaNorm).eq('bimestre', bimestre);
+      const trabalhoIds = (trabalhosData || []).map((t: any) => t.id);
+      if (trabalhoIds.length === 0) { if (mounted) setNotasTrabalhosPorAluno({}); return; }
+      const { data: registrosData } = await supabase
+        .from('trabalhos_registros').select('aluno_id, nota').in('trabalho_id', trabalhoIds);
+      const soma: Record<string, number> = {};
+      (registrosData || []).forEach((r: any) => {
+        if (r.nota !== null) soma[r.aluno_id] = (soma[r.aluno_id] || 0) + Number(r.nota);
+      });
+      if (mounted) setNotasTrabalhosPorAluno(soma);
+    }
+    carregarNotasTrabalhos();
+    return () => { mounted = false; };
+  }, [turmaId, bimestre]);
+
   const emRisco = alunos.filter((a) => a.em_risco || a.critico);
   const alunosCriticos = alunos.filter((a) =>
     a.registros_total > 0 && a.percentual === 0 && !nomesExcluidos.has(a.nome.toLowerCase().trim())
   );
 
-  const handleExcel = () => exportarExcel({ turma: turmaId, bimestre, periodo, periodoEfetivo, dataFiltro: dataFiltro || null, alunos, resumo, nomesAEE, nomesTransferidos });
+  const handleExcel = () => exportarExcel({ turma: turmaId, bimestre, periodo, periodoEfetivo, dataFiltro: dataFiltro || null, alunos, resumo, nomesAEE, nomesTransferidos, notasTrabalhosPorAluno });
   const handlePDF   = () => exportarPDF({ turma: turmaId, bimestre, periodo, periodoEfetivo, dataFiltro: dataFiltro || null, alunos, resumo });
 
   const handleDiario = async () => {
@@ -159,20 +182,21 @@ export function AttendanceReport() {
     finally { setCriandoAvaliacao(false); }
   }
 
-  function calcularNotaEf(percentual: number): number | null {
-    if (percentual <= 0) return null;
-    if (percentual <= 20) return 8.0;
-    if (percentual <= 40) return 8.5;
-    if (percentual <= 64) return 9.0;
-    if (percentual <= 88) return 9.5;
-    return 10.0;
+  // Nota total = pontos de frequência (0 a 0,35 por aula, conforme o nível
+  // de participação: NP 0,20 / PP 0,275 / PI e PA 0,35 / NPJ e AUS 0 — já
+  // calculado em a.pontos) + soma das notas de trabalhos do bimestre. Sem
+  // teto durante o bimestre (nota parcial acumulando); o teto de 10,0 só é
+  // aplicado no fechamento, ao calcular e salvar em "notas.nota_ef".
+  function notaTotal(pontos: number, somaTrabalhos: number, comTeto: boolean): number {
+    const total = pontos + somaTrabalhos;
+    return comTeto ? Math.min(total, 10.0) : total;
   }
 
   function normNome(s: string) { return s.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
 
   async function calcularESalvarNotasEf() {
     if (alunos.length === 0) return;
-    if (!window.confirm(`Calcular e salvar nota_ef para ${alunos.length} alunos da turma ${turmaId} (2º Bimestre)?\n\nIsso irá atualizar o campo nota_ef de cada aluno com base na frequência atual.`)) return;
+    if (!window.confirm(`Calcular e salvar nota_ef para ${alunos.length} alunos da turma ${turmaId} (2º Bimestre)?\n\nIsso irá atualizar o campo nota_ef de cada aluno com pontos de frequência + nota de trabalho, limitado a 10,0.`)) return;
     setCalculandoNota(true);
     setNotasCalculadas(false);
     try {
@@ -184,7 +208,7 @@ export function AttendanceReport() {
           bimestre: 2,
           nome: a.nome,
           numero: a.numero_chamada ?? 0,
-          nota_ef: calcularNotaEf(Math.round(a.percentual)),
+          nota_ef: notaTotal(a.pontos, notasTrabalhosPorAluno[a.id] ?? 0, true),
         }));
       if (updates.length === 0) { alert('Nenhum aluno com registros de frequência.'); return; }
       const { error } = await supabase
@@ -208,7 +232,7 @@ export function AttendanceReport() {
           Relatório de Frequência
         </h2>
         <div className="flex items-center gap-2 flex-wrap">
-          <button type="button" onClick={handleExcel} disabled={loading || alunos.length === 0} className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 transition-all disabled:opacity-50 shadow-sm"><FileSpreadsheet className="w-4 h-4" /> Nota 2BIM-2026</button>
+          <button type="button" onClick={handleExcel} disabled={loading || alunos.length === 0} className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 transition-all disabled:opacity-50 shadow-sm"><FileSpreadsheet className="w-4 h-4" /> Nota {bimestre}BIM-{new Date().getFullYear()}</button>
           <button type="button" onClick={handlePDF} disabled={loading || alunos.length === 0} className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-rose-600 text-white hover:bg-rose-700 active:scale-95 transition-all disabled:opacity-50 shadow-sm"><FileText className="w-4 h-4" /> PDF</button>
           <button type="button" onClick={handleDiario} disabled={loading || exportandoDiario || alunos.length === 0} className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-blue-700 text-white hover:bg-blue-800 active:scale-95 transition-all disabled:opacity-50 shadow-sm">
             {exportandoDiario ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
@@ -297,6 +321,25 @@ export function AttendanceReport() {
             <ResumoCard icon={<Award className="w-4 h-4" />} label="Pontos médios" value={resumo.media_pontos} tone="primary" />
             <ResumoCard icon={<ShieldCheck className="w-4 h-4" />} label="OK" value={resumo.total_ok} tone="success" />
             <ResumoCard icon={<AlertTriangle className="w-4 h-4" />} label="Em risco / Crítico" value={`${resumo.total_em_risco} / ${resumo.total_criticos}`} tone={resumo.total_criticos > 0 ? 'danger' : 'warning'} />
+          </div>
+
+          {/* Contadores por nível de participação — nunca mistura AUS com NP/NPJ */}
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+            {[
+              { sigla: 'PI', label: 'Participação Integral', valor: resumo.total_pi, cor: 'bg-teal-50 text-teal-700 border-teal-200' },
+              { sigla: 'PP', label: 'Participação Parcial', valor: resumo.total_pp, cor: 'bg-amber-50 text-amber-700 border-amber-200' },
+              { sigla: 'NP', label: 'Não Participou', valor: resumo.total_np, cor: 'bg-red-50 text-red-700 border-red-200',
+                sub: resumo.total_np > 0 ? `${resumo.total_np - resumo.total_np_com_trabalho} sem trabalho` : undefined },
+              { sigla: 'PA', label: 'Participação Adaptada', valor: resumo.total_pa, cor: 'bg-blue-50 text-blue-700 border-blue-200' },
+              { sigla: 'NPJ', label: 'Não Participou — Justificado', valor: resumo.total_npj, cor: 'bg-purple-50 text-purple-700 border-purple-200' },
+              { sigla: 'AUS', label: 'Ausente', valor: resumo.total_aus, cor: 'bg-gray-100 text-gray-600 border-gray-200' },
+            ].map(item => (
+              <div key={item.sigla} title={item.label} className={cn('rounded-xl border p-2.5 text-center', item.cor)}>
+                <p className="text-[10px] font-bold uppercase tracking-wide">{item.sigla}</p>
+                <p className="text-lg font-bold">{item.valor}</p>
+                {'sub' in item && item.sub && <p className="text-[9px] font-semibold opacity-70 leading-tight">{item.sub}</p>}
+              </div>
+            ))}
           </div>
 
           {emRisco.length > 0 && (
@@ -399,14 +442,17 @@ export function AttendanceReport() {
                   <th className="px-5 py-4 min-w-[220px]">Aluno</th>
                   <th className="px-4 py-4 text-center">Aulas</th>
                   <th className="px-4 py-4 text-center">Faltas</th>
-                  <th className="px-4 py-4 text-center">Pontos</th>
+                  <th className="px-4 py-4 text-center" title="NP 0,20 · PP 0,275 · PI e PA 0,35 · NPJ e AUS não pontuam, por aula">Pontos Freq.</th>
                   <th className="px-4 py-4 min-w-[200px]">Frequência</th>
                   <th className="px-4 py-4 text-center">Situação</th>
-                  <th className="px-4 py-4 text-center">Nota EF</th>
+                  <th className="px-4 py-4 text-center" title="Soma das notas de todos os trabalhos do aluno neste bimestre">Nota Trabalho</th>
+                  <th className="px-4 py-4 text-center" title="Pontos de frequência + Nota Trabalho">Nota EF</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {alunos.map((a) => (
+                {alunos.map((a) => {
+                  const notaTrabalho = notasTrabalhosPorAluno[a.id] ?? 0;
+                  return (
                   <tr key={a.id} className={cn('transition-colors',
                     a.percentual === 0 && a.registros_total > 0 ? 'bg-red-50/60 hover:bg-red-100/50'
                     : a.em_risco || a.critico ? 'bg-amber-50/60 hover:bg-amber-100/50'
@@ -422,15 +468,19 @@ export function AttendanceReport() {
                     <td className="px-4 py-3 text-center font-bold text-gray-900">{a.pontos.toFixed(1).replace('.', ',')}</td>
                     <td className="px-4 py-3"><BarraProgresso percentual={a.percentual} critico={a.critico} emRisco={a.em_risco} /></td>
                     <td className="px-4 py-3 text-center"><BadgeSituacao aluno={a} /></td>
-                    <td className="px-4 py-3 text-center font-bold text-violet-700">{calcularNotaEf(Math.round(a.percentual)) !== null ? calcularNotaEf(Math.round(a.percentual))?.toFixed(1).replace('.',',') : '—'}</td>
+                    <td className="px-4 py-3 text-center font-semibold text-gray-700">{notaTrabalho > 0 ? notaTrabalho.toFixed(1).replace('.', ',') : '—'}</td>
+                    <td className="px-4 py-3 text-center font-bold text-violet-700">{notaTotal(a.pontos, notaTrabalho, false).toFixed(1).replace('.', ',')}</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
           <div className="md:hidden flex flex-col gap-3">
-            {alunos.map((a) => (
+            {alunos.map((a) => {
+              const notaTrabalho = notasTrabalhosPorAluno[a.id] ?? 0;
+              return (
               <div key={a.id} className={cn('p-4 rounded-2xl shadow-sm border flex flex-col gap-3',
                 a.percentual === 0 && a.registros_total > 0 ? 'bg-red-50 border-red-200'
                 : a.em_risco || a.critico ? 'bg-amber-50 border-amber-200'
@@ -442,11 +492,16 @@ export function AttendanceReport() {
                 <div className="flex justify-between text-xs font-medium text-gray-600">
                   <span>Aulas: {a.registros_total}</span>
                   <span className="text-rose-600 font-semibold">Faltas: {a.ausentes}</span>
-                  <span className="text-gray-900 font-bold">{a.pontos.toFixed(1).replace('.', ',')} pts</span>
+                  <span className="text-gray-900 font-bold">{a.pontos.toFixed(1).replace('.', ',')} pts freq.</span>
                 </div>
                 <BarraProgresso percentual={a.percentual} critico={a.critico} emRisco={a.em_risco} />
+                <div className="flex justify-between items-center pt-2 border-t border-gray-100 text-xs font-medium text-gray-600">
+                  <span>Nota Trabalho: <span className="font-bold text-gray-900">{notaTrabalho > 0 ? notaTrabalho.toFixed(1).replace('.', ',') : '—'}</span></span>
+                  <span className="font-bold text-violet-700 text-sm">Nota EF: {notaTotal(a.pontos, notaTrabalho, false).toFixed(1).replace('.', ',')}</span>
+                </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </>
       )}

@@ -12,7 +12,11 @@ export default async function handler(req: any, res: any) {
   if (query) {
     try {
       const pageNum = page ? parseInt(String(page)) : 1;
-      const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(String(query))}&per_page=1&orientation=landscape&page=${pageNum}`;
+      // per_page=6 (não 1): a busca do Pexels às vezes traz o esporte errado
+      // no 1º resultado para queries compostas (ex: "handball dribbling drill"
+      // retorna futebol); pedir mais candidatas permite o cliente filtrar
+      // pela que realmente menciona o esporte certo.
+      const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(String(query))}&per_page=6&orientation=landscape&page=${pageNum}`;
       const response = await fetch(url, {
         headers: { Authorization: process.env.PEXELS_API_KEY || '' },
       });

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   BookOpen, Calendar, ClipboardList, Route,
   CalendarDays, FileQuestion, Gamepad2, Accessibility,
-  Lightbulb, ChevronRight, ClipboardCheck,
+  Lightbulb, ChevronRight, ClipboardCheck, BookImage, Target,
 } from 'lucide-react';
 
 const FERRAMENTAS = [
@@ -22,6 +22,15 @@ const FERRAMENTAS = [
     icon: ClipboardList,
     cor: 'from-emerald-600 to-emerald-500',
     tag: 'PLANEJAMENTO',
+  },
+  {
+    rota: '/ia/esportes-invasao',
+    titulo: 'Esportes de Invasão',
+    descricao: 'Sequências didáticas de handebol, futsal e basquete, com organização por estações e fundamentos.',
+    icon: Target,
+    cor: 'from-orange-600 to-orange-500',
+    tag: 'ESTAÇÕES',
+    novo: true,
   },
   {
     rota: '/ia/planejamento-anual',
@@ -89,6 +98,15 @@ const FERRAMENTAS = [
     icon: Lightbulb,
     cor: 'from-purple-600 to-indigo-500',
     tag: 'EDUCAÇÃO ESPECIAL',
+  },
+  {
+    rota: '/ia/charges',
+    titulo: 'Gerador de Charges Didáticas',
+    descricao: 'Crie tiras/charges pedagógicas com roteiro, personagens fixos, prompt de imagem e atividade completa.',
+    icon: BookImage,
+    cor: 'from-purple-600 to-indigo-500',
+    tag: 'ATIVIDADES',
+    novo: true,
   },
 ];
 

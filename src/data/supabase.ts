@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
+import type { Participacao } from '../domain/frequenciaPontos';
+import type { InscricaoInterclasses } from '../domain/interclasses';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://rsifjxeqitgiecqwvien.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_Vw7h5WZ5BF-GzaAM0hOECg_TMjwdiby';
@@ -13,7 +15,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 });
 
 export async function salvarChamada(
-  registros: { aluno_id: string; data: string; presente: boolean }[]
+  registros: { aluno_id: string; data: string; presente: boolean; participacao?: Participacao }[]
 ) {
   if (registros.length === 0) return;
   const data = registros[0].data;
@@ -31,7 +33,7 @@ export async function salvarChamada(
 
   const upsertData = registros.map((r) => {
     const recordId = existingMap.get(r.aluno_id) || uuidv4();
-    return { id: recordId, aluno_id: r.aluno_id, data: r.data, presente: r.presente };
+    return { id: recordId, aluno_id: r.aluno_id, data: r.data, presente: r.presente, participacao: r.presente ? (r.participacao ?? null) : null };
   });
 
   const { error: upsertError } = await supabase.from("frequencia").upsert(upsertData);
@@ -66,6 +68,9 @@ export async function buscarHistoricoFrequencia(turmaId?: string, dt?: string) {
         id: registro.id, aluno_id: registro.aluno_id, data: registro.data,
         presente: registro.presente, nome: aluno.nome, turma_id: aluno.turma_id,
         numero_chamada: aluno.numero_chamada,
+        participacao: registro.participacao ?? null,
+        justificativa_motivo: registro.justificativa_motivo ?? null,
+        justificativa_observacao: registro.justificativa_observacao ?? null,
       });
     }
   }
@@ -163,7 +168,10 @@ export async function salvarNotas(
     turma,
     bimestre,
     numero: a.numero,
-    nome: a.nome,
+    // Uppercase para o "onConflict" (turma,bimestre,nome) ser sempre o mesmo
+    // registro, nao importa se quem chamou mandou o nome em Title Case ou
+    // CAIXA ALTA -- sem isso, o mesmo aluno pode acabar duplicado na tabela.
+    nome: limparAnotacaoDeSituacao(a.nome).toUpperCase(),
     nota: a.nota ?? null,
     nota_texto: a.nota_texto ?? null,
     situacao: a.situacao ?? 'Em Curso',
@@ -171,10 +179,14 @@ export async function salvarNotas(
     faltas: a.faltas ?? 0,
   }));
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("notas")
-    .upsert(upsertData, { onConflict: "turma,bimestre,nome" });
+    .upsert(upsertData, { onConflict: "turma,bimestre,nome" })
+    .select("nome");
   if (error) throw error;
+  if (!data || data.length !== upsertData.length) {
+    throw new Error("Nada foi salvo. Faça login novamente e tente de novo.");
+  }
 }
 
 export async function buscarNotas(turma: string, bimestre: number) {
@@ -184,4 +196,469 @@ export async function buscarNotas(turma: string, bimestre: number) {
     .order("numero");
   if (error) throw error;
   return data || [];
+}
+
+// Lança/atualiza no Diário (tabela `notas`) a nota de UMA prova corrigida no
+// Corretor de Provas. Busca a linha existente do aluno antes de sobrescrever
+// -- senão o upsert do salvarNotas() reseta situacao/faltas/nota_texto para
+// os valores padrão, apagando o que a professora já tinha preenchido ali.
+export async function lancarNotaCorretorProva(
+  turma: string,
+  bimestre: number,
+  aluno: { numero: number; nome: string },
+  nota: number
+) {
+  const nomeChave = limparAnotacaoDeSituacao(aluno.nome).toUpperCase();
+  const existentes = await buscarNotas(turma, bimestre);
+  const atual = existentes.find((n: any) => n.nome === nomeChave) as any;
+  await salvarNotas(turma, bimestre, [{
+    numero: aluno.numero,
+    nome: aluno.nome,
+    nota,
+    nota_texto: atual?.nota_texto ?? null,
+    situacao: atual?.situacao ?? 'Em Curso',
+    data_situacao: atual?.data_situacao ?? '',
+    faltas: atual?.faltas ?? 0,
+  }]);
+}
+
+// Corrige nomes/sobrenomes dos alunos da turma comparando por posição na lista
+// (mesma logica do "Sincronizar Nomes" do Dashboard) -- nao apaga nem recria
+// ninguem, entao IDs e historico ficam intactos. Casa por posicao (nao pelo
+// valor de numero_chamada) para nao ser afetado por buracos na numeracao
+// (ex: quando um duplicado foi excluido e a numeracao ficou com um salto).
+// Remove anotacoes de situacao que a extracao por IA (ou uma edicao manual)
+// pode ter colado dentro do proprio nome, tipo "Fulano - Transf." ou
+// "Fulano Remanejado em 03/08/2026". O nome nunca deve carregar essa
+// informacao -- ela pertence ao campo situacao da tabela notas.
+function limparAnotacaoDeSituacao(nome: string): string {
+  return nome
+    .replace(/\s*[-–—]?\s*(foi\s+)?(transferid[oa]s?|transf\.?|remanejad[oa]s?)\.?(\s+em)?\s*(\d{2}\/\d{2}\/\d{4})?\s*$/i, '')
+    .trim();
+}
+
+export async function sincronizarNomesAlunos(
+  turmaId: string,
+  extraidos: { numero: number; nome: string }[]
+): Promise<{ changed: number; failed: number }> {
+  const { data: existentes, error } = await supabase
+    .from('alunos')
+    .select('id, nome, numero_chamada')
+    .eq('turma_id', turmaId);
+  if (error) throw error;
+  if (!existentes || existentes.length === 0) return { changed: 0, failed: 0 };
+
+  const ordenados = [...existentes].sort((a: any, b: any) =>
+    (a.numero_chamada ?? Infinity) - (b.numero_chamada ?? Infinity)
+  );
+  const extraidosOrdenados = [...extraidos].sort((a, b) => a.numero - b.numero);
+  const n = Math.min(ordenados.length, extraidosOrdenados.length);
+
+  let changed = 0;
+  let failed = 0;
+
+  for (let i = 0; i < n; i++) {
+    const atual: any = ordenados[i];
+    const nomeExtraido = extraidosOrdenados[i].nome?.trim();
+    const nomeNovo = nomeExtraido ? limparAnotacaoDeSituacao(nomeExtraido) : '';
+    if (!nomeNovo || nomeNovo === String(atual.nome).trim()) continue;
+
+    const { data, error: updError } = await supabase
+      .from('alunos')
+      .update({ nome: nomeNovo })
+      .eq('id', atual.id)
+      .select('id');
+    if (updError || !data || data.length === 0) { failed++; continue; }
+    changed++;
+  }
+
+  return { changed, failed };
+}
+
+// ------------------------------------------------------------
+// Trabalhos (registro de entregas dos alunos)
+// ------------------------------------------------------------
+
+export interface Trabalho {
+  id: string;
+  titulo: string;
+  descricao: string | null;
+  data: string | null;
+  bimestre: number;
+  valor: number | null;
+  turma: string;
+  observacoes: string | null;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export interface TrabalhoRegistro {
+  id: string;
+  trabalho_id: string;
+  aluno_id: string;
+  situacao: 'fez' | 'nao_fez';
+  nota: number | null;
+  observacao: string | null;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export async function buscarTrabalhos(turma: string, bimestre: number): Promise<Trabalho[]> {
+  const { data, error } = await supabase
+    .from("trabalhos").select("*")
+    .eq("turma", turma).eq("bimestre", bimestre)
+    .order("data", { ascending: false, nullsFirst: false })
+    .order("criado_em", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function criarTrabalho(payload: {
+  titulo: string;
+  descricao?: string | null;
+  data?: string | null;
+  bimestre: number;
+  valor?: number | null;
+  turma: string;
+  observacoes?: string | null;
+}): Promise<Trabalho> {
+  const { data, error } = await supabase
+    .from("trabalhos")
+    .insert({
+      titulo: payload.titulo,
+      descricao: payload.descricao ?? null,
+      data: payload.data ?? null,
+      bimestre: payload.bimestre,
+      valor: payload.valor ?? null,
+      turma: payload.turma,
+      observacoes: payload.observacoes ?? null,
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function excluirTrabalho(trabalhoId: string) {
+  // trabalhos_registros é apagado junto via ON DELETE CASCADE (ver sql/trabalhos_setup.sql)
+  const { error } = await supabase.from("trabalhos").delete().eq("id", trabalhoId);
+  if (error) throw error;
+}
+
+export async function buscarRegistrosTrabalho(trabalhoId: string): Promise<TrabalhoRegistro[]> {
+  const { data, error } = await supabase
+    .from("trabalhos_registros").select("*")
+    .eq("trabalho_id", trabalhoId);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function salvarRegistrosTrabalho(
+  trabalhoId: string,
+  registros: { aluno_id: string; situacao: 'fez' | 'nao_fez'; nota: number | null; observacao: string | null }[]
+) {
+  if (registros.length === 0) return;
+  const upsertData = registros.map(r => ({
+    trabalho_id: trabalhoId,
+    aluno_id: r.aluno_id,
+    situacao: r.situacao,
+    nota: r.nota ?? null,
+    observacao: r.observacao ?? null,
+  }));
+  const { error } = await supabase
+    .from("trabalhos_registros")
+    .upsert(upsertData, { onConflict: "trabalho_id,aluno_id" });
+  if (error) throw error;
+}
+
+export async function removerRegistrosTrabalho(trabalhoId: string, alunoIds: string[]) {
+  if (alunoIds.length === 0) return;
+  const { error } = await supabase
+    .from("trabalhos_registros")
+    .delete()
+    .eq("trabalho_id", trabalhoId)
+    .in("aluno_id", alunoIds);
+  if (error) throw error;
+}
+
+export async function buscarTrabalhosHistorico(filtros: {
+  turma?: string;
+  bimestre?: number;
+  dataInicio?: string;
+  dataFim?: string;
+  nome?: string;
+}): Promise<Trabalho[]> {
+  let query = supabase.from("trabalhos").select("*");
+  if (filtros.turma) query = query.eq("turma", filtros.turma);
+  if (filtros.bimestre) query = query.eq("bimestre", filtros.bimestre);
+  if (filtros.dataInicio) query = query.gte("data", filtros.dataInicio);
+  if (filtros.dataFim) query = query.lte("data", filtros.dataFim);
+  if (filtros.nome) query = query.ilike("titulo", `%${filtros.nome}%`);
+  query = query.order("data", { ascending: false, nullsFirst: false }).order("criado_em", { ascending: false });
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+// ------------------------------------------------------------
+// Times de Futsal
+// ------------------------------------------------------------
+
+// Salva a escalação do dia (substitui a escalação anterior da mesma turma/data)
+export async function salvarEscalacaoFutsal(
+  turmaId: string,
+  times: {
+    numero: number;
+    nome: string;
+    jogadores: { aluno_id: string; aluno_nome: string; posicao: 'goleiro' | 'linha' }[];
+  }[]
+) {
+  const data = new Date().toISOString().slice(0, 10);
+
+  const { error: delError } = await supabase
+    .from('futsal_escalacoes')
+    .delete()
+    .eq('turma_id', turmaId)
+    .eq('data', data);
+  if (delError) throw delError;
+
+  // Um time sem jogador nenhum ainda vira uma linha "placeholder" (aluno_id
+  // null) — só pra registrar que o time existe (número + nome), já que a
+  // tabela é "uma linha por jogador" e não tem uma tabela própria de times.
+  const rows = times.flatMap(t =>
+    t.jogadores.length > 0
+      ? t.jogadores.map(j => ({
+          turma_id: turmaId,
+          data,
+          time_numero: t.numero,
+          time_nome: t.nome,
+          aluno_id: j.aluno_id,
+          aluno_nome: j.aluno_nome,
+          posicao: j.posicao,
+        }))
+      : [{
+          turma_id: turmaId,
+          data,
+          time_numero: t.numero,
+          time_nome: t.nome,
+          aluno_id: null,
+          aluno_nome: null,
+          posicao: null,
+        }]
+  );
+  if (rows.length === 0) return;
+
+  const { error } = await supabase.from('futsal_escalacoes').insert(rows);
+  if (error) throw error;
+}
+
+export async function buscarEscalacaoFutsal(turmaId: string, data?: string) {
+  let query = supabase.from('futsal_escalacoes').select('*').eq('turma_id', turmaId);
+  query = data ? query.eq('data', data) : query.order('data', { ascending: false });
+  const { data: rows, error } = await query;
+  if (error) throw error;
+  return rows || [];
+}
+
+// ------------------------------------------------------------
+// Interclasses IOP — inscrição individual de alunos por equipe
+// ------------------------------------------------------------
+
+// Turmas "reais" do sistema, derivadas dos alunos já cadastrados — evita
+// manter uma lista de turmas hardcoded e desatualizada em mais um lugar.
+export async function buscarTurmasDisponiveis(): Promise<string[]> {
+  const { data, error } = await supabase.from('alunos').select('turma_id');
+  if (error) throw error;
+  const turmas = new Set<string>();
+  (data || []).forEach((r: any) => { if (r.turma_id) turmas.add(r.turma_id); });
+  return Array.from(turmas).sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
+}
+
+export async function buscarInscricoesInterclasses(edicao: string): Promise<InscricaoInterclasses[]> {
+  const { data, error } = await supabase
+    .from('interclasses_inscricoes')
+    .select('*')
+    .eq('edicao', edicao)
+    .order('nome_time', { ascending: true })
+    .order('numero_camisa', { ascending: true, nullsFirst: false });
+  if (error) throw error;
+  return (data || []) as InscricaoInterclasses[];
+}
+
+export interface InscricaoInterclassesPayload {
+  edicao: string;
+  aluno_id: string | null;
+  nome_completo: string;
+  turma_id: string;
+  numero_chamada: number;
+  numero_camisa: number;
+  nome_time: string;
+  modalidade: string;
+  categoria: string;
+  genero?: string | null;
+}
+
+export async function criarInscricaoInterclasses(payload: InscricaoInterclassesPayload): Promise<InscricaoInterclasses> {
+  const { data, error } = await supabase
+    .from('interclasses_inscricoes')
+    .insert(payload)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as InscricaoInterclasses;
+}
+
+export async function atualizarInscricaoInterclasses(
+  id: string,
+  payload: Partial<InscricaoInterclassesPayload>
+): Promise<InscricaoInterclasses> {
+  const { data, error } = await supabase
+    .from('interclasses_inscricoes')
+    .update(payload)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as InscricaoInterclasses;
+}
+
+export async function excluirInscricaoInterclasses(id: string) {
+  const { error } = await supabase.from('interclasses_inscricoes').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// Renomeia o time de várias inscrições de uma vez — usado pra corrigir/mesclar
+// times que ficaram separados por erro de digitação (ex: "O Pernas de Pau" vs
+// "Os Pernas de Pau").
+export async function renomearTimeInterclasses(ids: string[], nomeNovo: string) {
+  if (ids.length === 0) return;
+  const { error } = await supabase
+    .from('interclasses_inscricoes')
+    .update({ nome_time: nomeNovo.trim() })
+    .in('id', ids);
+  if (error) throw error;
+}
+
+// Apaga TODAS as inscrições de uma edição de uma vez — usado pra zerar dados
+// de teste antes de abrir pra valer.
+export async function limparInscricoesInterclasses(edicao: string) {
+  const { error } = await supabase.from('interclasses_inscricoes').delete().eq('edicao', edicao);
+  if (error) throw error;
+}
+
+// Interclasses IOP — campeonatos/jogos (motor de competição, isolado por
+// modalidade + categoria)
+// ------------------------------------------------------------
+
+export interface CampeonatoInterclasses {
+  id: string;
+  edicao: string;
+  modalidade: string;
+  categoria: string;
+  formato: string;
+  fase: string;
+  swiss_round: number;
+  playoffs_n: number | null;
+  config: Record<string, unknown>;
+  campeao: string | null;
+  vice: string | null;
+  terceiro: string | null;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export interface JogoInterclasses {
+  id: string;
+  campeonato_id: string;
+  equipe_a: string;
+  equipe_b: string | null;
+  grupo_nome: string | null;
+  fase: string;
+  rodada: number;
+  bracket_idx: number | null;
+  is_bye: boolean;
+  jogado: boolean;
+  vencedor: string | null;
+  resultado: Record<string, unknown> | null;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export async function buscarCampeonato(
+  edicao: string, modalidade: string, categoria: string
+): Promise<CampeonatoInterclasses | null> {
+  const { data, error } = await supabase
+    .from('interclasses_campeonatos')
+    .select('*')
+    .eq('edicao', edicao).eq('modalidade', modalidade).eq('categoria', categoria)
+    .maybeSingle();
+  if (error) throw error;
+  return data as CampeonatoInterclasses | null;
+}
+
+export async function criarCampeonato(payload: {
+  edicao: string; modalidade: string; categoria: string; formato: string; playoffs_n?: number | null;
+}): Promise<CampeonatoInterclasses> {
+  const { data, error } = await supabase
+    .from('interclasses_campeonatos')
+    .insert(payload)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as CampeonatoInterclasses;
+}
+
+export async function atualizarCampeonato(
+  id: string, patch: Partial<Pick<CampeonatoInterclasses, 'fase' | 'swiss_round' | 'campeao' | 'vice' | 'terceiro' | 'config'>>
+): Promise<void> {
+  const { error } = await supabase
+    .from('interclasses_campeonatos')
+    .update({ ...patch, atualizado_em: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+export async function excluirCampeonato(id: string) {
+  const { error } = await supabase.from('interclasses_campeonatos').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function buscarJogos(campeonatoId: string): Promise<JogoInterclasses[]> {
+  const { data, error } = await supabase
+    .from('interclasses_jogos')
+    .select('*')
+    .eq('campeonato_id', campeonatoId)
+    .order('rodada', { ascending: true });
+  if (error) throw error;
+  return (data || []) as JogoInterclasses[];
+}
+
+export async function criarJogos(
+  campeonatoId: string,
+  jogos: Omit<JogoInterclasses, 'id' | 'campeonato_id' | 'criado_em' | 'atualizado_em'>[]
+): Promise<JogoInterclasses[]> {
+  if (jogos.length === 0) return [];
+  const rows = jogos.map(j => ({ ...j, campeonato_id: campeonatoId }));
+  const { data, error } = await supabase.from('interclasses_jogos').insert(rows).select();
+  if (error) throw error;
+  return (data || []) as JogoInterclasses[];
+}
+
+export async function salvarResultadoJogo(
+  jogoId: string,
+  patch: { jogado: boolean; vencedor: string | null; resultado: Record<string, unknown> }
+): Promise<void> {
+  const { error } = await supabase
+    .from('interclasses_jogos')
+    .update({ ...patch, atualizado_em: new Date().toISOString() })
+    .eq('id', jogoId);
+  if (error) throw error;
+}
+
+export async function atualizarJogo(jogoId: string, patch: Partial<JogoInterclasses>): Promise<void> {
+  const { error } = await supabase
+    .from('interclasses_jogos')
+    .update({ ...patch, atualizado_em: new Date().toISOString() })
+    .eq('id', jogoId);
+  if (error) throw error;
 }

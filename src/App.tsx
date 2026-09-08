@@ -4,10 +4,12 @@ import { StoreProvider } from './store';
 import { AppLayout } from './ui/AppLayout';
 import { Dashboard } from './ui/pages/Dashboard';
 import { Attendance } from './ui/pages/Attendance';
+import { MarcarGenero } from './ui/pages/MarcarGenero';
 import { AttendanceHistory } from './ui/pages/AttendanceHistory';
 import { AttendanceReport } from './ui/pages/AttendanceReport';
 import { Evaluations } from './ui/pages/Evaluations';
 import { GradeReport } from './ui/pages/GradeReport';
+import { Trabalhos } from './ui/pages/Trabalhos';
 import { SystemReset } from './ui/pages/SystemReset';
 import { Login } from './ui/pages/Login';
 import { PortalAluno } from './ui/pages/PortalAluno';
@@ -19,6 +21,7 @@ import { CentralAluno } from './ui/pages/CentralAluno';
 import { IAHub } from './ui/pages/ia/IAHub';
 import { IAPlanoAula } from './ui/pages/ia/IAPlanoAula';
 import { IASequencia } from './ui/pages/ia/IASequencia';
+import { IAEsportesInvasao } from './ui/pages/ia/IAEsportesInvasao';
 import { IAPlanejamentoAnual } from './ui/pages/ia/IAPlanejamentoAnual';
 import { IARoteiro } from './ui/pages/ia/IARoteiro';
 import { IAPlanoMensal } from './ui/pages/ia/IAPlanoMensal';
@@ -33,8 +36,18 @@ import { Avaliacoes } from './ui/pages/avaliacoes/Avaliacoes';
 import { AvaliacaoFolha } from './ui/pages/avaliacoes/AvaliacaoFolha';
 import { AvaliacaoCorrigir } from './ui/pages/avaliacoes/AvaliacaoCorrigir';
 import { AvaliacaoResultados } from './ui/pages/avaliacoes/AvaliacaoResultados';
-import Torneio from './ui/pages/Torneio';
+import { AvaliacaoCorrecoes } from './ui/pages/avaliacoes/AvaliacaoCorrecoes';
+import { AvaliacaoFormatar } from './ui/pages/avaliacoes/AvaliacaoFormatar';
+import { ExerciciosFixacao } from './ui/pages/exercicios/ExerciciosFixacao';
+import { ExercicioFormatar } from './ui/pages/exercicios/ExercicioFormatar';
+import { GeradorQuestoes } from './ui/pages/avaliacoes/GeradorQuestoes';
+import { AvaliacaoGabaritoRapido } from './ui/pages/avaliacoes/AvaliacaoGabaritoRapido';
+import { GeradorCharges } from './ui/pages/charges/GeradorCharges';
+import { ChargesHistorico } from './ui/pages/charges/ChargesHistorico';
+import InterclassesIOP from './ui/pages/InterclassesIOP';
+import { InscricaoAlunosPublico } from './ui/pages/InscricaoAlunosPublico';
 import { InscricaoTime } from './ui/pages/InscricaoTime';
+import { TimesFutsal } from './ui/pages/TimesFutsal';
 import { AgendaHoje } from './ui/pages/AgendaHoje';
 import { supabase } from './data/supabase';
 
@@ -79,32 +92,45 @@ export default function App() {
         <Route path="/responder" element={<ResponderProva />} />
         <Route path="/login" element={<Login />} />
         <Route path="/torneio/inscricao/:token" element={<InscricaoTime />} />
+        <Route path="/interclasses/inscricao" element={<InscricaoAlunosPublico />} />
         <Route path="/agenda" element={<AgendaHoje />} />
 
         <Route element={<LayoutProtegido />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/attendance" element={<Attendance />} />
+          <Route path="/genero" element={<MarcarGenero />} />
           <Route path="/history" element={<AttendanceHistory />} />
           <Route path="/report" element={<AttendanceReport />} />
           <Route path="/evaluations" element={<Evaluations />} />
           <Route path="/grades" element={<GradeReport />} />
+          <Route path="/trabalhos" element={<Trabalhos />} />
           <Route path="/reset" element={<SystemReset />} />
           <Route path="/provas" element={<ProvasOnline />} />
           <Route path="/qrcodes" element={<GerarQRCodes />} />
           <Route path="/alunos" element={<CentralAluno />} />
           <Route path="/rendimento" element={<RendimentoBimestre />} />
-          <Route path="/torneio" element={<Torneio />} />
+          <Route path="/torneio" element={<InterclassesIOP />} />
+          <Route path="/futsal" element={<TimesFutsal />} />
 
           {/* Modulo Avaliacoes com QR Code */}
           <Route path="/avaliacoes" element={<Avaliacoes />} />
           <Route path="/avaliacoes/folha/:id" element={<AvaliacaoFolha />} />
           <Route path="/avaliacoes/corrigir/:id" element={<AvaliacaoCorrigir />} />
           <Route path="/avaliacoes/resultados/:id" element={<AvaliacaoResultados />} />
+          <Route path="/avaliacoes/correcoes/:id" element={<AvaliacaoCorrecoes />} />
+          <Route path="/avaliacoes/formatar/:id" element={<AvaliacaoFormatar />} />
+          <Route path="/avaliacoes/gerador" element={<GeradorQuestoes />} />
+          <Route path="/avaliacoes/gabarito-rapido" element={<AvaliacaoGabaritoRapido />} />
+
+          {/* Exercicios de Fixacao — conteudo livre, poucas questoes, mesmo cabecalho/Formatar */}
+          <Route path="/exercicios" element={<ExerciciosFixacao />} />
+          <Route path="/exercicios/formatar/:id" element={<ExercicioFormatar />} />
 
           {/* Rotas IA */}
           <Route path="/ia" element={<IAHub />} />
           <Route path="/ia/plano-aula" element={<IAPlanoAula />} />
           <Route path="/ia/sequencia" element={<IASequencia />} />
+          <Route path="/ia/esportes-invasao" element={<IAEsportesInvasao />} />
           <Route path="/ia/planejamento-anual" element={<IAPlanejamentoAnual />} />
           <Route path="/ia/roteiro" element={<IARoteiro />} />
           <Route path="/ia/plano-mensal" element={<IAPlanoMensal />} />
@@ -113,6 +139,8 @@ export default function App() {
           <Route path="/ia/atividades-ludicas" element={<IAAtividadesLudicas />} />
           <Route path="/ia/atividades-adaptadas" element={<IAAtividadesAdaptadas />} />
           <Route path="/ia/ideias-avaliacoes" element={<IAIdeiasAvaliacoes />} />
+          <Route path="/ia/charges" element={<GeradorCharges />} />
+          <Route path="/ia/charges/historico" element={<ChargesHistorico />} />
           <Route path="/diario-aulas" element={<DiarioAulas />} />
         </Route>
 

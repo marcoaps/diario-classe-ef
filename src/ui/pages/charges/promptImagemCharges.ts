@@ -1,0 +1,165 @@
+// ============================================================================
+// Módulo "Prompt de Imagem": monta, 100% no cliente (nunca pedindo à IA de
+// texto), o prompt final de geração de imagem de cada quadro — compatível
+// com ChatGPT Images, Claude, Gemini, Leonardo, Flux, Ideogram, Dreamina
+// (texto puro; este app não gera a imagem em si).
+//
+// A descrição física de cada personagem é sempre buscada do banco de
+// personagens (`Personagem`) e inserida como um bloco de texto FIXO — a IA de
+// texto nunca é solicitada a redescrever a aparência física em cada quadro,
+// o que elimina o risco de "drift" (a IA descrever o mesmo personagem de
+// forma ligeiramente diferente de um quadro para o outro). Isso é o
+// mecanismo central de continuidade visual pedido no requisito original.
+// ============================================================================
+
+import { PROIBICOES_PROMPT_IMAGEM } from './regrasChargesDidaticas';
+import { layoutQuaseQuadrado } from './imagemQuadroUtils';
+import type { EstiloIlustracao, Personagem, PromptImagemQuadro, QuadroIA, RoteiroChargeIA, TipoImagem } from './tiposCharges';
+
+function labelEstilo(e: EstiloIlustracao): string {
+  const labels: Record<EstiloIlustracao, string> = {
+    infantil: 'estilo infantil, traços simples e arredondados, cores vivas, bem lúdico',
+    didatico: 'estilo didático, traços claros e diretos, poucos elementos de fundo, foco na clareza',
+    hq: 'estilo de HQ/quadrinhos clássico, contornos definidos em preto, sombreamento simples',
+    cartoon: 'estilo cartoon, traços expressivos e levemente exagerados, bem-humorado',
+    semi_realista: 'estilo semi-realista, proporções próximas do real mas ainda claramente ilustrado (não fotográfico)',
+  };
+  return labels[e];
+}
+
+function labelTipo(t: TipoImagem): string {
+  const labels: Record<TipoImagem, string> = {
+    charge: 'charge editorial escolar (cena única com leve crítica/reflexão)',
+    tirinha: 'quadro de tirinha (parte de uma sequência narrativa em quadrinhos)',
+    ilustracao: 'ilustração pedagógica (cena única, sem intenção crítica/humorística)',
+  };
+  return labels[t];
+}
+
+/** Bloco de texto fixo com a aparência física completa de um personagem — sempre o mesmo texto para o mesmo personagem, em qualquer prompt/quadro. */
+export function montarDescricaoPersonagem(p: Personagem): string {
+  const partes = [
+    p.idade ? `${p.idade} anos` : null,
+    p.sexo,
+    p.alturaAproximada ? `altura aproximada ${p.alturaAproximada}` : null,
+    p.corPele ? `pele ${p.corPele}` : null,
+    p.tipoCabelo || p.corCabelo ? `cabelo ${[p.corCabelo, p.tipoCabelo].filter(Boolean).join(', ')}` : null,
+    p.olhos ? `olhos ${p.olhos}` : null,
+    p.uniforme ? `vestindo: ${p.uniforme}` : null,
+  ].filter(Boolean);
+
+  return `${p.nome} (${p.papel}): ${partes.join('; ')}.`;
+}
+
+interface ContextoPromptImagem {
+  roteiro: RoteiroChargeIA;
+  personagensUsados: Personagem[];
+  tipoImagem: TipoImagem;
+  estiloIlustracao: EstiloIlustracao;
+  /** Conteúdo específico da atividade (ex: "Handebol") — repetido em CADA quadro como reforço visual, independente de como o roteiro descreveu a cena, para reduzir a chance da ferramenta de imagem "confundir" com outro esporte/prática parecido da mesma categoria. */
+  conteudo: string;
+}
+
+function montarBlocoPersonagensDoQuadro(quadro: QuadroIA, personagensUsados: Personagem[]): string {
+  const porNome = new Map(personagensUsados.map(p => [p.nome, p]));
+  return quadro.personagensPresentes
+    .map(nome => {
+      const personagem = porNome.get(nome);
+      if (!personagem) return `${nome}: (personagem não encontrado no banco — descrição indisponível)`;
+      const expressao = quadro.expressoesFaciais[nome] ?? 'expressão neutra';
+      const posicao = quadro.posicaoCorporal[nome] ?? 'posição não especificada';
+      return `${montarDescricaoPersonagem(personagem)} Nesta cena: expressão "${expressao}", posição/pose "${posicao}".`;
+    })
+    .join('\n');
+}
+
+/** Lista as falas do quadro para a IA de imagem desenhar os balões de fato — único texto permitido dentro da imagem (ver `PROIBICOES_PROMPT_IMAGEM`). */
+function montarBlocoBaloesFala(quadro: QuadroIA): string {
+  if (!quadro.textoBalao || quadro.textoBalao.length === 0) {
+    return '\nBALÕES DE FALA: nenhum balão neste quadro — cena silenciosa, sem texto algum na imagem.';
+  }
+  const linhas = quadro.textoBalao.map(b => `- Personagem "${b.personagem}" fala: "${b.fala}"`).join('\n');
+  return `
+BALÕES DE FALA (desenhar como balões de fala de quadrinho clássicos — contorno definido, "rabicho"/ponta apontando para a boca de quem fala — com o texto a seguir escrito de forma legível, com ortografia correta em português, EXATAMENTE como está abaixo, sem inventar, resumir ou alterar palavras):
+${linhas}
+TAMANHO DA FONTE DOS BALÕES (IMPORTANTE): esta imagem será impressa BEM PEQUENA (poucos centímetros de largura) junto com outras questões numa prova. A fonte do texto dentro dos balões precisa ser GRANDE, GROSSA (bold) e de ALTO CONTRASTE (texto escuro em fundo branco/claro do balão) — bem maior, proporcionalmente, do que o padrão usual de balão de HQ — para continuar legível mesmo reduzida. Se a fala for longa, aumente o balão para caber o texto grande, em vez de diminuir a fonte. Nunca use fonte fina, cursiva ou decorativa.`;
+}
+
+function montarPromptDeUmQuadro(quadro: QuadroIA, contexto: ContextoPromptImagem): string {
+  const { roteiro, personagensUsados, tipoImagem, estiloIlustracao, conteudo } = contexto;
+
+  return `
+${labelTipo(tipoImagem)} — Quadro ${quadro.numero} de ${roteiro.quadros.length}.
+Estilo artístico: ${labelEstilo(estiloIlustracao)}.
+
+ASSUNTO/ESPORTE ESPECÍFICO DESTA ATIVIDADE (OBRIGATÓRIO EM TODOS OS ELEMENTOS VISUAIS): "${conteudo}" — a bola, a quadra/campo, o gol/cesta/alvo e os gestos dos jogadores nesta imagem têm que ser reconhecíveis como sendo especificamente deste esporte/prática, nunca de outro parecido (ex: não desenhe bola nem gestos de futebol se o assunto for handebol).
+
+CENA: ${quadro.descricaoCena}
+ÂNGULO DE CÂMERA: ${quadro.anguloCamera}
+ELEMENTOS DE CENÁRIO/FUNDO: ${quadro.elementosCenario.join(', ') || 'ambiente escolar simples, sem elementos adicionais'}
+CONTINUIDADE EM RELAÇÃO AO QUADRO ANTERIOR: ${quadro.continuidadeNotas || '(primeiro quadro da sequência)'}
+
+PERSONAGENS NESTA CENA (aparência física fixa — manter EXATAMENTE assim em todos os quadros desta atividade):
+${montarBlocoPersonagensDoQuadro(quadro, personagensUsados)}
+${montarBlocoBaloesFala(quadro)}
+
+ILUMINAÇÃO: consistente com ambiente escolar/quadra ao ar livre ou coberta, luz natural difusa, sem sombras dramáticas.
+
+PROIBIÇÕES OBRIGATÓRIAS:
+${PROIBICOES_PROMPT_IMAGEM.map(p => `- ${p}`).join('\n')}
+`.trim();
+}
+
+/** Um prompt de imagem por quadro — para ferramentas que geram uma imagem de cada vez. */
+export function montarPromptImagemPorQuadro(contexto: ContextoPromptImagem): PromptImagemQuadro[] {
+  return contexto.roteiro.quadros.map(quadro => ({
+    quadro: quadro.numero,
+    prompt: montarPromptDeUmQuadro(quadro, contexto),
+  }));
+}
+
+/** Descreve em português a grade "quase quadrada" (fileiras podem ter tamanhos diferentes) que o recorte automático do app vai assumir — a IA de imagem precisa seguir essa mesma grade, senão o recorte não bate com os painéis de verdade. */
+function descreverGradeParaPrompt(numeroQuadros: number): string {
+  const fileiras = layoutQuaseQuadrado(numeroQuadros);
+  if (fileiras.length === 1) return `numa ÚNICA FILEIRA horizontal com os ${numeroQuadros} painéis lado a lado`;
+  const porExtenso = fileiras.map((n, i) => `${i + 1}ª fileira (de cima pra baixo) com ${n} painéis`).join(', ');
+  const desigual = new Set(fileiras).size > 1;
+  return `em EXATAMENTE ${fileiras.length} fileiras: ${porExtenso}${desigual ? ' — a fileira mais curta fica alinhada à ESQUERDA, com um espaço vazio/neutro (sem desenho) do lado direito dela em vez de esticar os painéis dessa fileira pra ficarem maiores que os das outras' : ''}`;
+}
+
+/**
+ * A orientação/proporção do CANVAS INTEIRO importa tanto quanto a grade —
+ * já aconteceu de a ferramenta de imagem gerar em retrato (vertical) mesmo
+ * com vários painéis lado a lado, resultando em painéis espremidos e
+ * compridos ("quadradinhos" que saem em tiras finas de retrato). Calcula
+ * uma proporção aproximada largura:altura a partir da própria grade pedida.
+ */
+function descreverProporcaoParaPrompt(numeroQuadros: number): string {
+  const fileiras = layoutQuaseQuadrado(numeroQuadros);
+  const colunasMax = Math.max(...fileiras);
+  const linhas = fileiras.length;
+  if (colunasMax === linhas) return 'orientação QUADRADA (largura igual à altura)';
+  return `orientação PAISAGEM — mais larga do que alta, proporção aproximada ${colunasMax}:${linhas} (largura:altura)`;
+}
+
+export function montarPromptImagemUnico(contexto: ContextoPromptImagem): string {
+  const { roteiro, tipoImagem, estiloIlustracao } = contexto;
+  const blocosPorQuadro = roteiro.quadros
+    .map(quadro => `--- QUADRO ${quadro.numero} ---\n${montarPromptDeUmQuadro(quadro, contexto)}`)
+    .join('\n\n');
+
+  return `
+${labelTipo(tipoImagem)} composta por ${roteiro.quadros.length} quadro(s) em sequência, formando uma única imagem (grade de painéis, com uma pequena margem entre eles).
+GRADE OBRIGATÓRIA (siga exatamente esta organização, não escolha outra): organize os painéis ${descreverGradeParaPrompt(roteiro.quadros.length)}. Preencha os painéis na ordem de leitura (esquerda→direita, de cima pra baixo) — o Quadro 1 é o primeiro painel da 1ª fileira, e assim por diante.
+ORIENTAÇÃO/PROPORÇÃO DA IMAGEM INTEIRA (obrigatório): gere o canvas completo em ${descreverProporcaoParaPrompt(roteiro.quadros.length)} — NUNCA em retrato/vertical (mais alta que larga), mesmo que o site/ferramenta de imagem sugira retrato por padrão. Retrato faz os painéis saírem espremidos e compridos, difíceis de recortar e de ler.
+GRADE OBRIGATORIAMENTE REGULAR: todo painel com desenho deve ter EXATAMENTE o mesmo tamanho retangular que os outros, alinhados numa grade perfeitamente uniforme (linhas e colunas retas, margem/espaçamento idêntico e constante entre todos os painéis, sem painel maior, cortado ou deslocado) — isso é necessário porque o professor recorta essa imagem depois dividindo-a nessa mesma grade.
+NUMERAÇÃO DOS PAINÉIS (exceção às proibições de texto abaixo — isto é permitido, além das falas dos balões): desenhe um pequeno selo/badge numerado (círculo ou quadrado sólido com o número do quadro dentro, ex: "1", "2"...) no canto superior esquerdo de CADA painel, seguindo a ordem de leitura descrita acima (1 a ${roteiro.quadros.length}) — ajuda o professor a identificar cada quadro na hora de recortar e usar na avaliação. Desenhe esse número com uma margem de segurança das bordas do painel (não encostado no limite exato), para que continue visível mesmo se o recorte tiver uma pequena variação.
+Título da história: "${roteiro.tituloRoteiro}"
+Estilo artístico: ${labelEstilo(estiloIlustracao)} — MANTER O MESMO ESTILO E OS MESMOS PERSONAGENS (aparência idêntica) em todos os quadros.
+
+${blocosPorQuadro}
+
+PROIBIÇÕES OBRIGATÓRIAS (para a imagem inteira):
+${PROIBICOES_PROMPT_IMAGEM.map(p => `- ${p}`).join('\n')}
+`.trim();
+}

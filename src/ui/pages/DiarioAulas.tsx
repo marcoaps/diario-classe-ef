@@ -141,6 +141,7 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
   // Buscar alunos E frequências de todas as turmas
   const alunosPorTurma: Record<string, { id: string; nome: string }[]> = {};
   const frequenciasPorTurma: Record<string, Record<string, Record<string, boolean>>> = {};
+  const transferidosPorTurma: Record<string, Map<string, string>> = {};
   // frequenciasPorTurma[turma][aluno_id][data] = presente
 
   for (const turma of cfg.turmas) {
@@ -170,6 +171,24 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
       }
       frequenciasPorTurma[turma] = mapa;
     }
+
+    // Buscar alunos transferidos/remanejados (tabela notas, qualquer bimestre)
+    const transfMap = new Map<string, string>();
+    if ((alunosData || []).length > 0) {
+      const { data: notasData } = await supabase
+        .from('notas')
+        .select('nome, situacao')
+        .eq('turma', turma)
+        .or('situacao.ilike.%transferi%,situacao.ilike.%remanej%');
+      const situacaoPorNome = new Map<string, string>(
+        (notasData || []).map((n: any) => [n.nome?.toUpperCase(), n.situacao as string])
+      );
+      (alunosData || []).forEach((a: any) => {
+        const situacao = situacaoPorNome.get(String(a.nome).toUpperCase());
+        if (situacao) transfMap.set(a.id, situacao);
+      });
+    }
+    transferidosPorTurma[turma] = transfMap;
   }
 
   // Buscar conteúdo das aulas (tema/título por data) de todas as turmas
@@ -230,11 +249,12 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
       value?: any; bold?: boolean; size?: number; color?: string;
       fill?: any; hAlign?: ExcelJS.Alignment['horizontal'];
       vAlign?: ExcelJS.Alignment['vertical'];
-      wrapText?: boolean; rotation?: number;
+      wrapText?: boolean; rotation?: number; strike?: boolean; italic?: boolean;
     }) {
       if (opts.value !== undefined) cell.value = opts.value;
       cell.font = { bold: opts.bold ?? false, size: opts.size ?? 9,
-                    color: { argb: 'FF' + (opts.color ?? '000000') }, name: 'Arial' };
+                    color: { argb: 'FF' + (opts.color ?? '000000') }, name: 'Arial',
+                    strike: opts.strike ?? false, italic: opts.italic ?? false };
       if (opts.fill) cell.fill = opts.fill;
       cell.alignment = {
         horizontal: opts.hAlign ?? 'center',
@@ -346,6 +366,7 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
                        fgColor: { argb: 'FFFF4444' } }; // vermelho
 
     // ── Linhas de alunos ──
+    const transferidos = transferidosPorTurma[turma] || new Map<string, string>();
     const maxAlunos = Math.max(alunos.length, 35);
     for (let r = 0; r < maxAlunos; r++) {
       const row = 5 + r;
@@ -353,13 +374,25 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
       const alt = r % 2 === 0;
       const bgLinha = alt ? cinza : cinzaClar;
       const alunoObj = alunos[r];
+      const situacaoAluno = alunoObj ? transferidos.get(alunoObj.id) : undefined;
+      const isTransferido = !!situacaoAluno;
+      const rotuloSituacao = situacaoAluno?.toLowerCase().includes('remanej') ? 'Remanej.' : 'Transf.';
 
       fmtCell(ws.getCell(row, 1), {
         value: r + 1, bold: true, size: 8, fill: bgLinha,
       });
       fmtCell(ws.getCell(row, 2), {
         value: alunoObj?.nome ?? '', size: 9, fill: bgLinha, hAlign: 'left',
+        color: isTransferido ? '999999' : undefined, strike: isTransferido,
       });
+
+      if (isTransferido) {
+        ws.mergeCells(row, 3, row, lastCol);
+        fmtCell(ws.getCell(row, 3), {
+          value: rotuloSituacao, bold: true, italic: true, size: 8, color: '999999', fill: cinza,
+        });
+        continue;
+      }
 
       for (let i = 0; i < datas.length; i++) {
         const col  = 3 + i * 2;
@@ -436,8 +469,12 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
       const bgF = altF ? cinza : cinzaClar;
       const cellF = ws.getCell(row, colTotFaltas);
       const cellP = ws.getCell(row, colTotPresencas);
+      const isTransferido = !!alunoObj && transferidos.has(alunoObj.id);
 
-      if (alunoObj) {
+      if (alunoObj && isTransferido) {
+        fmtCell(cellF, { value: '', fill: bgF });
+        fmtCell(cellP, { value: '', fill: bgF });
+      } else if (alunoObj) {
         const freqAluno = freqTurma[alunoObj.id] || {};
         const diasFalta = datas.filter(dt => {
           if (dt.feriado || dt.label === 'Planejamento') return false;

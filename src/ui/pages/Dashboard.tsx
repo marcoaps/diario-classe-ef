@@ -2,9 +2,10 @@
 import { useStore } from '../../store';
 import { MIN_PASSING_GRADE, MAX_ABSENCES_TOTAL, ClassRoom, Student } from '../../domain/types';
 import { AgendaDia } from './AgendaDia';
-import { ChevronRight, UserX, Users, Download, X, CheckSquare, BarChart3, CalendarSearch, Edit, Trash2, Star, ChevronDown, GraduationCap, ChevronUp, Share2, Copy, CheckCircle } from 'lucide-react';
+import { ChevronRight, UserX, Users, Download, Upload, Loader2, X, CheckSquare, BarChart3, CalendarSearch, Edit, Trash2, Star, ChevronDown, GraduationCap, ChevronUp, Share2, Copy, CheckCircle, ClipboardCheck, CaseSensitive, UserCheck } from 'lucide-react';
 import { cn } from '../AppLayout';
-import { buscarAlunos, supabase } from '../../data/supabase';
+import { buscarAlunos, salvarNotas, sincronizarNomesAlunos, supabase } from '../../data/supabase';
+import { formatarNome } from '../../utils/formatarNome';
 import { v4 as uuidv4 } from 'uuid';
 import { useNavigate } from 'react-router-dom';
 
@@ -40,8 +41,11 @@ const MENU_ITEMS = [
   { Icon: BarChart3,      title: 'Relatórios',       sub: 'Frequência e notas',   color: '#7c3aed', bg: '#f5f3ff', action: 'route',  value: '/report',     destaque: false },
   { Icon: CalendarSearch, title: 'Histórico',        sub: 'Chamadas passadas',    color: '#059669', bg: '#ecfdf5', action: 'route',  value: '/history',    destaque: false },
   { Icon: Star,           title: 'Notas Bimestrais', sub: 'Lançar e consultar',   color: '#d97706', bg: '#fffbeb', action: 'route',  value: '/grades',     destaque: false },
+  { Icon: ClipboardCheck, title: 'Trabalhos',        sub: 'Registrar entregas',   color: '#0891b2', bg: '#ecfeff', action: 'route',  value: '/trabalhos',  destaque: false },
   { Icon: Download,       title: 'Importar Lista',   sub: 'Adicionar alunos',     color: '#0284c7', bg: '#f0f9ff', action: 'import', value: '',            destaque: false },
   { Icon: Edit,           title: 'Editar Turma',     sub: 'Gerenciar lista',      color: '#64748b', bg: '#f8fafc', action: 'turmas', value: '',            destaque: false },
+  { Icon: UserCheck,      title: 'Marcar Gênero',    sub: 'Meninos e meninas',    color: '#9333ea', bg: '#faf5ff', action: 'route',  value: '/genero',     destaque: false },
+  { Icon: CaseSensitive,  title: 'Corrigir Nomes',   sub: 'Ajustar maiúsculas',   color: '#0d9488', bg: '#f0fdfa', action: 'corrigirNomes', value: '',      destaque: false },
   { Icon: Trash2,         title: 'Reset Histórico',  sub: 'Apagar registros',     color: '#dc2626', bg: '#fef2f2', action: 'route',  value: '/reset',      destaque: false },
 ] as const;
 
@@ -55,15 +59,55 @@ export function Dashboard() {
   const [fetchedStudents, setFetchedStudents] = useState<Student[]>([]);
   const [studentCounts, setStudentCounts] = useState<Record<string, number>>({});
   const [showImportModal, setShowImportModal] = useState(false);
+  const [importMode, setImportMode] = useState<'lista' | 'pdf'>('lista');
   const [importText, setImportText] = useState('');
   const [importClassId, setImportClassId] = useState('ALL');
   const [importing, setImporting] = useState(false);
+  const [pdfProcessing, setPdfProcessing] = useState(false);
+  const [pdfResultMsg, setPdfResultMsg] = useState<string | null>(null);
   const [showEditListModal, setShowEditListModal] = useState(false);
   const [editListText, setEditListText] = useState('');
   const [savingList, setSavingList] = useState(false);
+  const [editModalMode, setEditModalMode] = useState<'destructive' | 'sync'>('destructive');
   const [cardMessage, setCardMessage] = useState<string | null>(null);
   const [openYears, setOpenYears] = useState<Set<number>>(new Set<number>());
   const [showTurmas, setShowTurmas] = useState(false);
+  const [corrigindoNomes, setCorrigindoNomes] = useState(false);
+
+  const handleCorrigirNomesTodasTurmas = async () => {
+    setCorrigindoNomes(true);
+    try {
+      const { data, error } = await supabase.from('alunos').select('id, nome, turma_id');
+      if (error) throw error;
+      const candidatos = (data || [])
+        .map((a: any) => ({ id: a.id, turma_id: a.turma_id, nomeAtual: a.nome as string, nomeNovo: formatarNome(a.nome) }))
+        .filter(a => a.nomeNovo !== a.nomeAtual);
+
+      if (candidatos.length === 0) {
+        alert('Nenhum nome em caixa alta encontrado — todas as turmas já estão certinhas.');
+        return;
+      }
+
+      const turmasAfetadas = new Set(candidatos.map(c => c.turma_id));
+      const exemplos = candidatos.slice(0, 10).map(c => `${c.nomeAtual} -> ${c.nomeNovo}`).join('\n');
+      const confirmMsg = `Encontrados ${candidatos.length} aluno(s) em ${turmasAfetadas.size} turma(s) com nome em caixa alta.\n\nExemplos:\n${exemplos}${candidatos.length > 10 ? '\n...' : ''}\n\nCorrigir a capitalização de todos agora?`;
+      if (!window.confirm(confirmMsg)) return;
+
+      const resultados = await Promise.all(
+        candidatos.map(c => supabase.from('alunos').update({ nome: c.nomeNovo }).eq('id', c.id))
+      );
+      const falhas = resultados.filter(r => r.error).length;
+      if (falhas > 0) {
+        alert(`${candidatos.length - falhas} nome(s) corrigido(s), mas ${falhas} falharam. Tente novamente.`);
+      } else {
+        alert(`${candidatos.length} nome(s) corrigido(s) em ${turmasAfetadas.size} turma(s)!`);
+      }
+    } catch (e: any) {
+      alert('Erro ao corrigir nomes: ' + e.message);
+    } finally {
+      setCorrigindoNomes(false);
+    }
+  };
 
   const toggleYear = (year: number) => {
     setOpenYears(prev => {
@@ -106,6 +150,7 @@ export function Dashboard() {
     if (action === 'route') navigate(value);
     else if (action === 'turmas') { setShowTurmas(true); setTimeout(() => document.getElementById('turmas-list')?.scrollIntoView({ behavior: 'smooth' }), 100); }
     else if (action === 'import') setShowImportModal(true);
+    else if (action === 'corrigirNomes') handleCorrigirNomesTodasTurmas();
   };
 
   const handleImport = async () => {
@@ -135,6 +180,102 @@ export function Dashboard() {
     finally { setImporting(false); }
   };
 
+  const handlePdfImport = async (file: File) => {
+    if (importClassId === 'ALL') { alert('Selecione uma turma para importar.'); return; }
+    setPdfProcessing(true);
+    setPdfResultMsg(null);
+    try {
+      const toBase64 = (f: File): Promise<string> =>
+        new Promise((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res((r.result as string).split(',')[1]);
+          r.onerror = rej;
+          r.readAsDataURL(f);
+        });
+      const base64 = await toBase64(file);
+      const resp = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-5',
+          max_tokens: 8000,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
+              {
+                type: 'text',
+                text: 'Extraia os dados dos alunos deste PDF da RELACAO DE NOTAS E CONCEITOS. Retorne SOMENTE um array JSON valido, sem markdown, sem explicacoes, sem texto extra. Formato exato: [{"num":1,"nome":"NOME COMPLETO","situacao":"Em Curso","data_situacao":""}]. Para alunos transferidos use situacao "Foi Transferido". Para remanejados use "Remanejado". O campo nome deve conter APENAS o nome do aluno, nunca a situacao. Use aspas duplas. Se nao houver data da situacao deixe string vazia.',
+              },
+            ],
+          }],
+        }),
+      });
+      const json = await resp.json();
+      if (!resp.ok) throw new Error('API erro ' + resp.status);
+      let text = json.content[0].text;
+      let clean = text.replace(/```json|```/g, '').trim();
+      const lastBracket = clean.lastIndexOf('}');
+      if (lastBracket !== -1 && !clean.endsWith(']')) {
+        clean = clean.substring(0, lastBracket + 1) + ']';
+      }
+      const extraidos: { num: number; nome: string; situacao?: string; data_situacao?: string }[] = JSON.parse(clean);
+      if (!Array.isArray(extraidos) || extraidos.length === 0) throw new Error('Não consegui ler nenhum aluno neste PDF.');
+
+      const turmaNormalizada = importClassId.replace(/º/g, '').replace(/\s/g, '').toUpperCase();
+
+      const { data: existentesData, error: exErr } = await supabase
+        .from('alunos').select('id, nome, numero_chamada').eq('turma_id', turmaNormalizada);
+      if (exErr) throw exErr;
+      const existentes = existentesData || [];
+      const maxNumeroExistente = existentes.reduce((max, a: any) => Math.max(max, a.numero_chamada ?? 0), 0);
+      const nomesExistentesLower = new Set(existentes.map((a: any) => String(a.nome).toLowerCase().trim()));
+
+      // 1) Corrige nomes dos alunos que já existem (casa por posição/numero)
+      const { changed, failed } = await sincronizarNomesAlunos(
+        turmaNormalizada,
+        extraidos.map(e => ({ numero: e.num, nome: e.nome }))
+      );
+
+      // 2) Insere quem ainda não existe (numero maior que o maior já cadastrado e nome novo)
+      const novos = extraidos.filter(e =>
+        e.num > maxNumeroExistente && !nomesExistentesLower.has(String(e.nome).toLowerCase().trim())
+      );
+      let inseridos = 0;
+      if (novos.length > 0) {
+        const inserts = novos.map(e => ({
+          nome: e.nome,
+          turma_id: turmaNormalizada,
+          numero_chamada: e.num,
+          token_acesso: uuidv4(),
+        }));
+        const { data: insData, error: insErr } = await supabase.from('alunos').insert(inserts).select('id');
+        if (insErr) throw insErr;
+        inseridos = insData?.length ?? 0;
+      }
+
+      // 3) Grava a situação (transferido/remanejado/em curso) no bimestre atual
+      const bim = bimestreAtual();
+      await salvarNotas(turmaNormalizada, bim, extraidos.map(e => ({
+        numero: e.num,
+        nome: e.nome,
+        nota: null,
+        situacao: e.situacao || 'Em Curso',
+        data_situacao: e.data_situacao || '',
+        faltas: 0,
+      })));
+
+      setPdfResultMsg(
+        `${inseridos} aluno(s) novo(s) · ${changed} nome(s) corrigido(s)${failed > 0 ? ` (${failed} falharam)` : ''} · situações do ${bim}º bimestre gravadas`
+      );
+      await fetchCounts();
+    } catch (e: any) {
+      alert('Erro ao processar PDF: ' + (e?.message || JSON.stringify(e)));
+    } finally {
+      setPdfProcessing(false);
+    }
+  };
+
   const handleEditList = () => {
     if (!classToConfirm || fetchedStudents.length === 0) return;
     const sorted = [...fetchedStudents].sort((a, b) => {
@@ -143,7 +284,67 @@ export function Dashboard() {
       return (isNaN(na) ? 999 : na) - (isNaN(nb) ? 999 : nb);
     });
     setEditListText(sorted.map(s => s.name).join('\n'));
+    setEditModalMode('destructive');
     setShowEditListModal(true);
+  };
+
+  const handleOpenSync = () => {
+    if (!classToConfirm || fetchedStudents.length === 0) return;
+    const sorted = [...fetchedStudents].sort((a, b) => {
+      const na = typeof a.numero_chamada === 'number' ? a.numero_chamada : parseInt(String(a.numero_chamada || '999'), 10);
+      const nb = typeof b.numero_chamada === 'number' ? b.numero_chamada : parseInt(String(b.numero_chamada || '999'), 10);
+      return (isNaN(na) ? 999 : na) - (isNaN(nb) ? 999 : nb);
+    });
+    setEditListText(sorted.map(s => s.name).join('\n'));
+    setEditModalMode('sync');
+    setShowEditListModal(true);
+  };
+
+  const handleSyncNomes = async () => {
+    if (!classToConfirm) return;
+    setSavingList(true);
+    const lines = editListText.split('\n').map(l => l.trim().replace(/\s+/g, ' ')).filter(l => l.length > 0);
+    const sorted = [...fetchedStudents].sort((a, b) => {
+      const na = typeof a.numero_chamada === 'number' ? a.numero_chamada : parseInt(String(a.numero_chamada || '999'), 10);
+      const nb = typeof b.numero_chamada === 'number' ? b.numero_chamada : parseInt(String(b.numero_chamada || '999'), 10);
+      return (isNaN(na) ? 999 : na) - (isNaN(nb) ? 999 : nb);
+    });
+    const n = Math.min(lines.length, sorted.length);
+    let changed = 0;
+    let failed = 0;
+    try {
+      for (let i = 0; i < n; i++) {
+        const aluno = sorted[i];
+        const novoNome = lines[i];
+        if (novoNome && novoNome !== aluno.name) {
+          const { data, error } = await supabase.from('alunos').update({ nome: novoNome }).eq('id', aluno.id).select('id');
+          if (error || !data || data.length === 0) { failed++; continue; }
+          aluno.name = novoNome;
+          changed++;
+        }
+      }
+      const atualizados = sorted.map(a => ({ ...a }));
+      setFetchedStudents(atualizados);
+      setStudents(prev => prev.map(s => {
+        const match = atualizados.find(a => a.id === s.id);
+        return match ? { ...s, name: match.name } : s;
+      }));
+      setShowEditListModal(false);
+      const obsContagem = lines.length !== sorted.length
+        ? ` (lista colada tinha ${lines.length} nomes, turma tem ${sorted.length} — comparei só os ${n} primeiros)`
+        : '';
+      setCardMessage(
+        failed > 0
+          ? `${changed} nome(s) corrigido(s), ${failed} falharam — faça login de novo`
+          : changed > 0
+            ? `${changed} nome(s) corrigido(s)${obsContagem}`
+            : `Nenhuma diferença encontrada${obsContagem}`
+      );
+      setTimeout(() => setCardMessage(null), 5000);
+    } catch (err: any) {
+      alert('Erro ao sincronizar: ' + err.message);
+    }
+    setSavingList(false);
   };
 
   const handleSaveList = async () => {
@@ -155,26 +356,37 @@ export function Dashboard() {
     const seen = new Set<string>();
     for (const line of lines) { const lower = line.toLowerCase(); if (!seen.has(lower)) { seen.add(lower); uniqueLines.push(line); } }
     try {
-      // Buscar alunos existentes para preservar IDs e token_acesso
+      // Buscar alunos existentes para preservar ID e token_acesso — o ID é a
+      // chave que liga cada aluno às chamadas/notas já lançadas, então nunca
+      // pode ser recriado para quem já estava na turma.
       const { data: existentes } = await supabase.from('alunos').select('id, nome, token_acesso').eq('turma_id', turmaNormalizada);
       const mapaExistentes = new Map((existentes || []).map((a: any) => [a.nome.toLowerCase().trim(), a]));
 
-      const { error: delError } = await supabase.from('alunos').delete().eq('turma_id', turmaNormalizada);
-      if (delError) throw new Error('Erro ao deletar: ' + delError.message);
+      // Só remove quem realmente saiu da lista colada.
+      const nomesNovaLista = new Set(uniqueLines.map(l => l.toLowerCase().trim()));
+      const removidos = (existentes || []).filter((a: any) => !nomesNovaLista.has(a.nome.toLowerCase().trim()));
+      if (removidos.length > 0) {
+        const { error: delError } = await supabase.from('alunos').delete().in('id', removidos.map((a: any) => a.id));
+        if (delError) throw new Error('Erro ao remover alunos que saíram da lista: ' + delError.message);
+      }
 
       if (uniqueLines.length > 0) {
-        const inserts = uniqueLines.map((name, index) => {
+        const mapped = await Promise.all(uniqueLines.map(async (name, index) => {
+          const numero_chamada = index + 1;
           const existente = mapaExistentes.get(name.toLowerCase().trim());
-          return {
-            nome: name,
-            turma_id: turmaNormalizada,
-            numero_chamada: index + 1,
-            token_acesso: existente?.token_acesso || uuidv4(),
-          };
-        });
-        const { error: insError } = await supabase.from('alunos').insert(inserts);
-        if (insError) throw new Error('Erro ao inserir: ' + insError.message);
-        const mapped = inserts.map((a, i) => ({ id: uuidv4(), classRoomId: classToConfirm.id, name: a.nome, numero_chamada: a.numero_chamada, numberInClass: i + 1 }));
+          if (existente) {
+            const { error } = await supabase.from('alunos').update({ nome: name, numero_chamada }).eq('id', existente.id);
+            if (error) throw new Error(`Erro ao atualizar "${name}": ` + error.message);
+            return { id: existente.id, classRoomId: classToConfirm.id, name, numero_chamada, numberInClass: index + 1 };
+          }
+          const { data, error } = await supabase
+            .from('alunos')
+            .insert({ nome: name, turma_id: turmaNormalizada, numero_chamada, token_acesso: uuidv4() })
+            .select('id')
+            .single();
+          if (error) throw new Error(`Erro ao inserir "${name}": ` + error.message);
+          return { id: data!.id, classRoomId: classToConfirm.id, name, numero_chamada, numberInClass: index + 1 };
+        }));
         setFetchedStudents(mapped);
         setStudentCounts(prev => ({ ...prev, [classToConfirm.id]: mapped.length }));
       } else {
@@ -192,13 +404,96 @@ export function Dashboard() {
   };
 
   const handleClassClick = async (cr: ClassRoom) => {
-    if (cr.id === selectedClassId) return;
     setClassToConfirm(cr); setFetching(true); setFetchedStudents([]);
     try {
       const alunos = await buscarAlunos(cr.name.replace("º", ""));
       if (alunos.length > 0) setFetchedStudents(alunos.map(a => ({ id: a.id ? String(a.id) : uuidv4(), classRoomId: cr.id, name: a.nome || a.name || 'Sem nome', numero_chamada: a.numero_chamada })));
     } catch (e) { console.error(e); }
     setFetching(false);
+  };
+
+  const handleDeleteAluno = async (alunoId: string, nome: string) => {
+    if (!confirm(`Excluir "${nome}" da turma?\n\nEssa ação não pode ser desfeita.`)) return;
+    try {
+      const { data, error } = await supabase.from('alunos').delete().eq('id', alunoId).select('id');
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error('Nada foi excluído. Faça login novamente e tente de novo.');
+      }
+      setFetchedStudents(prev => prev.filter(s => s.id !== alunoId));
+      setStudents(prev => prev.filter(s => s.id !== alunoId));
+      if (classToConfirm) {
+        setStudentCounts(prev => ({ ...prev, [classToConfirm.id]: Math.max(0, (prev[classToConfirm.id] || 1) - 1) }));
+      }
+    } catch (err: any) {
+      alert('Erro ao excluir: ' + err.message);
+    }
+  };
+
+  const handleRenameAluno = async (alunoId: string, nomeAtual: string) => {
+    const novoNome = prompt('Corrigir nome do aluno:', nomeAtual);
+    if (!novoNome || !novoNome.trim() || novoNome.trim() === nomeAtual) return;
+    const nomeCorrigido = novoNome.trim();
+    try {
+      const { data, error } = await supabase.from('alunos').update({ nome: nomeCorrigido }).eq('id', alunoId).select('id');
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error('Nada foi atualizado. Faça login novamente e tente de novo.');
+      }
+      setFetchedStudents(prev => prev.map(s => s.id === alunoId ? { ...s, name: nomeCorrigido } : s));
+      setStudents(prev => prev.map(s => s.id === alunoId ? { ...s, name: nomeCorrigido } : s));
+    } catch (err: any) {
+      alert('Erro ao renomear: ' + err.message);
+    }
+  };
+
+  const bimestreAtual = () => {
+    const mes = new Date().getMonth() + 1;
+    if (mes <= 4) return 1;
+    if (mes <= 7) return 2;
+    if (mes <= 10) return 3;
+    return 4;
+  };
+
+  const handleMarcarSituacao = async (aluno: Student) => {
+    if (!classToConfirm) return;
+    const bim = bimestreAtual();
+    const escolha = prompt(
+      `Situação de "${aluno.name}" no ${bim}º bimestre.\n\nDigite: transferido, remanejado ou em curso`,
+      'transferido'
+    );
+    if (!escolha) return;
+    const normalizado = escolha.trim().toLowerCase();
+    let situacao: string;
+    if (normalizado.includes('remanej')) situacao = 'Remanejado';
+    else if (normalizado.includes('transf')) situacao = 'Foi Transferido';
+    else if (normalizado.includes('curso')) situacao = 'Em Curso';
+    else { alert('Não entendi. Digite "transferido", "remanejado" ou "em curso".'); return; }
+
+    let dataSituacao = '';
+    if (situacao !== 'Em Curso') {
+      const hoje = new Date();
+      const sugestao = `${String(hoje.getDate()).padStart(2, '0')}/${String(hoje.getMonth() + 1).padStart(2, '0')}/${hoje.getFullYear()}`;
+      const dataInformada = prompt('Data da situação (DD/MM/AAAA):', sugestao);
+      if (!dataInformada) return;
+      dataSituacao = dataInformada.trim();
+    }
+
+    const turmaNormalizada = classToConfirm.name.replace(/º/g, '').replace(/\s/g, '').toUpperCase();
+    try {
+      await salvarNotas(turmaNormalizada, bim, [{
+        numero: typeof aluno.numero_chamada === 'number' ? aluno.numero_chamada : parseInt(String(aluno.numero_chamada || '0'), 10),
+        nome: aluno.name,
+        nota: null,
+        situacao,
+        data_situacao: dataSituacao,
+        faltas: 0,
+      }]);
+      setCardMessage(`Situação atualizada: ${aluno.name} — ${situacao}`);
+      setTimeout(() => setCardMessage(null), 4000);
+    } catch (err: any) {
+      alert('Erro ao salvar situação: ' + err.message);
+    }
   };
 
   const totalStudents = Object.values(studentCounts).reduce((acc: number, count: number) => acc + count, 0);
@@ -271,21 +566,27 @@ export function Dashboard() {
         <AgendaDia onTurmaClick={(t) => { const cr = sortedClassRooms.find((x) => x.name.replace(/[^0-9A-Za-z]/g,'').toUpperCase() === t); if (cr) handleClassClick(cr); }} />
         {/* Grid de botões */}
         <div className="grid grid-cols-2 gap-3">
-          {MENU_ITEMS.map((item) => (
+          {MENU_ITEMS.map((item) => {
+            const isCorrigirNomes = item.action === 'corrigirNomes';
+            return (
             <button
               key={item.title}
               onClick={() => handleMenuClick(item.action, item.value)}
-              className="flex items-center gap-3 p-3.5 rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-md active:scale-95 transition-all text-left"
+              disabled={isCorrigirNomes && corrigindoNomes}
+              className="flex items-center gap-3 p-3.5 rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-md active:scale-95 transition-all text-left disabled:opacity-50 disabled:active:scale-100"
             >
               <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: item.bg }}>
-                <item.Icon className="w-5 h-5" style={{ color: item.color }} />
+                {isCorrigirNomes && corrigindoNomes
+                  ? <Loader2 className="w-5 h-5 animate-spin" style={{ color: item.color }} />
+                  : <item.Icon className="w-5 h-5" style={{ color: item.color }} />}
               </div>
               <div className="min-w-0">
                 <p className="font-bold text-gray-900 text-sm leading-tight">{item.title}</p>
-                <p className="text-gray-400 text-xs mt-0.5 leading-tight">{item.sub}</p>
+                <p className="text-gray-400 text-xs mt-0.5 leading-tight">{isCorrigirNomes && corrigindoNomes ? 'Verificando...' : item.sub}</p>
               </div>
             </button>
-          ))}
+            );
+          })}
         </div>
 
         {/* Bloco Turmas colapsável */}
@@ -433,11 +734,41 @@ export function Dashboard() {
                   <p className="text-[#1a2e6e] font-bold text-sm mb-2">{fetchedStudents.length} alunos matriculados</p>
                   <ul className="text-sm flex flex-col gap-1 max-h-40 overflow-y-auto">
                     {fetchedStudents.length > 0
-                      ? fetchedStudents.map(s => <li key={s.id} className="truncate text-gray-700">{s.numero_chamada ? <span className="font-mono text-gray-400 mr-2">{s.numero_chamada} -</span> : null}{s.name}</li>)
+                      ? fetchedStudents.map(s => (
+                          <li key={s.id} className="flex items-center justify-between gap-2 text-gray-700">
+                            <span className="truncate">{s.numero_chamada ? <span className="font-mono text-gray-400 mr-2">{s.numero_chamada} -</span> : null}{s.name}</span>
+                            <span className="flex items-center gap-1 shrink-0">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleMarcarSituacao(s); }}
+                                className="text-gray-300 hover:text-amber-600 p-1"
+                                title="Marcar situação (transferido/remanejado)"
+                              >
+                                <UserX className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleRenameAluno(s.id, s.name); }}
+                                className="text-gray-300 hover:text-blue-600 p-1"
+                                title="Corrigir nome"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleDeleteAluno(s.id, s.name); }}
+                                className="text-gray-300 hover:text-red-600 p-1"
+                                title="Excluir aluno"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </span>
+                          </li>
+                        ))
                       : <li className="text-gray-400">Nenhum aluno encontrado.</li>}
                   </ul>
                   {fetchedStudents.length > 0 && (
-                    <button onClick={handleEditList} className="w-full mt-3 py-2 rounded-xl font-bold bg-red-50 text-red-700 hover:bg-red-100 text-xs transition-colors border border-red-200">Editar Lista da Turma</button>
+                    <div className="flex gap-2 mt-3">
+                      <button onClick={handleOpenSync} className="flex-1 py-2 rounded-xl font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs transition-colors border border-blue-200">Sincronizar Nomes</button>
+                      <button onClick={handleEditList} className="flex-1 py-2 rounded-xl font-bold bg-red-50 text-red-700 hover:bg-red-100 text-xs transition-colors border border-red-200">Editar Lista da Turma</button>
+                    </div>
                   )}
                   {cardMessage && <p className="text-xs font-bold text-[#1a2e6e] text-center mt-1">{cardMessage}</p>}
                 </>
@@ -460,24 +791,75 @@ export function Dashboard() {
       {showImportModal && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-[2rem] p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl relative">
-            <button onClick={() => setShowImportModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+            <button onClick={() => { setShowImportModal(false); setPdfResultMsg(null); }} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
             <h3 className="text-xl font-black text-gray-900">Importar Alunos</h3>
-            <div className="flex flex-col gap-3 text-sm">
-              <div>
-                <label className="font-bold text-gray-600 block mb-1">Turma de Destino</label>
-                <select value={importClassId} onChange={(e) => setImportClassId(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-red-200">
-                  <option value="ALL">Selecione uma turma</option>
-                  {sortedClassRooms.map(cr => <option key={cr.id} value={cr.name}>{cr.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="font-bold text-gray-600 block mb-1">Lista de Nomes (um por linha)</label>
-                <textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder="Maria Silva&#10;João Paulo" rows={6} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-red-200 resize-none font-medium" />
-              </div>
+
+            <div className="flex gap-1 p-1 bg-gray-100 rounded-xl">
+              <button
+                onClick={() => { setImportMode('lista'); setPdfResultMsg(null); }}
+                className={cn('flex-1 py-2 rounded-lg text-xs font-bold transition-all', importMode === 'lista' ? 'bg-white shadow-sm text-[#1a2e6e]' : 'text-gray-500')}
+              >
+                Colar Lista
+              </button>
+              <button
+                onClick={() => { setImportMode('pdf'); setPdfResultMsg(null); }}
+                className={cn('flex-1 py-2 rounded-lg text-xs font-bold transition-all', importMode === 'pdf' ? 'bg-white shadow-sm text-[#1a2e6e]' : 'text-gray-500')}
+              >
+                Carregar PDF do Simaed
+              </button>
             </div>
-            <button onClick={handleImport} disabled={importing} className="w-full py-3 rounded-2xl font-black text-white transition-all active:scale-95 disabled:opacity-50" style={{ background: '#1a2e6e' }}>
-              {importing ? 'Importando...' : 'Importar Alunos'}
-            </button>
+
+            <div>
+              <label className="font-bold text-gray-600 block mb-1 text-sm">Turma de Destino</label>
+              <select value={importClassId} onChange={(e) => setImportClassId(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-red-200 text-sm">
+                <option value="ALL">Selecione uma turma</option>
+                {sortedClassRooms.map(cr => <option key={cr.id} value={cr.name}>{cr.name}</option>)}
+              </select>
+            </div>
+
+            {importMode === 'lista' ? (
+              <>
+                <div>
+                  <label className="font-bold text-gray-600 block mb-1 text-sm">Lista de Nomes (um por linha)</label>
+                  <textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder="Maria Silva&#10;João Paulo" rows={6} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-red-200 resize-none font-medium text-sm" />
+                </div>
+                <button onClick={handleImport} disabled={importing} className="w-full py-3 rounded-2xl font-black text-white transition-all active:scale-95 disabled:opacity-50" style={{ background: '#1a2e6e' }}>
+                  {importing ? 'Importando...' : 'Importar Alunos'}
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-gray-500">
+                  Sobe o PDF "Relação de Notas e Conceitos" do Simaed: corrige nomes, adiciona alunos novos e grava a situação (Transferido/Remanejado) do bimestre atual — tudo de uma vez.
+                </p>
+                <label className={cn(
+                  'w-full py-6 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors',
+                  pdfProcessing ? 'border-gray-200 bg-gray-50' : 'border-blue-200 bg-blue-50 hover:bg-blue-100'
+                )}>
+                  {pdfProcessing ? (
+                    <>
+                      <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+                      <span className="text-xs font-bold text-blue-700">Analisando PDF...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-6 h-6 text-blue-600" />
+                      <span className="text-xs font-bold text-blue-700">Toque para escolher o PDF</span>
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    className="hidden"
+                    disabled={pdfProcessing}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePdfImport(f); e.target.value = ''; }}
+                  />
+                </label>
+                {pdfResultMsg && (
+                  <p className="text-xs font-bold text-[#1a2e6e] text-center bg-green-50 border border-green-200 rounded-xl py-2 px-3">{pdfResultMsg}</p>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}
@@ -487,13 +869,22 @@ export function Dashboard() {
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-[2rem] p-6 w-full max-w-lg max-h-[90vh] flex flex-col gap-4 shadow-2xl relative">
             <button onClick={() => setShowEditListModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
-            <h3 className="text-xl font-black text-gray-900">Editar Lista da Turma</h3>
-            <p className="text-sm text-gray-500">Corrija nomes, altere a ordem ou adicione novos alunos.</p>
+            <h3 className="text-xl font-black text-gray-900">{editModalMode === 'sync' ? 'Sincronizar Nomes' : 'Editar Lista da Turma'}</h3>
+            <p className="text-sm text-gray-500">
+              {editModalMode === 'sync'
+                ? 'Cole a lista oficial (mesma ordem/número de chamada). Só os nomes diferentes são corrigidos — ninguém é apagado ou perde histórico.'
+                : 'Corrija nomes, altere a ordem ou adicione novos alunos.'}
+            </p>
             <div className="flex-1 overflow-y-auto min-h-[300px]">
               <textarea value={editListText} onChange={(e) => setEditListText(e.target.value)} className="w-full h-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-red-200 font-medium" placeholder="João&#10;Maria&#10;Pedro" spellCheck={false} />
             </div>
-            <button onClick={handleSaveList} disabled={savingList} className="w-full py-3 rounded-2xl font-black text-white transition-all active:scale-95 disabled:opacity-50" style={{ background: '#1a2e6e' }}>
-              {savingList ? 'Salvando...' : 'Salvar Lista'}
+            <button
+              onClick={editModalMode === 'sync' ? handleSyncNomes : handleSaveList}
+              disabled={savingList}
+              className="w-full py-3 rounded-2xl font-black text-white transition-all active:scale-95 disabled:opacity-50"
+              style={{ background: editModalMode === 'sync' ? '#1d4ed8' : '#1a2e6e' }}
+            >
+              {savingList ? 'Salvando...' : editModalMode === 'sync' ? 'Sincronizar' : 'Salvar Lista'}
             </button>
           </div>
         </div>

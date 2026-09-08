@@ -69,6 +69,7 @@ const GRUPOS = [
   { id: '6-7', label: '6º e 7º Ano', turmas: ['6F','7A','7B','7C','7D','7E','7F'] },
   { id: '8',   label: '8º Ano',      turmas: ['8A','8B','8C','8D','8E','8F'] },
   { id: '9',   label: '9º Ano',      turmas: ['9A','9B','9C','9D','9E','9F'] },
+  { id: '8-9', label: '8º e 9º Ano', turmas: ['8A','8B','8C','8D','8E','8F','9A','9B','9C','9D','9E','9F'] },
 ];
 
 export function getTurmasDoGrupo(grupoId: string): string[] {

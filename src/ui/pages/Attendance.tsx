@@ -1,16 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../../store';
 import { cn } from '../AppLayout';
-import { Save, Loader2 } from 'lucide-react';
+import { Save, Loader2, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '../../data/supabase';
 import { ConteudoAulas } from './ConteudoAulas';
+import { PARTICIPACAO_OPCOES, MOTIVOS_JUSTIFICATIVA, type Participacao } from '../../domain/frequenciaPontos';
+import { buscarTrabalhos, type Trabalho } from '../../data/supabase';
+import { bimestreAtual } from '../../domain/useRelatorioFrequencia';
 
 interface AlunoSupabase {
   id: string;
   nome: string;
   turma_id: string;
   numero_chamada: number | null;
+}
+
+interface RegistroChamada {
+  presente: boolean;
+  participacao: Participacao;
+  justificativaMotivo: string | null;
+  justificativaObservacao: string | null;
+  trabalhoCompensatorioId: string | null;
 }
 
 function normalizarTurma(turmaId: string) {
@@ -20,6 +31,13 @@ function normalizarTurma(turmaId: string) {
   return turmaId.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
 }
 
+function registroVazio(presente: boolean, semQuadra: boolean): RegistroChamada {
+  return {
+    presente, participacao: presente && !semQuadra ? 'fez' : null,
+    justificativaMotivo: null, justificativaObservacao: null, trabalhoCompensatorioId: null,
+  };
+}
+
 type Aba = 'chamada' | 'conteudo';
 
 export function Attendance() {
@@ -27,14 +45,34 @@ export function Attendance() {
   const [abaAtiva, setAbaAtiva] = useState<Aba>('chamada');
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [alunos, setAlunos] = useState<AlunoSupabase[]>([]);
-  const [records, setRecords] = useState<Record<string, boolean>>({});
-  const [transferidos, setTransferidos] = useState<Set<string>>(new Set());
+  const [records, setRecords] = useState<Record<string, RegistroChamada>>({});
+  const [transferidos, setTransferidos] = useState<Map<string, string>>(new Map());
   const [especiais, setEspeciais] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [modalNpjAlunoId, setModalNpjAlunoId] = useState<string | null>(null);
+  const [npjMotivo, setNpjMotivo] = useState('');
+  const [npjObservacao, setNpjObservacao] = useState('');
+  const [npjErro, setNpjErro] = useState('');
+  const [semQuadra, setSemQuadra] = useState(false);
+  const [trabalhosDaTurma, setTrabalhosDaTurma] = useState<Trabalho[]>([]);
+  const [modalCompensatorioAlunoId, setModalCompensatorioAlunoId] = useState<string | null>(null);
+  const [trabalhoSelecionadoModal, setTrabalhoSelecionadoModal] = useState('');
 
   const turmaAtual = classRooms.find(cr => cr.id === selectedClassId);
   const turmaNorm = turmaAtual ? normalizarTurma(turmaAtual.name) : null;
+
+  // Trabalhos da turma no bimestre da data selecionada, pra oferecer como
+  // trabalho compensatório de um NP.
+  useEffect(() => {
+    if (!turmaNorm) { setTrabalhosDaTurma([]); return; }
+    let mounted = true;
+    const bimestre = bimestreAtual(new Date(date + 'T00:00:00'));
+    buscarTrabalhos(turmaNorm, bimestre)
+      .then(lista => { if (mounted) setTrabalhosDaTurma(lista); })
+      .catch(() => { if (mounted) setTrabalhosDaTurma([]); });
+    return () => { mounted = false; };
+  }, [turmaNorm, date]);
 
   useEffect(() => {
     if (!turmaNorm) return;
@@ -56,24 +94,23 @@ export function Attendance() {
         const lista = (data || []) as AlunoSupabase[];
         setAlunos(lista);
 
-        // Busca transferidos da tabela notas (qualquer bimestre)
+        // Busca transferidos/remanejados da tabela notas (qualquer bimestre)
         const nomes = lista.map(a => a.nome.toUpperCase());
         if (nomes.length > 0) {
           const { data: notasData } = await supabase
             .from('notas')
             .select('nome, situacao')
             .eq('turma', turmaNorm)
-            .ilike('situacao', '%transferi%');
+            .or('situacao.ilike.%transferi%,situacao.ilike.%remanej%');
 
-          const nomesTransf = new Set<string>(
-            (notasData || []).map((n: any) => n.nome?.toUpperCase())
+          const situacaoPorNome = new Map<string, string>(
+            (notasData || []).map((n: any) => [n.nome?.toUpperCase(), n.situacao as string])
           );
 
-          const idsTransf = new Set<string>();
+          const idsTransf = new Map<string, string>();
           lista.forEach(a => {
-            if (nomesTransf.has(a.nome.toUpperCase())) {
-              idsTransf.add(a.id);
-            }
+            const situacao = situacaoPorNome.get(a.nome.toUpperCase());
+            if (situacao) idsTransf.set(a.id, situacao);
           });
           if (mounted) setTransferidos(idsTransf);
         }
@@ -94,23 +131,36 @@ export function Attendance() {
         if (mounted) setEspeciais(idsAEE);
 
         // Busca frequencia existente
-        const novosRecords: Record<string, boolean> = {};
-        lista.forEach(a => { novosRecords[a.id] = false; });
+        const novosRecords: Record<string, RegistroChamada> = {};
+        lista.forEach(a => { novosRecords[a.id] = registroVazio(false, false); });
+        let novoSemQuadra = false;
 
         if (lista.length > 0) {
           const ids = lista.map(a => a.id);
           const { data: freqData } = await supabase
             .from('frequencia')
-            .select('aluno_id, presente')
+            .select('aluno_id, presente, participacao, justificativa_motivo, justificativa_observacao, trabalho_compensatorio_id')
             .eq('data', date)
             .in('aluno_id', ids);
 
           (freqData || []).forEach((r: any) => {
-            novosRecords[r.aluno_id] = r.presente;
+            novosRecords[r.aluno_id] = {
+              presente: r.presente,
+              participacao: r.participacao ?? null,
+              justificativaMotivo: r.justificativa_motivo ?? null,
+              justificativaObservacao: r.justificativa_observacao ?? null,
+              trabalhoCompensatorioId: r.trabalho_compensatorio_id ?? null,
+            };
           });
+
+          // Se essa chamada já foi salva antes e todo mundo que estava
+          // presente ficou sem participação marcada, era um dia "sem
+          // quadra" — reabre o toggle já ligado.
+          const presentes = (freqData || []).filter((r: any) => r.presente);
+          novoSemQuadra = presentes.length > 0 && presentes.every((r: any) => !r.participacao);
         }
 
-        if (mounted) setRecords(novosRecords);
+        if (mounted) { setRecords(novosRecords); setSemQuadra(novoSemQuadra); }
 
       } catch (err) {
         console.error('Erro ao carregar alunos:', err);
@@ -129,7 +179,128 @@ export function Attendance() {
 
   const handleToggle = (alunoId: string) => {
     if (transferidos.has(alunoId)) return;
-    setRecords(prev => ({ ...prev, [alunoId]: !prev[alunoId] }));
+    setRecords(prev => {
+      const novoPresente = !prev[alunoId]?.presente;
+      // Ao marcar presente, assume PI por padrão (caso mais comum) — o
+      // professor só precisa tocar no checklist para marcar as exceções.
+      // Se a aula for "sem quadra", não assume nenhum status.
+      return { ...prev, [alunoId]: registroVazio(novoPresente, semQuadra) };
+    });
+  };
+
+  // Aula sem atividade de quadra (teórica, aplicação de trabalho, etc.):
+  // some o checklist de participação e todo presente vale a frequência
+  // padrão (0,5), igual um registro antigo — não é tratado como PI.
+  const handleToggleSemQuadra = () => {
+    setSemQuadra(prev => {
+      const novoValor = !prev;
+      setRecords(atuais => {
+        const novos = { ...atuais };
+        alunos.forEach(a => {
+          if (!novos[a.id]?.presente) return;
+          novos[a.id] = registroVazio(true, novoValor);
+        });
+        return novos;
+      });
+      return novoValor;
+    });
+  };
+
+  const abrirModalNpj = (alunoId: string) => {
+    const atual = records[alunoId];
+    setNpjMotivo(atual?.participacao === 'nao_participou_justificado' ? (atual.justificativaMotivo ?? '') : '');
+    setNpjObservacao(atual?.participacao === 'nao_participou_justificado' ? (atual.justificativaObservacao ?? '') : '');
+    setNpjErro('');
+    setModalNpjAlunoId(alunoId);
+  };
+
+  const fecharModalNpj = () => {
+    setModalNpjAlunoId(null);
+    setNpjMotivo('');
+    setNpjObservacao('');
+    setNpjErro('');
+  };
+
+  const salvarJustificativaNpj = () => {
+    if (!npjMotivo) { setNpjErro('Selecione um motivo.'); return; }
+    if (npjMotivo === 'outro' && !npjObservacao.trim()) {
+      setNpjErro('Descreva o motivo em "Observação complementar".');
+      return;
+    }
+    if (!modalNpjAlunoId) return;
+    setRecords(prev => ({
+      ...prev,
+      [modalNpjAlunoId]: {
+        presente: true,
+        participacao: 'nao_participou_justificado',
+        justificativaMotivo: npjMotivo,
+        justificativaObservacao: npjObservacao.trim() || null,
+        trabalhoCompensatorioId: null,
+      },
+    }));
+    fecharModalNpj();
+  };
+
+  const abrirModalCompensatorio = (alunoId: string) => {
+    setTrabalhoSelecionadoModal(records[alunoId]?.trabalhoCompensatorioId ?? '');
+    setModalCompensatorioAlunoId(alunoId);
+  };
+
+  const fecharModalCompensatorio = () => {
+    setModalCompensatorioAlunoId(null);
+    setTrabalhoSelecionadoModal('');
+  };
+
+  const vincularTrabalhoCompensatorio = () => {
+    if (!modalCompensatorioAlunoId || !trabalhoSelecionadoModal) return;
+    setRecords(prev => ({
+      ...prev,
+      [modalCompensatorioAlunoId]: { ...prev[modalCompensatorioAlunoId], trabalhoCompensatorioId: trabalhoSelecionadoModal },
+    }));
+    fecharModalCompensatorio();
+  };
+
+  const desvincularTrabalhoCompensatorio = (alunoId: string) => {
+    setRecords(prev => ({ ...prev, [alunoId]: { ...prev[alunoId], trabalhoCompensatorioId: null } }));
+  };
+
+  const handleParticipacao = (alunoId: string, participacao: Exclude<Participacao, null>) => {
+    if (participacao === 'nao_participou_justificado') {
+      abrirModalNpj(alunoId);
+      return;
+    }
+    // Trocar para qualquer status diferente de NPJ limpa a justificativa
+    // antiga, e trocar pra fora de NP limpa o trabalho compensatório
+    // vinculado, para não ficarem presos a um status que já mudou.
+    setRecords(prev => ({
+      ...prev,
+      [alunoId]: {
+        presente: true, participacao, justificativaMotivo: null, justificativaObservacao: null,
+        trabalhoCompensatorioId: participacao === 'nao_fez' ? (prev[alunoId]?.trabalhoCompensatorioId ?? null) : null,
+      },
+    }));
+  };
+
+  const handleMarcarTodos = (presente: boolean) => {
+    setRecords(prev => {
+      const novos = { ...prev };
+      alunos.forEach(a => {
+        if (!transferidos.has(a.id)) novos[a.id] = registroVazio(presente, semQuadra);
+      });
+      return novos;
+    });
+  };
+
+  const handleMarcarTodosParticipacao = (participacao: 'fez' | 'nao_fez') => {
+    setRecords(prev => {
+      const novos = { ...prev };
+      alunos.forEach(a => {
+        if (transferidos.has(a.id)) return;
+        if (!novos[a.id]?.presente) return; // só afeta quem já está presente
+        novos[a.id] = { presente: true, participacao, justificativaMotivo: null, justificativaObservacao: null };
+      });
+      return novos;
+    });
   };
 
   const handleSave = async () => {
@@ -148,11 +319,19 @@ export function Attendance() {
       // Nao salva frequencia de transferidos
       const recordsToSave = alunos
         .filter(a => !transferidos.has(a.id))
-        .map(a => ({
-          aluno_id: a.id,
-          data: date,
-          presente: records[a.id] ?? false,
-        }));
+        .map(a => {
+          const r = records[a.id];
+          const presente = r?.presente ?? false;
+          return {
+            aluno_id: a.id,
+            data: date,
+            presente,
+            participacao: presente ? (r?.participacao ?? null) : null,
+            justificativa_motivo: presente ? (r?.justificativaMotivo ?? null) : null,
+            justificativa_observacao: presente ? (r?.justificativaObservacao ?? null) : null,
+            trabalho_compensatorio_id: presente && r?.participacao === 'nao_fez' ? (r?.trabalhoCompensatorioId ?? null) : null,
+          };
+        });
 
       const { error: insError } = await supabase.from('frequencia').insert(recordsToSave);
       if (insError) throw insError;
@@ -207,6 +386,52 @@ export function Attendance() {
                 className="bg-surface border border-gray-300 rounded-xl p-3 text-textPrimary text-base font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all flex-1"
               />
             </div>
+            <label className="flex items-center gap-2 mt-3 px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={semQuadra}
+                onChange={handleToggleSemQuadra}
+                className="w-4 h-4"
+              />
+              <span className="text-xs font-semibold text-gray-600">
+                Aula sem atividade de quadra (teórica, aplicação de trabalho, etc.) — não pede nível de participação, presença vale a frequência padrão
+              </span>
+            </label>
+            <div className="flex gap-2 items-center mt-3">
+              <button
+                onClick={() => handleMarcarTodos(true)}
+                disabled={loading || alunos.length === 0}
+                className="flex-1 h-11 rounded-xl font-bold text-sm bg-teal-600 text-white border border-teal-700 hover:bg-teal-700 active:scale-95 transition-all disabled:opacity-50"
+              >
+                Marcar Todos Presentes
+              </button>
+              <button
+                onClick={() => handleMarcarTodos(false)}
+                disabled={loading || alunos.length === 0}
+                className="flex-1 h-11 rounded-xl font-bold text-sm bg-red-600 text-white border border-red-700 hover:bg-red-700 active:scale-95 transition-all disabled:opacity-50"
+              >
+                Marcar Todas Faltas
+              </button>
+            </div>
+            <div className={cn("flex gap-2 items-center mt-2", semQuadra && "opacity-40 pointer-events-none")}>
+              <button
+                onClick={() => handleMarcarTodosParticipacao('fez')}
+                disabled={loading || alunos.length === 0}
+                className="flex-1 h-9 rounded-xl font-bold text-xs bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 active:scale-95 transition-all disabled:opacity-50"
+              >
+                Marcar todos como PI
+              </button>
+              <button
+                onClick={() => handleMarcarTodosParticipacao('nao_fez')}
+                disabled={loading || alunos.length === 0}
+                className="flex-1 h-9 rounded-xl font-bold text-xs bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 active:scale-95 transition-all disabled:opacity-50"
+              >
+                Marcar todos como NP
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-400 mt-2 leading-snug">
+              <span className="font-semibold text-gray-500">Nível de participação:</span> PI: Participação Integral · PP: Participação Parcial · NP: Não Participou · PA: Participação Adaptada · NPJ: Não Participou — Justificado
+            </p>
           </div>
 
           <div className="p-4 pb-32 flex flex-col gap-3">
@@ -217,11 +442,14 @@ export function Attendance() {
               </div>
             ) : (
               alunos.map(aluno => {
-                const isTransf = transferidos.has(aluno.id);
+                const situacaoAluno = transferidos.get(aluno.id);
+                const isTransf = !!situacaoAluno;
                 const isEspecial = especiais.has(aluno.id);
-                const isPresent = records[aluno.id] === true;
+                const registro = records[aluno.id];
+                const isPresent = registro?.presente === true;
 
                 if (isTransf) {
+                  const rotulo = situacaoAluno!.toLowerCase().includes('remanej') ? 'Remanej.' : 'Transf.';
                   return (
                     <div
                       key={aluno.id}
@@ -232,37 +460,95 @@ export function Attendance() {
                         {aluno.nome}
                       </span>
                       <div className="w-10 h-10 rounded-lg flex justify-center items-center font-bold text-xs bg-gray-300 text-gray-600 border border-gray-400">
-                        Transf.
+                        {rotulo}
                       </div>
                     </div>
                   );
                 }
 
+                const opcaoAtiva = PARTICIPACAO_OPCOES.find(o => o.valor === registro?.participacao);
+
                 return (
-                  <button
+                  <div
                     key={aluno.id}
-                    onClick={() => handleToggle(aluno.id)}
                     className={cn(
-                      "p-3 rounded-xl border transition-all flex items-center justify-between shadow-sm active:scale-[0.98]",
-                      isPresent ? "bg-white border-teal-500/30 ring-1 ring-teal-200" : "bg-white border-red-500/30 ring-1 ring-red-200"
+                      "rounded-xl border shadow-sm overflow-hidden",
+                      isPresent ? "border-teal-500/30 ring-1 ring-teal-200" : "border-red-500/30 ring-1 ring-red-200"
                     )}
                   >
-                    <span className={cn("font-semibold text-base transition-colors flex items-center gap-2", isPresent ? "text-teal-800" : "text-red-800")}>
-                      {aluno.numero_chamada ? <span className="font-mono text-gray-500 mr-2 text-sm">{aluno.numero_chamada}</span> : null}
-                      {aluno.nome}
-                      {isEspecial && (
-                        <span className="ml-1 px-1.5 py-0.5 rounded-md bg-purple-100 text-purple-700 text-[10px] font-bold border border-purple-300">
-                          AEE
-                        </span>
-                      )}
-                    </span>
-                    <div className={cn(
-                      "w-10 h-10 rounded-lg flex justify-center items-center font-bold text-lg shadow-sm border",
-                      isPresent ? "bg-teal-600 text-white border-teal-700" : "bg-red-600 text-white border-red-700"
-                    )}>
-                      {isPresent ? "P" : "F"}
-                    </div>
-                  </button>
+                    <button
+                      onClick={() => handleToggle(aluno.id)}
+                      className="w-full p-3 bg-white transition-all flex items-center justify-between active:scale-[0.98]"
+                    >
+                      <span className={cn("font-semibold text-base transition-colors flex items-center gap-2", isPresent ? "text-teal-800" : "text-red-800")}>
+                        {aluno.numero_chamada ? <span className="font-mono text-gray-500 mr-2 text-sm">{aluno.numero_chamada}</span> : null}
+                        {aluno.nome}
+                        {isEspecial && (
+                          <span className="ml-1 px-1.5 py-0.5 rounded-md bg-purple-100 text-purple-700 text-[10px] font-bold border border-purple-300">
+                            AEE
+                          </span>
+                        )}
+                      </span>
+                      <div className={cn(
+                        "w-10 h-10 rounded-lg flex justify-center items-center font-bold text-lg shadow-sm border",
+                        isPresent ? "bg-teal-600 text-white border-teal-700" : "bg-red-600 text-white border-red-700"
+                      )}>
+                        {isPresent ? "P" : "F"}
+                      </div>
+                    </button>
+                    {isPresent && semQuadra && (
+                      <div className="px-3 pb-3 pt-1 bg-white">
+                        <span className="text-[11px] text-gray-400 italic">Sem atividade de quadra — vale a frequência padrão (0,5)</span>
+                      </div>
+                    )}
+                    {isPresent && !semQuadra && (
+                      <div className="px-3 pb-3 pt-1 bg-white">
+                        <div className="flex gap-1.5">
+                          {PARTICIPACAO_OPCOES.map(opt => {
+                            const ativo = registro?.participacao === opt.valor;
+                            return (
+                              <button
+                                key={opt.valor}
+                                onClick={() => handleParticipacao(aluno.id, opt.valor)}
+                                title={`${opt.sigla}: ${opt.label}`}
+                                className={cn("flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all active:scale-95", ativo ? opt.corAtivo : opt.corInativo)}
+                              >
+                                {opt.sigla}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {opcaoAtiva?.valor === 'nao_participou_justificado' && (
+                          <button
+                            onClick={() => abrirModalNpj(aluno.id)}
+                            className="mt-1.5 text-left text-[11px] text-purple-700 bg-purple-50 border border-purple-200 rounded-lg px-2 py-1 w-full truncate hover:bg-purple-100 transition-colors"
+                          >
+                            NPJ — {MOTIVOS_JUSTIFICATIVA.find(m => m.valor === registro?.justificativaMotivo)?.label ?? registro?.justificativaMotivo}
+                            {registro?.justificativaObservacao ? `: ${registro.justificativaObservacao}` : ''}
+                          </button>
+                        )}
+                        {opcaoAtiva?.valor === 'nao_fez' && (
+                          registro?.trabalhoCompensatorioId ? (
+                            <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-lg px-2 py-1">
+                              <button onClick={() => abrirModalCompensatorio(aluno.id)} className="flex-1 text-left truncate hover:underline">
+                                📋 Trabalho: {trabalhosDaTurma.find(t => t.id === registro.trabalhoCompensatorioId)?.titulo ?? 'vinculado'}
+                              </button>
+                              <button onClick={() => desvincularTrabalhoCompensatorio(aluno.id)} className="shrink-0 text-red-400 hover:text-red-600">
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => abrirModalCompensatorio(aluno.id)}
+                              className="mt-1.5 text-left text-[11px] text-red-600 bg-white border border-dashed border-red-300 rounded-lg px-2 py-1 w-full hover:bg-red-50 transition-colors"
+                            >
+                              + Aplicar trabalho compensatório
+                            </button>
+                          )
+                        )}
+                      </div>
+                    )}
+                  </div>
                 );
               })
             )}
@@ -288,6 +574,105 @@ export function Attendance() {
       {/* Aba Conteudo */}
       {abaAtiva === 'conteudo' && turmaNorm && (
         <ConteudoAulas turmaId={turmaNorm} turmaNome={turmaAtual?.name || turmaNorm} />
+      )}
+
+      {/* Modal: Justificar não participação (NPJ) */}
+      {modalNpjAlunoId && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <button onClick={fecharModalNpj} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+              <X className="w-5 h-5" />
+            </button>
+            <h3 className="text-lg font-black text-gray-900">Justificar não participação</h3>
+
+            {npjErro && <div className="bg-red-50 text-red-700 text-sm px-3 py-2 rounded-xl border border-red-200">{npjErro}</div>}
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-bold text-gray-600">Motivo da não participação *</label>
+              <select
+                value={npjMotivo}
+                onChange={e => setNpjMotivo(e.target.value)}
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+              >
+                <option value="">Selecione...</option>
+                {MOTIVOS_JUSTIFICATIVA.map(m => (
+                  <option key={m.valor} value={m.valor}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-bold text-gray-600">
+                Observação complementar {npjMotivo === 'outro' && <span className="text-red-500">*</span>}
+              </label>
+              <textarea
+                value={npjObservacao}
+                onChange={e => setNpjObservacao(e.target.value)}
+                rows={3}
+                placeholder={npjMotivo === 'outro' ? 'Descreva o motivo (obrigatório)' : 'Opcional'}
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20 resize-none"
+              />
+              <p className="text-[11px] text-gray-400">Registre só informações pedagógicas — evite descrever diagnóstico médico.</p>
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={fecharModalNpj} className="flex-1 py-3 rounded-2xl font-bold bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
+                Cancelar
+              </button>
+              <button onClick={salvarJustificativaNpj} className="flex-1 py-3 rounded-2xl font-black text-white bg-primary hover:bg-primary-dark transition-all active:scale-95">
+                Salvar justificativa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Vincular trabalho compensatório (NP) */}
+      {modalCompensatorioAlunoId && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl relative">
+            <button onClick={fecharModalCompensatorio} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+              <X className="w-5 h-5" />
+            </button>
+            <h3 className="text-lg font-black text-gray-900">Trabalho compensatório</h3>
+            <p className="text-xs text-gray-500 -mt-2">
+              Vincula esse registro de NP a um trabalho aplicado ao aluno em vez da atividade de quadra.
+            </p>
+
+            {trabalhosDaTurma.length === 0 ? (
+              <p className="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl px-3 py-3">
+                Nenhum trabalho cadastrado ainda para essa turma/bimestre. Cadastre um na aba "Trabalhos" e volte aqui pra vincular.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-gray-600">Trabalho</label>
+                <select
+                  value={trabalhoSelecionadoModal}
+                  onChange={e => setTrabalhoSelecionadoModal(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                >
+                  <option value="">Selecione...</option>
+                  {trabalhosDaTurma.map(t => (
+                    <option key={t.id} value={t.id}>{t.titulo}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button onClick={fecharModalCompensatorio} className="flex-1 py-3 rounded-2xl font-bold bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
+                Cancelar
+              </button>
+              <button
+                onClick={vincularTrabalhoCompensatorio}
+                disabled={!trabalhoSelecionadoModal}
+                className="flex-1 py-3 rounded-2xl font-black text-white bg-primary hover:bg-primary-dark transition-all active:scale-95 disabled:opacity-50"
+              >
+                Vincular
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

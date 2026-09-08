@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../data/supabase';
-import { Search, CheckCircle, Send, BookOpen, AlertCircle, ChevronLeft, ChevronRight, Clock, Brain, Loader } from 'lucide-react';
+import { getTurmasDoGrupo } from './ProvasOnline';
+import { Search, CheckCircle, Send, BookOpen, AlertCircle, ChevronLeft, ChevronRight, Brain, Loader } from 'lucide-react';
 
 interface SubItem {
   letra: string;
@@ -36,17 +37,6 @@ interface CorrecaoDissertativa {
   justificativa: string;
 }
 
-const GRUPOS: Record<string, string[]> = {
-  '6-7': ['6F','7A','7B','7C','7D','7E','7F'],
-  '8':   ['8A','8B','8C','8D','8E','8F'],
-  '9':   ['9A','9B','9C','9D','9E','9F'],
-};
-
-function getTurmasDoGrupo(grupoId: string): string[] {
-  if (!GRUPOS[grupoId]) return [grupoId];
-  return GRUPOS[grupoId];
-}
-
 const LETRAS = ['A', 'B', 'C', 'D', 'E'];
 
 async function corrigirDissertativaComIA(
@@ -78,19 +68,27 @@ Responda APENAS com JSON neste formato exato (sem markdown, sem explicações fo
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 200,
         messages: [{ role: 'user', content: prompt }],
       }),
     });
 
     const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data?.error?.message || data?.error || `erro ${response.status}`);
+    }
     const texto = data.content?.[0]?.text || '';
-    const json = JSON.parse(texto.trim());
+    if (!texto.trim()) throw new Error('resposta vazia da IA');
+    // Tolera cercas ```json e frases extras ao redor do bloco, em vez de
+    // exigir que a IA devolva o JSON perfeitamente puro (ela às vezes não devolve).
+    const semCercas = texto.replace(/```json|```/gi, '').trim();
+    const bloco = semCercas.match(/\{[\s\S]*\}/);
+    const json = JSON.parse(bloco ? bloco[0] : semCercas);
     const pontosObtidos = Math.min(Math.max(parseFloat(json.pontos) || 0, 0), pontos);
     return { pontosObtidos, justificativa: json.justificativa || 'Corrigido automaticamente.' };
   } catch (e) {
-    return { pontosObtidos: 0, justificativa: 'Erro na correção automática. Professor revisará.' };
+    return { pontosObtidos: 0, justificativa: 'Erro na correção automática (' + (e as Error).message + '). Professor revisará.' };
   }
 }
 
@@ -109,20 +107,7 @@ export function ResponderProva() {
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [questaoAtual, setQuestaoAtual] = useState(0);
-  const [tempo, setTempo] = useState(0);
   const [etapaCorrecao, setEtapaCorrecao] = useState('');
-
-  useEffect(() => {
-    if (step !== 'prova') return;
-    const interval = setInterval(() => setTempo(t => t + 1), 1000);
-    return () => clearInterval(interval);
-  }, [step]);
-
-  const formatarTempo = (s: number) => {
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-  };
 
   const turmasDisponiveis = prova ? getTurmasDoGrupo(prova.turma_id) : [];
 
@@ -384,10 +369,6 @@ export function ResponderProva() {
             </div>
           </div>
           <div className="flex items-center gap-3 shrink-0 ml-2">
-            <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
-              <Clock className="w-3.5 h-3.5 text-blue-600" />
-              <span className="text-blue-700 font-mono text-sm font-black">{formatarTempo(tempo)}</span>
-            </div>
             <span className="text-xs text-gray-400 font-semibold hidden sm:block">
               <span className="text-blue-600 font-black">{respondidas}</span>/{questoes.length}
             </span>
@@ -439,7 +420,9 @@ export function ResponderProva() {
           </div>
 
           <div className="mx-4 lg:mx-8 lg:mt-6 bg-white rounded-2xl shadow-sm border border-gray-100 p-5 lg:p-10 flex flex-col gap-5">
-            <p className="text-gray-800 text-base lg:text-2xl font-medium leading-relaxed">{q.enunciado}</p>
+            <div className="bg-gray-50 border-2 border-blue-300 rounded-xl px-4 py-4 lg:px-6 lg:py-5">
+              <p className="text-gray-800 text-base lg:text-2xl font-medium leading-relaxed whitespace-pre-line">{q.enunciado}</p>
+            </div>
 
             {q.imagem_base64 && (
               <div className="rounded-xl overflow-hidden border border-gray-100">
@@ -519,9 +502,10 @@ export function ResponderProva() {
           <ChevronLeft className="w-4 h-4" /> Anterior
         </button>
 
-        <div className="flex-1 flex gap-1.5 justify-center overflow-x-auto scrollbar-none">
+        <div className="flex-1 flex gap-1.5 overflow-x-auto scrollbar-none">
           {questoes.map((qq, i) => (
             <button key={qq.id} onClick={() => setQuestaoAtual(i)}
+              ref={i === questaoAtual ? (el => el?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })) : undefined}
               className={`w-8 h-8 rounded-lg text-xs font-black shrink-0 transition-all border ${
                 i === questaoAtual ? 'bg-blue-600 border-blue-600 text-white'
                   : questaoRespondida(qq) ? 'bg-green-100 border-green-400 text-green-700'
@@ -584,8 +568,6 @@ export function ResponderProva() {
           )}
 
           <div className="flex items-center justify-center gap-4 text-gray-400 text-sm">
-            <span>⏱ {formatarTempo(tempo)}</span>
-            <span>·</span>
             <span>📝 {questoes.length} questões</span>
             <span>·</span>
             <span>✓ {respondidas} respondidas</span>
