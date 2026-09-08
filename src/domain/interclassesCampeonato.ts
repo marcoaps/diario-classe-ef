@@ -136,7 +136,8 @@ export function genElim(equipes: (string | null)[], prefix = 'se'): Jogo[] {
   for (let i = 0; i < size / 2; i++) { r1p.push(seeded[i], seeded[size - 1 - i] ?? null); }
   for (let i = 0; i < size / 2; i++) {
     const a = r1p[i * 2], b = r1p[i * 2 + 1]; const isBye = !a || !b;
-    todos.push({ id: `${prefix}_r1_m${i}_${uid()}`, equipeA: a, equipeB: b, jogado: isBye, vencedor: isBye ? (a || b) : null, resultado: null, rodada: 1, fase: 'Rodada 1', grupo: null, bracketIdx: i, isBye });
+    const faseR1 = rodadas === 1 ? 'Final' : rodadas === 2 ? 'Semifinal' : 'Rodada 1';
+    todos.push({ id: `${prefix}_r1_m${i}_${uid()}`, equipeA: a, equipeB: b, jogado: isBye, vencedor: isBye ? (a || b) : null, resultado: null, rodada: 1, fase: faseR1, grupo: null, bracketIdx: i, isBye });
   }
   for (let r = 2; r <= rodadas; r++) {
     const cnt = size / Math.pow(2, r);
@@ -165,8 +166,16 @@ export function genGroups(equipes: string[]): { grupos: Grupo[]; jogos: Jogo[] }
 }
 
 export function calcSt(equipes: string[], jogos: Jogo[], adapter: ResultadoAdapter, regras: RegrasPontuacao, grupo: string | null = null): Standing[] {
+  // Quando filtrado por grupo, a classificação só deve listar as equipes que
+  // de fato pertencem a esse grupo (jogam algum jogo com esse grupo) — usar a
+  // lista completa de equipes do campeonato faria todo grupo mostrar todo
+  // mundo, mesmo quem está em outro grupo e nunca jogou ali.
+  const equipesRelevantes = grupo === null
+    ? equipes
+    : Array.from(new Set(jogos.filter(j => j.grupo === grupo && j.equipeA && j.equipeB).flatMap(j => [j.equipeA!, j.equipeB!])));
+
   const st: Record<string, Standing> = {};
-  equipes.forEach(e => { st[e] = { equipe: e, P: 0, J: 0, V: 0, E: 0, D: 0, GP: 0, GC: 0, SG: 0 }; });
+  equipesRelevantes.forEach(e => { st[e] = { equipe: e, P: 0, J: 0, V: 0, E: 0, D: 0, GP: 0, GC: 0, SG: 0 }; });
   jogos.filter(j => {
     if (!j.jogado || j.isBye || !j.resultado || !j.equipeA || !j.equipeB) return false;
     if (grupo !== null) return j.grupo === grupo;

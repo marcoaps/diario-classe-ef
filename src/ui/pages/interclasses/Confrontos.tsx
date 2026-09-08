@@ -150,7 +150,7 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
   }
 
   async function iniciarMataMataDosGrupos() {
-    if (!campeonato) return;
+    if (!campeonato || campeonato.fase !== 'groups') return;
     const grupos = Array.from(new Set(jogos.map(j => j.grupo).filter(Boolean))) as string[];
     const classificados = grupos.map(g => calcSt(equipesDoCampeonato, jogos, adapter, regras, g)[0]?.equipe).filter(Boolean) as string[];
     if (classificados.length < 2) { alert('Termine os jogos dos grupos antes de iniciar o mata-mata.'); return; }
@@ -163,7 +163,11 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
   const jogosPendentes = jogos.filter(j => !j.jogado && !j.isBye && j.equipeA && j.equipeB);
   const jogosJogados = jogos.filter(j => j.jogado && !j.isBye && j.equipeA && j.equipeB);
   const grupos = Array.from(new Set(jogos.map(j => j.grupo).filter(Boolean))) as string[];
-  const gruposCompletos = campeonato?.formato === 'groups_ko' && grupos.length > 0 &&
+  // Só oferece iniciar o mata-mata enquanto o campeonato ainda está na fase de
+  // grupos — depois de clicado, a fase vira 'knockout' e o botão some, senão
+  // cada clique extra criaria outra final duplicada (e nenhum campeão nunca
+  // seria detectado, já que a lógica exige exatamente uma final pendente).
+  const gruposCompletos = campeonato?.formato === 'groups_ko' && campeonato.fase === 'groups' && grupos.length > 0 &&
     jogos.filter(j => j.grupo).every(j => j.jogado);
   const standings = useMemo(
     () => campeonato ? calcSt(equipesDoCampeonato, jogos, adapter, regras) : [],
