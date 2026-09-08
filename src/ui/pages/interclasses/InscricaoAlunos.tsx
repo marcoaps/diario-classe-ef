@@ -620,43 +620,45 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-2 mb-3">
+        <div className="flex flex-col gap-2 mb-3">
           <input
             type="text"
             value={busca}
             onChange={e => setBusca(e.target.value)}
             placeholder="🔎 Buscar aluno pelo nome"
-            className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs text-on-surface outline-none focus:border-primary"
+            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs text-on-surface outline-none focus:border-primary"
           />
-          <select
-            value={filtroTurma}
-            onChange={e => setFiltroTurma(e.target.value)}
-            className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs text-on-surface outline-none focus:border-primary"
-          >
-            <option value="TODAS">Todas as turmas</option>
-            {turmas.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-          <select
-            value={filtroTime}
-            onChange={e => setFiltroTime(e.target.value)}
-            className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs text-on-surface outline-none focus:border-primary"
-          >
-            <option value="TODOS">Todos os times</option>
-            {timesUnicos.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-          <select
-            value={filtroGenero}
-            onChange={e => setFiltroGenero(e.target.value)}
-            className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs text-on-surface outline-none focus:border-primary"
-          >
-            <option value="TODOS">Meninos e meninas</option>
-            <option value="M">👦 Meninos</option>
-            <option value="F">👧 Meninas</option>
-          </select>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <select
+              value={filtroTurma}
+              onChange={e => setFiltroTurma(e.target.value)}
+              className="w-full min-w-0 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs text-on-surface outline-none focus:border-primary"
+            >
+              <option value="TODAS">Todas as turmas</option>
+              {turmas.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <select
+              value={filtroTime}
+              onChange={e => setFiltroTime(e.target.value)}
+              className="w-full min-w-0 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs text-on-surface outline-none focus:border-primary"
+            >
+              <option value="TODOS">Todos os times</option>
+              {timesUnicos.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <select
+              value={filtroGenero}
+              onChange={e => setFiltroGenero(e.target.value)}
+              className="w-full min-w-0 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs text-on-surface outline-none focus:border-primary"
+            >
+              <option value="TODOS">Meninos e meninas</option>
+              <option value="M">👦 Meninos</option>
+              <option value="F">👧 Meninas</option>
+            </select>
+          </div>
           {filtrosAtivos && (
             <button
               onClick={() => { setBusca(''); setFiltroTurma('TODAS'); setFiltroTime('TODOS'); setFiltroGenero('TODOS'); }}
-              className="text-xs text-gray-500 hover:text-primary px-2 whitespace-nowrap"
+              className="self-end text-xs text-gray-500 hover:text-primary"
             >
               Limpar filtros
             </button>
