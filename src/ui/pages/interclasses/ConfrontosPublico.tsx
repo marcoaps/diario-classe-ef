@@ -79,40 +79,40 @@ export function ConfrontosPublico() {
   }, [temChave]);
 
   return (
-    <div className="min-h-screen bg-background font-sans">
-      <div className="text-center py-6 px-4 border-b border-gray-100 bg-white">
-        <div className="text-4xl mb-2">🏆</div>
-        <h1 className="text-on-surface text-xl font-bold">Interclasses IOP {EDICAO}</h1>
-        <p className="text-gray-500 text-sm mt-1">Resultados — Instituto Odilon Pratagi</p>
+    <div className="min-h-screen bg-background font-sans text-base">
+      <div className="text-center py-7 px-4 border-b border-gray-100 bg-white">
+        <div className="text-5xl mb-2">🏆</div>
+        <h1 className="text-on-surface text-2xl font-bold">Interclasses IOP {EDICAO}</h1>
+        <p className="text-gray-500 text-base mt-1">Resultados — Instituto Odilon Pratagi</p>
       </div>
 
       <div className="max-w-lg mx-auto p-4 flex flex-col gap-4">
-        <div className="flex gap-1.5 overflow-x-auto pt-1">
+        <div className="flex gap-2 overflow-x-auto pt-1">
           {MODALIDADES.map(m => (
             <button
               key={m.id}
               onClick={() => m.disponivel && selecionarModalidade(m.id)}
               disabled={!m.disponivel}
               className={cn(
-                'flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex-shrink-0',
+                'flex items-center gap-2 px-4 py-3 rounded-xl text-base font-bold whitespace-nowrap transition-all flex-shrink-0',
                 !m.disponivel ? 'bg-gray-50 text-gray-300 cursor-not-allowed' :
                 modalidade === m.id ? 'text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               )}
               style={modalidade === m.id && m.disponivel ? { background: m.cor } : undefined}
             >
-              <span>{m.icone}</span>
+              <span className="text-xl">{m.icone}</span>
               {m.label}
-              {!m.disponivel && <span className="text-[9px] opacity-70">(em breve)</span>}
+              {!m.disponivel && <span className="text-xs opacity-70">(em breve)</span>}
             </button>
           ))}
         </div>
 
-        <div className="flex gap-1.5">
+        <div className="flex gap-2">
           {CATEGORIAS.map(c => (
             <button
               key={c}
               onClick={() => setCategoriaAtiva(c)}
-              className={cn('flex-1 py-2 rounded-xl text-xs font-bold transition-all', categoriaAtiva === c ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}
+              className={cn('flex-1 py-3 rounded-xl text-base font-bold transition-all', categoriaAtiva === c ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}
             >
               {c}
             </button>
@@ -120,19 +120,19 @@ export function ConfrontosPublico() {
         </div>
 
         {loading ? (
-          <div className="flex gap-2 items-center justify-center py-10 text-gray-500 text-sm">
-            <Loader2 className="w-4 h-4 animate-spin" /> Carregando...
+          <div className="flex gap-2 items-center justify-center py-10 text-gray-500 text-base">
+            <Loader2 className="w-5 h-5 animate-spin" /> Carregando...
           </div>
         ) : !campeonato ? (
-          <div className="text-center text-gray-400 text-sm py-10 bg-white rounded-2xl border border-gray-100">
+          <div className="text-center text-gray-400 text-base py-10 bg-white rounded-2xl border border-gray-100 px-4">
             Nenhum campeonato criado ainda para esta modalidade/categoria.
           </div>
         ) : campeonato.campeao ? (
-          <div className="bg-gradient-to-br from-yellow-50 to-white rounded-2xl border border-yellow-200 shadow-sm p-6 text-center">
-            <Trophy className="w-12 h-12 text-yellow-500 mx-auto mb-2" />
-            <div className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Campeão — {categoriaAtiva}</div>
-            <div className="text-2xl font-bold text-on-surface mt-1 flex items-center justify-center gap-2">
-              <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: corDaEquipe(campeonato.campeao) }} />
+          <div className="bg-gradient-to-br from-yellow-50 to-white rounded-2xl border border-yellow-200 shadow-sm p-7 text-center">
+            <Trophy className="w-16 h-16 text-yellow-500 mx-auto mb-3" />
+            <div className="text-sm font-bold text-gray-400 uppercase tracking-widest">Campeão — {categoriaAtiva}</div>
+            <div className="text-3xl font-bold text-on-surface mt-2 flex items-center justify-center gap-2.5">
+              <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ background: corDaEquipe(campeonato.campeao) }} />
               {campeonato.campeao}
             </div>
           </div>
@@ -143,7 +143,7 @@ export function ConfrontosPublico() {
                 <button
                   key={t.id}
                   onClick={() => setAba(t.id)}
-                  className={cn('flex-1 py-2 rounded-lg text-xs font-bold transition-all', aba === t.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500')}
+                  className={cn('flex-1 py-2.5 rounded-lg text-sm font-bold transition-all', aba === t.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500')}
                 >
                   {t.label}
                 </button>
@@ -152,15 +152,15 @@ export function ConfrontosPublico() {
 
             {aba === 'jogos' && (
               <div className="flex flex-col gap-4">
-                <ListaJogos titulo={`Pendentes (${jogosPendentes.length})`} jogos={jogosPendentes} adapter={adapter} somenteLeitura />
-                <ListaJogos titulo={`Realizados (${jogosJogados.length})`} jogos={jogosJogados} adapter={adapter} somenteLeitura />
-                {jogos.length === 0 && <div className="text-center text-gray-400 text-sm py-8">Nenhum jogo gerado.</div>}
+                <ListaJogos titulo={`Pendentes (${jogosPendentes.length})`} jogos={jogosPendentes} adapter={adapter} somenteLeitura grande colunas={1} />
+                <ListaJogos titulo={`Realizados (${jogosJogados.length})`} jogos={jogosJogados} adapter={adapter} somenteLeitura grande colunas={1} />
+                {jogos.length === 0 && <div className="text-center text-gray-400 text-base py-8">Nenhum jogo gerado.</div>}
               </div>
             )}
 
-            {aba === 'classificacao' && <Classificacao standings={standings} adapter={adapter} jogos={jogos} />}
+            {aba === 'classificacao' && <Classificacao standings={standings} adapter={adapter} jogos={jogos} grande />}
 
-            {aba === 'chave' && <Chave jogos={jogos} adapter={adapter} somenteLeitura />}
+            {aba === 'chave' && <Chave jogos={jogos} adapter={adapter} somenteLeitura grande />}
           </>
         )}
       </div>

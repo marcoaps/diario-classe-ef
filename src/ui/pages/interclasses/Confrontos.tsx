@@ -354,22 +354,22 @@ function SetupCampeonato({ equipesProntas, equipesIncompletas, onIniciar, criand
   );
 }
 
-export function ListaJogos({ titulo, jogos, adapter, onLancar, mostrarGrupo, somenteLeitura }: {
-  titulo: string; jogos: Jogo[]; adapter: ResultadoAdapter; onLancar?: (id: string, r: Resultado) => void; mostrarGrupo?: boolean; somenteLeitura?: boolean;
+export function ListaJogos({ titulo, jogos, adapter, onLancar, mostrarGrupo, somenteLeitura, grande, colunas = 2 }: {
+  titulo: string; jogos: Jogo[]; adapter: ResultadoAdapter; onLancar?: (id: string, r: Resultado) => void; mostrarGrupo?: boolean; somenteLeitura?: boolean; grande?: boolean; colunas?: 1 | 2;
 }) {
   if (jogos.length === 0) return null;
   return (
     <div>
-      <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 px-1">{titulo}</div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {jogos.map(j => <CardJogo key={j.id} jogo={j} adapter={adapter} onLancar={onLancar} mostrarGrupo={mostrarGrupo} somenteLeitura={somenteLeitura} />)}
+      <div className={cn('font-bold text-gray-500 uppercase tracking-wider mb-2 px-1', grande ? 'text-sm' : 'text-xs')}>{titulo}</div>
+      <div className={cn('grid grid-cols-1 gap-3', colunas === 2 && 'sm:grid-cols-2')}>
+        {jogos.map(j => <CardJogo key={j.id} jogo={j} adapter={adapter} onLancar={onLancar} mostrarGrupo={mostrarGrupo} somenteLeitura={somenteLeitura} grande={grande} />)}
       </div>
     </div>
   );
 }
 
-export function CardJogo({ jogo, adapter, onLancar, compacto, mostrarGrupo = true, somenteLeitura = false }: {
-  jogo: Jogo; adapter: ResultadoAdapter; onLancar?: (id: string, r: Resultado) => void; compacto?: boolean; mostrarGrupo?: boolean; somenteLeitura?: boolean;
+export function CardJogo({ jogo, adapter, onLancar, compacto, mostrarGrupo = true, somenteLeitura = false, grande = false }: {
+  jogo: Jogo; adapter: ResultadoAdapter; onLancar?: (id: string, r: Resultado) => void; compacto?: boolean; mostrarGrupo?: boolean; somenteLeitura?: boolean; grande?: boolean;
 }) {
   const [editando, setEditando] = useState(false);
   const [a, setA] = useState(jogo.resultado ? String(adapter.valorA(jogo.resultado)) : '');
@@ -395,41 +395,41 @@ export function CardJogo({ jogo, adapter, onLancar, compacto, mostrarGrupo = tru
   const mostraNumeros = !ehVencedorOnly && jogo.jogado && jogo.resultado;
 
   return (
-    <div className={cn('bg-white rounded-2xl border border-gray-100 shadow-sm relative', compacto ? 'p-3' : 'p-4')}>
+    <div className={cn('bg-white rounded-2xl border border-gray-100 shadow-sm relative', compacto ? 'p-3' : grande ? 'p-5' : 'p-4')}>
       {((jogo.grupo && mostrarGrupo) || jogo.fase === 'league' || jogo.fase === 'swiss' || !FASES_LIGA.has(jogo.fase)) && (
         <div className="flex justify-center items-center gap-1.5 mb-2">
           {jogo.grupo && mostrarGrupo && (
-            <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full text-white" style={{ background: corDaEquipe(`grupo-${jogo.grupo}`) }}>
+            <span className={cn('font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full text-white', grande ? 'text-xs' : 'text-[10px]')} style={{ background: corDaEquipe(`grupo-${jogo.grupo}`) }}>
               Grupo {jogo.grupo}
             </span>
           )}
           {(jogo.fase === 'league' || jogo.fase === 'swiss') && (
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Rodada {jogo.rodada}</span>
+            <span className={cn('font-semibold text-gray-400 uppercase tracking-wider', grande ? 'text-xs' : 'text-[10px]')}>Rodada {jogo.rodada}</span>
           )}
           {!FASES_LIGA.has(jogo.fase) && (
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{jogo.fase}</span>
+            <span className={cn('font-semibold text-gray-400 uppercase tracking-wider', grande ? 'text-xs' : 'text-[10px]')}>{jogo.fase}</span>
           )}
         </div>
       )}
-      <div className="flex items-center justify-center gap-1.5 text-center flex-wrap mb-2.5">
-        {jogo.equipeA && <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: corDaEquipe(jogo.equipeA) }} />}
-        <span className={cn('text-xs', vencedorA ? 'font-bold text-on-surface' : 'text-gray-700')}>{jogo.equipeA ?? 'A definir'}</span>
-        <span className="text-[10px] font-black text-gray-400 px-0.5">
+      <div className={cn('flex items-center justify-center text-center flex-wrap', grande ? 'gap-2.5 mb-3' : 'gap-1.5 mb-2.5')}>
+        {jogo.equipeA && <span className={cn('rounded-full flex-shrink-0', grande ? 'w-3.5 h-3.5' : 'w-2 h-2')} style={{ background: corDaEquipe(jogo.equipeA) }} />}
+        <span className={cn(grande ? 'text-lg' : 'text-xs', vencedorA ? 'font-bold text-on-surface' : 'text-gray-700')}>{jogo.equipeA ?? 'A definir'}</span>
+        <span className={cn('font-black text-gray-400', grande ? 'text-base px-1' : 'text-[10px] px-0.5')}>
           {mostraNumeros ? `${adapter.valorA(jogo.resultado!)} x ${adapter.valorB(jogo.resultado!)}` : 'X'}
         </span>
-        <span className={cn('text-xs', vencedorB ? 'font-bold text-on-surface' : 'text-gray-700')}>{jogo.equipeB ?? 'A definir'}</span>
-        {jogo.equipeB && <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: corDaEquipe(jogo.equipeB) }} />}
+        <span className={cn(grande ? 'text-lg' : 'text-xs', vencedorB ? 'font-bold text-on-surface' : 'text-gray-700')}>{jogo.equipeB ?? 'A definir'}</span>
+        {jogo.equipeB && <span className={cn('rounded-full flex-shrink-0', grande ? 'w-3.5 h-3.5' : 'w-2 h-2')} style={{ background: corDaEquipe(jogo.equipeB) }} />}
       </div>
 
       {somenteLeitura ? (
         jogo.jogado && jogo.resultado ? (
           ehVencedorOnly && (
-            <div className="text-center text-xs text-gray-500 font-medium py-1 border-t border-gray-50">{adapter.formatarPlacar(jogo.resultado)}</div>
+            <div className={cn('text-center text-gray-500 font-medium py-1 border-t border-gray-50', grande ? 'text-sm' : 'text-xs')}>{adapter.formatarPlacar(jogo.resultado)}</div>
           )
         ) : !jogo.equipeA || !jogo.equipeB ? (
-          <div className="text-center text-xs text-gray-400 py-1">aguardando definição</div>
+          <div className={cn('text-center text-gray-400 py-1', grande ? 'text-sm' : 'text-xs')}>aguardando definição</div>
         ) : (
-          <div className="text-center text-xs text-gray-400 py-1">a jogar</div>
+          <div className={cn('text-center text-gray-400 py-1', grande ? 'text-sm' : 'text-xs')}>a jogar</div>
         )
       ) : jogo.jogado && jogo.resultado ? (
         <button onClick={() => setEditando(e => !e)} className="w-full text-center text-xs text-gray-500 hover:text-primary font-medium py-1 border-t border-gray-50">
@@ -503,24 +503,27 @@ function formaRecente(equipe: string, jogos: Jogo[], adapter: ResultadoAdapter, 
   });
 }
 
-export function Classificacao({ standings, adapter, jogos, compacto, destacarTopN }: {
-  standings: Standing[]; adapter: ResultadoAdapter; jogos: Jogo[]; compacto?: boolean; destacarTopN?: number;
+export function Classificacao({ standings, adapter, jogos, compacto, destacarTopN, grande }: {
+  standings: Standing[]; adapter: ResultadoAdapter; jogos: Jogo[]; compacto?: boolean; destacarTopN?: number; grande?: boolean;
 }) {
   const mostraGols = adapter.labelA !== '';
+  const txt = grande ? 'text-sm' : 'text-xs';
+  const dot = grande ? 'w-3 h-3' : 'w-2 h-2';
+  const py = grande ? 'py-3' : 'py-2';
   return (
     <div className={compacto ? '' : 'bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden'}>
       <div className="overflow-x-auto">
-        <table className="w-full text-xs">
+        <table className={cn('w-full', txt)}>
           <thead>
             <tr className="text-left text-gray-500 border-b border-gray-100">
-              <th className="py-2 px-3 font-semibold">Equipe</th>
-              <th className="py-2 px-2 font-semibold text-center">P</th>
-              <th className="py-2 px-2 font-semibold text-center">J</th>
-              <th className="py-2 px-2 font-semibold text-center">V</th>
-              <th className="py-2 px-2 font-semibold text-center">E</th>
-              <th className="py-2 px-2 font-semibold text-center">D</th>
-              {mostraGols && <th className="py-2 px-2 font-semibold text-center">SG</th>}
-              <th className="py-2 px-3 font-semibold text-right">Forma</th>
+              <th className={cn(py, 'px-3 font-semibold')}>Equipe</th>
+              <th className={cn(py, 'px-2 font-semibold text-center')}>P</th>
+              <th className={cn(py, 'px-2 font-semibold text-center')}>J</th>
+              <th className={cn(py, 'px-2 font-semibold text-center')}>V</th>
+              <th className={cn(py, 'px-2 font-semibold text-center')}>E</th>
+              <th className={cn(py, 'px-2 font-semibold text-center')}>D</th>
+              {mostraGols && <th className={cn(py, 'px-2 font-semibold text-center')}>SG</th>}
+              <th className={cn(py, 'px-3 font-semibold text-right')}>Forma</th>
             </tr>
           </thead>
           <tbody>
@@ -529,25 +532,25 @@ export function Classificacao({ standings, adapter, jogos, compacto, destacarTop
               const classifica = !lider && destacarTopN != null && i < destacarTopN;
               return (
                 <tr key={s.equipe} className={cn('border-b border-gray-50 last:border-0', lider && 'bg-yellow-50', classifica && 'bg-green-50')}>
-                  <td className="py-2 px-3 font-medium text-on-surface">
+                  <td className={cn(py, 'px-3 font-medium text-on-surface')}>
                     <div className="flex items-center gap-1.5">
                       <span className="text-gray-400 w-4 flex-shrink-0">{i + 1}.</span>
-                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: corDaEquipe(s.equipe) }} />
+                      <span className={cn('rounded-full flex-shrink-0', dot)} style={{ background: corDaEquipe(s.equipe) }} />
                       <span className="truncate">{s.equipe}</span>
-                      {lider && <Trophy className="w-3.5 h-3.5 text-yellow-500 flex-shrink-0" />}
+                      {lider && <Trophy className={cn(grande ? 'w-4 h-4' : 'w-3.5 h-3.5', 'text-yellow-500 flex-shrink-0')} />}
                     </div>
                   </td>
-                  <td className="py-2 px-2 text-center font-bold">{s.P}</td>
-                  <td className="py-2 px-2 text-center text-gray-500">{s.J}</td>
-                  <td className="py-2 px-2 text-center text-gray-500">{s.V}</td>
-                  <td className="py-2 px-2 text-center text-gray-500">{s.E}</td>
-                  <td className="py-2 px-2 text-center text-gray-500">{s.D}</td>
-                  {mostraGols && <td className="py-2 px-2 text-center text-gray-500">{s.SG > 0 ? `+${s.SG}` : s.SG}</td>}
-                  <td className="py-2 px-3">
+                  <td className={cn(py, 'px-2 text-center font-bold')}>{s.P}</td>
+                  <td className={cn(py, 'px-2 text-center text-gray-500')}>{s.J}</td>
+                  <td className={cn(py, 'px-2 text-center text-gray-500')}>{s.V}</td>
+                  <td className={cn(py, 'px-2 text-center text-gray-500')}>{s.E}</td>
+                  <td className={cn(py, 'px-2 text-center text-gray-500')}>{s.D}</td>
+                  {mostraGols && <td className={cn(py, 'px-2 text-center text-gray-500')}>{s.SG > 0 ? `+${s.SG}` : s.SG}</td>}
+                  <td className={cn(py, 'px-3')}>
                     <div className="flex items-center justify-end gap-1">
                       {formaRecente(s.equipe, jogos, adapter).map((r, idx) => (
                         <span key={idx} className={cn(
-                          'w-2 h-2 rounded-full flex-shrink-0',
+                          'rounded-full flex-shrink-0', dot,
                           r === 'V' ? 'bg-green-500' : r === 'D' ? 'bg-red-400' : 'bg-gray-300'
                         )} title={r === 'V' ? 'Vitória' : r === 'D' ? 'Derrota' : 'Empate'} />
                       ))}
@@ -566,7 +569,7 @@ export function Classificacao({ standings, adapter, jogos, compacto, destacarTop
   );
 }
 
-export function Chave({ jogos, adapter, onLancar, somenteLeitura }: { jogos: Jogo[]; adapter: ResultadoAdapter; onLancar?: (id: string, r: Resultado) => void; somenteLeitura?: boolean }) {
+export function Chave({ jogos, adapter, onLancar, somenteLeitura, grande }: { jogos: Jogo[]; adapter: ResultadoAdapter; onLancar?: (id: string, r: Resultado) => void; somenteLeitura?: boolean; grande?: boolean }) {
   const jogosChave = jogos.filter(j => !FASES_LIGA.has(j.fase));
   const rodadas = Array.from(new Set(jogosChave.map(j => j.rodada))).sort((x, y) => x - y);
 
@@ -580,17 +583,17 @@ export function Chave({ jogos, adapter, onLancar, somenteLeitura }: { jogos: Jog
         const jogosRodada = jogosChave.filter(j => j.rodada === r).sort((x, y) => (x.bracketIdx ?? 0) - (y.bracketIdx ?? 0));
         const faseLabel = jogosRodada[0]?.fase ?? `Rodada ${r}`;
         return (
-          <div key={r} className="flex flex-col gap-3 min-w-[240px] flex-shrink-0">
-            <div className="text-xs font-bold text-gray-500 uppercase tracking-wider text-center">{faseLabel}</div>
+          <div key={r} className={cn('flex flex-col gap-3 flex-shrink-0', grande ? 'min-w-[280px]' : 'min-w-[240px]')}>
+            <div className={cn('font-bold text-gray-500 uppercase tracking-wider text-center', grande ? 'text-sm' : 'text-xs')}>{faseLabel}</div>
             <div className="flex flex-col gap-3 justify-around flex-1">
               {jogosRodada.map(j => (
                 j.isBye
                   ? (
-                    <div key={j.id} className="bg-gray-50 rounded-2xl border border-dashed border-gray-200 p-3 text-center text-xs text-gray-400">
+                    <div key={j.id} className={cn('bg-gray-50 rounded-2xl border border-dashed border-gray-200 p-3 text-center text-gray-400', grande ? 'text-sm' : 'text-xs')}>
                       {j.equipeA} avança (bye)
                     </div>
                   )
-                  : <CardJogo key={j.id} jogo={j} adapter={adapter} onLancar={onLancar} compacto somenteLeitura={somenteLeitura} />
+                  : <CardJogo key={j.id} jogo={j} adapter={adapter} onLancar={onLancar} compacto={!grande} somenteLeitura={somenteLeitura} grande={grande} />
               ))}
             </div>
           </div>
