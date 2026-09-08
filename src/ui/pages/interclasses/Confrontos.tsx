@@ -183,12 +183,17 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
     [campeonato, equipesDoCampeonato, jogos, adapter, regras]
   );
 
+  // Com um único grupo, a aba "Grupos" e a etiqueta "Grupo A" nos cards não
+  // agregam nada (não existe "Grupo B" pra comparar) — a Classificação geral
+  // já mostra a mesma coisa.
+  const temMaisDeUmGrupo = grupos.length > 1;
+
   const tabs = useMemo(() => {
     const t: { id: typeof aba; label: string }[] = [{ id: 'jogos', label: 'Jogos' }, { id: 'classificacao', label: 'Classificação' }];
-    if (campeonato?.formato === 'groups_ko') t.push({ id: 'grupos', label: 'Grupos' });
+    if (campeonato?.formato === 'groups_ko' && temMaisDeUmGrupo) t.push({ id: 'grupos', label: 'Grupos' });
     if (temChave) t.push({ id: 'chave', label: 'Chave' });
     return t;
-  }, [campeonato, temChave]);
+  }, [campeonato, temChave, temMaisDeUmGrupo]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -248,8 +253,8 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
                       🏆 Iniciar mata-mata (classificados dos grupos)
                     </button>
                   )}
-                  <ListaJogos titulo={`Pendentes (${jogosPendentes.length})`} jogos={jogosPendentes} adapter={adapter} onLancar={lancarPlacar} />
-                  <ListaJogos titulo={`Realizados (${jogosJogados.length})`} jogos={jogosJogados} adapter={adapter} onLancar={lancarPlacar} />
+                  <ListaJogos titulo={`Pendentes (${jogosPendentes.length})`} jogos={jogosPendentes} adapter={adapter} onLancar={lancarPlacar} mostrarGrupo={temMaisDeUmGrupo} />
+                  <ListaJogos titulo={`Realizados (${jogosJogados.length})`} jogos={jogosJogados} adapter={adapter} onLancar={lancarPlacar} mostrarGrupo={temMaisDeUmGrupo} />
                   {jogos.length === 0 && <div className="text-center text-gray-400 text-sm py-8">Nenhum jogo gerado.</div>}
                 </div>
               )}
@@ -318,22 +323,22 @@ function SetupCampeonato({ equipesProntas, onIniciar }: { equipesProntas: string
   );
 }
 
-function ListaJogos({ titulo, jogos, adapter, onLancar }: {
-  titulo: string; jogos: Jogo[]; adapter: ResultadoAdapter; onLancar: (id: string, r: Resultado) => void;
+function ListaJogos({ titulo, jogos, adapter, onLancar, mostrarGrupo }: {
+  titulo: string; jogos: Jogo[]; adapter: ResultadoAdapter; onLancar: (id: string, r: Resultado) => void; mostrarGrupo?: boolean;
 }) {
   if (jogos.length === 0) return null;
   return (
     <div>
       <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 px-1">{titulo}</div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {jogos.map(j => <CardJogo key={j.id} jogo={j} adapter={adapter} onLancar={onLancar} />)}
+        {jogos.map(j => <CardJogo key={j.id} jogo={j} adapter={adapter} onLancar={onLancar} mostrarGrupo={mostrarGrupo} />)}
       </div>
     </div>
   );
 }
 
-function CardJogo({ jogo, adapter, onLancar, compacto }: {
-  jogo: Jogo; adapter: ResultadoAdapter; onLancar: (id: string, r: Resultado) => void; compacto?: boolean;
+function CardJogo({ jogo, adapter, onLancar, compacto, mostrarGrupo = true }: {
+  jogo: Jogo; adapter: ResultadoAdapter; onLancar: (id: string, r: Resultado) => void; compacto?: boolean; mostrarGrupo?: boolean;
 }) {
   const [editando, setEditando] = useState(false);
   const [a, setA] = useState(jogo.resultado ? String(adapter.valorA(jogo.resultado)) : '');
@@ -359,9 +364,9 @@ function CardJogo({ jogo, adapter, onLancar, compacto }: {
 
   return (
     <div className={cn('bg-white rounded-2xl border border-gray-100 shadow-sm relative', compacto ? 'p-3' : 'p-4')}>
-      {(jogo.grupo || jogo.fase === 'league' || jogo.fase === 'swiss' || !FASES_LIGA.has(jogo.fase)) && (
+      {((jogo.grupo && mostrarGrupo) || jogo.fase === 'league' || jogo.fase === 'swiss' || !FASES_LIGA.has(jogo.fase)) && (
         <div className="flex justify-center items-center gap-1.5 mb-2">
-          {jogo.grupo && (
+          {jogo.grupo && mostrarGrupo && (
             <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full text-white" style={{ background: corDaEquipe(`grupo-${jogo.grupo}`) }}>
               Grupo {jogo.grupo}
             </span>
