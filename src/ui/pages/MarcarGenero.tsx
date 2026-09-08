@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { useStore } from '../../store';
+import React, { useState, useEffect, useCallback } from 'react';
 import { cn } from '../AppLayout';
 import { Save, Loader2, Wand2 } from 'lucide-react';
-import { supabase } from '../../data/supabase';
+import { supabase, buscarTurmasDisponiveis } from '../../data/supabase';
+import { unirTurmas } from '../../domain/interclasses';
 import { inferirGenero } from '../../domain/generoPorNome';
 
 interface AlunoSupabase {
@@ -13,58 +13,51 @@ interface AlunoSupabase {
   sexo: 'M' | 'F' | null;
 }
 
-function normalizarTurma(turmaId: string) {
-  if (/^\d+[A-Z]$/i.test(turmaId.trim())) return turmaId.trim().toUpperCase();
-  const match = turmaId.match(/(\d+).*?([A-Z])$/i);
-  if (match) return `${match[1]}${match[2].toUpperCase()}`;
-  return turmaId.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
-}
-
+// Seletor de turma próprio, direto das turmas reais do banco de alunos — não
+// depende da lista local de turmas do professor (aba Turmas), que só tem as
+// turmas em que ele dá aula. Isso permite marcar gênero também de turmas
+// alheias que só existem aqui por causa do Interclasses (ex: 6A-6E, 7A).
 export function MarcarGenero() {
-  const { selectedClassId, classRooms } = useStore();
+  const [turmas, setTurmas] = useState<string[]>([]);
+  const [turmaSelecionada, setTurmaSelecionada] = useState<string>('');
   const [alunos, setAlunos] = useState<AlunoSupabase[]>([]);
   const [sexos, setSexos] = useState<Record<string, 'M' | 'F' | null>>({});
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  const turmaAtual = classRooms.find(cr => cr.id === selectedClassId);
-  const turmaNorm = turmaAtual ? normalizarTurma(turmaAtual.name) : null;
+  const [loadingTurmas, setLoadingTurmas] = useState(true);
 
   useEffect(() => {
-    if (!turmaNorm) return;
-    let mounted = true;
+    buscarTurmasDisponiveis()
+      .then(tms => setTurmas(unirTurmas(tms)))
+      .catch(err => console.error('Erro ao carregar turmas:', err))
+      .finally(() => setLoadingTurmas(false));
+  }, []);
+
+  const carregar = useCallback(async () => {
+    if (!turmaSelecionada) return;
     setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('alunos')
+        .select('id, nome, turma_id, numero_chamada, sexo')
+        .eq('turma_id', turmaSelecionada)
+        .order('numero_chamada', { ascending: true, nullsFirst: false });
 
-    const carregar = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('alunos')
-          .select('id, nome, turma_id, numero_chamada, sexo')
-          .eq('turma_id', turmaNorm)
-          .order('numero_chamada', { ascending: true, nullsFirst: false });
+      if (error) throw error;
 
-        if (error) throw error;
-        if (!mounted) return;
+      const lista = (data || []) as AlunoSupabase[];
+      setAlunos(lista);
+      const novosSexos: Record<string, 'M' | 'F' | null> = {};
+      lista.forEach(a => { novosSexos[a.id] = a.sexo ?? null; });
+      setSexos(novosSexos);
+    } catch (err) {
+      console.error('Erro ao carregar alunos:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [turmaSelecionada]);
 
-        const lista = (data || []) as AlunoSupabase[];
-        setAlunos(lista);
-        const novosSexos: Record<string, 'M' | 'F' | null> = {};
-        lista.forEach(a => { novosSexos[a.id] = a.sexo ?? null; });
-        setSexos(novosSexos);
-      } catch (err) {
-        console.error('Erro ao carregar alunos:', err);
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
-
-    carregar();
-    return () => { mounted = false; };
-  }, [turmaNorm]);
-
-  if (!selectedClassId) {
-    return <div className="p-8 text-center text-gray-500 mt-10 font-medium">Por favor, selecione uma turma na aba "Turmas".</div>;
-  }
+  useEffect(() => { carregar(); }, [carregar]);
 
   const handleMarcar = (alunoId: string, sexo: 'M' | 'F') => {
     setSexos(prev => ({ ...prev, [alunoId]: prev[alunoId] === sexo ? null : sexo }));
@@ -121,35 +114,54 @@ export function MarcarGenero() {
       <div className="p-4 border-b border-gray-200 bg-background/90 backdrop-blur-md shadow-sm">
         <h2 className="text-2xl font-bold tracking-tight mb-1 text-primary-dark">Marcar Gênero</h2>
         <p className="text-sm text-gray-500 mb-3">
-          Usado pra separar meninos e meninas nas Fichas de Grupo, quando várias turmas do mesmo horário são juntadas. {totalMarcados}/{alunos.length} marcados.
+          Usado pra separar meninos e meninas nas Fichas de Grupo e na inscrição do Interclasses.
         </p>
-        <button
-          onClick={handleDetectarAutomaticamente}
-          disabled={loading || alunos.length === 0}
-          className="w-full h-10 mb-2 rounded-xl font-bold text-sm bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+
+        <label className="text-xs font-semibold text-gray-500 mb-1 block">Turma</label>
+        <select
+          value={turmaSelecionada}
+          onChange={e => setTurmaSelecionada(e.target.value)}
+          disabled={loadingTurmas}
+          className="w-full bg-white border border-gray-300 rounded-xl px-3 py-2.5 text-sm font-semibold outline-none focus:border-primary mb-3"
         >
-          <Wand2 className="w-4 h-4" /> Detectar automaticamente pelo nome
-        </button>
-        <div className="flex gap-2 items-center">
-          <button
-            onClick={() => handleMarcarTodos('M')}
-            disabled={loading || alunos.length === 0}
-            className="flex-1 h-11 rounded-xl font-bold text-sm bg-blue-600 text-white border border-blue-700 hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-50"
-          >
-            Marcar Todos M
-          </button>
-          <button
-            onClick={() => handleMarcarTodos('F')}
-            disabled={loading || alunos.length === 0}
-            className="flex-1 h-11 rounded-xl font-bold text-sm bg-pink-600 text-white border border-pink-700 hover:bg-pink-700 active:scale-95 transition-all disabled:opacity-50"
-          >
-            Marcar Todas F
-          </button>
-        </div>
+          <option value="" disabled>{loadingTurmas ? 'Carregando turmas...' : 'Selecione a turma'}</option>
+          {turmas.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+
+        {turmaSelecionada && (
+          <>
+            <p className="text-xs text-gray-400 mb-2">{totalMarcados}/{alunos.length} marcados nesta turma.</p>
+            <button
+              onClick={handleDetectarAutomaticamente}
+              disabled={loading || alunos.length === 0}
+              className="w-full h-10 mb-2 rounded-xl font-bold text-sm bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              <Wand2 className="w-4 h-4" /> Detectar automaticamente pelo nome
+            </button>
+            <div className="flex gap-2 items-center">
+              <button
+                onClick={() => handleMarcarTodos('M')}
+                disabled={loading || alunos.length === 0}
+                className="flex-1 h-11 rounded-xl font-bold text-sm bg-blue-600 text-white border border-blue-700 hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-50"
+              >
+                Marcar Todos M
+              </button>
+              <button
+                onClick={() => handleMarcarTodos('F')}
+                disabled={loading || alunos.length === 0}
+                className="flex-1 h-11 rounded-xl font-bold text-sm bg-pink-600 text-white border border-pink-700 hover:bg-pink-700 active:scale-95 transition-all disabled:opacity-50"
+              >
+                Marcar Todas F
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="p-4 pb-32 flex flex-col gap-3">
-        {loading ? (
+        {!turmaSelecionada ? (
+          <div className="text-center text-gray-500 py-10 font-medium">Selecione uma turma acima.</div>
+        ) : loading ? (
           <div className="flex gap-2 items-center justify-center p-8 text-gray-500">
             <Loader2 className="w-5 h-5 animate-spin" />
             <span>Carregando alunos...</span>
@@ -191,21 +203,23 @@ export function MarcarGenero() {
           })
         )}
 
-        {!loading && alunos.length === 0 && (
+        {turmaSelecionada && !loading && alunos.length === 0 && (
           <div className="text-center text-gray-500 py-10 font-medium">Nenhum aluno nesta turma.</div>
         )}
       </div>
 
-      <div className="fixed bottom-20 left-4 right-4 max-w-md mx-auto z-20">
-        <button
-          onClick={handleSave}
-          disabled={saving || loading || alunos.length === 0}
-          className="w-full h-14 bg-primary text-white font-bold text-lg rounded-2xl shadow-[0_8px_16px_rgba(31,44,151,0.2)] flex items-center justify-center gap-2 hover:bg-primary-dark active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100"
-        >
-          {saving ? <Loader2 className="w-6 h-6 animate-spin" /> : <Save className="w-6 h-6" />}
-          {saving ? 'Salvando...' : 'Salvar Gênero'}
-        </button>
-      </div>
+      {turmaSelecionada && (
+        <div className="fixed bottom-20 left-4 right-4 max-w-md mx-auto z-20">
+          <button
+            onClick={handleSave}
+            disabled={saving || loading || alunos.length === 0}
+            className="w-full h-14 bg-primary text-white font-bold text-lg rounded-2xl shadow-[0_8px_16px_rgba(31,44,151,0.2)] flex items-center justify-center gap-2 hover:bg-primary-dark active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100"
+          >
+            {saving ? <Loader2 className="w-6 h-6 animate-spin" /> : <Save className="w-6 h-6" />}
+            {saving ? 'Salvando...' : 'Salvar Gênero'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
