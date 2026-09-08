@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Loader2, Trophy, RefreshCw } from 'lucide-react';
+import { Loader2, Trophy, RefreshCw, Shield } from 'lucide-react';
 import { cn } from '../../AppLayout';
 import {
   buscarCampeonato, criarCampeonato, atualizarCampeonato, excluirCampeonato,
@@ -357,17 +357,31 @@ function CardJogo({ jogo, adapter, onLancar, compacto }: {
 
   return (
     <div className={cn('bg-white rounded-2xl border border-gray-100 shadow-sm relative', compacto ? 'p-3' : 'p-4')}>
-      <div className="flex items-center justify-between gap-2 mb-1.5">
+      {jogo.grupo && (
+        <div className="flex justify-center mb-2">
+          <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full text-white" style={{ background: corDaEquipe(`grupo-${jogo.grupo}`) }}>
+            Grupo {jogo.grupo}
+          </span>
+        </div>
+      )}
+      <div className="flex items-center justify-between gap-2 mb-1">
         <div className="flex items-center gap-2 min-w-0">
-          {jogo.equipeA && <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: corDaEquipe(jogo.equipeA) }} />}
-          <span className={cn('text-sm truncate', vencedorA ? 'font-bold text-on-surface' : 'text-gray-600')}>{jogo.equipeA ?? 'A definir'}</span>
+          <span className="w-6 h-6 rounded-full flex items-center justify-center text-white flex-shrink-0" style={{ background: jogo.equipeA ? corDaEquipe(jogo.equipeA) : '#cbd5e1' }}>
+            <Shield className="w-3.5 h-3.5" />
+          </span>
+          <span className={cn('text-sm uppercase truncate', vencedorA ? 'font-extrabold text-on-surface' : 'font-semibold text-gray-600')}>{jogo.equipeA ?? 'A definir'}</span>
         </div>
         {mostraNumeros && <span className={cn('text-base font-bold flex-shrink-0', vencedorA ? 'text-on-surface' : 'text-gray-400')}>{adapter.valorA(jogo.resultado!)}</span>}
       </div>
+      <div className="flex justify-center my-0.5">
+        <span className="text-[9px] font-black text-white bg-secondary px-2 py-[1px] rounded tracking-wider">VS</span>
+      </div>
       <div className="flex items-center justify-between gap-2 mb-2.5">
         <div className="flex items-center gap-2 min-w-0">
-          {jogo.equipeB && <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: corDaEquipe(jogo.equipeB) }} />}
-          <span className={cn('text-sm truncate', vencedorB ? 'font-bold text-on-surface' : 'text-gray-600')}>{jogo.equipeB ?? 'A definir'}</span>
+          <span className="w-6 h-6 rounded-full flex items-center justify-center text-white flex-shrink-0" style={{ background: jogo.equipeB ? corDaEquipe(jogo.equipeB) : '#cbd5e1' }}>
+            <Shield className="w-3.5 h-3.5" />
+          </span>
+          <span className={cn('text-sm uppercase truncate', vencedorB ? 'font-extrabold text-on-surface' : 'font-semibold text-gray-600')}>{jogo.equipeB ?? 'A definir'}</span>
         </div>
         {mostraNumeros && <span className={cn('text-base font-bold flex-shrink-0', vencedorB ? 'text-on-surface' : 'text-gray-400')}>{adapter.valorB(jogo.resultado!)}</span>}
       </div>
