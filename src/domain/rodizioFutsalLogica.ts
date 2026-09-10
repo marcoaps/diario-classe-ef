@@ -14,6 +14,10 @@ export interface TimeRodizio {
   nome: string;
   capitaoNome: string;
   ordemInicial: number;
+  // Time "avulso" montado no meio da aula (ex: sobrou um aluno sem equipe e
+  // ele chama jogadores que já perderam pra formar um time extra) — os times
+  // originais nunca são alterados quando isso acontece.
+  criadoDuranteRodizio: boolean;
 }
 
 export interface JogoRodizio {
@@ -35,14 +39,23 @@ export interface EstatisticasTime {
   vezesEmQuadra: number;
 }
 
-// Fila atual: se ainda não houve nenhum jogo, é a ordem inicial dos times;
-// senão é o snapshot "fila_apos" gravado no último jogo (maior número).
+// Fila atual: parte do snapshot "fila_apos" gravado no último jogo (ou da
+// ordem inicial dos times, se ainda não houve nenhum jogo) e acrescenta no
+// final, por ordem de criação, qualquer time que ainda não apareça nela —
+// é assim que um time criado no meio da aula (ver TimeRodizio.criadoDuranteRodizio)
+// entra na fila sem precisar reescrever o histórico de jogos já registrado.
 export function calcularFilaAtual(times: TimeRodizio[], jogos: JogoRodizio[]): string[] {
-  if (jogos.length === 0) {
-    return [...times].sort((a, b) => a.ordemInicial - b.ordemInicial).map(t => t.id);
-  }
-  const ultimoJogo = jogos.reduce((max, j) => (j.numero > max.numero ? j : max), jogos[0]);
-  return ultimoJogo.filaApos;
+  const base = jogos.length === 0
+    ? []
+    : jogos.reduce((max, j) => (j.numero > max.numero ? j : max), jogos[0]).filaApos;
+
+  const idsNaBase = new Set(base);
+  const novos = times
+    .filter(t => !idsNaBase.has(t.id))
+    .sort((a, b) => a.ordemInicial - b.ordemInicial)
+    .map(t => t.id);
+
+  return [...base, ...novos];
 }
 
 export function calcularEstatisticas(times: TimeRodizio[], jogos: JogoRodizio[]): Map<string, EstatisticasTime> {

@@ -686,6 +686,7 @@ export interface RodizioTime {
   capitao_aluno_id: string | null;
   capitao_nome: string;
   ordem_inicial: number;
+  criado_durante_rodizio: boolean;
   criado_em: string;
 }
 
@@ -735,6 +736,7 @@ export async function criarSessaoRodizio(payload: {
       capitao_aluno_id: t.capitaoAlunoId,
       capitao_nome: t.capitaoNome,
       ordem_inicial: t.ordemInicial,
+      criado_durante_rodizio: false,
     })))
     .select('*')
     .order('ordem_inicial');
@@ -790,6 +792,44 @@ export async function buscarSessaoCompleta(sessaoId: string): Promise<RodizioSes
   if (errJogos) throw errJogos;
 
   return { sessao, times: times || [], jogadores, jogos: jogos || [] };
+}
+
+// Time montado no meio da aula (ex: sobrou aluno sem equipe) — não mexe nos
+// times originais, só entra como mais um time da sessão, marcado como
+// "criado_durante_rodizio" pra a tela deixar isso visível.
+export async function adicionarTimeRodizio(payload: {
+  sessaoId: string;
+  nome: string;
+  capitaoAlunoId: string | null;
+  capitaoNome: string;
+  ordemInicial: number;
+  jogadores: { alunoId: string; alunoNome: string }[];
+}): Promise<{ time: RodizioTime; jogadores: RodizioJogador[] }> {
+  const { data: time, error: errTime } = await supabase
+    .from('rodizio_times')
+    .insert({
+      sessao_id: payload.sessaoId,
+      nome: payload.nome,
+      capitao_aluno_id: payload.capitaoAlunoId,
+      capitao_nome: payload.capitaoNome,
+      ordem_inicial: payload.ordemInicial,
+      criado_durante_rodizio: true,
+    })
+    .select('*')
+    .single();
+  if (errTime) throw errTime;
+
+  let jogadores: RodizioJogador[] = [];
+  if (payload.jogadores.length > 0) {
+    const { data, error } = await supabase
+      .from('rodizio_times_jogadores')
+      .insert(payload.jogadores.map(j => ({ time_id: time.id, aluno_id: j.alunoId, aluno_nome: j.alunoNome })))
+      .select('*');
+    if (error) throw error;
+    jogadores = data || [];
+  }
+
+  return { time, jogadores };
 }
 
 export async function adicionarJogadorTime(timeId: string, alunoId: string, alunoNome: string): Promise<RodizioJogador> {

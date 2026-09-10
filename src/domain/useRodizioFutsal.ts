@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   buscarSessaoAbertaRodizio, criarSessaoRodizio, adicionarJogadorTime, removerJogadorTime,
-  registrarJogoRodizio, finalizarSessaoRodizio,
+  registrarJogoRodizio, finalizarSessaoRodizio, adicionarTimeRodizio,
   type RodizioSessaoCompleta,
 } from '../data/supabase';
 import {
@@ -16,11 +16,14 @@ export interface NovoTimeRodizio {
   jogadores: { alunoId: string; alunoNome: string }[];
 }
 
-function paraTimeRodizio(t: RodizioSessaoCompleta['times'][number]): TimeRodizio {
-  return { id: t.id, nome: t.nome, capitaoNome: t.capitao_nome, ordemInicial: t.ordem_inicial };
+export function paraTimeRodizio(t: RodizioSessaoCompleta['times'][number]): TimeRodizio {
+  return {
+    id: t.id, nome: t.nome, capitaoNome: t.capitao_nome, ordemInicial: t.ordem_inicial,
+    criadoDuranteRodizio: t.criado_durante_rodizio,
+  };
 }
 
-function paraJogoRodizio(j: RodizioSessaoCompleta['jogos'][number]): JogoRodizio {
+export function paraJogoRodizio(j: RodizioSessaoCompleta['jogos'][number]): JogoRodizio {
   return {
     id: j.id, numero: j.numero, equipeAId: j.equipe_a_id, equipeBId: j.equipe_b_id,
     vencedorId: j.vencedor_id, filaApos: j.fila_apos, criadoEm: j.criado_em,
@@ -94,6 +97,26 @@ export function useRodizioFutsal(turmaId: string) {
       : prev);
   }, []);
 
+  // Time montado no meio da aula (ex: sobrou aluno sem equipe) — entra na
+  // fila sozinho, no final, sem tocar nos times originais (ver
+  // TimeRodizio.criadoDuranteRodizio e calcularFilaAtual).
+  const adicionarTime = useCallback(async (
+    nome: string,
+    capitaoAlunoId: string | null,
+    capitaoNome: string,
+    jogadores: { alunoId: string; alunoNome: string }[],
+  ) => {
+    if (!sessaoCompleta) return;
+    const proximaOrdem = Math.max(0, ...sessaoCompleta.times.map(t => t.ordem_inicial)) + 1;
+    const { time, jogadores: novosJogadores } = await adicionarTimeRodizio({
+      sessaoId: sessaoCompleta.sessao.id,
+      nome, capitaoAlunoId, capitaoNome, ordemInicial: proximaOrdem, jogadores,
+    });
+    setSessaoCompleta(prev => prev
+      ? { ...prev, times: [...prev.times, time], jogadores: [...prev.jogadores, ...novosJogadores] }
+      : prev);
+  }, [sessaoCompleta]);
+
   const registrarResultado = useCallback(async (vencedorId: string) => {
     if (!sessaoCompleta) return;
     const times = sessaoCompleta.times.map(paraTimeRodizio);
@@ -125,7 +148,7 @@ export function useRodizioFutsal(turmaId: string) {
 
   return {
     sessaoCompleta, loading, erro, recarregar,
-    criarSessao, adicionarJogador, removerJogador, registrarResultado, finalizarSessao,
+    criarSessao, adicionarJogador, removerJogador, adicionarTime, registrarResultado, finalizarSessao,
     times, jogos, filaAtual, estatisticas,
   };
 }

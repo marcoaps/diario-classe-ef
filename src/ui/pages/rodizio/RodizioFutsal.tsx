@@ -92,7 +92,9 @@ export function RodizioFutsal() {
               jogos={rodizio.jogos}
               filaAtual={rodizio.filaAtual}
               estatisticas={rodizio.estatisticas}
+              alunos={alunos}
               onRegistrarResultado={rodizio.registrarResultado}
+              onAdicionarTime={rodizio.adicionarTime}
               onFinalizar={rodizio.finalizarSessao}
             />
           ) : (

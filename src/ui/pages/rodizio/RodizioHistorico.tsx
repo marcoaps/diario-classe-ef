@@ -5,19 +5,9 @@ import {
   type RodizioSessao, type RodizioSessaoCompleta,
 } from '../../../data/supabase';
 import { TURMAS_EF } from '../../../domain/turmasEf';
-import { calcularEstatisticas, LABEL_MODO_RODIZIO, type TimeRodizio, type JogoRodizio } from '../../../domain/rodizioFutsalLogica';
+import { calcularEstatisticas, LABEL_MODO_RODIZIO } from '../../../domain/rodizioFutsalLogica';
+import { paraTimeRodizio, paraJogoRodizio } from '../../../domain/useRodizioFutsal';
 import { TabelaJogos, TabelaEstatisticas } from './RodizioTabelas';
-
-function paraTimeRodizio(t: RodizioSessaoCompleta['times'][number]): TimeRodizio {
-  return { id: t.id, nome: t.nome, capitaoNome: t.capitao_nome, ordemInicial: t.ordem_inicial };
-}
-
-function paraJogoRodizio(j: RodizioSessaoCompleta['jogos'][number]): JogoRodizio {
-  return {
-    id: j.id, numero: j.numero, equipeAId: j.equipe_a_id, equipeBId: j.equipe_b_id,
-    vencedorId: j.vencedor_id, filaApos: j.fila_apos, criadoEm: j.criado_em,
-  };
-}
 
 export function RodizioHistorico() {
   const [turmaFiltro, setTurmaFiltro] = useState('ALL');

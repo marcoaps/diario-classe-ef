@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Crown, Flag, Loader2 } from 'lucide-react';
 import type { RodizioSessaoCompleta } from '../../../data/supabase';
+import type { AlunoSupabase } from '../../../domain/useAlunosPresentesHoje';
 import type { TimeRodizio, JogoRodizio, EstatisticasTime } from '../../../domain/rodizioFutsalLogica';
-import { TabelaJogos, TabelaEstatisticas } from './RodizioTabelas';
+import { TabelaJogos, TabelaEstatisticas, NomeTime } from './RodizioTabelas';
+import { RodizioAdicionarTime } from './RodizioAdicionarTime';
 
 interface Props {
   sessaoCompleta: RodizioSessaoCompleta;
@@ -10,18 +12,21 @@ interface Props {
   jogos: JogoRodizio[];
   filaAtual: string[];
   estatisticas: Map<string, EstatisticasTime>;
+  alunos: AlunoSupabase[];
   onRegistrarResultado: (vencedorId: string) => Promise<void>;
+  onAdicionarTime: (nome: string, capitaoAlunoId: string | null, capitaoNome: string, jogadores: { alunoId: string; alunoNome: string }[]) => Promise<void>;
   onFinalizar: () => Promise<void>;
 }
 
 export function RodizioControle({
-  sessaoCompleta, times, jogos, filaAtual, estatisticas, onRegistrarResultado, onFinalizar,
+  sessaoCompleta, times, jogos, filaAtual, estatisticas, alunos, onRegistrarResultado, onAdicionarTime, onFinalizar,
 }: Props) {
   const [registrando, setRegistrando] = useState(false);
   const [finalizando, setFinalizando] = useState(false);
   const [mostrarDetalhes, setMostrarDetalhes] = useState(false);
 
-  const nome = (id: string | undefined) => times.find(t => t.id === id)?.nome ?? '—';
+  const buscarTime = (id: string | undefined) => times.find(t => t.id === id);
+  const nome = (id: string | undefined) => buscarTime(id)?.nome ?? '—';
   const equipeAId = filaAtual[0];
   const equipeBId = filaAtual[1];
   const proximoId = filaAtual[2];
@@ -68,9 +73,9 @@ export function RodizioControle({
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-center">
             <div className="text-xs font-bold text-gray-400 tracking-wide mb-3">JOGO ATUAL</div>
             <div className="flex items-center justify-center gap-3 flex-wrap">
-              <span className="text-lg font-bold text-on-surface">{nome(equipeAId)}</span>
+              <span className="text-lg font-bold text-on-surface"><NomeTime time={buscarTime(equipeAId)} /></span>
               <span className="text-gray-300 font-bold">×</span>
-              <span className="text-lg font-bold text-on-surface">{nome(equipeBId)}</span>
+              <span className="text-lg font-bold text-on-surface"><NomeTime time={buscarTime(equipeBId)} /></span>
             </div>
           </div>
 
@@ -95,17 +100,19 @@ export function RodizioControle({
 
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
             <div className="text-xs font-bold text-gray-400 tracking-wide mb-1">PRÓXIMO A ENTRAR</div>
-            <div className="text-xl font-bold text-primary mb-2">{proximoId ? nome(proximoId) : '—'}</div>
+            <div className="text-xl font-bold text-primary mb-2">{proximoId ? <NomeTime time={buscarTime(proximoId)} /> : '—'}</div>
             {depoisIds.length > 0 && (
               <div className="flex flex-col gap-0.5">
                 {depoisIds.map(id => (
-                  <div key={id} className="text-sm text-gray-500">Depois: <span className="font-semibold text-gray-700">{nome(id)}</span></div>
+                  <div key={id} className="text-sm text-gray-500">Depois: <span className="font-semibold text-gray-700"><NomeTime time={buscarTime(id)} /></span></div>
                 ))}
               </div>
             )}
           </div>
         </>
       )}
+
+      <RodizioAdicionarTime alunos={alunos} onAdicionar={onAdicionarTime} />
 
       <button
         onClick={() => setMostrarDetalhes(prev => !prev)}
