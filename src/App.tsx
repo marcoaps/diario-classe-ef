@@ -49,6 +49,7 @@ import { InscricaoAlunosPublico } from './ui/pages/InscricaoAlunosPublico';
 import { ConfrontosPublico } from './ui/pages/interclasses/ConfrontosPublico';
 import { InscricaoTime } from './ui/pages/InscricaoTime';
 import { TimesFutsal } from './ui/pages/TimesFutsal';
+import { RodizioFutsal } from './ui/pages/rodizio/RodizioFutsal';
 import { AgendaHoje } from './ui/pages/AgendaHoje';
 import { supabase } from './data/supabase';
 
@@ -113,6 +114,7 @@ export default function App() {
           <Route path="/rendimento" element={<RendimentoBimestre />} />
           <Route path="/torneio" element={<InterclassesIOP />} />
           <Route path="/futsal" element={<TimesFutsal />} />
+          <Route path="/rodizio" element={<RodizioFutsal />} />
 
           {/* Modulo Avaliacoes com QR Code */}
           <Route path="/avaliacoes" element={<Avaliacoes />} />

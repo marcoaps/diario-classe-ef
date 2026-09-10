@@ -2,21 +2,9 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Loader2, Save, Copy, Trash2, Shuffle, Plus, X, CheckCircle2, Swords, Pencil } from 'lucide-react';
 import { cn } from '../AppLayout';
-import { supabase, salvarEscalacaoFutsal } from '../../data/supabase';
-
-interface AlunoSupabase {
-  id: string;
-  nome: string;
-  turma_id: string;
-  numero_chamada: number | null;
-  sexo: 'M' | 'F' | null;
-}
-
-const GENEROS = [
-  { valor: 'M' as const, label: 'Meninos' },
-  { valor: 'F' as const, label: 'Meninas' },
-  { valor: null, label: 'Todos (misto)' },
-];
+import { salvarEscalacaoFutsal } from '../../data/supabase';
+import { useAlunosPresentesHoje, type AlunoSupabase } from '../../domain/useAlunosPresentesHoje';
+import { SeletorTurmasGenero } from '../components/SeletorTurmasGenero';
 
 interface TimeFutsal {
   id: string;
@@ -27,17 +15,6 @@ interface TimeFutsal {
 }
 
 const LINHA_SLOTS = 4;
-
-const TURMAS = ["6F", "7B", "7C", "7D", "7E", "7F", "8A", "8B", "8C", "8D", "8E", "8F", "9A", "9B", "9C", "9D", "9E", "9F"];
-
-// Agrupamentos de série usados nos atalhos rápidos — não é "todas as turmas
-// do ano", é a combinação real que joga junto (ex: 7º só D/E/F, sem B/C).
-const GRUPOS_SERIE: [string, string[]][] = [
-  ['6º', ['6F']],
-  ['7º', ['7D', '7E', '7F']],
-  ['8º', ['8A', '8B', '8C', '8D', '8E', '8F']],
-  ['9º', ['9A', '9B', '9C', '9D', '9E', '9F']],
-];
 
 function novoTime(numero: number): TimeFutsal {
   return { id: uuidv4(), numero, nome: `Time ${numero}`, goleiro: null, linha: Array(LINHA_SLOTS).fill(null) };
@@ -90,8 +67,6 @@ function gerarRodadas(timesOriginais: TimeFutsal[]): Rodada[] {
 export function TimesFutsal() {
   const [turmasSelecionadas, setTurmasSelecionadas] = useState<Set<string>>(new Set());
   const [genero, setGenero] = useState<'M' | 'F' | null>('M');
-  const [alunosBrutos, setAlunosBrutos] = useState<AlunoSupabase[]>([]);
-  const [loading, setLoading] = useState(false);
   const [times, setTimes] = useState<TimeFutsal[]>([novoTime(1), novoTime(2)]);
   const [saving, setSaving] = useState(false);
   const [copiado, setCopiado] = useState(false);
@@ -125,67 +100,15 @@ export function TimesFutsal() {
     setRodadas(null);
   };
 
-  const [presentesHojeIds, setPresentesHojeIds] = useState<Set<string>>(new Set());
-  const [chamadaCarregada, setChamadaCarregada] = useState(false);
+  const { alunosBrutos, alunosComGenero, alunos, loading, chamadaCarregada } =
+    useAlunosPresentesHoje(turmasArray, genero);
 
+  // Turma (ou grupo de turmas) diferente = escalação anterior não faz mais
+  // sentido, começa do zero.
   useEffect(() => {
-    if (turmasArray.length === 0) {
-      setAlunosBrutos([]);
-      setPresentesHojeIds(new Set());
-      setChamadaCarregada(false);
-      setTimes([novoTime(1), novoTime(2)]);
-      setRodadas(null);
-      return;
-    }
-    let mounted = true;
-    setLoading(true);
-    setChamadaCarregada(false);
-    supabase
-      .from('alunos')
-      .select('id, nome, turma_id, numero_chamada, sexo')
-      .in('turma_id', turmasArray)
-      .order('turma_id', { ascending: true })
-      .order('numero_chamada', { ascending: true, nullsFirst: false })
-      .then(async ({ data, error }) => {
-        if (!mounted) return;
-        if (error) console.error('Erro ao buscar alunos:', error);
-        const lista = (data || []) as AlunoSupabase[];
-        setAlunosBrutos(lista);
-
-        // Só ficam "disponíveis" os alunos com a chamada de HOJE marcada como
-        // presente — se a turma ainda não teve chamada feita hoje, ninguém
-        // dela aparece disponível (força fazer a chamada antes de montar times).
-        const hoje = new Date().toISOString().slice(0, 10);
-        if (lista.length > 0) {
-          const { data: freqData, error: freqError } = await supabase
-            .from('frequencia')
-            .select('aluno_id, presente')
-            .eq('data', hoje)
-            .in('aluno_id', lista.map(a => a.id));
-          if (!mounted) return;
-          if (freqError) console.error('Erro ao buscar frequência do dia:', freqError);
-          setPresentesHojeIds(new Set((freqData || []).filter(r => r.presente).map(r => r.aluno_id)));
-        } else {
-          setPresentesHojeIds(new Set());
-        }
-
-        setChamadaCarregada(true);
-        setTimes([novoTime(1), novoTime(2)]);
-        setRodadas(null);
-        setLoading(false);
-      });
-    return () => { mounted = false; };
+    setTimes([novoTime(1), novoTime(2)]);
+    setRodadas(null);
   }, [turmasKey]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const alunosComGenero = useMemo(
-    () => alunosBrutos.filter(a => !genero || a.sexo === genero),
-    [alunosBrutos, genero]
-  );
-
-  const alunos = useMemo(
-    () => alunosComGenero.filter(a => presentesHojeIds.has(a.id)),
-    [alunosComGenero, presentesHojeIds]
-  );
 
   const idsAlocados = useMemo(() => {
     const s = new Set<string>();
@@ -317,44 +240,13 @@ export function TimesFutsal() {
   return (
     <div className="flex flex-col gap-4 pb-32 font-sans">
       {/* Seletor de turmas */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mt-2">
-        <label className="text-xs font-semibold text-gray-500 mb-2 block">SÉRIES</label>
-        <div className="flex gap-1.5 mb-2 flex-wrap">
-          {GRUPOS_SERIE.map(([label, turmasDoGrupo]) => {
-            const todasMarcadas = turmasDoGrupo.every(t => turmasSelecionadas.has(t));
-            return (
-              <button key={label} type="button" onClick={() => toggleGrupo(turmasDoGrupo)}
-                className={cn("flex-1 min-w-[70px] py-1.5 rounded-lg text-xs font-bold transition-all",
-                  todasMarcadas ? "bg-primary text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200")}>
-                Todos {label}
-              </button>
-            );
-          })}
-        </div>
-        <label className="text-xs font-semibold text-gray-500 mb-1 block">TURMAS</label>
-        <div className="grid grid-cols-6 gap-1 mb-3">
-          {TURMAS.map(t => (
-            <button key={t} type="button" onClick={() => toggleTurma(t)}
-              className={cn("py-1.5 rounded-lg text-xs font-bold transition-all",
-                turmasSelecionadas.has(t) ? "bg-primary text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200")}>
-              {t}
-            </button>
-          ))}
-        </div>
-        <label className="text-xs font-semibold text-gray-500 mb-1 block">GÊNERO</label>
-        <div className="flex gap-1.5">
-          {GENEROS.map(g => (
-            <button key={g.label} type="button" onClick={() => handleSetGenero(g.valor)}
-              className={cn("flex-1 py-1.5 rounded-lg text-xs font-bold transition-all",
-                genero === g.valor ? "bg-primary text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200")}>
-              {g.label}
-            </button>
-          ))}
-        </div>
-        {genero && (
-          <p className="text-[11px] text-gray-400 mt-1.5">Alunos sem gênero marcado ficam de fora — use "Marcar Gênero" na aba Turmas se faltar alguém.</p>
-        )}
-      </div>
+      <SeletorTurmasGenero
+        turmasSelecionadas={turmasSelecionadas}
+        onToggleTurma={toggleTurma}
+        onToggleGrupo={toggleGrupo}
+        genero={genero}
+        onSetGenero={handleSetGenero}
+      />
 
       {/* Header */}
       <div className="bg-primary rounded-[2rem] p-5 text-white shadow-lg relative overflow-hidden">

@@ -3,7 +3,7 @@ import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import {
   Users, CheckSquare, GraduationCap, CloudOff, Cloud,
   CalendarSearch, BarChart3, QrCode, ClipboardList, CalendarDays,
-  Sparkles, MoreHorizontal, X, BookOpen, Trophy, ClipboardCheck, Goal, NotebookPen
+  Sparkles, MoreHorizontal, X, BookOpen, Trophy, ClipboardCheck, Goal, NotebookPen, Crown
 } from 'lucide-react';
 import { useStore } from '../store';
 import { clsx, type ClassValue } from 'clsx';
@@ -15,7 +15,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-const MAIS_PATHS = ['/ia', '/avaliacoes', '/alunos', '/diario-aulas', '/torneio', '/trabalhos', '/futsal'];
+const MAIS_PATHS = ['/ia', '/avaliacoes', '/alunos', '/diario-aulas', '/torneio', '/trabalhos', '/futsal', '/rodizio'];
 
 export function AppLayout() {
   const { isSynced, triggerSync } = useStore();
@@ -125,6 +125,12 @@ export function AppLayout() {
             to="/futsal"
             icon={<Goal className="w-5 h-5" />}
             label="Times de Futsal"
+            onClick={() => setMaisAberto(false)}
+          />
+          <PopupItem
+            to="/rodizio"
+            icon={<Crown className="w-5 h-5" />}
+            label="Rod&#237;zio de Futsal"
             onClick={() => setMaisAberto(false)}
           />
         </div>

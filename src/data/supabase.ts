@@ -662,3 +662,191 @@ export async function atualizarJogo(jogoId: string, patch: Partial<JogoInterclas
     .eq('id', jogoId);
   if (error) throw error;
 }
+
+// ------------------------------------------------------------
+// Rodízio de Futsal ("Rei da Quadra")
+// ------------------------------------------------------------
+
+export interface RodizioSessao {
+  id: string;
+  turma_id: string;
+  modalidade: string;
+  modo: 'rei_da_quadra' | 'fila_continua' | 'ordem_fixa' | 'rodizio_equilibrado';
+  limite_permanencia: number | null;
+  data: string;
+  status: 'em_andamento' | 'finalizada';
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export interface RodizioTime {
+  id: string;
+  sessao_id: string;
+  nome: string;
+  capitao_aluno_id: string | null;
+  capitao_nome: string;
+  ordem_inicial: number;
+  criado_em: string;
+}
+
+export interface RodizioJogador {
+  id: string;
+  time_id: string;
+  aluno_id: string;
+  aluno_nome: string;
+}
+
+export interface RodizioJogo {
+  id: string;
+  sessao_id: string;
+  numero: number;
+  equipe_a_id: string;
+  equipe_b_id: string;
+  vencedor_id: string;
+  fila_apos: string[];
+  criado_em: string;
+}
+
+export interface RodizioSessaoCompleta {
+  sessao: RodizioSessao;
+  times: RodizioTime[];
+  jogadores: RodizioJogador[];
+  jogos: RodizioJogo[];
+}
+
+export async function criarSessaoRodizio(payload: {
+  turmaId: string;
+  modalidade: string;
+  limitePermanencia: number | null;
+  times: { nome: string; capitaoAlunoId: string | null; capitaoNome: string; ordemInicial: number; jogadores: { alunoId: string; alunoNome: string }[] }[];
+}): Promise<RodizioSessaoCompleta> {
+  const { data: sessao, error: errSessao } = await supabase
+    .from('rodizio_sessoes')
+    .insert({ turma_id: payload.turmaId, modalidade: payload.modalidade, limite_permanencia: payload.limitePermanencia })
+    .select('*')
+    .single();
+  if (errSessao) throw errSessao;
+
+  const { data: times, error: errTimes } = await supabase
+    .from('rodizio_times')
+    .insert(payload.times.map(t => ({
+      sessao_id: sessao.id,
+      nome: t.nome,
+      capitao_aluno_id: t.capitaoAlunoId,
+      capitao_nome: t.capitaoNome,
+      ordem_inicial: t.ordemInicial,
+    })))
+    .select('*')
+    .order('ordem_inicial');
+  if (errTimes) throw errTimes;
+
+  const jogadoresRows = payload.times.flatMap((t, i) =>
+    t.jogadores.map(j => ({ time_id: times![i].id, aluno_id: j.alunoId, aluno_nome: j.alunoNome }))
+  );
+  let jogadores: RodizioJogador[] = [];
+  if (jogadoresRows.length > 0) {
+    const { data, error } = await supabase.from('rodizio_times_jogadores').insert(jogadoresRows).select('*');
+    if (error) throw error;
+    jogadores = data || [];
+  }
+
+  return { sessao, times: times || [], jogadores, jogos: [] };
+}
+
+export async function buscarSessaoAbertaRodizio(turmaId: string): Promise<RodizioSessaoCompleta | null> {
+  const { data: sessao, error: errSessao } = await supabase
+    .from('rodizio_sessoes')
+    .select('*')
+    .eq('turma_id', turmaId)
+    .eq('status', 'em_andamento')
+    .order('criado_em', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (errSessao) throw errSessao;
+  if (!sessao) return null;
+  return buscarSessaoCompleta(sessao.id);
+}
+
+export async function buscarSessaoCompleta(sessaoId: string): Promise<RodizioSessaoCompleta> {
+  const { data: sessao, error: errSessao } = await supabase
+    .from('rodizio_sessoes').select('*').eq('id', sessaoId).single();
+  if (errSessao) throw errSessao;
+
+  const { data: times, error: errTimes } = await supabase
+    .from('rodizio_times').select('*').eq('sessao_id', sessaoId).order('ordem_inicial');
+  if (errTimes) throw errTimes;
+
+  const timeIds = (times || []).map(t => t.id);
+  let jogadores: RodizioJogador[] = [];
+  if (timeIds.length > 0) {
+    const { data, error } = await supabase
+      .from('rodizio_times_jogadores').select('*').in('time_id', timeIds);
+    if (error) throw error;
+    jogadores = data || [];
+  }
+
+  const { data: jogos, error: errJogos } = await supabase
+    .from('rodizio_jogos').select('*').eq('sessao_id', sessaoId).order('numero');
+  if (errJogos) throw errJogos;
+
+  return { sessao, times: times || [], jogadores, jogos: jogos || [] };
+}
+
+export async function adicionarJogadorTime(timeId: string, alunoId: string, alunoNome: string): Promise<RodizioJogador> {
+  const { data, error } = await supabase
+    .from('rodizio_times_jogadores')
+    .insert({ time_id: timeId, aluno_id: alunoId, aluno_nome: alunoNome })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function removerJogadorTime(jogadorRegistroId: string) {
+  const { error } = await supabase.from('rodizio_times_jogadores').delete().eq('id', jogadorRegistroId);
+  if (error) throw error;
+}
+
+export async function registrarJogoRodizio(payload: {
+  sessaoId: string;
+  numero: number;
+  equipeAId: string;
+  equipeBId: string;
+  vencedorId: string;
+  filaApos: string[];
+}): Promise<RodizioJogo> {
+  const { data, error } = await supabase
+    .from('rodizio_jogos')
+    .insert({
+      sessao_id: payload.sessaoId,
+      numero: payload.numero,
+      equipe_a_id: payload.equipeAId,
+      equipe_b_id: payload.equipeBId,
+      vencedor_id: payload.vencedorId,
+      fila_apos: payload.filaApos,
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function finalizarSessaoRodizio(sessaoId: string) {
+  const { error } = await supabase.from('rodizio_sessoes').update({ status: 'finalizada' }).eq('id', sessaoId);
+  if (error) throw error;
+}
+
+export async function buscarHistoricoSessoesRodizio(filtros: {
+  turmaId?: string;
+  dataInicio?: string;
+  dataFim?: string;
+}): Promise<RodizioSessao[]> {
+  let query = supabase.from('rodizio_sessoes').select('*').eq('status', 'finalizada');
+  if (filtros.turmaId) query = query.eq('turma_id', filtros.turmaId);
+  if (filtros.dataInicio) query = query.gte('data', filtros.dataInicio);
+  if (filtros.dataFim) query = query.lte('data', filtros.dataFim);
+  query = query.order('data', { ascending: false }).order('criado_em', { ascending: false });
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
