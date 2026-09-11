@@ -620,10 +620,10 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
             type="submit"
             disabled={salvando || (usaListaOficial && Object.keys(selecionados).length === 0)}
             className={cn(
-              'w-full rounded-xl disabled:opacity-50 text-white font-bold transition flex items-center justify-center gap-2',
-              modoPublico ? 'py-4 text-lg shadow-sm hover:brightness-95 active:brightness-90' : 'py-3 text-sm bg-primary hover:bg-primary-dark'
+              'w-full rounded-xl disabled:opacity-50 text-white font-bold transition flex items-center justify-center gap-2 shadow-sm hover:brightness-95 active:brightness-90',
+              modoPublico ? 'py-4 text-lg' : 'py-3 text-sm'
             )}
-            style={modoPublico ? { background: '#f59e0b' } : undefined}
+            style={{ background: '#f59e0b' }}
           >
             {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             {salvando

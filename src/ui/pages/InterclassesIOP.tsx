@@ -64,7 +64,14 @@ export default function InterclassesIOP() {
 
   return (
     <div className="flex flex-col gap-4 pb-6 font-sans">
-      <ModalidadeSeletor modalidade={modalidade} onSelecionar={selecionarModalidade} />
+      <div className="rounded-3xl px-5 pt-6 pb-5 flex flex-col items-center text-center gap-4" style={{ background: 'linear-gradient(180deg, #0066cc 0%, #0052a3 100%)' }}>
+        <div>
+          <div className="text-5xl mb-2">🏆</div>
+          <h1 className="text-white text-xl font-extrabold tracking-tight">Interclasses IOP {EDICAO_ATUAL}</h1>
+          <p className="text-blue-100 text-xs mt-1">Painel do professor — Instituto Odilon Pratagi</p>
+        </div>
+        <ModalidadeSeletor modalidade={modalidade} onSelecionar={selecionarModalidade} variant="hero" />
+      </div>
       <SubTabBar tab={tab} setTab={setTab} />
       {tab === 'visao' && <VisaoGeral inscricoes={inscricoesModalidade} turmas={turmas} loading={loading} modalidade={modalidade} />}
       {tab === 'inscricao' && (
