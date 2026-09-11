@@ -546,10 +546,12 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
                 })}
                 {alunosPorGenero.semGenero.length > 0 && (
                   <div>
-                    <div className="px-3 py-1.5 bg-amber-50 border-b border-amber-100">
-                      <span className="text-xs font-bold text-amber-700">⚠️ Sem gênero marcado</span>
-                      <p className="text-[10px] text-amber-600 mt-0.5">Use a tela "Marcar Gênero" (aba Turmas) pra classificar — por enquanto aparecem aqui.</p>
-                    </div>
+                    {!modoPublico && (
+                      <div className="px-3 py-1.5 bg-amber-50 border-b border-amber-100">
+                        <span className="text-xs font-bold text-amber-700">⚠️ Sem gênero marcado</span>
+                        <p className="text-[10px] text-amber-600 mt-0.5">Use a tela "Marcar Gênero" (aba Turmas) pra classificar — por enquanto aparecem aqui.</p>
+                      </div>
+                    )}
                     <div className="divide-y divide-gray-50">
                       {alunosPorGenero.semGenero.map(a => (
                         <LinhaAlunoSelecao key={a.id} aluno={a} marcado={a.id in selecionados} valorCamisa={selecionados[a.id]} grande={modoPublico}
