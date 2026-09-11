@@ -592,8 +592,10 @@ export function AvaliacaoFolha() {
       // mostrando o título como foi digitado.
       const tituloSemLetraDeTurma = avaliacao.titulo.replace(/-[A-Fa-f]$/, '').trim();
       const avaliacaoParaLote = { ...avaliacao, titulo: tituloSemLetraDeTurma };
+      // "( )" depois da série pro aluno escrever a letra da própria sala à
+      // caneta, já que a folha da série não identifica mais qual turma é.
       const canvas = document.createElement('canvas');
-      await desenharFolhaModelo(canvas, avaliacaoParaLote, codigo, serieLabel(avaliacao.turma_id));
+      await desenharFolhaModelo(canvas, avaliacaoParaLote, codigo, `${serieLabel(avaliacao.turma_id)} ( )`);
       const paginaUrl = canvas.toDataURL('image/png');
 
       const html = `<!DOCTYPE html><html><head>
