@@ -305,14 +305,9 @@ async function desenharFolhaModelo(
   // Barras "/" com bastante espaço nos dois lados, pro aluno escrever
   // dia/mês/ano à caneta diretamente entre elas (sem linha de baixo).
   linhaComValor('DATA:', '        /        /          ', CX + 8, alunoY + 80);
-  // PROFESSOR: pré-preenchido com avaliacoes.professor quando cadastrado
-  // (mesma pessoa que aplica a prova, no modelo de professor único do app);
-  // senão fica em branco pra preencher à mão, igual ao NOME.
-  if (avaliacao.professor) {
-    linhaComValor('PROFESSOR:', avaliacao.professor, CX + 8, alunoY + 104);
-  } else {
-    linhaPreencher('PROFESSOR:', CX + 8, alunoY + 104, larguraCampos);
-  }
+  // Sempre em branco pra preencher à mão -- não pré-preenche com
+  // avaliacoes.professor, igual ao NOME.
+  linhaPreencher('NOME DO PROFESSOR(A):', CX + 8, alunoY + 104, larguraCampos);
 
   // QR Code — no modo individual, `qrConteudo` é o payload assinado (payload +
   // assinatura HMAC), exclusivo desta folha; no modo 100% anônimo, é só o
