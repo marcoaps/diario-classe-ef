@@ -51,6 +51,7 @@ import { InscricaoTime } from './ui/pages/InscricaoTime';
 import { TimesFutsal } from './ui/pages/TimesFutsal';
 import { RodizioFutsal } from './ui/pages/rodizio/RodizioFutsal';
 import { AgendaHoje } from './ui/pages/AgendaHoje';
+import { AlunosProva } from './ui/pages/AlunosProva';
 import { supabase } from './data/supabase';
 
 export function useAuth() {
@@ -123,6 +124,7 @@ export default function App() {
           <Route path="/avaliacoes/resultados/:id" element={<AvaliacaoResultados />} />
           <Route path="/avaliacoes/correcoes/:id" element={<AvaliacaoCorrecoes />} />
           <Route path="/avaliacoes/formatar/:id" element={<AvaliacaoFormatar />} />
+          <Route path="/prova-alunos" element={<AlunosProva />} />
           <Route path="/avaliacoes/gerador" element={<GeradorQuestoes />} />
           <Route path="/avaliacoes/gabarito-rapido" element={<AvaliacaoGabaritoRapido />} />
 

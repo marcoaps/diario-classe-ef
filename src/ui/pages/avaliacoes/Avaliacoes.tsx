@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
-import { ClipboardList, Plus, QrCode, Camera, Trash2, ChevronDown, ChevronUp, BarChart2, Sparkles, Share2, Copy, Check, ListChecks, FileUp } from 'lucide-react';
+import { ClipboardList, Plus, QrCode, Camera, Trash2, ChevronDown, ChevronUp, BarChart2, Sparkles, Share2, Copy, Check, ListChecks, FileUp, Printer } from 'lucide-react';
 import type { Avaliacao, QuestaoObjetiva } from './tiposCorretorProvas';
 import { ALTERNATIVAS_PADRAO, valorPorQuestaoObjetiva, arredondar, GRUPOS_CORRETOR, ehGrupoDeTurmas, labelTurmaOuGrupo } from './tiposCorretorProvas';
 import { getTurmasDoGrupo, getLabelGrupo } from '../ProvasOnline';
@@ -954,6 +954,13 @@ export function Avaliacoes() {
                       Resultados
                     </button>
                   </div>
+                  <button
+                    onClick={() => navigate(`/avaliacoes/formatar/${av.id}`)}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-secondary-container text-on-secondary-container text-xs font-semibold"
+                  >
+                    <Printer className="w-4 h-4" />
+                    Selecionar alunos e imprimir
+                  </button>
                   <button
                     onClick={() => excluir(av.id)}
                     className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-xl border border-error text-error text-xs font-semibold"
