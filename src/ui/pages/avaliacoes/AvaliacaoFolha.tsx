@@ -302,7 +302,9 @@ async function desenharFolhaModelo(
     linhaPreencher('TURMA:', CX + 8, alunoY + 54, Math.floor(larguraCampos / 2) - 8);
   }
   linhaPreencher('Nº:', ncX, alunoY + 54, Math.floor(larguraCampos / 2) - 16);
-  linhaPreencher('DATA:', CX + 8, alunoY + 80, 180);
+  // Barras "/" com bastante espaço nos dois lados, pro aluno escrever
+  // dia/mês/ano à caneta diretamente entre elas (sem linha de baixo).
+  linhaComValor('DATA:', '        /        /          ', CX + 8, alunoY + 80);
 
   // QR Code — no modo individual, `qrConteudo` é o payload assinado (payload +
   // assinatura HMAC), exclusivo desta folha; no modo 100% anônimo, é só o
@@ -592,10 +594,11 @@ export function AvaliacaoFolha() {
       // mostrando o título como foi digitado.
       const tituloSemLetraDeTurma = avaliacao.titulo.replace(/-[A-Fa-f]$/, '').trim();
       const avaliacaoParaLote = { ...avaliacao, titulo: tituloSemLetraDeTurma };
-      // "( )" depois da série pro aluno escrever a letra da própria sala à
-      // caneta, já que a folha da série não identifica mais qual turma é.
+      // "(   )" bem aberto depois da série pro aluno escrever a letra da
+      // própria sala à caneta, já que a folha da série não identifica mais
+      // qual turma é.
       const canvas = document.createElement('canvas');
-      await desenharFolhaModelo(canvas, avaliacaoParaLote, codigo, `${serieLabel(avaliacao.turma_id)} ( )`);
+      await desenharFolhaModelo(canvas, avaliacaoParaLote, codigo, `${serieLabel(avaliacao.turma_id)} (      )`);
       const paginaUrl = canvas.toDataURL('image/png');
 
       const html = `<!DOCTYPE html><html><head>
