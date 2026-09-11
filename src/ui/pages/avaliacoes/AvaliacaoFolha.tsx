@@ -204,13 +204,20 @@ function turmasParaLoteCombinado(turmaId: string): string[] {
   return mesmaSerie.length ? mesmaSerie : [turmaId];
 }
 
-/** "6A" / "6F" -> "6º Ano" -- rótulo genérico da série, sem letra de sala,
- *  usado no campo TURMA da folha combinada (uma única folha pra série
- *  inteira, em vez de uma por turma). */
-function serieLabel(turmaId: string): string {
-  if (ehGrupoDeTurmas(turmaId)) return labelTurmaOuGrupo(turmaId);
-  const serie = turmaId.match(/^(\d+)/)?.[1];
-  return serie ? `${serie}º Ano` : turmaId;
+/** Rótulos das séries distintas cobertas por `turma_id` (ex. "9A" -> só
+ *  "9º Ano"; um GRUPO como GRUPO_6_7 -> "6º Ano" E "7º Ano", uma pra cada
+ *  série que ele junta) -- sem letra de sala em nenhum caso. Cada rótulo
+ *  vira UMA página na folha combinada: séries diferentes nunca dividem a
+ *  mesma página, só turmas da MESMA série é que se juntam numa só. */
+function seriesDoTurmaId(turmaId: string): string[] {
+  const turmas = turmasParaLoteCombinado(turmaId);
+  const series = new Set<string>();
+  turmas.forEach(t => {
+    const serie = t.match(/^(\d+)/)?.[1];
+    if (serie) series.add(serie);
+  });
+  const ordenadas = Array.from(series).sort((a, b) => Number(a) - Number(b));
+  return ordenadas.length ? ordenadas.map(s => `${s}º Ano`) : [labelTurmaOuGrupo(turmaId)];
 }
 
 async function desenharFolhaModelo(
@@ -597,21 +604,29 @@ export function AvaliacaoFolha() {
       // mostrando o título como foi digitado.
       const tituloSemLetraDeTurma = avaliacao.titulo.replace(/-[A-Fa-f]$/, '').trim();
       const avaliacaoParaLote = { ...avaliacao, titulo: tituloSemLetraDeTurma };
-      // "(   )" bem aberto depois da série pro aluno escrever a letra da
-      // própria sala à caneta, já que a folha da série não identifica mais
-      // qual turma é.
-      const canvas = document.createElement('canvas');
-      await desenharFolhaModelo(canvas, avaliacaoParaLote, codigo, `${serieLabel(avaliacao.turma_id)} (      )`);
-      const paginaUrl = canvas.toDataURL('image/png');
 
+      // Uma página por SÉRIE (nunca por turma/letra) -- um grupo que junta
+      // mais de uma série (ex. GRUPO_6_7) gera uma página pra cada, já que
+      // "6º Ano" e "7º Ano" não podem virar uma folha só.
+      const labels = seriesDoTurmaId(avaliacao.turma_id);
+      const paginas: string[] = [];
+      for (const label of labels) {
+        // "(   )" bem aberto depois da série pro aluno escrever a letra da
+        // própria sala à caneta, já que a folha da série não identifica
+        // mais qual turma é.
+        const canvas = document.createElement('canvas');
+        await desenharFolhaModelo(canvas, avaliacaoParaLote, codigo, `${label} (      )`);
+        paginas.push(canvas.toDataURL('image/png'));
+      }
+
+      const blocos = paginas.map((url, i) => `<div style="${i === paginas.length - 1 ? '' : 'page-break-after: always;'}text-align:center;">
+        <img src="${url}" style="width:100%;max-width:794px;display:block;margin:0 auto;" />
+      </div>`).join('');
       const html = `<!DOCTYPE html><html><head>
         <meta charset="utf-8">
-        <title>${serieLabel(avaliacao.turma_id)} — ${codigo || avaliacao.titulo}</title>
+        <title>${labels.join(', ')} — ${codigo || avaliacao.titulo}</title>
         <style>* { margin:0; padding:0; box-sizing:border-box; } @page { margin:0; size: A4 portrait; } body { background:white; }</style>
-      </head><body>
-        <div style="text-align:center;">
-          <img src="${paginaUrl}" style="width:100%;max-width:794px;display:block;margin:0 auto;" />
-        </div>
+      </head><body>${blocos}
         <script>setTimeout(function(){ window.print(); }, 600);<\/script>
       </body></html>`;
       const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
@@ -794,7 +809,12 @@ export function AvaliacaoFolha() {
             <Printer className="w-4 h-4" />
             {gerandoTodas
               ? 'Gerando...'
-              : `Gerar folha única do ${serieLabel(avaliacao.turma_id)} (todas as turmas, 1 página)`}
+              : (() => {
+                  const labels = seriesDoTurmaId(avaliacao.turma_id);
+                  return labels.length > 1
+                    ? `Gerar folhas de ${labels.join(' e ')} (todas as turmas, ${labels.length} páginas)`
+                    : `Gerar folha única do ${labels[0]} (todas as turmas, 1 página)`;
+                })()}
           </button>
         )}
 
