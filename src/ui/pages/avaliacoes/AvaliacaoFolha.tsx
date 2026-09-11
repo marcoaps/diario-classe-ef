@@ -190,11 +190,11 @@ function formatarTurma(turma: string): string {
   return turma.replace(/(\d+)/, '$1º');
 }
 
-/** Turmas a incluir no arquivo combinado (1 folha por turma, só troca o
- *  campo TURMA): se `turma_id` já for um GRUPO (ex. GRUPO_8_9), usa as
- *  turmas do grupo; senão, deduz as turmas da MESMA SÉRIE a partir do
- *  dígito inicial (ex. turma_id "8A" -> só as turmas que começam com "8",
- *  sem misturar com o 9º ano, mesmo que GRUPO_8_9 junte os dois). */
+/** Turmas da MESMA SÉRIE do `turma_id` (ex. "8A" -> só as turmas que
+ *  começam com "8", sem misturar com o 9º ano, mesmo que GRUPO_8_9 junte
+ *  os dois; se `turma_id` já for um GRUPO, usa as turmas do grupo). Serve
+ *  só pra saber se a série tem mais de uma turma (mostra ou não o botão de
+ *  lote) -- a folha do lote não differ mais por turma, ver serieLabel(). */
 function turmasParaLoteCombinado(turmaId: string): string[] {
   if (ehGrupoDeTurmas(turmaId)) return turmasDoValor(turmaId);
   const serie = turmaId.match(/^(\d+)/)?.[1];
@@ -202,6 +202,15 @@ function turmasParaLoteCombinado(turmaId: string): string[] {
   const todasTurmas = GRUPOS_CORRETOR.flatMap(g => g.turmas);
   const mesmaSerie = todasTurmas.filter(t => t.startsWith(serie));
   return mesmaSerie.length ? mesmaSerie : [turmaId];
+}
+
+/** "6A" / "6F" -> "6º Ano" -- rótulo genérico da série, sem letra de sala,
+ *  usado no campo TURMA da folha combinada (uma única folha pra série
+ *  inteira, em vez de uma por turma). */
+function serieLabel(turmaId: string): string {
+  if (ehGrupoDeTurmas(turmaId)) return labelTurmaOuGrupo(turmaId);
+  const serie = turmaId.match(/^(\d+)/)?.[1];
+  return serie ? `${serie}º Ano` : turmaId;
 }
 
 async function desenharFolhaModelo(
@@ -555,10 +564,9 @@ export function AvaliacaoFolha() {
     }
   }
 
-  // Gera UMA folha de CADA turma do grupo (mesmo cabeçalho/QR/conteúdo, só
-  // muda o campo TURMA pré-preenchido) num único arquivo -- 1 página por
-  // turma, sem repetição. Se precisar de mais exemplares de alguma turma,
-  // o professor tira fotocópia da página dela depois.
+  // Gera UMA ÚNICA folha pra série inteira (mesmo cabeçalho/QR/conteúdo),
+  // com o campo TURMA mostrando só "6º Ano" -- sem separar por sala, já
+  // que a folha não identifica turma nem aluno (só a avaliação, via QR).
   async function gerarEImprimirTodasTurmas() {
     if (!avaliacao) return;
     setGerandoTodas(true);
@@ -577,30 +585,25 @@ export function AvaliacaoFolha() {
         setAvaliacao(prev => prev ? { ...prev, codigo_avaliacao: codigo } : prev);
       }
 
-      const turmas = turmasParaLoteCombinado(avaliacao.turma_id);
       // O título costuma vir com a letra da turma em que a avaliação foi
-      // criada originalmente (ex: "AVA-8ºANO-A") -- no arquivo combinado
-      // isso ficaria errado nas páginas das outras turmas, já que o
-      // cabeçalho é o mesmo em todas. Tira essa letra só aqui; a folha
-      // individual (fora do lote) continua mostrando o título como foi
-      // digitado.
+      // criada originalmente (ex: "AVA-8ºANO-A") -- na folha da série isso
+      // ficaria errado, já que ela vale pra todas as turmas. Tira essa
+      // letra só aqui; a folha individual (fora do lote) continua
+      // mostrando o título como foi digitado.
       const tituloSemLetraDeTurma = avaliacao.titulo.replace(/-[A-Fa-f]$/, '').trim();
       const avaliacaoParaLote = { ...avaliacao, titulo: tituloSemLetraDeTurma };
-      const paginas: string[] = [];
-      for (const turma of turmas) {
-        const canvas = document.createElement('canvas');
-        await desenharFolhaModelo(canvas, avaliacaoParaLote, codigo, formatarTurma(turma));
-        paginas.push(canvas.toDataURL('image/png'));
-      }
+      const canvas = document.createElement('canvas');
+      await desenharFolhaModelo(canvas, avaliacaoParaLote, codigo, serieLabel(avaliacao.turma_id));
+      const paginaUrl = canvas.toDataURL('image/png');
 
-      const blocos = paginas.map((url, i) => `<div style="${i === paginas.length - 1 ? '' : 'page-break-after: always;'}text-align:center;">
-        <img src="${url}" style="width:100%;max-width:794px;display:block;margin:0 auto;" />
-      </div>`).join('');
       const html = `<!DOCTYPE html><html><head>
         <meta charset="utf-8">
-        <title>Todas as turmas — ${codigo || avaliacao.titulo}</title>
+        <title>${serieLabel(avaliacao.turma_id)} — ${codigo || avaliacao.titulo}</title>
         <style>* { margin:0; padding:0; box-sizing:border-box; } @page { margin:0; size: A4 portrait; } body { background:white; }</style>
-      </head><body>${blocos}
+      </head><body>
+        <div style="text-align:center;">
+          <img src="${paginaUrl}" style="width:100%;max-width:794px;display:block;margin:0 auto;" />
+        </div>
         <script>setTimeout(function(){ window.print(); }, 600);<\/script>
       </body></html>`;
       const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
@@ -782,8 +785,8 @@ export function AvaliacaoFolha() {
             className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-bold disabled:opacity-50">
             <Printer className="w-4 h-4" />
             {gerandoTodas
-              ? 'Gerando todas as turmas...'
-              : `Gerar arquivo com as turmas ${turmasParaLoteCombinado(avaliacao.turma_id).map(formatarTurma).join(', ')} (1 página cada)`}
+              ? 'Gerando...'
+              : `Gerar folha única do ${serieLabel(avaliacao.turma_id)} (todas as turmas, 1 página)`}
           </button>
         )}
 
