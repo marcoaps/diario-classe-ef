@@ -83,26 +83,34 @@ export default function InterclassesIOP() {
   );
 }
 
-export function ModalidadeSeletor({ modalidade, onSelecionar }: { modalidade: Modalidade; onSelecionar: (m: Modalidade) => void }) {
+export function ModalidadeSeletor({ modalidade, onSelecionar, variant = 'default' }: { modalidade: Modalidade; onSelecionar: (m: Modalidade) => void; variant?: 'default' | 'hero' }) {
+  const hero = variant === 'hero';
   return (
-    <div className="flex gap-1.5 overflow-x-auto pt-2">
-      {MODALIDADES.map(m => (
-        <button
-          key={m.id}
-          onClick={() => m.disponivel && onSelecionar(m.id)}
-          disabled={!m.disponivel}
-          className={cn(
-            "flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex-shrink-0",
-            !m.disponivel ? "bg-gray-50 text-gray-300 cursor-not-allowed" :
-            modalidade === m.id ? "text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-          )}
-          style={modalidade === m.id && m.disponivel ? { background: m.cor } : undefined}
-        >
-          <span>{m.icone}</span>
-          {m.label}
-          {!m.disponivel && <span className="text-[9px] opacity-70">(em breve)</span>}
-        </button>
-      ))}
+    <div className={cn('flex gap-1.5 overflow-x-auto', hero ? 'justify-center flex-wrap pb-1' : 'pt-2')}>
+      {MODALIDADES.map(m => {
+        const ativo = modalidade === m.id && m.disponivel;
+        return (
+          <button
+            key={m.id}
+            onClick={() => m.disponivel && onSelecionar(m.id)}
+            disabled={!m.disponivel}
+            className={cn(
+              'flex items-center gap-1.5 rounded-xl font-bold whitespace-nowrap transition-all flex-shrink-0',
+              hero ? 'px-4 py-2.5 text-sm shadow-sm' : 'px-3 py-2 text-xs',
+              !m.disponivel
+                ? (hero ? 'bg-white/20 text-white/50 cursor-not-allowed' : 'bg-gray-50 text-gray-300 cursor-not-allowed')
+                : ativo
+                  ? 'text-white'
+                  : (hero ? 'bg-white text-blue-700 hover:bg-blue-50' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')
+            )}
+            style={ativo ? { background: hero ? '#f59e0b' : m.cor } : undefined}
+          >
+            <span>{m.icone}</span>
+            {m.label}
+            {!m.disponivel && <span className="text-[9px] opacity-70">(em breve)</span>}
+          </button>
+        );
+      })}
     </div>
   );
 }

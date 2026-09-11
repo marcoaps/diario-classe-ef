@@ -44,14 +44,14 @@ export function InscricaoAlunosPublico() {
   const inscricoesModalidade = inscricoes.filter(i => (i.modalidade ?? 'futsal') === modalidade);
 
   return (
-    <div className="min-h-screen bg-background font-sans">
-      <div className="text-center py-6 px-4 border-b border-gray-100 bg-white">
-        <div className="text-4xl mb-2">🏆</div>
-        <h1 className="text-on-surface text-xl font-bold">Interclasses IOP {EDICAO_PADRAO}</h1>
-        <p className="text-gray-500 text-sm mt-1">Inscrição de alunos — Instituto Odilon Pratagi</p>
+    <div className="min-h-screen font-sans" style={{ background: 'linear-gradient(180deg, #0066cc 0%, #0052a3 100%)' }}>
+      <div className="text-center pt-10 pb-8 px-4">
+        <div className="text-6xl mb-3">🏆</div>
+        <h1 className="text-white text-3xl font-extrabold tracking-tight">Interclasses IOP {EDICAO_PADRAO}</h1>
+        <p className="text-blue-100 text-sm mt-1.5">Inscrição de alunos — Instituto Odilon Pratagi</p>
       </div>
-      <div className="max-w-lg mx-auto p-4 flex flex-col gap-4">
-        <ModalidadeSeletor modalidade={modalidade} onSelecionar={selecionarModalidade} />
+      <div className="max-w-lg mx-auto px-4 pb-10 flex flex-col gap-4">
+        <ModalidadeSeletor modalidade={modalidade} onSelecionar={selecionarModalidade} variant="hero" />
         <InscricaoAlunos
           edicao={EDICAO_PADRAO}
           modalidade={modalidade}

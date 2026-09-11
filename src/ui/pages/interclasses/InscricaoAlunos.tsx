@@ -411,7 +411,9 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
     <div className="flex flex-col gap-4">
       <div className={cn(
         'rounded-2xl border px-4 py-3 flex items-center gap-3',
-        inscricoesEncerradas ? 'bg-gray-50 border-gray-200' : 'bg-blue-50 border-blue-200'
+        modoPublico
+          ? 'bg-white border-gray-100 shadow-sm'
+          : inscricoesEncerradas ? 'bg-gray-50 border-gray-200' : 'bg-blue-50 border-blue-200'
       )}>
         <Calendar className={cn('w-5 h-5 shrink-0', inscricoesEncerradas ? 'text-gray-500' : 'text-blue-600')} />
         <div>
@@ -618,10 +620,10 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
             type="submit"
             disabled={salvando || (usaListaOficial && Object.keys(selecionados).length === 0)}
             className={cn(
-              'w-full rounded-xl disabled:opacity-50 text-white font-bold transition-colors flex items-center justify-center gap-2',
-              modoPublico ? 'py-4 text-lg' : 'py-3 text-sm bg-primary hover:bg-primary-dark'
+              'w-full rounded-xl disabled:opacity-50 text-white font-bold transition flex items-center justify-center gap-2',
+              modoPublico ? 'py-4 text-lg shadow-sm hover:brightness-95 active:brightness-90' : 'py-3 text-sm bg-primary hover:bg-primary-dark'
             )}
-            style={modoPublico ? { background: corModalidade } : undefined}
+            style={modoPublico ? { background: '#f59e0b' } : undefined}
           >
             {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             {salvando
