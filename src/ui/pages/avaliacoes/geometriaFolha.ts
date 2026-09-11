@@ -39,7 +39,7 @@ export const GAP_APOS_CABECALHO = 30;
  * pra a leitura nunca poder desalinhar do que é impresso (mesmo raciocínio das
  * constantes de bolha acima). */
 export const HEADER_H = 44;
-export const ALUNO_FIELDS_H = 100;
+export const ALUNO_FIELDS_H = 126;
 
 export interface GeometriaQuestoes {
   Q_START_X: number;
