@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, type FormEvent } from 'react';
-import { CheckCircle2, Loader2, Pencil, Trash2, X, Link2, Check } from 'lucide-react';
+import { CheckCircle2, Loader2, Pencil, Trash2, X, Link2, Check, Calendar } from 'lucide-react';
 import { cn } from '../../AppLayout';
 import { buscarAlunos, criarInscricaoInterclasses, atualizarInscricaoInterclasses, excluirInscricaoInterclasses, limparInscricoesInterclasses } from '../../../data/supabase';
 import { agruparPorTime, categoriaFromTurma, MAXIMO_JOGADORES_TIME, minimoJogadoresPara, modalidadeConfig } from '../../../domain/interclasses';
@@ -28,6 +28,16 @@ interface Props {
 }
 
 const FORM_VAZIO = { nomeCompleto: '', turmaId: '', numeroChamada: '', numeroCamisa: '', nomeTime: '' };
+
+// Datas do regulamento (Mini Projeto-Regulamento — Jogos Interclasses 2026):
+// inscrições abertas de 11/09 até o Congresso Técnico, dia 02/10.
+const INSCRICOES_INICIO = new Date('2026-09-11T00:00:00');
+const INSCRICOES_FIM = new Date('2026-10-02T23:59:59');
+const DATA_CONGRESSO_TECNICO = '02/10/2026';
+
+function formatarDataBR(d: Date) {
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
 
 function LinhaAlunoSelecao({ aluno, marcado, valorCamisa, onToggle, onCamisaChange, grande }: {
   aluno: AlunoOficial; marcado: boolean; valorCamisa?: string;
@@ -394,8 +404,26 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
   const corModalidade = modalidadeConfig(modalidade).cor;
   const equipesFiltradas = useMemo(() => agruparPorTime(listaFiltrada), [listaFiltrada]);
 
+  const agora = new Date();
+  const inscricoesEncerradas = agora > INSCRICOES_FIM;
+
   return (
     <div className="flex flex-col gap-4">
+      <div className={cn(
+        'rounded-2xl border px-4 py-3 flex items-center gap-3',
+        inscricoesEncerradas ? 'bg-gray-50 border-gray-200' : 'bg-blue-50 border-blue-200'
+      )}>
+        <Calendar className={cn('w-5 h-5 shrink-0', inscricoesEncerradas ? 'text-gray-500' : 'text-blue-600')} />
+        <div>
+          <p className={cn('text-sm font-semibold', inscricoesEncerradas ? 'text-gray-700' : 'text-blue-900')}>
+            {inscricoesEncerradas ? 'Inscrições encerradas' : `Inscrições abertas até ${formatarDataBR(INSCRICOES_FIM)}`}
+          </p>
+          <p className={cn('text-xs', inscricoesEncerradas ? 'text-gray-500' : 'text-blue-700')}>
+            Período: {formatarDataBR(INSCRICOES_INICIO)} a {formatarDataBR(INSCRICOES_FIM)} · Congresso Técnico no dia {DATA_CONGRESSO_TECNICO}
+          </p>
+        </div>
+      </div>
+
       {!modoPublico && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <h3 className="font-bold text-on-surface text-sm mb-1 flex items-center gap-1.5">
