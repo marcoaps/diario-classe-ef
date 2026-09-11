@@ -64,6 +64,10 @@ export function AvaliacaoCorrigir() {
 
   const [avaliacao, setAvaliacao] = useState<Avaliacao | null>(null);
   const [loading, setLoading] = useState(true);
+  // Fica lembrado entre folhas (e entre sessões) pra não ter que redigitar a
+  // cada correção -- pré-preenche com avaliacoes.professor (quem criou a
+  // avaliação) só na primeira vez, se ainda não tiver nada salvo localmente.
+  const [professorNome, setProfessorNome] = useState(() => localStorage.getItem('corretor_professor_nome') || '');
   const [etapa, setEtapa] = useState<'identificar' | 'lendo_bolhas' | 'respostas' | 'salvo'>('identificar');
   const [qrVisivel, setQrVisivel] = useState(false);
   const [marcadoresVisiveis, setMarcadoresVisiveis] = useState(false);
@@ -104,9 +108,14 @@ export function AvaliacaoCorrigir() {
       const { data: av } = await supabase.from('avaliacoes').select('*').eq('id', id).single();
       setAvaliacao(av);
       setLoading(false);
+      setProfessorNome(prev => prev || av?.professor || '');
     }
     init();
   }, [id]);
+
+  useEffect(() => {
+    if (professorNome.trim()) localStorage.setItem('corretor_professor_nome', professorNome.trim());
+  }, [professorNome]);
 
   async function calcularHash(file: File | Blob): Promise<string> {
     const buffer = await file.arrayBuffer();
@@ -618,6 +627,7 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
       arquivo_hash: arquivoHash || null,
       metodo_scan: 'qr',
       escaneado_em: new Date().toISOString(),
+      professor_nome: professorNome.trim() || null,
     });
 
     if (error) { setSalvando(false); setErro('Erro ao salvar: ' + error.message); return; }
@@ -701,6 +711,17 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
             {avaliacao.titulo} · {ehGrupoDeTurmas(avaliacao.turma_id) ? labelTurmaOuGrupo(avaliacao.turma_id) : `Turma ${avaliacao.turma_id}`} · {avaliacao.codigo_avaliacao}
           </p>
         </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <label className="text-xs font-semibold text-on-surface-variant whitespace-nowrap">Professor(a):</label>
+        <input
+          type="text"
+          value={professorNome}
+          onChange={e => setProfessorNome(e.target.value)}
+          placeholder="Nome de quem está corrigindo"
+          className="flex-1 px-3 py-1.5 rounded-xl border border-outline-variant bg-background text-sm"
+        />
       </div>
 
       {/* ETAPA 1: IDENTIFICAR (QR de perto) + ETAPA 2: LENDO_BOLHAS (alinhar
@@ -1029,7 +1050,7 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
 
           <div className="flex gap-2">
             <button onClick={() => proximaFolha()} className="px-4 py-3 rounded-2xl border border-outline-variant text-on-surface-variant text-sm">
-              Cancelar
+              Ler outro gabarito
             </button>
             <button onClick={salvar} disabled={salvando}
               className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-on-primary font-semibold disabled:opacity-60">
