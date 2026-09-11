@@ -156,8 +156,11 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
     return n;
   }
 
+  // Aluno sem numero_chamada = nao esta mais ativo na turma (transferido/saiu
+  // -- ver zeramento em massa feito na atualizacao do Simaed). Nao faz sentido
+  // oferece-lo como opcao de inscricao no Interclasses.
   const alunosDisponiveis = useMemo(
-    () => alunosDaTurma.filter(a => !inscricoes.some(i => i.aluno_id === a.id)),
+    () => alunosDaTurma.filter(a => a.numero_chamada != null && !inscricoes.some(i => i.aluno_id === a.id)),
     [alunosDaTurma, inscricoes]
   );
 
