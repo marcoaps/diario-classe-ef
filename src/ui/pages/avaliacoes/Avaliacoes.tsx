@@ -106,6 +106,11 @@ export function Avaliacoes() {
   const [avisoImportacao, setAvisoImportacao] = useState('');
   const [publicando, setPublicando] = useState<string | null>(null);
   const [copiadoOnline, setCopiadoOnline] = useState<string | null>(null);
+  // Erro de "Publicar como Prova Online" -- separado do `erro` do formulário
+  // de criação (lá em cima) porque esse fica escondido enquanto o formulário
+  // não está aberto, e o clique em Publicar acontece na lista de avaliações
+  // já criadas, bem longe dali. Sem isso o erro era só invisível pro usuário.
+  const [erroPublicar, setErroPublicar] = useState<{ id: string; msg: string } | null>(null);
 
   // Dados gerais
   const [titulo, setTitulo] = useState('');
@@ -423,11 +428,11 @@ export function Avaliacoes() {
     // uma dessas resultaria em questões em branco.
     const semTexto = (av.questoes_objetivas || []).length > 0 && av.questoes_objetivas.every(q => !q.enunciado?.trim());
     if (semTexto) {
-      setErro('Esta avaliação foi criada em "Só o Gabarito" e não tem o texto das questões — a Prova Online precisa mostrar a questão pro aluno na tela. Crie a avaliação pelo formulário completo (ou pelo Gerador de Questões) pra poder publicar online.');
+      setErroPublicar({ id: av.id, msg: 'Esta avaliação foi criada em "Só o Gabarito" e não tem o texto das questões — a Prova Online precisa mostrar a questão pro aluno na tela. Crie a avaliação pelo formulário completo (ou pelo Gerador de Questões) pra poder publicar online.' });
       return;
     }
     setPublicando(av.id);
-    setErro('');
+    setErroPublicar(null);
     try {
       const valorObjetiva = arredondar(valorPorQuestaoObjetiva(av), 2);
       const qtdDisc = av.quantidade_discursivas || 0;
@@ -479,7 +484,7 @@ export function Avaliacoes() {
 
       setLista(prev => prev.map(a => a.id === av.id ? { ...a, prova_online_id: prova.id, prova_online_codigo: codigo } : a));
     } catch (e: any) {
-      setErro('Erro ao publicar prova online: ' + e.message);
+      setErroPublicar({ id: av.id, msg: 'Erro ao publicar prova online: ' + e.message });
     } finally {
       setPublicando(null);
     }
@@ -984,14 +989,19 @@ export function Avaliacoes() {
                       </button>
                     </div>
                   ) : (
-                    <button
-                      onClick={() => publicarOnline(av)}
-                      disabled={publicando === av.id}
-                      className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-outline-variant text-on-surface text-xs font-semibold disabled:opacity-60"
-                    >
-                      <Share2 className="w-4 h-4" />
-                      {publicando === av.id ? 'Publicando...' : 'Publicar como Prova Online'}
-                    </button>
+                    <div className="flex flex-col gap-1.5">
+                      <button
+                        onClick={() => publicarOnline(av)}
+                        disabled={publicando === av.id}
+                        className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-outline-variant text-on-surface text-xs font-semibold disabled:opacity-60"
+                      >
+                        <Share2 className="w-4 h-4" />
+                        {publicando === av.id ? 'Publicando...' : 'Publicar como Prova Online'}
+                      </button>
+                      {erroPublicar?.id === av.id && (
+                        <p className="text-xs text-red-500 px-1">{erroPublicar.msg}</p>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
