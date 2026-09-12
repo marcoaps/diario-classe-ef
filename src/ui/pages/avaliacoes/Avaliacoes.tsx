@@ -443,6 +443,7 @@ export function Avaliacoes() {
       const { data: prova, error } = await supabase.from('provas').insert({
         titulo: av.titulo,
         descricao: av.descricao || '',
+        texto_apoio: av.texto_apoio || null,
         turma_id: grupo,
         codigo,
         data_limite: null,

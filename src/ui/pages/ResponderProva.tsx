@@ -27,6 +27,7 @@ interface Prova {
   turma_id: string;
   codigo: string;
   data_limite: string;
+  texto_apoio: string | null;
 }
 
 interface CorrecaoDissertativa {
@@ -108,6 +109,7 @@ export function ResponderProva() {
   const [enviando, setEnviando] = useState(false);
   const [questaoAtual, setQuestaoAtual] = useState(0);
   const [etapaCorrecao, setEtapaCorrecao] = useState('');
+  const [textoApoioAberto, setTextoApoioAberto] = useState(true);
 
   const turmasDisponiveis = prova ? getTurmasDoGrupo(prova.turma_id) : [];
 
@@ -418,6 +420,23 @@ export function ResponderProva() {
               {q.tipo === 'multipla_escolha' ? 'Múltipla Escolha' : q.tipo === 'composta' ? 'Composta' : 'Dissertativa'}
             </span>
           </div>
+
+          {prova?.texto_apoio && (
+            <div className="mx-4 lg:mx-8 lg:mt-6 mt-3 bg-amber-50 border border-amber-200 rounded-2xl overflow-hidden">
+              <button onClick={() => setTextoApoioAberto(v => !v)}
+                className="w-full flex items-center justify-between px-4 py-3 lg:px-6 lg:py-4 text-left">
+                <span className="flex items-center gap-2 text-amber-800 font-black text-sm lg:text-base">
+                  <BookOpen className="w-4 h-4 lg:w-5 lg:h-5 shrink-0" /> Texto de Apoio
+                </span>
+                <span className="text-amber-600 text-xs font-bold shrink-0">{textoApoioAberto ? 'Ocultar' : 'Mostrar'}</span>
+              </button>
+              {textoApoioAberto && (
+                <div className="px-4 pb-4 lg:px-6 lg:pb-5">
+                  <p className="text-gray-700 text-sm lg:text-base leading-relaxed whitespace-pre-line">{prova.texto_apoio}</p>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="mx-4 lg:mx-8 lg:mt-6 bg-white rounded-2xl shadow-sm border border-gray-100 p-5 lg:p-10 flex flex-col gap-5">
             <div className="bg-gray-50 border-2 border-blue-300 rounded-xl px-4 py-4 lg:px-6 lg:py-5">
