@@ -39,6 +39,7 @@ interface CorrecaoDissertativa {
 }
 
 const LETRAS = ['A', 'B', 'C', 'D', 'E'];
+const MAX_TENTATIVAS = 3;
 
 async function corrigirDissertativaComIA(
   enunciado: string,
@@ -110,6 +111,8 @@ export function ResponderProva() {
   const [questaoAtual, setQuestaoAtual] = useState(0);
   const [etapaCorrecao, setEtapaCorrecao] = useState('');
   const [textoApoioAberto, setTextoApoioAberto] = useState(true);
+  const [tentativaAtual, setTentativaAtual] = useState<number | null>(null);
+  const [verificandoTentativas, setVerificandoTentativas] = useState(false);
 
   const turmasDisponiveis = prova ? getTurmasDoGrupo(prova.turma_id) : [];
 
@@ -144,12 +147,33 @@ export function ResponderProva() {
     setLoading(false);
   };
 
-  const iniciarProva = () => {
+  const iniciarProva = async () => {
     if (!nome.trim()) { setErro('Digite seu nome completo.'); return; }
     if (!numero.trim()) { setErro('Digite seu número de chamada.'); return; }
     if (!turmaAluno) { setErro('Selecione sua turma.'); return; }
+    if (!prova) return;
     setErro(null);
-    setStep('prova');
+    setVerificandoTentativas(true);
+    try {
+      const { count, error } = await supabase
+        .from('respostas')
+        .select('id', { count: 'exact', head: true })
+        .eq('prova_id', prova.id)
+        .eq('turma_id', turmaAluno)
+        .eq('aluno_numero', parseInt(numero));
+      if (error) throw error;
+      const tentativasUsadas = count || 0;
+      if (tentativasUsadas >= MAX_TENTATIVAS) {
+        setErro(`Você já utilizou suas ${MAX_TENTATIVAS} tentativas para esta prova. Fale com seu professor.`);
+        setVerificandoTentativas(false);
+        return;
+      }
+      setTentativaAtual(tentativasUsadas + 1);
+      setStep('prova');
+    } catch (e) {
+      setErro('Erro ao verificar tentativas. Tente novamente.');
+    }
+    setVerificandoTentativas(false);
   };
 
   const responder = (chave: string, resposta: string) =>
@@ -303,6 +327,13 @@ export function ResponderProva() {
         </div>
       </div>
 
+      <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 mb-4 flex items-start gap-2.5">
+        <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+        <p className="text-amber-800 text-sm font-bold leading-snug">
+          Atenção: você tem direito a no máximo {MAX_TENTATIVAS} tentativas para realizar esta prova.
+        </p>
+      </div>
+
       <div className="bg-white rounded-2xl p-5 shadow-xl flex flex-col gap-4">
         <h3 className="text-gray-800 font-black text-lg">Sua identificação</h3>
         <div>
@@ -329,10 +360,10 @@ export function ResponderProva() {
           </div>
         </div>
         {erro && <p className="text-red-500 text-sm font-medium">{erro}</p>}
-        <button onClick={iniciarProva}
-          className="w-full py-4 rounded-2xl font-black text-white text-lg transition-all active:scale-95"
+        <button onClick={iniciarProva} disabled={verificandoTentativas}
+          className="w-full py-4 rounded-2xl font-black text-white text-lg transition-all active:scale-95 disabled:opacity-50"
           style={{ background: 'linear-gradient(135deg, #1a3a7c, #2d5fd4)' }}>
-          Iniciar Avaliação →
+          {verificandoTentativas ? 'Verificando tentativas...' : 'Iniciar Avaliação →'}
         </button>
       </div>
     </div>
@@ -367,7 +398,7 @@ export function ResponderProva() {
             <img src="/Logo_IOP.png" alt="IOP" className="w-8 h-8 rounded-full border border-gray-200 object-cover shrink-0" />
             <div className="min-w-0">
               <p className="text-gray-800 font-black text-sm leading-tight truncate">{prova?.titulo}</p>
-              <p className="text-gray-400 text-xs truncate">{nome} · Turma {turmaAluno}</p>
+              <p className="text-gray-400 text-xs truncate">{nome} · Turma {turmaAluno}{tentativaAtual ? ` · Tentativa ${tentativaAtual}/${MAX_TENTATIVAS}` : ''}</p>
             </div>
           </div>
           <div className="flex items-center gap-3 shrink-0 ml-2">
@@ -566,7 +597,10 @@ export function ResponderProva() {
 
           <p className="text-gray-400 text-base mb-1">Avaliação enviada com sucesso!</p>
           <h2 className="text-gray-800 font-black text-2xl mb-1">{nome}</h2>
-          <p className="text-gray-500 text-base mb-6">Turma {turmaAluno} · {prova?.titulo}</p>
+          <p className="text-gray-500 text-base mb-6">
+            Turma {turmaAluno} · {prova?.titulo}
+            {tentativaAtual ? ` · Tentativa ${tentativaAtual}/${MAX_TENTATIVAS}` : ''}
+          </p>
 
           {nota !== null && (
             <div className={`rounded-2xl p-7 mb-5 border-2 ${nota >= 6 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
