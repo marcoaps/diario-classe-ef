@@ -356,10 +356,11 @@ export function Dashboard() {
     const seen = new Set<string>();
     for (const line of lines) { const lower = line.toLowerCase(); if (!seen.has(lower)) { seen.add(lower); uniqueLines.push(line); } }
     try {
-      // Buscar alunos existentes para preservar ID e token_acesso — o ID é a
-      // chave que liga cada aluno às chamadas/notas já lançadas, então nunca
-      // pode ser recriado para quem já estava na turma.
-      const { data: existentes } = await supabase.from('alunos').select('id, nome, token_acesso').eq('turma_id', turmaNormalizada);
+      // Buscar alunos existentes para preservar ID, token_acesso e numero_chamada —
+      // o ID liga cada aluno às chamadas/notas já lançadas e o numero_chamada é a
+      // posição histórica dele na chamada, então nenhum dos dois pode mudar para
+      // quem já estava na turma, mesmo que a lista colada venha em outra ordem.
+      const { data: existentes } = await supabase.from('alunos').select('id, nome, token_acesso, numero_chamada').eq('turma_id', turmaNormalizada);
       const mapaExistentes = new Map((existentes || []).map((a: any) => [a.nome.toLowerCase().trim(), a]));
 
       // Só remove quem realmente saiu da lista colada.
@@ -371,22 +372,32 @@ export function Dashboard() {
       }
 
       if (uniqueLines.length > 0) {
-        const mapped = await Promise.all(uniqueLines.map(async (name, index) => {
-          const numero_chamada = index + 1;
+        // Aluno novo ou remanejado entra sempre depois do maior número de
+        // chamada já existente na turma — nunca no meio, nunca renumerando
+        // quem já estava lá.
+        let proximoNumero = (existentes || []).reduce((max, a: any) => {
+          const num = typeof a.numero_chamada === 'number' ? a.numero_chamada : parseInt(a.numero_chamada || '0', 10);
+          return !isNaN(num) && num > max ? num : max;
+        }, 0) + 1;
+
+        const mapped = await Promise.all(uniqueLines.map(async (name) => {
           const existente = mapaExistentes.get(name.toLowerCase().trim());
           if (existente) {
-            const { error } = await supabase.from('alunos').update({ nome: name, numero_chamada }).eq('id', existente.id);
+            const numero_chamada = typeof existente.numero_chamada === 'number' ? existente.numero_chamada : parseInt(existente.numero_chamada || '0', 10);
+            const { error } = await supabase.from('alunos').update({ nome: name }).eq('id', existente.id);
             if (error) throw new Error(`Erro ao atualizar "${name}": ` + error.message);
-            return { id: existente.id, classRoomId: classToConfirm.id, name, numero_chamada, numberInClass: index + 1 };
+            return { id: existente.id, classRoomId: classToConfirm.id, name, numero_chamada };
           }
+          const numero_chamada = proximoNumero++;
           const { data, error } = await supabase
             .from('alunos')
             .insert({ nome: name, turma_id: turmaNormalizada, numero_chamada, token_acesso: uuidv4() })
             .select('id')
             .single();
           if (error) throw new Error(`Erro ao inserir "${name}": ` + error.message);
-          return { id: data!.id, classRoomId: classToConfirm.id, name, numero_chamada, numberInClass: index + 1 };
+          return { id: data!.id, classRoomId: classToConfirm.id, name, numero_chamada };
         }));
+        mapped.sort((a, b) => (a.numero_chamada ?? 0) - (b.numero_chamada ?? 0));
         setFetchedStudents(mapped);
         setStudentCounts(prev => ({ ...prev, [classToConfirm.id]: mapped.length }));
       } else {
@@ -873,7 +884,7 @@ export function Dashboard() {
             <p className="text-sm text-gray-500">
               {editModalMode === 'sync'
                 ? 'Cole a lista oficial (mesma ordem/número de chamada). Só os nomes diferentes são corrigidos — ninguém é apagado ou perde histórico.'
-                : 'Corrija nomes, altere a ordem ou adicione novos alunos.'}
+                : 'Adicione alunos novos (entram sempre no final) ou remova quem saiu. Quem já está na turma mantém o número de chamada e a posição originais, mesmo mudando a ordem aqui.'}
             </p>
             <div className="flex-1 overflow-y-auto min-h-[300px]">
               <textarea value={editListText} onChange={(e) => setEditListText(e.target.value)} className="w-full h-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-red-200 font-medium" placeholder="João&#10;Maria&#10;Pedro" spellCheck={false} />
