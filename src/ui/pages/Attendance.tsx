@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../../store';
 import { cn } from '../AppLayout';
-import { Save, Loader2, X } from 'lucide-react';
+import { Save, Loader2, X, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '../../data/supabase';
 import { ConteudoAulas } from './ConteudoAulas';
@@ -345,6 +345,31 @@ export function Attendance() {
     }
   };
 
+  // Apaga do banco a chamada já registrada dessa turma nesse dia (ex: chamada
+  // feita só de teste) — só mexe nos registros de frequência dos alunos desta
+  // turma nesta data, nenhuma outra turma/dia é afetada.
+  const handleLimparChamadaDoDia = async () => {
+    if (!turmaNorm || alunos.length === 0) return;
+    if (!window.confirm(`Apagar a chamada de ${turmaAtual?.name || turmaNorm} do dia ${date}? Essa ação não pode ser desfeita.`)) return;
+    setSaving(true);
+    try {
+      const ids = alunos.map(a => a.id);
+      const { error } = await supabase.from('frequencia').delete().in('aluno_id', ids).eq('data', date);
+      if (error) throw error;
+
+      const vazios: Record<string, RegistroChamada> = {};
+      alunos.forEach(a => { vazios[a.id] = registroVazio(false, false); });
+      setRecords(vazios);
+      setSemQuadra(false);
+      alert('Chamada apagada.');
+    } catch (err) {
+      alert('Erro ao apagar a chamada. Tente novamente.');
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-background relative">
       {/* Abas */}
@@ -558,11 +583,19 @@ export function Attendance() {
             )}
           </div>
 
-          <div className="fixed bottom-20 left-4 right-4 max-w-md mx-auto z-20">
+          <div className="fixed bottom-20 left-4 right-4 max-w-md mx-auto z-20 flex gap-2">
+            <button
+              onClick={handleLimparChamadaDoDia}
+              disabled={saving || loading || alunos.length === 0}
+              title="Apagar a chamada já registrada desta turma neste dia"
+              className="h-14 px-4 bg-white border border-gray-200 text-error rounded-2xl shadow-sm flex items-center justify-center hover:bg-error-container/20 active:scale-95 transition-all disabled:opacity-50"
+            >
+              <Trash2 className="w-5 h-5" />
+            </button>
             <button
               onClick={handleSave}
               disabled={saving || loading || alunos.length === 0}
-              className="w-full h-14 bg-primary text-white font-bold text-lg rounded-2xl shadow-[0_8px_16px_rgba(11,122,61,0.25)] flex items-center justify-center gap-2 hover:bg-primary-dark active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100"
+              className="flex-1 h-14 bg-primary text-white font-bold text-lg rounded-2xl shadow-[0_8px_16px_rgba(11,122,61,0.25)] flex items-center justify-center gap-2 hover:bg-primary-dark active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100"
             >
               {saving ? <Loader2 className="w-6 h-6 animate-spin" /> : <Save className="w-6 h-6" />}
               {saving ? 'Salvando...' : 'Registrar Chamada'}
