@@ -11,7 +11,13 @@ interface TimeSetup {
   capitaoAlunoId: string;
   capitaoNome: string;
   jogadores: AlunoSupabase[];
+  // Time extra criado com nome personalizado (ex: "Time da Cerca") em vez de
+  // capitão — escolhido no mesmo campo de seleção dos demais times.
+  ehTimeCerca: boolean;
 }
+
+const OPCAO_CRIAR_CERCA = '__criar_time_cerca__';
+const NOME_PADRAO_CERCA = 'Time da Cerca';
 
 const OPCOES_LIMITE = ['sem_limite', '2', '3', '4', 'personalizado'] as const;
 type OpcaoLimite = typeof OPCOES_LIMITE[number];
@@ -44,6 +50,15 @@ export function RodizioSetup({ alunos, loading, chamadaCarregada, criando, onIni
     [alunos, idsAlocados]
   );
 
+  // Nome do time (com a marcação "Cerca") de cada aluno já alocado, pra
+  // identificar rapidinho quem é de qual time enquanto os confrontos vão
+  // sendo montados.
+  const timePorAluno = useMemo(() => {
+    const mapa = new Map<string, { nomeTime: string; ehTimeCerca: boolean }>();
+    times.forEach(t => t.jogadores.forEach(j => mapa.set(j.id, { nomeTime: t.nome, ehTimeCerca: t.ehTimeCerca })));
+    return mapa;
+  }, [times]);
+
   const adicionarCapitao = (alunoId: string) => {
     const aluno = alunos.find(a => a.id === alunoId);
     if (!aluno) return;
@@ -53,7 +68,29 @@ export function RodizioSetup({ alunos, loading, chamadaCarregada, criando, onIni
       capitaoAlunoId: aluno.id,
       capitaoNome: aluno.nome,
       jogadores: [aluno],
+      ehTimeCerca: false,
     }]);
+  };
+
+  // Time extra com nome personalizado, escolhido no mesmo campo de seleção
+  // dos capitães — entra na mesma lista, sem capitão, e é preenchido do
+  // mesmo jeito que os demais times (dropdown "+ Adicionar jogador").
+  const criarTimeCerca = () => {
+    const nome = window.prompt('Nome do time extra:', NOME_PADRAO_CERCA);
+    if (nome === null) return;
+    setTimes(prev => [...prev, {
+      tempId: uuidv4(),
+      nome: nome.trim() || NOME_PADRAO_CERCA,
+      capitaoAlunoId: '',
+      capitaoNome: '',
+      jogadores: [],
+      ehTimeCerca: true,
+    }]);
+  };
+
+  const handleSelecaoCapitao = (valor: string) => {
+    if (valor === OPCAO_CRIAR_CERCA) criarTimeCerca();
+    else if (valor) adicionarCapitao(valor);
   };
 
   const removerTime = (tempId: string) => {
@@ -95,9 +132,10 @@ export function RodizioSetup({ alunos, loading, chamadaCarregada, criando, onIni
   const handleIniciar = async () => {
     try {
       await onIniciar('Futsal', limitePermanencia, times.map(t => ({
-        nome: t.nome.trim() || `Time ${primeiroNome(t.capitaoNome)}`,
-        capitaoAlunoId: t.capitaoAlunoId,
+        nome: t.nome.trim() || (t.ehTimeCerca ? NOME_PADRAO_CERCA : `Time ${primeiroNome(t.capitaoNome)}`),
+        capitaoAlunoId: t.capitaoAlunoId || null,
         capitaoNome: t.capitaoNome,
+        ehTimeCerca: t.ehTimeCerca,
         jogadores: t.jogadores.map(j => ({ alunoId: j.id, alunoNome: j.nome })),
       })));
     } catch (e) {
@@ -132,10 +170,11 @@ export function RodizioSetup({ alunos, loading, chamadaCarregada, criando, onIni
         <label className="text-xs font-semibold text-gray-500 mb-2 block">1. ESCOLHA OS CAPITÃES</label>
         <select
           value=""
-          onChange={e => { if (e.target.value) adicionarCapitao(e.target.value); }}
+          onChange={e => { if (e.target.value) handleSelecaoCapitao(e.target.value); }}
           className="w-full bg-gray-50 border border-dashed border-gray-300 rounded-xl px-3 py-2 text-sm text-gray-600 outline-none focus:border-primary"
         >
           <option value="" disabled>+ Selecionar capitão / capitã</option>
+          <option value={OPCAO_CRIAR_CERCA}>+ Criar time extra com nome personalizado (ex: "Time da Cerca")</option>
           {disponiveis.map(a => (
             <option key={a.id} value={a.id}>
               {a.turma_id} {a.numero_chamada ? `${a.numero_chamada} · ` : '· '}{a.nome}
@@ -152,7 +191,11 @@ export function RodizioSetup({ alunos, loading, chamadaCarregada, criando, onIni
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-bold text-gray-400 w-5 shrink-0">{idx + 1}º</span>
                 <div className="flex items-center gap-1.5 flex-1 min-w-0 border-b border-dashed border-gray-300 focus-within:border-primary focus-within:border-solid pb-0.5">
-                  <Crown className="w-3.5 h-3.5 text-tertiary shrink-0" />
+                  {t.ehTimeCerca ? (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-secondary-container text-on-secondary-container shrink-0">Cerca</span>
+                  ) : (
+                    <Crown className="w-3.5 h-3.5 text-tertiary shrink-0" />
+                  )}
                   <input
                     value={t.nome}
                     onChange={e => renomearTime(t.tempId, e.target.value)}
@@ -208,6 +251,32 @@ export function RodizioSetup({ alunos, loading, chamadaCarregada, criando, onIni
         </div>
       )}
 
+      {alunos.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <label className="text-xs font-semibold text-gray-500 mb-2 block">ALUNOS E TIMES</label>
+          <div className="flex flex-col gap-1">
+            {alunos.map(a => {
+              const info = timePorAluno.get(a.id);
+              return (
+                <div key={a.id} className="flex items-center gap-2 text-sm">
+                  {info ? (
+                    <span className={cn(
+                      "text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0",
+                      info.ehTimeCerca ? "bg-secondary-container text-on-secondary-container" : "bg-tertiary-container/40 text-on-tertiary-container"
+                    )}>
+                      {info.ehTimeCerca ? 'Cerca' : info.nomeTime}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-400 shrink-0">sem time</span>
+                  )}
+                  <span className="text-on-surface truncate">{a.nome}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
         <label className="text-xs font-semibold text-gray-500 mb-2 block">3. LIMITE DE PERMANÊNCIA DO VENCEDOR</label>
         <div className="flex gap-1.5 flex-wrap">
@@ -239,7 +308,7 @@ export function RodizioSetup({ alunos, loading, chamadaCarregada, criando, onIni
         {criando ? 'Iniciando...' : 'Iniciar Rodízio'}
       </button>
       {times.length < 2 && (
-        <p className="text-xs text-gray-400 text-center -mt-2">Escolha pelo menos 2 capitães para iniciar.</p>
+        <p className="text-xs text-gray-400 text-center -mt-2">Escolha pelo menos 2 times para iniciar.</p>
       )}
     </div>
   );

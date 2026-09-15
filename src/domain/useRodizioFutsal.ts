@@ -13,13 +13,14 @@ export interface NovoTimeRodizio {
   nome: string;
   capitaoAlunoId: string | null;
   capitaoNome: string;
+  ehTimeCerca?: boolean;
   jogadores: { alunoId: string; alunoNome: string }[];
 }
 
 export function paraTimeRodizio(t: RodizioSessaoCompleta['times'][number]): TimeRodizio {
   return {
     id: t.id, nome: t.nome, capitaoNome: t.capitao_nome, ordemInicial: t.ordem_inicial,
-    criadoDuranteRodizio: t.criado_durante_rodizio,
+    criadoDuranteRodizio: t.criado_durante_rodizio, ehTimeCerca: t.time_cerca,
   };
 }
 
@@ -74,6 +75,7 @@ export function useRodizioFutsal(turmaId: string) {
           capitaoAlunoId: t.capitaoAlunoId,
           capitaoNome: t.capitaoNome,
           ordemInicial: i + 1,
+          ehTimeCerca: t.ehTimeCerca,
           jogadores: t.jogadores,
         })),
       });

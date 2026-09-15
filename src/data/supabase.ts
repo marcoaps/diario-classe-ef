@@ -687,6 +687,7 @@ export interface RodizioTime {
   capitao_nome: string;
   ordem_inicial: number;
   criado_durante_rodizio: boolean;
+  time_cerca: boolean;
   criado_em: string;
 }
 
@@ -719,7 +720,7 @@ export async function criarSessaoRodizio(payload: {
   turmaId: string;
   modalidade: string;
   limitePermanencia: number | null;
-  times: { nome: string; capitaoAlunoId: string | null; capitaoNome: string; ordemInicial: number; jogadores: { alunoId: string; alunoNome: string }[] }[];
+  times: { nome: string; capitaoAlunoId: string | null; capitaoNome: string; ordemInicial: number; ehTimeCerca?: boolean; jogadores: { alunoId: string; alunoNome: string }[] }[];
 }): Promise<RodizioSessaoCompleta> {
   const { data: sessao, error: errSessao } = await supabase
     .from('rodizio_sessoes')
@@ -737,6 +738,7 @@ export async function criarSessaoRodizio(payload: {
       capitao_nome: t.capitaoNome,
       ordem_inicial: t.ordemInicial,
       criado_durante_rodizio: false,
+      time_cerca: t.ehTimeCerca ?? false,
     })))
     .select('*')
     .order('ordem_inicial');

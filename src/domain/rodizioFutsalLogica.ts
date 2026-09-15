@@ -18,6 +18,10 @@ export interface TimeRodizio {
   // ele chama jogadores que já perderam pra formar um time extra) — os times
   // originais nunca são alterados quando isso acontece.
   criadoDuranteRodizio: boolean;
+  // Time extra criado já no cadastro inicial, com nome personalizado (ex:
+  // "Time da Cerca") em vez de um capitão — participa da fila normalmente,
+  // igual aos demais times.
+  ehTimeCerca: boolean;
 }
 
 export interface JogoRodizio {

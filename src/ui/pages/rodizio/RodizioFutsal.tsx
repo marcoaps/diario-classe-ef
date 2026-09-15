@@ -1,9 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { Loader2, Crown } from 'lucide-react';
+import { Loader2, Crown, FlaskConical, Trash2 } from 'lucide-react';
 import { cn } from '../../AppLayout';
 import { SeletorTurmasGenero } from '../../components/SeletorTurmasGenero';
 import { useAlunosPresentesHoje } from '../../../domain/useAlunosPresentesHoje';
 import { useRodizioFutsal, type NovoTimeRodizio } from '../../../domain/useRodizioFutsal';
+import { useRodizioFutsalTeste } from '../../../domain/useRodizioFutsalTeste';
+import { gerarAlunosTeste } from '../../../domain/alunosTeste';
 import { RodizioSetup } from './RodizioSetup';
 import { RodizioControle } from './RodizioControle';
 import { RodizioHistorico } from './RodizioHistorico';
@@ -15,6 +17,23 @@ export function RodizioFutsal() {
   const [turmasSelecionadas, setTurmasSelecionadas] = useState<Set<string>>(new Set());
   const [genero, setGenero] = useState<'M' | 'F' | null>('M');
   const [criandoSessao, setCriandoSessao] = useState(false);
+
+  // Chamada de teste: alunos fictícios + rodízio 100% local, exclusivamente
+  // pra testar times/Cerca/confrontos sem precisar de uma chamada oficial
+  // feita e sem gravar nada no Supabase (ver useRodizioFutsalTeste).
+  const [modoTeste, setModoTeste] = useState(false);
+  const [alunosTeste, setAlunosTeste] = useState(() => gerarAlunosTeste());
+  const rodizioTeste = useRodizioFutsalTeste();
+
+  const ativarModoTeste = () => {
+    setAlunosTeste(gerarAlunosTeste());
+    setModoTeste(true);
+  };
+
+  const apagarChamadaTeste = () => {
+    rodizioTeste.limparChamadaTeste();
+    setModoTeste(false);
+  };
 
   const turmasArray = useMemo(() => Array.from(turmasSelecionadas).sort(), [turmasSelecionadas]);
   const turmaKey = turmasArray.join('+');
@@ -36,8 +55,13 @@ export function RodizioFutsal() {
     });
   };
 
-  const { alunos, loading: carregandoAlunos, chamadaCarregada } = useAlunosPresentesHoje(turmasArray, genero);
-  const rodizio = useRodizioFutsal(turmaKey);
+  const alunosReais = useAlunosPresentesHoje(turmasArray, genero);
+  const rodizioReal = useRodizioFutsal(turmaKey);
+
+  const alunos = modoTeste ? alunosTeste : alunosReais.alunos;
+  const carregandoAlunos = modoTeste ? false : alunosReais.loading;
+  const chamadaCarregada = modoTeste ? true : alunosReais.chamadaCarregada;
+  const rodizio = modoTeste ? rodizioTeste : rodizioReal;
 
   const handleIniciar = async (modalidade: string, limitePermanencia: number | null, times: NovoTimeRodizio[]) => {
     setCriandoSessao(true);
@@ -70,15 +94,40 @@ export function RodizioFutsal() {
         <RodizioHistorico />
       ) : (
         <>
-          <SeletorTurmasGenero
-            turmasSelecionadas={turmasSelecionadas}
-            onToggleTurma={toggleTurma}
-            onToggleGrupo={toggleGrupo}
-            genero={genero}
-            onSetGenero={setGenero}
-          />
+          {modoTeste ? (
+            <div className="flex items-center justify-between gap-2 bg-tertiary-container/40 border border-tertiary/30 rounded-2xl px-4 py-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <FlaskConical className="w-4 h-4 text-on-tertiary-container shrink-0" />
+                <span className="text-xs font-bold text-on-tertiary-container">
+                  Chamada de teste ativa — alunos fictícios, nada é gravado nem afeta registros oficiais.
+                </span>
+              </div>
+              <button
+                onClick={apagarChamadaTeste}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white text-error text-xs font-bold shrink-0 hover:bg-error-container/20 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Apagar chamada de teste
+              </button>
+            </div>
+          ) : (
+            <>
+              <SeletorTurmasGenero
+                turmasSelecionadas={turmasSelecionadas}
+                onToggleTurma={toggleTurma}
+                onToggleGrupo={toggleGrupo}
+                genero={genero}
+                onSetGenero={setGenero}
+              />
+              <button
+                onClick={ativarModoTeste}
+                className="flex items-center justify-center gap-1.5 h-9 rounded-xl border border-dashed border-gray-300 text-gray-500 text-xs font-bold hover:border-primary hover:text-primary transition-colors"
+              >
+                <FlaskConical className="w-3.5 h-3.5" /> Testar com chamada fictícia (sem afetar dados oficiais)
+              </button>
+            </>
+          )}
 
-          {turmasArray.length === 0 ? (
+          {!modoTeste && turmasArray.length === 0 ? (
             <div className="text-center text-gray-500 py-10 font-medium">Selecione ao menos uma turma para começar.</div>
           ) : rodizio.loading ? (
             <div className="flex gap-2 items-center justify-center p-8 text-gray-500">

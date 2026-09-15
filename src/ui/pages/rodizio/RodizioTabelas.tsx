@@ -18,12 +18,26 @@ export function BadgeTimeExtra() {
   );
 }
 
+// Marca o time extra/banco criado já no cadastro inicial com nome
+// personalizado (ex: "Time da Cerca") — ver TimeRodizio.ehTimeCerca.
+export function BadgeTimeCerca() {
+  return (
+    <span
+      title="Time extra criado com nome personalizado no cadastro"
+      className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-secondary-container text-on-secondary-container align-middle"
+    >
+      Cerca
+    </span>
+  );
+}
+
 export function NomeTime({ time }: { time: TimeRodizio | undefined }) {
   if (!time) return <>—</>;
   return (
     <span className="inline-flex items-center gap-1">
       {time.nome}
       {time.criadoDuranteRodizio && <BadgeTimeExtra />}
+      {time.ehTimeCerca && <BadgeTimeCerca />}
     </span>
   );
 }
@@ -72,6 +86,7 @@ export function TabelaEstatisticas({ times, estatisticas }: { times: TimeRodizio
             <div className="font-bold text-sm text-on-surface mb-1 flex items-center gap-1.5">
               {t.nome}
               {t.criadoDuranteRodizio && <BadgeTimeExtra />}
+              {t.ehTimeCerca && <BadgeTimeCerca />}
             </div>
             <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-500">
               <span>Jogos: <b className="text-on-surface">{e.jogos}</b></span>
