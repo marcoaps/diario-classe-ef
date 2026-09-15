@@ -264,16 +264,16 @@ export function ResponderProva() {
   // ── CÓDIGO ───────────────────────────────────────────────────────────────
   if (step === 'codigo') return (
     <div className="min-h-screen flex flex-col items-center justify-center p-5"
-      style={{ background: 'linear-gradient(160deg, #0a1628 0%, #1a3a7c 100%)' }}>
-      <img src="/Logo_IOP.png" alt="IOP" className="w-20 h-20 rounded-full border-4 border-white/20 mb-5 object-cover shadow-xl" />
-      <h1 className="text-white text-3xl font-black mb-1 text-center">Portal do Aluno</h1>
-      <p className="text-white/40 text-base mb-8 text-center">Instituto Odilon Pratagi</p>
+      style={{ background: 'linear-gradient(160deg, #EAFBF3 0%, #CDF3DE 55%, #A9EAC8 100%)' }}>
+      <img src="/Logo_IOP.png" alt="IOP" className="w-20 h-20 rounded-full border-4 border-white mb-5 object-cover shadow-xl" />
+      <h1 className="text-[#053B20] text-3xl font-black mb-1 text-center">Portal do Aluno</h1>
+      <p className="text-[#0B7A3D]/60 text-base mb-8 text-center">Instituto Odilon Pratagi</p>
 
       <div className="w-full max-w-sm flex flex-col gap-4">
         <div className="bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
-              <BookOpen className="w-5 h-5 text-blue-600" />
+            <div className="w-10 h-10 rounded-xl bg-[#E3F8EC] flex items-center justify-center shrink-0">
+              <BookOpen className="w-5 h-5 text-[#0B7A3D]" />
             </div>
             <div>
               <p className="font-black text-gray-900 text-base">Fazer Avaliação</p>
@@ -283,7 +283,7 @@ export function ResponderProva() {
           <input value={codigo} onChange={e => setCodigo(e.target.value.toUpperCase())}
             placeholder="ABC123" maxLength={6}
             onKeyDown={e => e.key === 'Enter' && buscarProva()}
-            className="w-full border-2 border-gray-200 rounded-2xl px-4 py-4 text-gray-800 placeholder-gray-300 text-2xl font-mono font-black text-center outline-none focus:border-blue-500 tracking-[0.4em] transition-all" />
+            className="w-full border-2 border-gray-200 rounded-2xl px-4 py-4 text-gray-800 placeholder-gray-300 text-2xl font-mono font-black text-center outline-none focus:border-[#0B7A3D] tracking-[0.4em] transition-all" />
           {erro && step === 'codigo' && (
             <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
@@ -292,16 +292,16 @@ export function ResponderProva() {
           )}
           <button onClick={buscarProva} disabled={loading}
             className="w-full py-4 rounded-2xl font-black text-white text-lg flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
-            style={{ background: 'linear-gradient(135deg, #1a3a7c, #2d5fd4)' }}>
+            style={{ background: 'linear-gradient(135deg, #0B7A3D, #149951)' }}>
             <Search className="w-5 h-5" />
             {loading ? 'Buscando...' : 'Entrar na Avaliação'}
           </button>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex-1 h-px bg-white/20" />
-          <span className="text-white/40 text-sm font-bold">ou</span>
-          <div className="flex-1 h-px bg-white/20" />
+          <div className="flex-1 h-px bg-[#0B7A3D]/15" />
+          <span className="text-[#0B7A3D]/50 text-sm font-bold">ou</span>
+          <div className="flex-1 h-px bg-[#0B7A3D]/15" />
         </div>
 
         <ConsultarPortal />
@@ -312,18 +312,18 @@ export function ResponderProva() {
   // ── IDENTIFICAÇÃO ────────────────────────────────────────────────────────
   if (step === 'identificacao' && prova) return (
     <div className="min-h-screen flex flex-col p-5"
-      style={{ background: 'linear-gradient(160deg, #0a1628 0%, #1a3a7c 100%)' }}>
+      style={{ background: 'linear-gradient(160deg, #EAFBF3 0%, #CDF3DE 55%, #A9EAC8 100%)' }}>
       <div className="flex items-center gap-3 mb-5 pt-2">
-        <img src="/Logo_IOP.png" alt="IOP" className="w-10 h-10 rounded-full border-2 border-white/20 object-cover" />
-        <p className="text-white font-bold text-base">Instituto Odilon Pratagi</p>
+        <img src="/Logo_IOP.png" alt="IOP" className="w-10 h-10 rounded-full border-2 border-white object-cover" />
+        <p className="text-[#053B20] font-bold text-base">Instituto Odilon Pratagi</p>
       </div>
 
-      <div className="bg-white/10 border border-white/20 rounded-2xl p-5 mb-4 text-white">
-        <p className="text-blue-300 text-xs font-black uppercase tracking-widest mb-1">✓ Avaliação encontrada</p>
+      <div className="bg-white/70 border border-white rounded-2xl p-5 mb-4 text-[#0B2E1B]">
+        <p className="text-[#0B7A3D] text-xs font-black uppercase tracking-widest mb-1">✓ Avaliação encontrada</p>
         <h2 className="font-black text-xl mb-1">{prova.titulo}</h2>
-        {prova.descricao && <p className="text-white/60 text-sm mb-2">{prova.descricao}</p>}
+        {prova.descricao && <p className="text-[#0B2E1B]/60 text-sm mb-2">{prova.descricao}</p>}
         <div className="flex gap-2 flex-wrap">
-          <span className="bg-blue-500/20 border border-blue-400/30 text-blue-300 px-3 py-1 rounded-full text-sm font-bold">{questoes.length} questões</span>
+          <span className="bg-white border border-[#BEEBD1] text-[#0B7A3D] px-3 py-1 rounded-full text-sm font-bold">{questoes.length} questões</span>
         </div>
       </div>
 
@@ -339,12 +339,12 @@ export function ResponderProva() {
         <div>
           <label className="text-gray-500 text-xs font-black uppercase tracking-wider mb-1.5 block">Nome completo</label>
           <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Seu nome completo"
-            className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-800 text-base outline-none focus:border-blue-500 transition-all" />
+            className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-800 text-base outline-none focus:border-[#0B7A3D] transition-all" />
         </div>
         <div>
           <label className="text-gray-500 text-xs font-black uppercase tracking-wider mb-1.5 block">Número de chamada</label>
           <input value={numero} onChange={e => setNumero(e.target.value)} placeholder="Ex: 15" type="number"
-            className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-800 text-base outline-none focus:border-blue-500 transition-all" />
+            className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-800 text-base outline-none focus:border-[#0B7A3D] transition-all" />
         </div>
         <div>
           <label className="text-gray-500 text-xs font-black uppercase tracking-wider mb-1.5 block">Sua turma</label>
@@ -352,7 +352,7 @@ export function ResponderProva() {
             {turmasDisponiveis.map(t => (
               <button key={t} onClick={() => setTurmaAluno(t)}
                 className={`py-2.5 rounded-xl text-sm font-black border-2 transition-all ${
-                  turmaAluno === t ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300'
+                  turmaAluno === t ? 'bg-[#0B7A3D] border-[#0B7A3D] text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-[#8DE8B0]'
                 }`}>
                 {t}
               </button>
@@ -362,7 +362,7 @@ export function ResponderProva() {
         {erro && <p className="text-red-500 text-sm font-medium">{erro}</p>}
         <button onClick={iniciarProva} disabled={verificandoTentativas}
           className="w-full py-4 rounded-2xl font-black text-white text-lg transition-all active:scale-95 disabled:opacity-50"
-          style={{ background: 'linear-gradient(135deg, #1a3a7c, #2d5fd4)' }}>
+          style={{ background: 'linear-gradient(135deg, #0B7A3D, #149951)' }}>
           {verificandoTentativas ? 'Verificando tentativas...' : 'Iniciar Avaliação →'}
         </button>
       </div>
@@ -371,16 +371,16 @@ export function ResponderProva() {
 
   // ── CORRIGINDO ───────────────────────────────────────────────────────────
   if (step === 'corrigindo') return (
-    <div className="min-h-screen flex items-center justify-center p-5 bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center p-5 bg-background">
       <div className="w-full max-w-sm text-center bg-white rounded-3xl p-8 shadow-xl border border-gray-100">
-        <div className="w-20 h-20 rounded-full bg-blue-100 border-4 border-blue-200 flex items-center justify-center mx-auto mb-4">
-          <Brain className="w-10 h-10 text-blue-600 animate-pulse" />
+        <div className="w-20 h-20 rounded-full bg-[#E3F8EC] border-4 border-[#BEEBD1] flex items-center justify-center mx-auto mb-4">
+          <Brain className="w-10 h-10 text-[#0B7A3D] animate-pulse" />
         </div>
         <h2 className="text-gray-800 font-black text-xl mb-2">Corrigindo sua prova...</h2>
         <p className="text-gray-400 text-sm mb-5">A IA está avaliando suas respostas dissertativas.</p>
-        <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 flex items-center gap-2">
-          <Loader className="w-4 h-4 text-blue-600 animate-spin shrink-0" />
-          <p className="text-blue-700 text-sm font-medium text-left">{etapaCorrecao || 'Iniciando...'}</p>
+        <div className="bg-[#E3F8EC] border border-[#BEEBD1] rounded-xl px-4 py-3 flex items-center gap-2">
+          <Loader className="w-4 h-4 text-[#0B7A3D] animate-spin shrink-0" />
+          <p className="text-[#0B7A3D] text-sm font-medium text-left">{etapaCorrecao || 'Iniciando...'}</p>
         </div>
       </div>
     </div>
@@ -388,10 +388,10 @@ export function ResponderProva() {
 
   // ── PROVA ────────────────────────────────────────────────────────────────
   if (step === 'prova' && q) return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-background">
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
         <div className="h-1.5 bg-gray-100">
-          <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${progresso}%` }} />
+          <div className="h-full bg-[#0B7A3D] transition-all duration-500" style={{ width: `${progresso}%` }} />
         </div>
         <div className="flex items-center justify-between px-4 py-2.5">
           <div className="flex items-center gap-2 min-w-0">
@@ -403,7 +403,7 @@ export function ResponderProva() {
           </div>
           <div className="flex items-center gap-3 shrink-0 ml-2">
             <span className="text-xs text-gray-400 font-semibold hidden sm:block">
-              <span className="text-blue-600 font-black">{respondidas}</span>/{questoes.length}
+              <span className="text-[#0B7A3D] font-black">{respondidas}</span>/{questoes.length}
             </span>
           </div>
         </div>
@@ -418,9 +418,9 @@ export function ResponderProva() {
                 {questoes.map((qq, i) => (
                   <button key={qq.id} onClick={() => setQuestaoAtual(i)}
                     className={`w-10 h-10 rounded-xl text-sm font-black transition-all ${
-                      i === questaoAtual ? 'bg-blue-600 text-white scale-110 shadow-md shadow-blue-200'
+                      i === questaoAtual ? 'bg-[#0B7A3D] text-white scale-110 shadow-md shadow-emerald-200'
                         : questaoRespondida(qq) ? 'bg-green-100 border-2 border-green-400 text-green-700'
-                        : 'bg-gray-100 border-2 border-gray-200 text-gray-500 hover:bg-blue-50 hover:border-blue-300'
+                        : 'bg-gray-100 border-2 border-gray-200 text-gray-500 hover:bg-[#E3F8EC] hover:border-[#8DE8B0]'
                     }`}>
                     {i + 1}
                   </button>
@@ -429,8 +429,8 @@ export function ResponderProva() {
             </div>
             <div className="mt-auto">
               <button onClick={enviarProva} disabled={enviando}
-                className="w-full py-4 rounded-2xl font-black text-white text-base flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-50 shadow-lg shadow-blue-200"
-                style={{ background: 'linear-gradient(135deg, #1a3a7c, #2d5fd4)' }}>
+                className="w-full py-4 rounded-2xl font-black text-white text-base flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-50 shadow-lg shadow-emerald-200"
+                style={{ background: 'linear-gradient(135deg, #0B7A3D, #149951)' }}>
                 <Send className="w-5 h-5" />
                 {enviando ? 'Enviando...' : 'Enviar Prova'}
               </button>
@@ -441,10 +441,10 @@ export function ResponderProva() {
         <main className="flex-1 flex flex-col pb-28">
           <div className="lg:hidden flex items-center justify-between px-4 pt-4 pb-2">
             <span className="text-xs text-gray-400 font-semibold">
-              Questão <span className="text-blue-600 font-black text-sm">{questaoAtual + 1}</span> de {questoes.length}
+              Questão <span className="text-[#0B7A3D] font-black text-sm">{questaoAtual + 1}</span> de {questoes.length}
             </span>
             <span className={`text-xs font-black px-2.5 py-1 rounded-full ${
-              q.tipo === 'multipla_escolha' ? 'bg-blue-100 text-blue-700'
+              q.tipo === 'multipla_escolha' ? 'bg-[#E3F8EC] text-[#0B7A3D]'
               : q.tipo === 'composta' ? 'bg-orange-100 text-orange-700'
               : 'bg-purple-100 text-purple-700'
             }`}>
@@ -470,7 +470,7 @@ export function ResponderProva() {
           )}
 
           <div className="mx-4 lg:mx-8 lg:mt-6 bg-white rounded-2xl shadow-sm border border-gray-100 p-5 lg:p-10 flex flex-col gap-5">
-            <div className="bg-gray-50 border-2 border-blue-300 rounded-xl px-4 py-4 lg:px-6 lg:py-5">
+            <div className="bg-gray-50 border-2 border-[#8DE8B0] rounded-xl px-4 py-4 lg:px-6 lg:py-5">
               <p className="text-gray-800 text-base lg:text-2xl font-medium leading-relaxed whitespace-pre-line">{q.enunciado}</p>
             </div>
 
@@ -487,8 +487,8 @@ export function ResponderProva() {
                   <button key={i} onClick={() => responder(q.id, String(i))}
                     className={`flex items-center gap-3 px-4 py-3 lg:px-6 lg:py-4 rounded-xl text-left transition-all border-2 ${
                       respostas[q.id] === String(i)
-                        ? 'bg-blue-600 border-blue-600 shadow-md shadow-blue-200'
-                        : 'bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50 active:bg-blue-50'
+                        ? 'bg-[#0B7A3D] border-[#0B7A3D] shadow-md shadow-emerald-200'
+                        : 'bg-white border-gray-200 hover:border-[#8DE8B0] hover:bg-[#E3F8EC] active:bg-[#E3F8EC]'
                     }`}>
                     <span className={`w-9 h-9 lg:w-11 lg:h-11 rounded-lg border-2 flex items-center justify-center shrink-0 font-black text-base transition-all ${
                       respostas[q.id] === String(i) ? 'border-white/40 bg-white/20 text-white' : 'border-gray-300 text-gray-500 bg-gray-50'
@@ -557,7 +557,7 @@ export function ResponderProva() {
             <button key={qq.id} onClick={() => setQuestaoAtual(i)}
               ref={i === questaoAtual ? (el => el?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })) : undefined}
               className={`w-8 h-8 rounded-lg text-xs font-black shrink-0 transition-all border ${
-                i === questaoAtual ? 'bg-blue-600 border-blue-600 text-white'
+                i === questaoAtual ? 'bg-[#0B7A3D] border-[#0B7A3D] text-white'
                   : questaoRespondida(qq) ? 'bg-green-100 border-green-400 text-green-700'
                   : 'bg-gray-100 border-gray-200 text-gray-500'
               }`}>
@@ -569,13 +569,13 @@ export function ResponderProva() {
         {questaoAtual < questoes.length - 1 ? (
           <button onClick={() => setQuestaoAtual(i => Math.min(questoes.length - 1, i + 1))}
             className="flex items-center gap-1.5 px-4 py-3 rounded-xl font-black text-white text-sm transition-all"
-            style={{ background: 'linear-gradient(135deg, #1a3a7c, #2d5fd4)' }}>
+            style={{ background: 'linear-gradient(135deg, #0B7A3D, #149951)' }}>
             Próxima <ChevronRight className="w-4 h-4" />
           </button>
         ) : (
           <button onClick={enviarProva} disabled={enviando}
             className="flex items-center gap-1.5 px-4 py-3 rounded-xl font-black text-white text-sm disabled:opacity-50 transition-all"
-            style={{ background: 'linear-gradient(135deg, #1a3a7c, #2d5fd4)' }}>
+            style={{ background: 'linear-gradient(135deg, #0B7A3D, #149951)' }}>
             <Send className="w-4 h-4" />
             {enviando ? 'Enviando...' : 'Enviar'}
           </button>
@@ -586,7 +586,7 @@ export function ResponderProva() {
 
   // ── RESULTADO ────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50 p-4 lg:p-8 flex items-start lg:items-center justify-center">
+    <div className="min-h-screen bg-background p-4 lg:p-8 flex items-start lg:items-center justify-center">
       <div className="w-full max-w-lg flex flex-col gap-4 pt-4 lg:pt-0">
         <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-7 text-center">
           <div className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-5 ${
@@ -665,8 +665,8 @@ export function ResponderProva() {
           </div>
         )}
 
-        <div className="bg-blue-50 border-2 border-blue-100 rounded-2xl p-4">
-          <p className="text-blue-700 text-sm font-medium text-center">
+        <div className="bg-[#E3F8EC] border-2 border-[#BEEBD1] rounded-2xl p-4">
+          <p className="text-[#0B7A3D] text-sm font-medium text-center">
             O professor poderá revisar a correção e ajustar a nota final no boletim.
           </p>
         </div>

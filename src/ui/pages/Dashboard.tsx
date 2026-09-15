@@ -513,25 +513,25 @@ export function Dashboard() {
   if (loading) return <div className="p-4 text-center mt-10">Carregando dados offline...</div>;
 
   return (
-    <div className="flex flex-col gap-4 pb-28 bg-gray-50 min-h-screen">
+    <div className="flex flex-col gap-4 pb-28 min-h-screen" style={{ background: 'linear-gradient(180deg, #EAFBF3 0%, #EEF9F3 220px, #F4FBF7 100%)' }}>
 
       {/* Header branco com logo */}
-      <div className="bg-white border-b-4 border-red-600 px-4 pt-4 pb-3">
+      <div className="bg-white border-b-4 border-[#0B7A3D] px-4 pt-4 pb-3">
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-14 h-14 rounded-full border-2 border-red-600 overflow-hidden shrink-0 bg-red-50 flex items-center justify-center">
+          <div className="w-14 h-14 rounded-full border-2 border-[#0B7A3D] overflow-hidden shrink-0 bg-[#E3F8EC] flex items-center justify-center">
             <img src={LOGO_IOP} alt="IOP" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-black text-sm text-[#1a2e6e] leading-tight">Instituto Odilon Pratagi</p>
+            <p className="font-black text-sm text-[#0B2E1B] leading-tight">Instituto Odilon Pratagi</p>
             <p className="text-xs text-gray-500">Escola Estadual · Brasiléia - AC</p>
             <p className="text-lg font-black text-gray-900 mt-0.5">Olá, Professor! 👋</p>
           </div>
         </div>
         <div className="flex gap-2">
-          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 border border-red-200 text-red-700 text-xs font-bold">
+          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E3F8EC] border border-[#BEEBD1] text-[#0B7A3D] text-xs font-bold">
             📚 {totalStudents} alunos
           </span>
-          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 border border-red-200 text-red-700 text-xs font-bold">
+          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E3F8EC] border border-[#BEEBD1] text-[#0B7A3D] text-xs font-bold">
              {sortedClassRooms.length} turmas
           </span>
         </div>
@@ -560,16 +560,16 @@ export function Dashboard() {
         {/* Botão Compartilhar Portal */}
         <button
           onClick={() => setShowCompartilhar(true)}
-          className="w-full flex items-center gap-4 p-4 rounded-2xl text-left transition-all active:scale-95 bg-white border border-gray-100 shadow-sm hover:shadow-md"
+          className="w-full flex items-center gap-4 p-4 rounded-2xl text-left transition-all active:scale-95 bg-white border border-[#EAF7EF] shadow-sm hover:shadow-md"
         >
-          <div className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0 bg-green-50">
-            <Share2 className="w-7 h-7 text-green-600" />
+          <div className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0 bg-[#E3F8EC]">
+            <Share2 className="w-7 h-7 text-[#0B7A3D]" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-black text-gray-900 text-base">Compartilhar Portal</p>
             <p className="text-gray-400 text-xs mt-0.5">Enviar link das provas pelo WhatsApp</p>
           </div>
-          <span className="px-3 py-1.5 rounded-full text-xs font-black text-white shrink-0 bg-green-600">
+          <span className="px-3 py-1.5 rounded-full text-xs font-black text-white shrink-0" style={{ background: '#0B7A3D' }}>
             ENVIAR ↗
           </span>
         </button>
@@ -584,7 +584,7 @@ export function Dashboard() {
               key={item.title}
               onClick={() => handleMenuClick(item.action, item.value)}
               disabled={isCorrigirNomes && corrigindoNomes}
-              className="flex items-center gap-3 p-3.5 rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-md active:scale-95 transition-all text-left disabled:opacity-50 disabled:active:scale-100"
+              className="flex items-center gap-3 p-3.5 rounded-2xl bg-white border border-[#EAF7EF] shadow-sm hover:shadow-md active:scale-95 transition-all text-left disabled:opacity-50 disabled:active:scale-100"
             >
               <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: item.bg }}>
                 {isCorrigirNomes && corrigindoNomes
@@ -604,17 +604,18 @@ export function Dashboard() {
         <div id="turmas-list" className="scroll-mt-20">
           <button
             onClick={() => setShowTurmas(prev => !prev)}
-            className="w-full flex items-center justify-between px-4 py-3 bg-white rounded-2xl border border-gray-100 shadow-sm hover:bg-gray-50 transition-colors"
+            className="w-full flex items-center justify-between px-4 py-3 bg-white rounded-2xl border border-[#EAF7EF] shadow-sm hover:bg-[#F5FCF8] transition-colors"
           >
             <div className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-red-600" />
+              <Users className="w-5 h-5 text-[#0B7A3D]" />
               <span className="text-base font-black text-gray-900">Turmas e Alunos</span>
-              <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-700 text-xs font-bold border border-red-200">{totalStudents}</span>
+              <span className="px-2 py-0.5 rounded-full bg-[#E3F8EC] text-[#0B7A3D] text-xs font-bold border border-[#BEEBD1]">{totalStudents}</span>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={(e) => { e.stopPropagation(); setShowImportModal(true); }}
-                className="flex items-center gap-1 px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 font-bold rounded-lg text-xs transition-colors border border-red-200"
+                className="flex items-center gap-1 px-2.5 py-1 font-bold rounded-lg text-xs transition-colors border"
+                style={{ background: '#FBF1E7', color: '#B4713A', borderColor: '#F0DAC0' }}
               >
                 <Download className="w-3.5 h-3.5" /> Importar
               </button>
@@ -629,7 +630,7 @@ export function Dashboard() {
                 const isOpen = openYears.has(year);
                 const colors = YEAR_COLORS[year] || { bg: '#f8fafc', text: '#475569', dot: '#64748b' };
                 return (
-                  <div key={year} className="rounded-2xl border border-gray-100 overflow-hidden bg-white shadow-sm">
+                  <div key={year} className="rounded-2xl border border-[#EAF7EF] overflow-hidden bg-white shadow-sm">
                     <button onClick={() => toggleYear(year)} className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors">
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm shrink-0" style={{ background: colors.bg, color: colors.text }}>
@@ -646,16 +647,16 @@ export function Dashboard() {
                       </div>
                     </button>
                     {isOpen && (
-                      <div className="flex flex-col divide-y divide-gray-50 border-t border-gray-100">
+                      <div className="flex flex-col divide-y divide-[#F0FAF4] border-t border-[#EAF7EF]">
                         {turmas.map(cr => (
                           <div key={cr.id} onClick={() => handleClassClick(cr)}
-                            className={cn("flex items-center justify-between px-4 py-3 cursor-pointer transition-colors", selectedClassId === cr.id ? "bg-blue-50" : "hover:bg-gray-50")}>
+                            className={cn("flex items-center justify-between px-4 py-3 cursor-pointer transition-colors", selectedClassId === cr.id ? "bg-[#E3F8EC]" : "hover:bg-[#F5FCF8]")}>
                             <div>
                               <span className="text-sm font-bold text-gray-900">{cr.name}</span>
                               <span className="text-xs text-gray-400 ml-2">{studentCounts[cr.id] || 0} alunos</span>
                             </div>
                             <div className="flex items-center gap-2">
-                              {selectedClassId === cr.id && <span className="text-xs font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">Selecionada</span>}
+                              {selectedClassId === cr.id && <span className="text-xs font-bold text-[#0B7A3D] bg-[#BEEBD1] px-2 py-0.5 rounded-full">Selecionada</span>}
                               <ChevronRight className="w-4 h-4 text-gray-300" />
                             </div>
                           </div>
@@ -734,15 +735,15 @@ export function Dashboard() {
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-[2rem] p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#fef2f2' }}>
-                <Users className="w-5 h-5 text-red-600" />
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#E3F8EC' }}>
+                <Users className="w-5 h-5 text-[#0B7A3D]" />
               </div>
               <h3 className="text-lg font-black text-gray-900">Acessar {classToConfirm.name}?</h3>
             </div>
-            <div className="bg-gray-50 rounded-2xl p-3 border border-gray-200">
+            <div className="bg-[#F9FCFA] rounded-2xl p-3 border border-[#EAF7EF]">
               {fetching ? <p className="text-sm text-center py-4 text-gray-500 animate-pulse">Buscando alunos...</p> : (
                 <>
-                  <p className="text-[#1a2e6e] font-bold text-sm mb-2">{fetchedStudents.length} alunos matriculados</p>
+                  <p className="text-[#0B7A3D] font-bold text-sm mb-2">{fetchedStudents.length} alunos matriculados</p>
                   <ul className="text-sm flex flex-col gap-1 max-h-40 overflow-y-auto">
                     {fetchedStudents.length > 0
                       ? fetchedStudents.map(s => (
@@ -778,10 +779,10 @@ export function Dashboard() {
                   {fetchedStudents.length > 0 && (
                     <div className="flex gap-2 mt-3">
                       <button onClick={handleOpenSync} className="flex-1 py-2 rounded-xl font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs transition-colors border border-blue-200">Sincronizar Nomes</button>
-                      <button onClick={handleEditList} className="flex-1 py-2 rounded-xl font-bold bg-red-50 text-red-700 hover:bg-red-100 text-xs transition-colors border border-red-200">Editar Lista da Turma</button>
+                      <button onClick={handleEditList} className="flex-1 py-2 rounded-xl font-bold text-xs transition-colors border" style={{ background: '#FBF1E7', color: '#B4713A', borderColor: '#F0DAC0' }}>Editar Lista da Turma</button>
                     </div>
                   )}
-                  {cardMessage && <p className="text-xs font-bold text-[#1a2e6e] text-center mt-1">{cardMessage}</p>}
+                  {cardMessage && <p className="text-xs font-bold text-[#0B7A3D] text-center mt-1">{cardMessage}</p>}
                 </>
               )}
             </div>
@@ -789,8 +790,8 @@ export function Dashboard() {
               <button onClick={() => setClassToConfirm(null)} className="flex-1 py-3 rounded-2xl font-bold bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">Cancelar</button>
               <button
                 onClick={() => { setStudents(prev => [...prev.filter(s => s.classRoomId !== classToConfirm.id), ...fetchedStudents]); setSelectedClassId(classToConfirm.id); setClassToConfirm(null); }}
-                className="flex-1 py-3 rounded-2xl font-black text-white transition-all active:scale-95"
-                style={{ background: '#1a2e6e' }}>
+                className="flex-1 py-3 rounded-2xl font-black text-white transition-all active:scale-95 shadow-md shadow-emerald-900/10"
+                style={{ background: '#0B7A3D' }}>
                 Acessar
               </button>
             </div>
@@ -808,13 +809,13 @@ export function Dashboard() {
             <div className="flex gap-1 p-1 bg-gray-100 rounded-xl">
               <button
                 onClick={() => { setImportMode('lista'); setPdfResultMsg(null); }}
-                className={cn('flex-1 py-2 rounded-lg text-xs font-bold transition-all', importMode === 'lista' ? 'bg-white shadow-sm text-[#1a2e6e]' : 'text-gray-500')}
+                className={cn('flex-1 py-2 rounded-lg text-xs font-bold transition-all', importMode === 'lista' ? 'bg-white shadow-sm text-[#0B7A3D]' : 'text-gray-500')}
               >
                 Colar Lista
               </button>
               <button
                 onClick={() => { setImportMode('pdf'); setPdfResultMsg(null); }}
-                className={cn('flex-1 py-2 rounded-lg text-xs font-bold transition-all', importMode === 'pdf' ? 'bg-white shadow-sm text-[#1a2e6e]' : 'text-gray-500')}
+                className={cn('flex-1 py-2 rounded-lg text-xs font-bold transition-all', importMode === 'pdf' ? 'bg-white shadow-sm text-[#0B7A3D]' : 'text-gray-500')}
               >
                 Carregar PDF do Simaed
               </button>
@@ -822,7 +823,7 @@ export function Dashboard() {
 
             <div>
               <label className="font-bold text-gray-600 block mb-1 text-sm">Turma de Destino</label>
-              <select value={importClassId} onChange={(e) => setImportClassId(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-red-200 text-sm">
+              <select value={importClassId} onChange={(e) => setImportClassId(e.target.value)} className="w-full bg-[#F9FCFA] border border-[#EAF7EF] rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-200 text-sm">
                 <option value="ALL">Selecione uma turma</option>
                 {sortedClassRooms.map(cr => <option key={cr.id} value={cr.name}>{cr.name}</option>)}
               </select>
@@ -832,9 +833,9 @@ export function Dashboard() {
               <>
                 <div>
                   <label className="font-bold text-gray-600 block mb-1 text-sm">Lista de Nomes (um por linha)</label>
-                  <textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder="Maria Silva&#10;João Paulo" rows={6} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-red-200 resize-none font-medium text-sm" />
+                  <textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder="Maria Silva&#10;João Paulo" rows={6} className="w-full bg-[#F9FCFA] border border-[#EAF7EF] rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-200 resize-none font-medium text-sm" />
                 </div>
-                <button onClick={handleImport} disabled={importing} className="w-full py-3 rounded-2xl font-black text-white transition-all active:scale-95 disabled:opacity-50" style={{ background: '#1a2e6e' }}>
+                <button onClick={handleImport} disabled={importing} className="w-full py-3 rounded-2xl font-black text-white transition-all active:scale-95 disabled:opacity-50" style={{ background: '#0B7A3D' }}>
                   {importing ? 'Importando...' : 'Importar Alunos'}
                 </button>
               </>
@@ -867,7 +868,7 @@ export function Dashboard() {
                   />
                 </label>
                 {pdfResultMsg && (
-                  <p className="text-xs font-bold text-[#1a2e6e] text-center bg-green-50 border border-green-200 rounded-xl py-2 px-3">{pdfResultMsg}</p>
+                  <p className="text-xs font-bold text-[#0B7A3D] text-center bg-[#E3F8EC] border border-[#BEEBD1] rounded-xl py-2 px-3">{pdfResultMsg}</p>
                 )}
               </>
             )}
@@ -887,13 +888,13 @@ export function Dashboard() {
                 : 'Adicione alunos novos (entram sempre no final) ou remova quem saiu. Quem já está na turma mantém o número de chamada e a posição originais, mesmo mudando a ordem aqui.'}
             </p>
             <div className="flex-1 overflow-y-auto min-h-[300px]">
-              <textarea value={editListText} onChange={(e) => setEditListText(e.target.value)} className="w-full h-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-red-200 font-medium" placeholder="João&#10;Maria&#10;Pedro" spellCheck={false} />
+              <textarea value={editListText} onChange={(e) => setEditListText(e.target.value)} className="w-full h-full min-h-[300px] bg-[#F9FCFA] border border-[#EAF7EF] rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-emerald-200 font-medium" placeholder="João&#10;Maria&#10;Pedro" spellCheck={false} />
             </div>
             <button
               onClick={editModalMode === 'sync' ? handleSyncNomes : handleSaveList}
               disabled={savingList}
               className="w-full py-3 rounded-2xl font-black text-white transition-all active:scale-95 disabled:opacity-50"
-              style={{ background: editModalMode === 'sync' ? '#1d4ed8' : '#1a2e6e' }}
+              style={{ background: editModalMode === 'sync' ? '#1d4ed8' : '#0B7A3D' }}
             >
               {savingList ? 'Salvando...' : editModalMode === 'sync' ? 'Sincronizar' : 'Salvar Lista'}
             </button>

@@ -9,7 +9,7 @@ import type { Bimestre } from '../../domain/useRelatorioFrequencia';
 
 type Aba = 'inicio' | 'notas' | 'frequencia' | 'provas';
 
-const COR_PRIMARIA = '#1E3A8A';
+const COR_PRIMARIA = '#0B7A3D';
 const LETRAS = ['A', 'B', 'C', 'D', 'E'];
 
 export function PortalAluno() {
@@ -49,7 +49,7 @@ export function PortalAluno() {
   const freqBim = frequencia[bimestreFreq];
 
   return (
-    <div className="min-h-screen w-full" style={{ background: '#f3f4f6' }}>
+    <div className="min-h-screen w-full" style={{ background: '#EEF9F3' }}>
       <div className="mx-auto w-full max-w-[480px] flex flex-col min-h-screen pb-24">
         <header className="px-5 pt-6 pb-5 text-white" style={{ background: COR_PRIMARIA }}>
           <p className="text-xs font-bold tracking-widest opacity-80 uppercase">Portal do Aluno</p>
