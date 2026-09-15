@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Crown, Flag, Loader2 } from 'lucide-react';
+import { Crown, Flag, Loader2, CheckCircle2 } from 'lucide-react';
 import type { RodizioSessaoCompleta } from '../../../data/supabase';
 import type { AlunoSupabase } from '../../../domain/useAlunosPresentesHoje';
 import type { TimeRodizio, JogoRodizio, EstatisticasTime } from '../../../domain/rodizioFutsalLogica';
@@ -32,6 +32,11 @@ export function RodizioControle({
   const proximoId = filaAtual[2];
   const depoisIds = filaAtual.slice(3);
   const jogoAcabou = !equipeAId || !equipeBId;
+
+  const ultimoJogo = jogos.length > 0 ? jogos.reduce((max, j) => (j.numero > max.numero ? j : max), jogos[0]) : null;
+  const perdedorUltimoJogo = ultimoJogo
+    ? (ultimoJogo.vencedorId === ultimoJogo.equipeAId ? ultimoJogo.equipeBId : ultimoJogo.equipeAId)
+    : null;
 
   const handleResultado = async (vencedorId: string) => {
     if (registrando) return;
@@ -97,6 +102,15 @@ export function RodizioControle({
               {nome(equipeBId).toUpperCase()} VENCEU
             </button>
           </div>
+
+          {ultimoJogo && (
+            <div className="flex items-center gap-2 text-sm text-on-secondary-container bg-secondary-container/30 border border-secondary/20 rounded-xl px-3 py-2.5">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>
+                Jogo {ultimoJogo.numero} registrado — <NomeTime time={buscarTime(ultimoJogo.vencedorId)} /> venceu <NomeTime time={buscarTime(perdedorUltimoJogo ?? undefined)} />
+              </span>
+            </div>
+          )}
 
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
             <div className="text-xs font-bold text-gray-400 tracking-wide mb-1">PRÓXIMO A ENTRAR</div>
