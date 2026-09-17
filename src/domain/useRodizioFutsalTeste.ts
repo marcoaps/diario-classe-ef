@@ -96,13 +96,14 @@ export function useRodizioFutsalTeste() {
 
   const times: TimeRodizio[] = (sessaoCompleta?.times ?? []).map(paraTimeRodizio);
   const jogos: JogoRodizio[] = (sessaoCompleta?.jogos ?? []).map(paraJogoRodizio);
+  const jogadores = sessaoCompleta?.jogadores ?? [];
   const filaAtual = sessaoCompleta ? calcularFilaAtual(times, jogos) : [];
   const estatisticas = sessaoCompleta ? calcularEstatisticas(times, jogos) : new Map();
 
   return {
-    sessaoCompleta, loading: false, erro: null, recarregar: async () => {},
+    sessaoCompleta, loading: false, erro: null, erroCarregamento: null, recarregar: async () => {},
     criarSessao, adicionarJogador: async () => {}, removerJogador: async () => {},
     adicionarTime, registrarResultado, finalizarSessao, limparChamadaTeste,
-    times, jogos, filaAtual, estatisticas,
+    times, jogos, jogadores, filaAtual, estatisticas,
   };
 }

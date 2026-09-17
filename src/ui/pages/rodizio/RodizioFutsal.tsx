@@ -134,11 +134,22 @@ export function RodizioFutsal() {
               <Loader2 className="w-5 h-5 animate-spin" />
               <span>Verificando rodízio em andamento...</span>
             </div>
+          ) : rodizio.erroCarregamento ? (
+            <div className="flex flex-col items-center gap-3 text-center bg-error-container/20 border border-error/20 rounded-2xl p-6">
+              <span className="text-sm font-semibold text-error">{rodizio.erroCarregamento}</span>
+              <button
+                onClick={() => rodizio.recarregar()}
+                className="px-4 py-2 rounded-xl bg-white border border-error/30 text-error text-sm font-bold hover:bg-error-container/30 transition-colors"
+              >
+                Tentar novamente
+              </button>
+            </div>
           ) : rodizio.sessaoCompleta ? (
             <RodizioControle
               sessaoCompleta={rodizio.sessaoCompleta}
               times={rodizio.times}
               jogos={rodizio.jogos}
+              jogadores={rodizio.jogadores}
               filaAtual={rodizio.filaAtual}
               estatisticas={rodizio.estatisticas}
               alunos={alunos}

@@ -44,10 +44,12 @@ export interface EstatisticasTime {
 }
 
 // Fila atual: parte do snapshot "fila_apos" gravado no último jogo (ou da
-// ordem inicial dos times, se ainda não houve nenhum jogo) e acrescenta no
-// final, por ordem de criação, qualquer time que ainda não apareça nela —
-// é assim que um time criado no meio da aula (ver TimeRodizio.criadoDuranteRodizio)
-// entra na fila sem precisar reescrever o histórico de jogos já registrado.
+// ordem inicial dos times, se ainda não houve nenhum jogo) e insere logo
+// depois do jogo atual (posições 0 e 1) qualquer time que ainda não apareça
+// nela — é assim que um time criado no meio da aula (ver
+// TimeRodizio.criadoDuranteRodizio) entra pra jogar em seguida, em vez de ter
+// que esperar todo mundo que já estava na fila, sem precisar reescrever o
+// histórico de jogos já registrado nem tocar em quem está jogando agora.
 export function calcularFilaAtual(times: TimeRodizio[], jogos: JogoRodizio[]): string[] {
   const base = jogos.length === 0
     ? []
@@ -59,7 +61,10 @@ export function calcularFilaAtual(times: TimeRodizio[], jogos: JogoRodizio[]): s
     .sort((a, b) => a.ordemInicial - b.ordemInicial)
     .map(t => t.id);
 
-  return [...base, ...novos];
+  if (novos.length === 0) return base;
+
+  const posicaoInsercao = Math.min(2, base.length);
+  return [...base.slice(0, posicaoInsercao), ...novos, ...base.slice(posicaoInsercao)];
 }
 
 export function calcularEstatisticas(times: TimeRodizio[], jogos: JogoRodizio[]): Map<string, EstatisticasTime> {
@@ -89,6 +94,56 @@ export function calcularEstatisticas(times: TimeRodizio[], jogos: JogoRodizio[])
   }
 
   return stats;
+}
+
+export interface ParticipacaoAluno {
+  alunoId: string;
+  alunoNome: string;
+  timeId: string | null;
+  timeNome: string | null;
+  ehTimeCerca: boolean;
+  jaJogou: boolean;
+}
+
+// Controle de quem já jogou: como o rodízio registra o resultado por TIME (o
+// time inteiro entra em quadra junto), um aluno é considerado "já jogou" se
+// o time dele já entrou em quadra ao menos uma vez (vezesEmQuadra > 0). Quem
+// não está em nenhum time (sobrou na chamada) sempre aparece como "não
+// jogou", o que ajuda a identificar quando formar um time extra com eles
+// (ver RodizioAdicionarTime — não mexe nos times originais).
+export function calcularParticipacaoAlunos(
+  alunosPresentes: { id: string; nome: string }[],
+  jogadores: { aluno_id: string; time_id: string }[],
+  times: TimeRodizio[],
+  estatisticas: Map<string, EstatisticasTime>,
+): ParticipacaoAluno[] {
+  const timePorId = new Map(times.map(t => [t.id, t]));
+  const timeIdPorAluno = new Map(jogadores.map(j => [j.aluno_id, j.time_id]));
+
+  return alunosPresentes.map(a => {
+    const timeId = timeIdPorAluno.get(a.id) ?? null;
+    const time = timeId ? timePorId.get(timeId) : undefined;
+    const vezesEmQuadra = timeId ? (estatisticas.get(timeId)?.vezesEmQuadra ?? 0) : 0;
+    return {
+      alunoId: a.id,
+      alunoNome: a.nome,
+      timeId,
+      timeNome: time?.nome ?? null,
+      ehTimeCerca: time?.ehTimeCerca ?? false,
+      jaJogou: vezesEmQuadra > 0,
+    };
+  });
+}
+
+// Marco pra avisar o professor que chegou a hora de colocar os times extras
+// pra rodar também: considera só os times ORIGINAIS (cadastrados antes de
+// "Iniciar Rodízio" — inclui o time "Cerca", que já entra na fila desde o
+// início) porque um time avulso criado no meio da aula (criadoDuranteRodizio)
+// não deveria contar pra decidir se já é hora de criar... um time avulso.
+export function todosTimesOriginaisJaJogaram(times: TimeRodizio[], estatisticas: Map<string, EstatisticasTime>): boolean {
+  const originais = times.filter(t => !t.criadoDuranteRodizio);
+  if (originais.length === 0) return false;
+  return originais.every(t => (estatisticas.get(t.id)?.vezesEmQuadra ?? 0) > 0);
 }
 
 // Regra do "Rei da Quadra": o vencedor permanece na quadra e o próximo da

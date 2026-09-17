@@ -17,6 +17,21 @@ export interface NovoTimeRodizio {
   jogadores: { alunoId: string; alunoNome: string }[];
 }
 
+const TIMEOUT_MS = 15000;
+
+// Some conexões (wifi da escola, por exemplo) deixam a chamada ao Supabase
+// pendurada sem nunca resolver nem rejeitar — sem isso, o botão fica girando
+// pra sempre porque o await nunca retorna. Com o timeout, a ação sempre
+// termina (com erro claro) em no máximo TIMEOUT_MS.
+function comTimeout<T>(promessa: Promise<T>): Promise<T> {
+  return Promise.race([
+    promessa,
+    new Promise<T>((_, reject) => {
+      setTimeout(() => reject(new Error('Tempo esgotado ao falar com o servidor. Verifique sua conexão e tente novamente.')), TIMEOUT_MS);
+    }),
+  ]);
+}
+
 export function paraTimeRodizio(t: RodizioSessaoCompleta['times'][number]): TimeRodizio {
   return {
     id: t.id, nome: t.nome, capitaoNome: t.capitao_nome, ordemInicial: t.ordem_inicial,
@@ -41,17 +56,23 @@ export function useRodizioFutsal(turmaId: string) {
   const [sessaoCompleta, setSessaoCompleta] = useState<RodizioSessaoCompleta | null>(null);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  // Separado de `erro` (que cobre ações com seu próprio alert() no chamador,
+  // ex: criar/registrar/finalizar) porque uma falha ao CARREGAR a sessão não
+  // tem nenhum botão que a capture — sem isso, o professor cairia direto na
+  // tela de "criar novo rodízio" sem saber que só falhou o carregamento
+  // (risco de duplicar a sessão de uma turma que já tinha rodízio aberto).
+  const [erroCarregamento, setErroCarregamento] = useState<string | null>(null);
 
   const recarregar = useCallback(async () => {
-    if (!turmaId) { setSessaoCompleta(null); return; }
+    if (!turmaId) { setSessaoCompleta(null); setErroCarregamento(null); return; }
     setLoading(true);
-    setErro(null);
+    setErroCarregamento(null);
     try {
-      const sessao = await buscarSessaoAbertaRodizio(turmaId);
+      const sessao = await comTimeout(buscarSessaoAbertaRodizio(turmaId));
       setSessaoCompleta(sessao);
     } catch (e) {
       console.error(e);
-      setErro('Erro ao carregar o rodízio dessa turma.');
+      setErroCarregamento('Erro ao carregar o rodízio dessa turma. Verifique sua conexão.');
     } finally {
       setLoading(false);
     }
@@ -66,7 +87,7 @@ export function useRodizioFutsal(turmaId: string) {
   ) => {
     setErro(null);
     try {
-      const criada = await criarSessaoRodizio({
+      const criada = await comTimeout(criarSessaoRodizio({
         turmaId,
         modalidade,
         limitePermanencia,
@@ -78,7 +99,7 @@ export function useRodizioFutsal(turmaId: string) {
           ehTimeCerca: t.ehTimeCerca,
           jogadores: t.jogadores,
         })),
-      });
+      }));
       setSessaoCompleta(criada);
     } catch (e) {
       console.error(e);
@@ -88,15 +109,29 @@ export function useRodizioFutsal(turmaId: string) {
   }, [turmaId]);
 
   const adicionarJogador = useCallback(async (timeId: string, alunoId: string, alunoNome: string) => {
-    const jogador = await adicionarJogadorTime(timeId, alunoId, alunoNome);
-    setSessaoCompleta(prev => prev ? { ...prev, jogadores: [...prev.jogadores, jogador] } : prev);
+    setErro(null);
+    try {
+      const jogador = await comTimeout(adicionarJogadorTime(timeId, alunoId, alunoNome));
+      setSessaoCompleta(prev => prev ? { ...prev, jogadores: [...prev.jogadores, jogador] } : prev);
+    } catch (e) {
+      console.error(e);
+      setErro('Erro ao adicionar o jogador ao time. Tente novamente.');
+      throw e;
+    }
   }, []);
 
   const removerJogador = useCallback(async (jogadorRegistroId: string) => {
-    await removerJogadorTime(jogadorRegistroId);
-    setSessaoCompleta(prev => prev
-      ? { ...prev, jogadores: prev.jogadores.filter(j => j.id !== jogadorRegistroId) }
-      : prev);
+    setErro(null);
+    try {
+      await comTimeout(removerJogadorTime(jogadorRegistroId));
+      setSessaoCompleta(prev => prev
+        ? { ...prev, jogadores: prev.jogadores.filter(j => j.id !== jogadorRegistroId) }
+        : prev);
+    } catch (e) {
+      console.error(e);
+      setErro('Erro ao remover o jogador do time. Tente novamente.');
+      throw e;
+    }
   }, []);
 
   // Time montado no meio da aula (ex: sobrou aluno sem equipe) — entra na
@@ -109,48 +144,75 @@ export function useRodizioFutsal(turmaId: string) {
     jogadores: { alunoId: string; alunoNome: string }[],
   ) => {
     if (!sessaoCompleta) return;
-    const proximaOrdem = Math.max(0, ...sessaoCompleta.times.map(t => t.ordem_inicial)) + 1;
-    const { time, jogadores: novosJogadores } = await adicionarTimeRodizio({
-      sessaoId: sessaoCompleta.sessao.id,
-      nome, capitaoAlunoId, capitaoNome, ordemInicial: proximaOrdem, jogadores,
-    });
-    setSessaoCompleta(prev => prev
-      ? { ...prev, times: [...prev.times, time], jogadores: [...prev.jogadores, ...novosJogadores] }
-      : prev);
+    setErro(null);
+    try {
+      const proximaOrdem = Math.max(0, ...sessaoCompleta.times.map(t => t.ordem_inicial)) + 1;
+      const { time, jogadores: novosJogadores } = await comTimeout(adicionarTimeRodizio({
+        sessaoId: sessaoCompleta.sessao.id,
+        nome, capitaoAlunoId, capitaoNome, ordemInicial: proximaOrdem, jogadores,
+      }));
+      setSessaoCompleta(prev => prev
+        ? { ...prev, times: [...prev.times, time], jogadores: [...prev.jogadores, ...novosJogadores] }
+        : prev);
+    } catch (e) {
+      console.error(e);
+      setErro('Erro ao adicionar o time. Tente novamente.');
+      throw e;
+    }
   }, [sessaoCompleta]);
 
   const registrarResultado = useCallback(async (vencedorId: string) => {
     if (!sessaoCompleta) return;
-    const times = sessaoCompleta.times.map(paraTimeRodizio);
-    const jogos = sessaoCompleta.jogos.map(paraJogoRodizio);
-    const filaAtual = calcularFilaAtual(times, jogos);
-    const [equipeAId, equipeBId] = filaAtual;
-    const estatisticas = calcularEstatisticas(times, jogos);
-    const sequenciaAtual = estatisticas.get(vencedorId)?.sequenciaAtual ?? 0;
-    const filaApos = calcularProximaFila(filaAtual, vencedorId, sequenciaAtual, sessaoCompleta.sessao.limite_permanencia);
+    setErro(null);
+    try {
+      const times = sessaoCompleta.times.map(paraTimeRodizio);
+      const jogos = sessaoCompleta.jogos.map(paraJogoRodizio);
+      const filaAtual = calcularFilaAtual(times, jogos);
+      const [equipeAId, equipeBId] = filaAtual;
+      const estatisticas = calcularEstatisticas(times, jogos);
+      const sequenciaAtual = estatisticas.get(vencedorId)?.sequenciaAtual ?? 0;
+      const filaApos = calcularProximaFila(filaAtual, vencedorId, sequenciaAtual, sessaoCompleta.sessao.limite_permanencia);
 
-    const jogo = await registrarJogoRodizio({
-      sessaoId: sessaoCompleta.sessao.id,
-      numero: jogos.length + 1,
-      equipeAId, equipeBId, vencedorId, filaApos,
-    });
-    setSessaoCompleta(prev => prev ? { ...prev, jogos: [...prev.jogos, jogo] } : prev);
-  }, [sessaoCompleta]);
+      const jogo = await comTimeout(registrarJogoRodizio({
+        sessaoId: sessaoCompleta.sessao.id,
+        numero: jogos.length + 1,
+        equipeAId, equipeBId, vencedorId, filaApos,
+      }));
+      setSessaoCompleta(prev => prev ? { ...prev, jogos: [...prev.jogos, jogo] } : prev);
+    } catch (e) {
+      console.error(e);
+      // Conflito de numeração (duas abas, ou um clique duplo que passou do
+      // guard local) — recarrega do banco pra fila voltar a bater com o que
+      // foi realmente salvo, em vez de deixar o professor tentando de novo
+      // contra um estado que já ficou desatualizado.
+      setErro('Erro ao registrar o resultado. Verifique sua conexão e tente novamente.');
+      await recarregar();
+      throw e;
+    }
+  }, [sessaoCompleta, recarregar]);
 
   const finalizarSessao = useCallback(async () => {
     if (!sessaoCompleta) return;
-    await finalizarSessaoRodizio(sessaoCompleta.sessao.id);
-    setSessaoCompleta(null);
+    setErro(null);
+    try {
+      await comTimeout(finalizarSessaoRodizio(sessaoCompleta.sessao.id));
+      setSessaoCompleta(null);
+    } catch (e) {
+      console.error(e);
+      setErro('Erro ao finalizar o rodízio. Tente novamente.');
+      throw e;
+    }
   }, [sessaoCompleta]);
 
   const times = (sessaoCompleta?.times ?? []).map(paraTimeRodizio);
   const jogos = (sessaoCompleta?.jogos ?? []).map(paraJogoRodizio);
+  const jogadores = sessaoCompleta?.jogadores ?? [];
   const filaAtual = sessaoCompleta ? calcularFilaAtual(times, jogos) : [];
   const estatisticas = sessaoCompleta ? calcularEstatisticas(times, jogos) : new Map();
 
   return {
-    sessaoCompleta, loading, erro, recarregar,
+    sessaoCompleta, loading, erro, erroCarregamento, recarregar,
     criarSessao, adicionarJogador, removerJogador, adicionarTime, registrarResultado, finalizarSessao,
-    times, jogos, filaAtual, estatisticas,
+    times, jogos, jogadores, filaAtual, estatisticas,
   };
 }

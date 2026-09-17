@@ -1,15 +1,16 @@
-import React, { useState } from 'react';
-import { Crown, Flag, Loader2, CheckCircle2 } from 'lucide-react';
-import type { RodizioSessaoCompleta } from '../../../data/supabase';
+import React, { useMemo, useState } from 'react';
+import { Crown, Flag, Loader2, CheckCircle2, Users, PartyPopper } from 'lucide-react';
+import type { RodizioSessaoCompleta, RodizioJogador } from '../../../data/supabase';
 import type { AlunoSupabase } from '../../../domain/useAlunosPresentesHoje';
-import type { TimeRodizio, JogoRodizio, EstatisticasTime } from '../../../domain/rodizioFutsalLogica';
-import { TabelaJogos, TabelaEstatisticas, NomeTime } from './RodizioTabelas';
+import { calcularParticipacaoAlunos, todosTimesOriginaisJaJogaram, type TimeRodizio, type JogoRodizio, type EstatisticasTime } from '../../../domain/rodizioFutsalLogica';
+import { TabelaJogos, TabelaEstatisticas, TabelaParticipacao, NomeTime } from './RodizioTabelas';
 import { RodizioAdicionarTime } from './RodizioAdicionarTime';
 
 interface Props {
   sessaoCompleta: RodizioSessaoCompleta;
   times: TimeRodizio[];
   jogos: JogoRodizio[];
+  jogadores: RodizioJogador[];
   filaAtual: string[];
   estatisticas: Map<string, EstatisticasTime>;
   alunos: AlunoSupabase[];
@@ -19,11 +20,20 @@ interface Props {
 }
 
 export function RodizioControle({
-  sessaoCompleta, times, jogos, filaAtual, estatisticas, alunos, onRegistrarResultado, onAdicionarTime, onFinalizar,
+  sessaoCompleta, times, jogos, jogadores, filaAtual, estatisticas, alunos, onRegistrarResultado, onAdicionarTime, onFinalizar,
 }: Props) {
   const [registrando, setRegistrando] = useState(false);
   const [finalizando, setFinalizando] = useState(false);
   const [mostrarDetalhes, setMostrarDetalhes] = useState(false);
+
+  const participacao = useMemo(
+    () => calcularParticipacaoAlunos(alunos, jogadores, times, estatisticas),
+    [alunos, jogadores, times, estatisticas]
+  );
+  const alunosSemTime = participacao.filter(p => !p.timeId);
+  const jaJogaramCount = participacao.filter(p => p.jaJogou).length;
+  const marcoTodosJogaram = todosTimesOriginaisJaJogaram(times, estatisticas);
+  const timesOriginaisCount = times.filter(t => !t.criadoDuranteRodizio).length;
 
   const buscarTime = (id: string | undefined) => times.find(t => t.id === id);
   const nome = (id: string | undefined) => buscarTime(id)?.nome ?? '—';
@@ -43,6 +53,8 @@ export function RodizioControle({
     setRegistrando(true);
     try {
       await onRegistrarResultado(vencedorId);
+    } catch (e) {
+      alert('Não foi possível registrar o resultado. Verifique sua conexão e tente novamente.');
     } finally {
       setRegistrando(false);
     }
@@ -53,6 +65,8 @@ export function RodizioControle({
     setFinalizando(true);
     try {
       await onFinalizar();
+    } catch (e) {
+      alert('Não foi possível finalizar o rodízio. Verifique sua conexão e tente novamente.');
     } finally {
       setFinalizando(false);
     }
@@ -126,17 +140,53 @@ export function RodizioControle({
         </>
       )}
 
+      {alunosSemTime.length > 0 && (
+        marcoTodosJogaram ? (
+          <div className="flex items-start gap-2 bg-secondary-container/40 border border-secondary/30 rounded-2xl px-4 py-3">
+            <PartyPopper className="w-4 h-4 text-on-secondary-container shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <div className="text-xs font-bold text-on-secondary-container">
+                Os {timesOriginaisCount} times já jogaram! Hora de colocar os times extras pra rodar também.
+              </div>
+              <div className="text-xs text-on-secondary-container/80 mt-0.5">
+                Aguardando: {alunosSemTime.map(p => p.alunoNome).join(', ')}
+              </div>
+              <p className="text-[11px] text-on-secondary-container/70 mt-1">Use "Adicionar time extra" abaixo pra colocá-los na fila, sem mexer nos times originais.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-start gap-2 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3">
+            <Users className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <div className="text-xs font-bold text-gray-500">
+                {alunosSemTime.length} aluno{alunosSemTime.length !== 1 ? 's' : ''} aguardando time
+              </div>
+              <div className="text-xs text-gray-400 mt-0.5">
+                {alunosSemTime.map(p => p.alunoNome).join(', ')}
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1">Assim que os times originais entrarem em quadra ao menos uma vez, o app avisa aqui que é hora de formar um time extra com eles.</p>
+            </div>
+          </div>
+        )
+      )}
+
       <RodizioAdicionarTime alunos={alunos} onAdicionar={onAdicionarTime} />
 
       <button
         onClick={() => setMostrarDetalhes(prev => !prev)}
         className="text-sm font-semibold text-primary underline underline-offset-2 self-start px-1"
       >
-        {mostrarDetalhes ? 'Ocultar jogos e estatísticas' : 'Ver jogos e estatísticas'}
+        {mostrarDetalhes ? 'Ocultar jogos, estatísticas e participação' : 'Ver jogos, estatísticas e participação'}
       </button>
 
       {mostrarDetalhes && (
         <div className="flex flex-col gap-3">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <div className="text-xs font-semibold text-gray-500 mb-2">
+              Participação dos alunos ({jaJogaramCount}/{participacao.length} já jogaram)
+            </div>
+            <TabelaParticipacao participacao={participacao} />
+          </div>
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
             <div className="text-xs font-semibold text-gray-500 mb-2">Jogos da aula</div>
             <TabelaJogos times={times} jogos={jogos} />

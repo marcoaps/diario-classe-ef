@@ -1,5 +1,6 @@
 import React from 'react';
-import type { TimeRodizio, JogoRodizio, EstatisticasTime } from '../../../domain/rodizioFutsalLogica';
+import { CheckCircle2, Circle } from 'lucide-react';
+import type { TimeRodizio, JogoRodizio, EstatisticasTime, ParticipacaoAluno } from '../../../domain/rodizioFutsalLogica';
 
 function buscarTime(times: TimeRodizio[], id: string | undefined) {
   return times.find(t => t.id === id);
@@ -71,6 +72,43 @@ export function TabelaJogos({ times, jogos }: { times: TimeRodizio[]; jogos: Jog
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// Lista todo aluno presente com quem ainda não jogou primeiro, pra ficar
+// fácil de ver quem precisa entrar num time extra (ver
+// calcularParticipacaoAlunos e RodizioAdicionarTime).
+export function TabelaParticipacao({ participacao }: { participacao: ParticipacaoAluno[] }) {
+  const ordenada = [...participacao].sort((a, b) => {
+    if (a.jaJogou !== b.jaJogou) return a.jaJogou ? 1 : -1;
+    return a.alunoNome.localeCompare(b.alunoNome);
+  });
+
+  if (ordenada.length === 0) {
+    return <p className="text-sm text-gray-400 text-center py-4">Nenhum aluno presente.</p>;
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      {ordenada.map(p => (
+        <div key={p.alunoId} className="flex items-center gap-2 text-sm py-0.5">
+          {p.jaJogou
+            ? <CheckCircle2 className="w-4 h-4 text-secondary shrink-0" />
+            : <Circle className="w-4 h-4 text-gray-300 shrink-0" />}
+          <span className={p.jaJogou ? "text-on-surface" : "text-on-surface font-semibold"}>{p.alunoNome}</span>
+          {p.timeNome ? (
+            <span className={
+              "text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 " +
+              (p.ehTimeCerca ? "bg-secondary-container text-on-secondary-container" : "bg-tertiary-container/40 text-on-tertiary-container")
+            }>
+              {p.ehTimeCerca ? 'Cerca' : p.timeNome}
+            </span>
+          ) : (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-error-container/40 text-error shrink-0">sem time</span>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
