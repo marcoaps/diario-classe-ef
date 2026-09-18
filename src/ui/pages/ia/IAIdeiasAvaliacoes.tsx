@@ -162,9 +162,13 @@ export function IAIdeiasAvaliacoes() {
       // verificação já usada na Sequência Didática, importante aqui porque
       // uma imagem do esporte errado confunde justamente quem mais depende
       // dela pra entender a questão.
+      // exigirMatch=true: melhor a questão ficar sem foto do que vir com
+      // foto de outro esporte (ou sem relação nenhuma) — diferente da
+      // Sequência Didática, aqui uma imagem errada atrapalha mais quem
+      // precisa dela pra entender a questão.
       const termoObrigatorio = termoObrigatorioImagem(tema);
       const comImagens = await Promise.all(qs.map(async (q, idx) => {
-        const img = await buscarImagemPexels(q.imageQuery, idx, termoObrigatorio);
+        const img = await buscarImagemPexels(q.imageQuery, idx, termoObrigatorio, true);
         return { ...q, imageUrl: img?.url || undefined };
       }));
       setQuestoes(comImagens);

@@ -44,9 +44,21 @@ function fotoBateComEsporte(foto: FotoPexels, termoObrigatorio: string): boolean
  * basquete, mesmo com "handball" na busca). Se nenhuma das candidatas da
  * query original bater, tenta de novo com "{termoObrigatorio} training",
  * uma busca mais simples e segura.
+ *
+ * `exigirMatch`: quando true, NÃO aceita o "último recurso" (1ª foto de
+ * qualquer busca, mesmo sem bater com o esporte) — devolve null em vez de
+ * arriscar uma foto de outro esporte/sem relação nenhuma. Usado onde uma
+ * imagem errada atrapalha mais do que não ter imagem (ex: avaliação
+ * adaptada pra aluno com NEE, que depende da foto pra entender a questão).
+ * A Sequência Didática mantém o comportamento antigo (sempre tenta emplacar
+ * alguma imagem) passando `exigirMatch: false` (padrão).
  */
-export async function buscarImagemPexels(query: string, index = 0, termoObrigatorio?: string): Promise<{ url: string; author: string } | null> {
-  const page = (index % 5) + 1;
+export async function buscarImagemPexels(query: string, index = 0, termoObrigatorio?: string, exigirMatch = false): Promise<{ url: string; author: string } | null> {
+  // Módulo 20 (não 5): com só 5 páginas, itens cujo índice difere em
+  // exatamente 5 (ex: questão 2 e questão 7 de uma prova de 7) caíam na
+  // mesma página e podiam repetir a mesma foto — bug real observado numa
+  // avaliação de 7 questões.
+  const page = (index % 20) + 1;
   const fotos = await pesquisarPexels(query, page);
 
   if (termoObrigatorio) {
@@ -54,10 +66,14 @@ export async function buscarImagemPexels(query: string, index = 0, termoObrigato
     if (bate) return { url: bate.src.medium, author: bate.photographer };
 
     const fotosFallback = await pesquisarPexels(`${termoObrigatorio} training`, page);
-    const escolhidaFallback = fotosFallback.find((f) => fotoBateComEsporte(f, termoObrigatorio)) ?? fotosFallback[0];
-    if (escolhidaFallback) return { url: escolhidaFallback.src.medium, author: escolhidaFallback.photographer };
+    const bateFallback = fotosFallback.find((f) => fotoBateComEsporte(f, termoObrigatorio));
+    if (bateFallback) return { url: bateFallback.src.medium, author: bateFallback.photographer };
+
+    if (exigirMatch) return null;
+    if (fotosFallback[0]) return { url: fotosFallback[0].src.medium, author: fotosFallback[0].photographer };
   }
 
+  if (exigirMatch) return null;
   if (fotos.length > 0) return { url: fotos[0].src.medium, author: fotos[0].photographer };
   return null;
 }
