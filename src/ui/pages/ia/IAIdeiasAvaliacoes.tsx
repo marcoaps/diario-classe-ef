@@ -143,7 +143,7 @@ export function IAIdeiasAvaliacoes() {
 
     setEtapa('Gerando questoes com IA...');
     try {
-      const prompt = 'Voce e especialista em educacao inclusiva. Crie EXATAMENTE 7 questoes adaptadas para: Tema: ' + tema + ', Serie: ' + serie + ', NEE: ' + deficiencia + ', Objetivo: ' + objetivoFinal + '. REGRAS: linguagem simples e curta, apenas 2 alternativas (A e B), questoes visuais, imageQuery SEMPRE em ingles para busca Pexels. Responda APENAS JSON valido sem texto extra: {"questoes":[{"numero":1,"imageQuery":"volleyball players court","pergunta":"pergunta simples","opcaoA":"opcao A","opcaoB":"opcao B","resposta":"A","habilidade":"habilidade pedagogica"}]}';
+      const prompt = 'Voce e especialista em educacao inclusiva. Crie EXATAMENTE 7 questoes adaptadas para: Tema: ' + tema + ', Serie: ' + serie + ', NEE: ' + deficiencia + ', Objetivo: ' + objetivoFinal + '. REGRAS: linguagem simples e curta, apenas 2 alternativas (A e B), questoes visuais, imageQuery SEMPRE em ingles para busca Pexels. IMPORTANTE: alterne a alternativa correta entre A e B ao longo das 7 questoes (nao deixe a resposta certa sempre na mesma letra) — o campo "resposta" no exemplo abaixo e so ilustrativo, no JSON final ele deve variar entre "A" e "B" questao a questao. Responda APENAS JSON valido sem texto extra: {"questoes":[{"numero":1,"imageQuery":"volleyball players court","pergunta":"pergunta simples","opcaoA":"opcao A","opcaoB":"opcao B","resposta":"A ou B, varie","habilidade":"habilidade pedagogica"}]}';
       const res = await fetch('/api/claude', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
