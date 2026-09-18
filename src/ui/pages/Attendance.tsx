@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useStore } from '../../store';
 import { cn } from '../AppLayout';
 import { Save, Loader2, X, Trash2 } from 'lucide-react';
@@ -41,9 +42,12 @@ function registroVazio(presente: boolean, semQuadra: boolean): RegistroChamada {
 type Aba = 'chamada' | 'conteudo';
 
 export function Attendance() {
-  const { selectedClassId, classRooms } = useStore();
+  const { selectedClassId, classRooms, setSelectedClassId } = useStore();
+  const [searchParams] = useSearchParams();
   const [abaAtiva, setAbaAtiva] = useState<Aba>('chamada');
-  const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  // Vem de um link "Editar chamada" do Histórico (?date=YYYY-MM-DD) — abre
+  // já na data certa em vez de sempre cair em hoje.
+  const [date, setDate] = useState(() => searchParams.get('date') || format(new Date(), 'yyyy-MM-dd'));
   const [alunos, setAlunos] = useState<AlunoSupabase[]>([]);
   const [records, setRecords] = useState<Record<string, RegistroChamada>>({});
   const [transferidos, setTransferidos] = useState<Map<string, string>>(new Map());
@@ -61,6 +65,13 @@ export function Attendance() {
 
   const turmaAtual = classRooms.find(cr => cr.id === selectedClassId);
   const turmaNorm = turmaAtual ? normalizarTurma(turmaAtual.name) : null;
+
+  // Lista de turmas pra troca rápida direto nesta tela, sem precisar voltar
+  // ao Dashboard — permite fazer/editar chamada de qualquer turma na hora,
+  // independente do dia da semana.
+  const uniqueClassRooms = useMemo(() => Array.from(
+    new Map<string, typeof classRooms[number]>(classRooms.map(cr => [cr.name, cr])).values()
+  ).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { numeric: true })), [classRooms]);
 
   // Trabalhos da turma no bimestre da data selecionada, pra oferecer como
   // trabalho compensatório de um NP.
@@ -172,10 +183,6 @@ export function Attendance() {
     carregar();
     return () => { mounted = false; };
   }, [turmaNorm, date]);
-
-  if (!selectedClassId) {
-    return <div className="p-8 text-center text-gray-500 mt-10 font-medium">Por favor, selecione uma turma na aba "Turmas".</div>;
-  }
 
   const handleToggle = (alunoId: string) => {
     if (transferidos.has(alunoId)) return;
@@ -398,6 +405,22 @@ export function Attendance() {
         </button>
       </div>
 
+      {/* Seletor de turma — troca rápida sem depender do dia da semana nem
+          precisar voltar ao Dashboard */}
+      <div className="p-4 pb-0 bg-background/90">
+        <label className="text-xs font-semibold text-gray-500 mb-1 block">Turma</label>
+        <select
+          value={selectedClassId ?? ''}
+          onChange={e => setSelectedClassId(e.target.value || null)}
+          className="w-full bg-surface border border-gray-300 rounded-xl p-3 text-textPrimary text-base font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+        >
+          <option value="" disabled>Selecione uma turma...</option>
+          {uniqueClassRooms.map(cr => (
+            <option key={cr.id} value={cr.id}>{cr.name}</option>
+          ))}
+        </select>
+      </div>
+
       {/* Aba Chamada */}
       {abaAtiva === 'chamada' && (
         <>
@@ -579,7 +602,9 @@ export function Attendance() {
             )}
 
             {!loading && alunos.length === 0 && (
-              <div className="text-center text-gray-500 py-10 font-medium">Nenhum aluno nesta turma.</div>
+              <div className="text-center text-gray-500 py-10 font-medium">
+                {selectedClassId ? 'Nenhum aluno nesta turma.' : 'Selecione uma turma acima para começar a chamada.'}
+              </div>
             )}
           </div>
 

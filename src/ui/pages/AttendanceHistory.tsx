@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { buscarHistoricoFrequencia } from '../../data/supabase';
+import { useNavigate } from 'react-router-dom';
+import { buscarHistoricoFrequencia, buscarDatasComChamada } from '../../data/supabase';
 import { useStore } from '../../store';
 import { supabase } from '../../data/supabase';
 import { format } from 'date-fns';
-import { Loader2, Filter, CheckCircle2, XCircle, Trash2 } from 'lucide-react';
+import { Loader2, Filter, CheckCircle2, XCircle, Trash2, Pencil, CalendarClock } from 'lucide-react';
 import { cn } from '../AppLayout';
 import { opcaoParticipacao, labelMotivoJustificativa } from '../../domain/frequenciaPontos';
 
@@ -15,16 +16,47 @@ function normalizarTurma(turmaId: string) {
 }
 
 export function AttendanceHistory() {
-  const { classRooms } = useStore();
+  const navigate = useNavigate();
+  const { classRooms, setSelectedClassId } = useStore();
   const [dataAtual, setDataAtual] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [turmaId, setTurmaId] = useState('ALL');
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [historico, setHistorico] = useState<any[]>([]);
 
+  // Datas com chamada já registrada para a turma selecionada — a "Gestão de
+  // Chamadas": veja rápido quais aulas já foram lançadas e edite qualquer
+  // uma direto, sem depender do dia da semana.
+  const [datasRegistradas, setDatasRegistradas] = useState<{ data: string; presentes: number; faltas: number }[]>([]);
+  const [loadingDatas, setLoadingDatas] = useState(false);
+  const [filtroInicio, setFiltroInicio] = useState('');
+  const [filtroFim, setFiltroFim] = useState('');
+
   const uniqueClassRooms = useMemo(() => Array.from(
     new Map(classRooms.map(cr => [cr.name, cr])).values()
   ).sort((a: any, b: any) => a.name.localeCompare(b.name, 'pt-BR', { numeric: true })), [classRooms]);
+
+  useEffect(() => {
+    if (turmaId === 'ALL') { setDatasRegistradas([]); return; }
+    let mounted = true;
+    setLoadingDatas(true);
+    buscarDatasComChamada(turmaId)
+      .then(datas => { if (mounted) setDatasRegistradas(datas); })
+      .catch(err => console.error('Erro ao listar datas registradas', err))
+      .finally(() => { if (mounted) setLoadingDatas(false); });
+    return () => { mounted = false; };
+  }, [turmaId]);
+
+  const datasFiltradas = useMemo(() => datasRegistradas.filter(d =>
+    (!filtroInicio || d.data >= filtroInicio) && (!filtroFim || d.data <= filtroFim)
+  ), [datasRegistradas, filtroInicio, filtroFim]);
+
+  const handleEditarChamada = (data: string) => {
+    const cr = uniqueClassRooms.find((c: any) => c.name === turmaId);
+    if (!cr) return;
+    setSelectedClassId(cr.id);
+    navigate(`/attendance?date=${data}`);
+  };
 
   const { totalP, totalF, avgFreq } = useMemo(() => {
     let p = 0, f = 0;
@@ -140,6 +172,67 @@ export function AttendanceHistory() {
           </div>
         </div>
       </div>
+
+      {turmaId !== 'ALL' && (
+        <div className="px-4 md:px-6">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
+              <p className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                <CalendarClock className="w-4 h-4 text-teal-600" />
+                {turmaId} — Chamadas registradas
+              </p>
+              <span className="text-xs font-bold text-gray-400">{datasFiltradas.length} {datasFiltradas.length === 1 ? 'data' : 'datas'}</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 p-4 border-b border-gray-100">
+              <div>
+                <label className="text-xs font-semibold text-gray-500 mb-1 block">Período — de</label>
+                <input
+                  type="date"
+                  value={filtroInicio}
+                  onChange={(e) => setFiltroInicio(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-500 mb-1 block">até</label>
+                <input
+                  type="date"
+                  value={filtroFim}
+                  onChange={(e) => setFiltroFim(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
+                />
+              </div>
+            </div>
+
+            {loadingDatas ? (
+              <div className="flex items-center justify-center gap-2 py-8 text-gray-500">
+                <Loader2 className="w-5 h-5 animate-spin" /> Carregando datas...
+              </div>
+            ) : datasFiltradas.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-8">Nenhuma chamada registrada para essa turma{filtroInicio || filtroFim ? ' no período selecionado' : ''}.</p>
+            ) : (
+              <div className="flex flex-col divide-y divide-gray-100">
+                {datasFiltradas.map(d => (
+                  <button
+                    key={d.data}
+                    onClick={() => handleEditarChamada(d.data)}
+                    className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+                  >
+                    <div>
+                      <p className="font-bold text-gray-900 text-sm">{format(new Date(d.data + 'T00:00:00'), 'dd/MM/yyyy')}</p>
+                      <p className="text-xs text-gray-400">{d.presentes} presente{d.presentes !== 1 ? 's' : ''} · {d.faltas} falta{d.faltas !== 1 ? 's' : ''} — chamada registrada</p>
+                    </div>
+                    <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-teal-50 text-teal-700 border border-teal-200 shrink-0">
+                      <Pencil className="w-3.5 h-3.5" /> Editar chamada
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="px-4 md:px-6 flex flex-col gap-6">
         {loading ? (

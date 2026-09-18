@@ -53,7 +53,7 @@ export async function buscarHistoricoFrequencia(turmaId?: string, dt?: string) {
 
   let turmaNormalizada: string | null = null;
   if (turmaId && turmaId !== 'ALL') {
-    turmaNormalizada = turmaId.replace("o", "").replace(/\s/g, "").toUpperCase();
+    turmaNormalizada = turmaId.replace(/º/g, "").replace(/\s/g, "").toUpperCase();
   }
 
   const alunosMap = new Map();
@@ -85,6 +85,34 @@ export async function buscarHistoricoFrequencia(turmaId?: string, dt?: string) {
   return historico;
 }
 
+// Datas com chamada já registrada para uma turma, mais recentes primeiro —
+// usado pela "Gestão de Chamadas" no Histórico pra listar dias já lançados
+// e permitir editar direto, sem precisar adivinhar a data.
+export async function buscarDatasComChamada(turmaId: string) {
+  const turmaNormalizada = turmaId.replace(/º/g, "").replace(/\s/g, "").toUpperCase();
+  const { data: alunos, error: errAlunos } = await supabase
+    .from("alunos").select("id").eq("turma_id", turmaNormalizada);
+  if (errAlunos) throw errAlunos;
+
+  const alunoIds = (alunos || []).map((a: any) => a.id);
+  if (alunoIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("frequencia").select("data, presente").in("aluno_id", alunoIds);
+  if (error) throw error;
+
+  const porData = new Map<string, { presentes: number; faltas: number }>();
+  (data || []).forEach((r: any) => {
+    const atual = porData.get(r.data) || { presentes: 0, faltas: 0 };
+    if (r.presente) atual.presentes++; else atual.faltas++;
+    porData.set(r.data, atual);
+  });
+
+  return Array.from(porData.entries())
+    .map(([data, contagem]) => ({ data, ...contagem }))
+    .sort((a, b) => b.data.localeCompare(a.data));
+}
+
 export async function buscarAlunos(turmaId: string) {
   const turmaNormalizada = turmaId.replace("o", "").replace(/\s/g, "").toUpperCase();
   const { data, error } = await supabase
@@ -108,7 +136,7 @@ export async function buscarRelatorioFrequencia(turmaId?: string, dataInicio?: s
 
   let turmaNormalizada: string | null = null;
   if (turmaId && turmaId !== 'ALL') {
-    turmaNormalizada = turmaId.replace("o", "").replace(/\s/g, "").toUpperCase();
+    turmaNormalizada = turmaId.replace(/º/g, "").replace(/\s/g, "").toUpperCase();
   }
 
   const alunosMap = new Map();

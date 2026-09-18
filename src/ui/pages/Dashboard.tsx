@@ -51,7 +51,8 @@ const MENU_ITEMS = [
 
 export function Dashboard() {
   const navigate = useNavigate();
-  const { classRooms, students, setStudents, selectedClassId, setSelectedClassId, loading } = useStore();
+  const { classRooms, students, setStudents, selectedClassId, setSelectedClassId, recentClassIds, loading } = useStore();
+  const [buscaTurma, setBuscaTurma] = useState('');
   const [classToConfirm, setClassToConfirm] = useState<ClassRoom | null>(null);
   const [showCompartilhar, setShowCompartilhar] = useState(false);
   const [copiado, setCopiado] = useState(false);
@@ -127,6 +128,22 @@ export function Dashboard() {
 
   const groupedByYear = useMemo(() => groupByYear(sortedClassRooms), [sortedClassRooms]);
   const years = useMemo(() => Array.from(groupedByYear.keys()).sort((a, b) => a - b), [groupedByYear]);
+
+  // Busca rápida por turma ("6ºF", "6f", "6 f" etc. todos encontram a mesma
+  // turma) — ignora acentos/símbolos pra comparar só letras e números.
+  const buscaNormalizada = buscaTurma.trim().toLowerCase().replace(/[^0-9a-z]/g, '');
+  const turmasBuscadas = useMemo(() => {
+    if (!buscaNormalizada) return [];
+    return sortedClassRooms.filter(cr =>
+      cr.name.toLowerCase().replace(/[^0-9a-z]/g, '').includes(buscaNormalizada)
+    );
+  }, [sortedClassRooms, buscaNormalizada]);
+
+  const recentClassRooms = useMemo(() =>
+    recentClassIds
+      .map(id => sortedClassRooms.find(cr => cr.id === id))
+      .filter((cr): cr is ClassRoom => !!cr),
+  [recentClassIds, sortedClassRooms]);
 
   const fetchCounts = async () => {
     const counts: Record<string, number> = {};
@@ -574,7 +591,7 @@ export function Dashboard() {
           </span>
         </button>
 
-        <AgendaDia onTurmaClick={(t) => { const cr = sortedClassRooms.find((x) => x.name.replace(/[^0-9A-Za-z]/g,'').toUpperCase() === t); if (cr) handleClassClick(cr); }} />
+        <AgendaDia onTurmaClick={(t) => { const cr = sortedClassRooms.find((x) => x.name.replace(/[^0-9A-Za-z]/g,'').toUpperCase() === t); if (cr) { setSelectedClassId(cr.id); navigate('/attendance'); } }} />
         {/* Grid de botões */}
         <div className="grid grid-cols-2 gap-3">
           {MENU_ITEMS.map((item) => {
@@ -600,6 +617,25 @@ export function Dashboard() {
           })}
         </div>
 
+        {/* Últimas Turmas Acessadas — pra voltar rápido quando o professor
+            está corrigindo registros em várias turmas seguidas */}
+        {recentClassRooms.length > 0 && (
+          <div className="bg-white rounded-2xl border border-[#EAF7EF] shadow-sm p-4">
+            <p className="text-xs font-black text-gray-500 uppercase tracking-wide mb-2">Últimas Turmas Acessadas</p>
+            <div className="flex flex-wrap gap-2">
+              {recentClassRooms.map(cr => (
+                <button
+                  key={cr.id}
+                  onClick={() => { setSelectedClassId(cr.id); navigate('/attendance'); }}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold bg-[#E3F8EC] text-[#0B7A3D] border border-[#BEEBD1] hover:bg-[#BEEBD1] active:scale-95 transition-all"
+                >
+                  <CheckSquare className="w-3.5 h-3.5" /> {cr.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Bloco Turmas colapsável */}
         <div id="turmas-list" className="scroll-mt-20">
           <button
@@ -624,6 +660,52 @@ export function Dashboard() {
           </button>
 
           {showTurmas && (
+            <div className="mt-2 relative">
+              <input
+                type="text"
+                value={buscaTurma}
+                onChange={(e) => setBuscaTurma(e.target.value)}
+                placeholder="Buscar turma... (ex: 6ºF, 7B, 9c)"
+                className="w-full bg-white border border-[#EAF7EF] rounded-2xl px-4 py-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-emerald-200 shadow-sm"
+              />
+              {buscaTurma && (
+                <button
+                  onClick={() => setBuscaTurma('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {showTurmas && buscaNormalizada && (
+            <div className="flex flex-col divide-y divide-[#F0FAF4] border border-[#EAF7EF] rounded-2xl overflow-hidden bg-white shadow-sm mt-2">
+              {turmasBuscadas.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-6">Nenhuma turma encontrada para "{buscaTurma}".</p>
+              ) : turmasBuscadas.map(cr => (
+                <div key={cr.id} onClick={() => handleClassClick(cr)}
+                  className={cn("flex items-center justify-between px-4 py-3 cursor-pointer transition-colors", selectedClassId === cr.id ? "bg-[#E3F8EC]" : "hover:bg-[#F5FCF8]")}>
+                  <div>
+                    <span className="text-sm font-bold text-gray-900">{cr.name}</span>
+                    <span className="text-xs text-gray-400 ml-2">{studentCounts[cr.id] || 0} alunos</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setSelectedClassId(cr.id); navigate('/attendance'); }}
+                      title="Ir direto para a chamada desta turma"
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-[#E3F8EC] text-[#0B7A3D] border border-[#BEEBD1] hover:bg-[#BEEBD1] active:scale-95 transition-all"
+                    >
+                      <CheckSquare className="w-3.5 h-3.5" /> Chamada
+                    </button>
+                    <ChevronRight className="w-4 h-4 text-gray-300" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {showTurmas && !buscaNormalizada && (
             <div className="flex flex-col gap-2 mt-2">
               {years.map(year => {
                 const turmas = groupedByYear.get(year) || [];
@@ -655,7 +737,14 @@ export function Dashboard() {
                               <span className="text-sm font-bold text-gray-900">{cr.name}</span>
                               <span className="text-xs text-gray-400 ml-2">{studentCounts[cr.id] || 0} alunos</span>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setSelectedClassId(cr.id); navigate('/attendance'); }}
+                                title="Ir direto para a chamada desta turma"
+                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-[#E3F8EC] text-[#0B7A3D] border border-[#BEEBD1] hover:bg-[#BEEBD1] active:scale-95 transition-all"
+                              >
+                                <CheckSquare className="w-3.5 h-3.5" /> Chamada
+                              </button>
                               {selectedClassId === cr.id && <span className="text-xs font-bold text-[#0B7A3D] bg-[#BEEBD1] px-2 py-0.5 rounded-full">Selecionada</span>}
                               <ChevronRight className="w-4 h-4 text-gray-300" />
                             </div>

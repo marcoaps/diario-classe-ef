@@ -12,6 +12,7 @@ interface AppState {
   grades: GradeRecord[];
   loading: boolean;
   selectedClassId: string | null;
+  recentClassIds: string[];
   refreshDb: () => Promise<void>;
   setSelectedClassId: (id: string | null) => void;
   saveAttendance: (record: AttendanceRecord) => Promise<void>;
@@ -34,6 +35,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [selectedClassId, setSelectedClassIdRaw] = useState<string | null>(() => {
     try { return localStorage.getItem('selectedClassId') || null; } catch { return null; }
   });
+  const [recentClassIds, setRecentClassIds] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('recentClassIds') || '[]'); } catch { return []; }
+  });
 
   const setSelectedClassId = (id: string | null) => {
     setSelectedClassIdRaw(id);
@@ -41,6 +45,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (id) localStorage.setItem('selectedClassId', id);
       else localStorage.removeItem('selectedClassId');
     } catch {}
+
+    // Guarda as últimas turmas acessadas (mais recente primeiro) — usado
+    // pelo atalho "Últimas Turmas Acessadas" no Dashboard, pra voltar rápido
+    // a uma turma sem precisar procurar de novo.
+    if (id) {
+      setRecentClassIds(prev => {
+        const novo = [id, ...prev.filter(x => x !== id)].slice(0, 8);
+        try { localStorage.setItem('recentClassIds', JSON.stringify(novo)); } catch {}
+        return novo;
+      });
+    }
   };
   const [isSynced, setIsSynced] = useState(true);
 
@@ -113,7 +128,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   return (
     <StoreContext.Provider value={{
       classRooms, students, setStudents, attendances, evaluations, grades,
-      loading, selectedClassId, setSelectedClassId,
+      loading, selectedClassId, recentClassIds, setSelectedClassId,
       refreshDb: fetchDb, saveAttendance, saveGrade, addEvaluation,
       isSynced, triggerSync
     }}>
