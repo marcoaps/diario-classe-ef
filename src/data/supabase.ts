@@ -85,6 +85,26 @@ export async function buscarHistoricoFrequencia(turmaId?: string, dt?: string) {
   return historico;
 }
 
+export interface AlunoEspecial {
+  id: string;
+  nome: string;
+  turma_id: string;
+  cid_diagnostico: string | null;
+  transferido: boolean;
+}
+
+// Lista completa de alunos especiais (AEE), com CID/diagnóstico e situação
+// de transferência — base pra busca por CID na hora de preparar a prova
+// bimestral.
+export async function buscarAlunosEspeciais(): Promise<AlunoEspecial[]> {
+  const { data, error } = await supabase
+    .from('alunos_especiais')
+    .select('id, nome, turma_id, cid_diagnostico, transferido')
+    .order('turma_id', { ascending: true });
+  if (error) throw error;
+  return (data || []) as AlunoEspecial[];
+}
+
 // Datas com chamada já registrada para uma turma, mais recentes primeiro —
 // usado pela "Gestão de Chamadas" no Histórico pra listar dias já lançados
 // e permitir editar direto, sem precisar adivinhar a data.

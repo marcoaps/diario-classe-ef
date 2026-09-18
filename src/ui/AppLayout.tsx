@@ -3,7 +3,7 @@ import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import {
   Users, CheckSquare, GraduationCap, CloudOff, Cloud,
   CalendarSearch, BarChart3, QrCode, ClipboardList, CalendarDays,
-  Sparkles, MoreHorizontal, X, BookOpen, Trophy, ClipboardCheck, Goal, NotebookPen, Crown, UserCheck
+  Sparkles, MoreHorizontal, X, BookOpen, Trophy, ClipboardCheck, Goal, NotebookPen, Crown, UserCheck, HeartHandshake
 } from 'lucide-react';
 import { useStore } from '../store';
 import { clsx, type ClassValue } from 'clsx';
@@ -15,7 +15,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-const MAIS_PATHS = ['/ia', '/avaliacoes', '/alunos', '/diario-aulas', '/torneio', '/trabalhos', '/futsal', '/rodizio', '/prova-alunos'];
+const MAIS_PATHS = ['/ia', '/avaliacoes', '/alunos', '/diario-aulas', '/torneio', '/trabalhos', '/futsal', '/rodizio', '/prova-alunos', '/alunos-especiais'];
 
 export function AppLayout() {
   const { isSynced, triggerSync } = useStore();
@@ -137,6 +137,12 @@ export function AppLayout() {
             to="/prova-alunos"
             icon={<UserCheck className="w-5 h-5" />}
             label="Alunos para a Prova"
+            onClick={() => setMaisAberto(false)}
+          />
+          <PopupItem
+            to="/alunos-especiais"
+            icon={<HeartHandshake className="w-5 h-5" />}
+            label="Alunos Especiais (AEE)"
             onClick={() => setMaisAberto(false)}
           />
         </div>

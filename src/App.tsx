@@ -52,6 +52,7 @@ import { TimesFutsal } from './ui/pages/TimesFutsal';
 import { RodizioFutsal } from './ui/pages/rodizio/RodizioFutsal';
 import { AgendaHoje } from './ui/pages/AgendaHoje';
 import { AlunosProva } from './ui/pages/AlunosProva';
+import { AlunosEspeciais } from './ui/pages/AlunosEspeciais';
 import { supabase } from './data/supabase';
 
 export function useAuth() {
@@ -103,6 +104,7 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/attendance" element={<Attendance />} />
           <Route path="/genero" element={<MarcarGenero />} />
+          <Route path="/alunos-especiais" element={<AlunosEspeciais />} />
           <Route path="/history" element={<AttendanceHistory />} />
           <Route path="/report" element={<AttendanceReport />} />
           <Route path="/evaluations" element={<Evaluations />} />

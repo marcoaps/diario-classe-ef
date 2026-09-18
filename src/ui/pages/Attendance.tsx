@@ -51,7 +51,7 @@ export function Attendance() {
   const [alunos, setAlunos] = useState<AlunoSupabase[]>([]);
   const [records, setRecords] = useState<Record<string, RegistroChamada>>({});
   const [transferidos, setTransferidos] = useState<Map<string, string>>(new Map());
-  const [especiais, setEspeciais] = useState<Set<string>>(new Set());
+  const [especiais, setEspeciais] = useState<Map<string, string | null>>(new Map());
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [modalNpjAlunoId, setModalNpjAlunoId] = useState<string | null>(null);
@@ -129,14 +129,15 @@ export function Attendance() {
         // Busca alunos especiais (AEE)
         const { data: aeeData } = await supabase
           .from('alunos_especiais')
-          .select('nome');
-        const nomesAEE = new Set<string>(
-          (aeeData || []).map((e: any) => e.nome?.toLowerCase().trim())
+          .select('nome, cid_diagnostico');
+        const cidPorNome = new Map<string, string | null>(
+          (aeeData || []).map((e: any) => [e.nome?.toLowerCase().trim(), e.cid_diagnostico ?? null])
         );
-        const idsAEE = new Set<string>();
+        const idsAEE = new Map<string, string | null>();
         lista.forEach(a => {
-          if (nomesAEE.has(a.nome.toLowerCase().trim())) {
-            idsAEE.add(a.id);
+          const nomeNorm = a.nome.toLowerCase().trim();
+          if (cidPorNome.has(nomeNorm)) {
+            idsAEE.set(a.id, cidPorNome.get(nomeNorm) ?? null);
           }
         });
         if (mounted) setEspeciais(idsAEE);
@@ -532,7 +533,10 @@ export function Attendance() {
                         {aluno.numero_chamada ? <span className="font-mono text-gray-500 mr-2 text-sm">{aluno.numero_chamada}</span> : null}
                         {aluno.nome}
                         {isEspecial && (
-                          <span className="ml-1 px-1.5 py-0.5 rounded-md bg-purple-100 text-purple-700 text-[10px] font-bold border border-purple-300">
+                          <span
+                            title={especiais.get(aluno.id) || 'AEE — sem CID/diagnóstico registrado'}
+                            className="ml-1 px-1.5 py-0.5 rounded-md bg-purple-100 text-purple-700 text-[10px] font-bold border border-purple-300"
+                          >
                             AEE
                           </span>
                         )}
