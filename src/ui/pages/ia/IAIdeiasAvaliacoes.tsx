@@ -69,7 +69,7 @@ function montarPromptImagem(p: { tema: string; serie: string; nee: string; cena:
   const temaPrincipal = p.tema.split(/[:;,\n]/)[0].trim() || p.tema;
   const numeroSerie = parseInt(p.serie, 10);
   const idade = Number.isNaN(numeroSerie) ? '' : ` Personagens: estudantes de ${numeroSerie + 5} a ${numeroSerie + 6} anos.`;
-  return `Ilustração em estilo cartoon vetorial simples, cores vivas, traços limpos e fundo neutro, formato horizontal 4:3. UMA única imagem com UMA única cena, sem colagem, sem painéis e sem moldura. Cena: ${p.cena}. Esporte: ${temaPrincipal} — desenhe corretamente a quadra, os equipamentos e os uniformes desse esporte.${idade} ${cuidado}; um único assunto em destaque. Não escreva nenhum texto, letra, número, logotipo, legenda ou placar na imagem. Não crie prova, folha de exercícios nem layout de documento: apenas a ilustração.`;
+  return `Ilustração em estilo cartoon vetorial simples, cores vivas, traços limpos e fundo neutro, formato horizontal 4:3. UMA única imagem com UMA única cena, sem colagem, sem painéis e sem moldura. Cena: ${p.cena}. Esporte: ${temaPrincipal} — desenhe corretamente a quadra, os equipamentos e os uniformes desse esporte.${idade} Estilo da cena: ${cuidado}; um único assunto em destaque. Não escreva nenhum texto, letra, número, logotipo, legenda ou placar na imagem. Não crie prova, folha de exercícios nem layout de documento: apenas a ilustração.`;
 }
 
 function montarPromptQuestoes(p: { tema: string; serie: string; nee: string; nivel: Nivel; objetivo: string }): string {
