@@ -559,9 +559,21 @@ export function IAIdeiasAvaliacoes() {
           </div>
 
           <div className="bg-surface border border-outline-variant rounded-2xl p-4 space-y-3">
-            <div>
-              <p className="text-xs font-bold text-on-surface-variant">PROMPTS DE IMAGEM (guia pra você — não vai impresso)</p>
-              <p className="text-[11px] text-on-surface-variant mt-1">Cole <strong>um prompt por vez</strong> no gerador de imagem — vários juntos viram uma colagem numa imagem só.</p>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-xs font-bold text-on-surface-variant">PROMPTS DE IMAGEM (guia pra você — não vai impresso)</p>
+                <p className="text-[11px] text-on-surface-variant mt-1">
+                  No Canva (Mídia Mágica) cole <strong>um prompt por vez</strong> — vários juntos podem virar colagem ou até uma prova.
+                  O "Copiar todos" serve pra guardar a lista ou pra um chat de IA (Copilot, ChatGPT), que nem sempre gera várias imagens de uma vez.
+                </p>
+              </div>
+              <button
+                onClick={() => copiar('todos', `Gere UMA imagem separada para cada um dos ${questoes.length} pedidos abaixo, na ordem, sem juntar em colagem:\n\n${questoes.map((q, i) => `${i + 1}) ${promptImagem(q)}`).join('\n\n')}`)}
+                className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-secondary-container text-on-secondary-container text-xs font-semibold"
+              >
+                {copiado === 'todos' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                {copiado === 'todos' ? 'Copiado!' : 'Copiar todos'}
+              </button>
             </div>
             {questoes.map(q => (
               <div key={q.numero} className="space-y-1">
