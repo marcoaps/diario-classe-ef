@@ -24,6 +24,24 @@ interface Questao {
   habilidade: string;
 }
 
+// Deduz o tipo de NEE a partir do texto do CID/diagnóstico cadastrado em
+// alunos_especiais, pra não depender do professor lembrar/adivinhar. Se o
+// aluno tiver mais de uma condição reconhecida, cai em "Deficiencia Multipla".
+function inferirNeeDoCid(cid: string): string | null {
+  const t = cid.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const encontradas = new Set<string>();
+  if (/F84|\bTEA\b|AUTIST|ESPECTRO AUTISTA/.test(t)) encontradas.add('Autismo (TEA)');
+  if (/F90|TDAH|DEFICIT DE ATENCAO/.test(t)) encontradas.add('TDAH');
+  if (/F81|DISLEXIA|APRENDIZAGEM/.test(t)) encontradas.add('Dislexia');
+  if (/F70|F71|F79|DEFICIENCIA INTELECTUAL/.test(t)) encontradas.add('Deficiencia Intelectual (DI)');
+  if (/H90|SURD/.test(t)) encontradas.add('Deficiencia Auditiva');
+  if (/BAIXA VISAO/.test(t)) encontradas.add('Deficiencia Visual');
+  if (/LOCOMOCAO|\bS86\b|PARALISIA/.test(t)) encontradas.add('Deficiencia Fisica');
+  if (encontradas.size === 0) return null;
+  if (encontradas.size > 1) return 'Deficiencia Multipla';
+  return Array.from(encontradas)[0];
+}
+
 async function buscarImagemPexels(query: string, index = 0): Promise<string | null> {
   try {
     const page = (index % 5) + 1;
@@ -46,25 +64,32 @@ export function IAIdeiasAvaliacoes() {
   const [alunoNumero, setAlunoNumero] = useState<number | null>(null);
   const [listaAlunos, setListaAlunos] = useState<Aluno[]>([]);
   const [buscandoAlunos, setBuscandoAlunos] = useState(false);
+  const [cidPorNome, setCidPorNome] = useState<Map<string, string | null>>(new Map());
+  const [cidAlunoSelecionado, setCidAlunoSelecionado] = useState<string | null>(null);
   const [questoes, setQuestoes] = useState<Questao[]>([]);
   const [gerando, setGerando] = useState(false);
   const [gerandoObjetivo, setGerandoObjetivo] = useState(false);
   const [etapa, setEtapa] = useState('');
   const [erro, setErro] = useState('');
 
-  // Buscar alunos quando série ou turma mudar
+  // Buscar alunos quando série ou turma mudar — só os cadastrados como AEE
+  // nessa turma (esta tela é justamente pra gerar a versão adaptada deles).
   useEffect(() => {
     async function buscarAlunos() {
-      if (!turma.trim()) { setListaAlunos([]); return; }
+      if (!turma.trim()) { setListaAlunos([]); setCidPorNome(new Map()); return; }
       setBuscandoAlunos(true);
       const serieNum = serie.replace(/[^0-9]/g, '');
       const turmaId = serieNum + turma.toUpperCase().trim();
-      const { data } = await supabase
-        .from('alunos')
-        .select('id, nome, numero_chamada, turma_id')
-        .eq('turma_id', turmaId)
-        .order('numero_chamada');
-      setListaAlunos(data || []);
+      const [{ data: todosAlunos }, { data: especiais }] = await Promise.all([
+        supabase.from('alunos').select('id, nome, numero_chamada, turma_id').eq('turma_id', turmaId).order('numero_chamada'),
+        supabase.from('alunos_especiais').select('nome, cid_diagnostico').eq('turma_id', turmaId),
+      ]);
+      const mapaCid = new Map<string, string | null>(
+        (especiais || []).map((e: any) => [e.nome?.toLowerCase().trim(), e.cid_diagnostico ?? null])
+      );
+      const soAEE = (todosAlunos || []).filter((a: any) => mapaCid.has(a.nome.toLowerCase().trim()));
+      setListaAlunos(soAEE);
+      setCidPorNome(mapaCid);
       setBuscandoAlunos(false);
     }
     buscarAlunos();
@@ -277,10 +302,14 @@ export function IAIdeiasAvaliacoes() {
                 const found = listaAlunos.find(a => a.id === e.target.value);
                 setAlunoNome(found?.nome || '');
                 setAlunoNumero(found?.numero_chamada || null);
+                const cid = found ? (cidPorNome.get(found.nome.toLowerCase().trim()) ?? null) : null;
+                setCidAlunoSelecionado(cid);
+                const neeInferida = cid ? inferirNeeDoCid(cid) : null;
+                if (neeInferida) handleNeeChange(neeInferida);
               }}
               className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface"
             >
-              <option value="">Selecione o aluno...</option>
+              <option value="">Selecione o aluno (AEE)...</option>
               {listaAlunos.map(a => (
                 <option key={a.id} value={a.id}>
                   {a.numero_chamada}. {a.nome}
@@ -289,8 +318,14 @@ export function IAIdeiasAvaliacoes() {
             </select>
           ) : (
             <div className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface-variant text-sm text-on-surface-variant">
-              {turma.trim() ? 'Nenhum aluno encontrado na turma.' : 'Preencha a Turma para carregar os alunos.'}
+              {turma.trim() ? 'Nenhum aluno AEE cadastrado nesta turma.' : 'Preencha a Turma para carregar os alunos AEE.'}
             </div>
+          )}
+          {aluno && (
+            <p className="text-xs text-on-surface-variant mt-1.5 leading-snug">
+              <span className="font-semibold">CID/diagnóstico: </span>
+              {cidAlunoSelecionado || 'sem registro — confirme o NEE manualmente.'}
+            </p>
           )}
         </div>
         {erro && <p className="text-xs text-error">{erro}</p>}
