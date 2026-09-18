@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
-import { ClipboardList, Plus, QrCode, Camera, Trash2, ChevronDown, ChevronUp, BarChart2, Sparkles, Share2, Copy, Check, ListChecks, FileUp, Printer } from 'lucide-react';
+import { ClipboardList, Plus, QrCode, Camera, Trash2, ChevronDown, ChevronUp, BarChart2, Sparkles, Share2, Copy, Check, ListChecks, FileUp, Printer, HeartHandshake } from 'lucide-react';
 import type { Avaliacao, QuestaoObjetiva } from './tiposCorretorProvas';
 import { ALTERNATIVAS_PADRAO, valorPorQuestaoObjetiva, arredondar, GRUPOS_CORRETOR, ehGrupoDeTurmas, labelTurmaOuGrupo } from './tiposCorretorProvas';
 import { getTurmasDoGrupo, getLabelGrupo } from '../ProvasOnline';
@@ -616,6 +616,18 @@ export function Avaliacoes() {
                 </select>
               </div>
             </div>
+
+            {turmaId && !ehGrupoDeTurmas(turmaId) && (
+              <a
+                href={`/alunos-especiais?turma=${turmaId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-purple-700 hover:underline w-fit"
+                title="Abre em outra aba — não perde o que você já digitou aqui"
+              >
+                <HeartHandshake className="w-3.5 h-3.5" /> Ver alunos especiais (AEE) da turma {turmaId}
+              </a>
+            )}
 
             <div className="grid grid-cols-3 gap-3">
               <div>

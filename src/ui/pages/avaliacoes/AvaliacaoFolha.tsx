@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
-import { ArrowLeft, Printer, FileText, Download, Sparkles, QrCode } from 'lucide-react';
+import { ArrowLeft, Printer, FileText, Download, Sparkles, QrCode, HeartHandshake } from 'lucide-react';
 import QRCode from 'qrcode';
 import type { Avaliacao, Aluno, QuestaoObjetiva } from './tiposCorretorProvas';
 import { valorPorQuestaoObjetiva, turmasDoValor, ehGrupoDeTurmas, labelTurmaOuGrupo, GRUPOS_CORRETOR } from './tiposCorretorProvas';
@@ -779,6 +779,18 @@ export function AvaliacaoFolha() {
             {gerando ? 'Gerando...' : folhaDataUrl ? 'Gerar de novo' : 'Gerar folha-modelo'}
           </button>
         </div>
+
+        {turmaSelecionada && (
+          <a
+            href={`/alunos-especiais?turma=${turmaSelecionada}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-purple-700 hover:underline w-fit"
+            title="Abre em outra aba — não perde o que você já preparou aqui"
+          >
+            <HeartHandshake className="w-3.5 h-3.5" /> Ver alunos especiais (AEE) da turma {formatarTurma(turmaSelecionada)}
+          </a>
+        )}
 
         {ehGrupoDeTurmas(avaliacao.turma_id) && turmasDoValor(avaliacao.turma_id).length > 1 && (
           <div className="flex items-center gap-2">

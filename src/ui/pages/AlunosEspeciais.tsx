@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { buscarAlunosEspeciais, type AlunoEspecial } from '../../data/supabase';
 import { Loader2, Search, HeartHandshake, X } from 'lucide-react';
 import { cn } from '../AppLayout';
@@ -13,10 +14,13 @@ function normalizar(texto: string): string {
 }
 
 export function AlunosEspeciais() {
+  const [searchParams] = useSearchParams();
   const [alunos, setAlunos] = useState<AlunoEspecial[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState('');
-  const [turmaFiltro, setTurmaFiltro] = useState('TODAS');
+  // Vem de um atalho "Ver alunos especiais desta turma" nas telas de prova
+  // (?turma=6F) — já abre filtrado, sem precisar escolher de novo.
+  const [turmaFiltro, setTurmaFiltro] = useState(() => searchParams.get('turma')?.toUpperCase() || 'TODAS');
 
   useEffect(() => {
     let mounted = true;
