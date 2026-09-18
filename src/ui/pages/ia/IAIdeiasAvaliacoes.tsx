@@ -61,7 +61,10 @@ const CUIDADO_IMAGEM_POR_NEE: Record<string, string> = {
 // e o "sem texto" evita a imagem vir com letras (que não dá pra editar depois).
 function montarPromptImagem(p: { tema: string; serie: string; nee: string; cena: string }): string {
   const cuidado = CUIDADO_IMAGEM_POR_NEE[p.nee] ?? 'composição clara, com poucos elementos';
-  return `Ilustração educativa em estilo cartoon vetorial simples, cores vivas, traços limpos e fundo neutro, proporção horizontal 4:3, no mesmo estilo visual para toda a série de imagens. Cena: ${p.cena}. Contexto: aula de Educação Física do ${p.serie} sobre ${p.tema}; represente corretamente os equipamentos, a quadra e as regras desse esporte/tema. Cuidados: ${cuidado}; um único assunto em destaque. Sem nenhum texto, letra, número, logotipo, legenda ou placar escrito na imagem.`;
+  // Só o assunto principal ("Handebol:História,Fundamentos e Regras" -> "Handebol"):
+  // o resto do tema faz o gerador puxar elementos que não são da cena.
+  const temaPrincipal = p.tema.split(/[:;,\n]/)[0].trim() || p.tema;
+  return `Ilustração educativa em estilo cartoon vetorial simples, cores vivas, traços limpos e fundo neutro, proporção horizontal 4:3, no mesmo estilo visual para toda a série de imagens. Cena: ${p.cena}. Contexto: aula de Educação Física do ${p.serie} sobre ${temaPrincipal}; represente corretamente os equipamentos, a quadra e as regras desse esporte/tema. Cuidados: ${cuidado}; um único assunto em destaque. Sem nenhum texto, letra, número, logotipo, legenda ou placar escrito na imagem.`;
 }
 
 function montarPromptQuestoes(p: { tema: string; serie: string; nee: string; nivel: Nivel; objetivo: string }): string {
@@ -367,7 +370,7 @@ export function IAIdeiasAvaliacoes() {
   // sugerida pela IA.
   function sugestoesImagemHtmlStr(): string {
     return `<div style="margin-top:16px;border-top:2px dashed #94a3b8;padding-top:10px;">
-      <div style="font-weight:bold;font-size:10pt;margin-bottom:4px;">PROMPTS DE IMAGEM (guia do professor &#8212; n&#227;o imprimir)</div>
+      <div style="font-weight:bold;font-size:10pt;margin-bottom:4px;">PROMPTS DE IMAGEM (guia do professor &#8212; n&#227;o imprimir; cole um por vez no gerador de imagem)</div>
       ${questoes.map(q => `<div style="font-size:9pt;margin-bottom:6px;"><strong>Quest&#227;o ${q.numero}${q.titulo ? ` (${q.titulo})` : ''}:</strong> ${promptImagem(q)}</div>`).join('')}
     </div>`;
   }
@@ -551,15 +554,9 @@ export function IAIdeiasAvaliacoes() {
           </div>
 
           <div className="bg-surface border border-outline-variant rounded-2xl p-4 space-y-3">
-            <div className="flex items-center justify-between gap-2">
+            <div>
               <p className="text-xs font-bold text-on-surface-variant">PROMPTS DE IMAGEM (guia pra você — não vai impresso)</p>
-              <button
-                onClick={() => copiar('todos', questoes.map(q => `Questão ${q.numero}${q.titulo ? ` (${q.titulo})` : ''}:\n${promptImagem(q)}`).join('\n\n'))}
-                className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-secondary-container text-on-secondary-container text-xs font-semibold"
-              >
-                {copiado === 'todos' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                {copiado === 'todos' ? 'Copiado!' : 'Copiar todos'}
-              </button>
+              <p className="text-[11px] text-on-surface-variant mt-1">Cole <strong>um prompt por vez</strong> no gerador de imagem — vários juntos viram uma colagem numa imagem só.</p>
             </div>
             {questoes.map(q => (
               <div key={q.numero} className="space-y-1">
