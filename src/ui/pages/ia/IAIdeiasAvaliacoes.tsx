@@ -15,7 +15,9 @@ interface Aluno {
 
 interface Questao {
   numero: number;
+  titulo?: string;
   imageQuery: string;
+  contexto?: string;
   pergunta: string;
   opcaoA: string;
   opcaoB: string;
@@ -48,8 +50,8 @@ const ADAPTACAO_POR_NEE: Record<string, string> = {
 function montarPromptQuestoes(p: { tema: string; serie: string; nee: string; nivel: Nivel; objetivo: string }): string {
   const tresAlternativas = p.nivel === 'ano';
   const regrasNivel = tresAlternativas
-    ? `NÍVEL DO ANO: cada questão tem EXATAMENTE 3 alternativas (A, B e C). O enunciado traz um contexto de 1 a 2 frases curtas (uma situação de jogo ou de aula) e depois a pergunta. O conteúdo é o do ${p.serie}, sem simplificá-lo demais: o apoio está no FORMATO (frases curtas, um comando por vez, imagem de apoio), não em perguntar coisas triviais.`
-    : `NÍVEL DE MAIOR APOIO: cada questão tem EXATAMENTE 2 alternativas (A e B). O enunciado tem 1 frase curta e concreta que descreve o que aparece na imagem, seguida da pergunta. Conceitos concretos e visíveis: a resposta deve poder ser encontrada olhando a imagem.`;
+    ? `NÍVEL DO ANO: cada questão tem EXATAMENTE 3 alternativas (A, B e C). O "contexto" tem 1 a 2 frases curtas (uma situação de jogo ou de aula) e a "pergunta" vem depois, separada. O conteúdo é o do ${p.serie}, sem simplificá-lo demais: o apoio está no FORMATO (frases curtas, um comando por vez, imagem de apoio), não em perguntar coisas triviais.`
+    : `NÍVEL DE MAIOR APOIO: cada questão tem EXATAMENTE 2 alternativas (A e B). O "contexto" tem 1 frase curta e concreta que descreve o que aparece na imagem, e a "pergunta" vem depois, separada. Conceitos concretos e visíveis: a resposta deve poder ser encontrada olhando a imagem.`;
   const letras = tresAlternativas ? 'A, B e C' : 'A e B';
   const exemploOpcoes = tresAlternativas
     ? '"opcaoA":"opção A","opcaoB":"opção B","opcaoC":"opção C","resposta":"A, B ou C (varie)"'
@@ -70,11 +72,11 @@ REGRAS DE LINGUAGEM (importantes):
 - Prefira "onde", "qual" e "o que" a "quantos" quando a resposta exigir noção abstrata de número; só pergunte quantidade se ela puder ser vista na imagem.
 - Alternativas curtas, de tamanho parecido, sem que a correta seja sempre a mais longa.
 - Alterne a alternativa correta entre TODAS as letras (${letras}) ao longo das 7 questões; não deixe a resposta certa sempre na mesma letra.
-- O campo "pergunta" traz o enunciado completo (contexto + pergunta) em texto corrido.
+- Cada questão tem 3 campos de texto SEPARADOS: "titulo" (uma palavra-chave em MAIÚSCULAS que nomeia o assunto, ex: BOLA, TRAVE, REGRA), "contexto" (a frase de observação/situação, SEM a pergunta) e "pergunta" (somente a pergunta, em uma frase, terminando em "?"). Não repita o contexto dentro da pergunta.
 - O campo "imageQuery" descreve em português, em poucas palavras, a cena que a imagem dessa questão deve mostrar — vira uma legenda para o professor saber qual imagem colar depois, NÃO é usado em busca automática.
 
 Responda APENAS com JSON válido, sem texto antes ou depois:
-{"questoes":[{"numero":1,"imageQuery":"jogador sacando a bola de voleibol por cima da rede","pergunta":"enunciado completo",${exemploOpcoes},"habilidade":"habilidade pedagógica"}]}`;
+{"questoes":[{"numero":1,"titulo":"PALAVRA-CHAVE","imageQuery":"jogador sacando a bola de voleibol por cima da rede","contexto":"frase de contexto ou de observação da imagem","pergunta":"a pergunta?",${exemploOpcoes},"habilidade":"habilidade pedagógica"}]}`;
 }
 
 // Deduz o tipo de NEE a partir do texto do CID/diagnóstico cadastrado em
@@ -253,21 +255,37 @@ export function IAIdeiasAvaliacoes() {
       </table>`;
   }
 
-  function espacoImagemHtml(q: Questao, largura: number, altura: number): string {
-    return `<div style="width:${largura}px;height:${altura}px;border:1.5px dashed #94a3b8;border-radius:4px;display:flex;align-items:center;justify-content:center;text-align:center;padding:4px;box-sizing:border-box;">
-      <span style="font-size:7.5pt;color:#64748b;">Espa&#231;o para imagem${q.imageQuery ? `<br/>(sugest&#227;o: ${q.imageQuery})` : ''}</span>
-    </div>`;
+  // Caixa tracejada em branco onde o professor cola a imagem. Sem texto
+  // dentro: a sugestão de imagem fica numa lista à parte (sugestoesImagemHtml),
+  // pra não sair impressa na prova do aluno. Tabela com altura fixa porque o
+  // Word ignora height em div.
+  function espacoImagemHtml(largura: number, altura: number): string {
+    return `<table width="${largura}" height="${altura}" style="width:${largura}px;height:${altura}px;border:1.5px dashed #94a3b8;border-collapse:collapse;"><tr><td height="${altura}" style="height:${altura}px;">&nbsp;</td></tr></table>`;
+  }
+
+  function tituloQuestaoHtml(q: Questao, tamanho: number): string {
+    const tag = q.titulo ? ` &#8212; <span style="color:#1e3a5f;">${q.titulo}</span>` : '';
+    return `<div style="font-weight:bold;font-size:${tamanho}pt;margin-bottom:4px;">Quest&#227;o ${q.numero}${tag}</div>`;
+  }
+
+  // Contexto (observação/situação) numa linha e a pergunta, em negrito, em outra.
+  // Se a IA devolver só "pergunta" (sem contexto), sai só a pergunta.
+  function enunciadoHtml(q: Questao, tamanho: number): string {
+    return `${q.contexto ? `<div style="font-size:${tamanho}pt;margin-bottom:6px;">${q.contexto}</div>` : ''}<div style="font-size:${tamanho}pt;font-weight:bold;margin-bottom:8px;">${q.pergunta}</div>`;
+  }
+
+  function alternativasHtml(q: Questao, tamanho: number): string {
+    const linha = (letra: string, texto: string) =>
+      `<div style="margin-left:6px;margin-bottom:5px;font-size:${tamanho}pt;"><strong style="color:#1e3a5f;">${letra})</strong> ${texto}</div>`;
+    return `${linha('A', q.opcaoA)}${linha('B', q.opcaoB)}${q.opcaoC ? linha('C', q.opcaoC) : ''}`;
   }
 
   function questaoHtmlCompacto(q: Questao): string {
-    return `<div style="margin-bottom:10px;page-break-inside:avoid;overflow:hidden;">
-      <div style="font-weight:bold;font-size:12pt;margin-bottom:3px;">Quest&#227;o ${q.numero}</div>
-      <div style="float:left;margin-right:8px;margin-bottom:3px;">${espacoImagemHtml(q, 140, 95)}</div>
-      <div style="font-size:11pt;margin-bottom:4px;">${q.pergunta}</div>
-      <div style="clear:both;margin-left:6px;font-size:11pt;">A) ${q.opcaoA}</div>
-      <div style="margin-left:6px;font-size:11pt;">B) ${q.opcaoB}</div>
-      ${q.opcaoC ? `<div style="margin-left:6px;font-size:11pt;">C) ${q.opcaoC}</div>` : ''}
-      <div style="clear:both;"></div>
+    return `<div style="margin-bottom:14px;page-break-inside:avoid;overflow:hidden;">
+      ${tituloQuestaoHtml(q, 12)}
+      <div style="float:left;margin-right:8px;margin-bottom:6px;">${espacoImagemHtml(140, 95)}</div>
+      ${enunciadoHtml(q, 11)}
+      <div style="clear:both;margin-top:6px;">${alternativasHtml(q, 11)}</div>
     </div>`;
   }
 
@@ -291,16 +309,14 @@ export function IAIdeiasAvaliacoes() {
   function questoesWordStr(): string {
     // Word: coluna única, imagem ao lado do texto via float
     return questoes.map(q => `
-      <div style="margin-bottom:10px;overflow:hidden;">
-        <div style="font-weight:bold;font-size:10pt;margin-bottom:3px;">Quest&#227;o ${q.numero}</div>
+      <div style="margin-bottom:14px;overflow:hidden;">
+        ${tituloQuestaoHtml(q, 11)}
         <table width="100%" style="border-collapse:collapse;">
           <tr>
-            <td width="130" style="vertical-align:top;padding-right:8px;">${espacoImagemHtml(q, 120, 85)}</td>
+            <td width="130" style="vertical-align:top;padding-right:8px;">${espacoImagemHtml(120, 85)}</td>
             <td style="vertical-align:top;">
-              <div style="font-size:10pt;margin-bottom:4px;">${q.pergunta}</div>
-              <div style="font-size:10pt;margin-bottom:2px;">A) ${q.opcaoA}</div>
-              <div style="font-size:10pt;margin-bottom:2px;">B) ${q.opcaoB}</div>
-              ${q.opcaoC ? `<div style="font-size:10pt;">C) ${q.opcaoC}</div>` : ''}
+              ${enunciadoHtml(q, 10)}
+              <div style="margin-top:6px;">${alternativasHtml(q, 10)}</div>
             </td>
           </tr>
         </table>
@@ -311,6 +327,16 @@ export function IAIdeiasAvaliacoes() {
     return `<div style="margin-top:16px;border-top:2px dashed #94a3b8;padding-top:10px;">
       <div style="font-weight:bold;font-size:10pt;margin-bottom:4px;">GABARITO</div>
       <div style="font-size:10pt;">${questoes.map(q => q.numero + ') ' + q.resposta).join('   ')}</div>
+    </div>`;
+  }
+
+  // Guia só pro professor (fica no fim do Word, junto do gabarito — apague
+  // antes de imprimir pro aluno). Casa cada espaço em branco com a imagem
+  // sugerida pela IA.
+  function sugestoesImagemHtmlStr(): string {
+    return `<div style="margin-top:16px;border-top:2px dashed #94a3b8;padding-top:10px;">
+      <div style="font-weight:bold;font-size:10pt;margin-bottom:4px;">SUGEST&#213;ES DE IMAGEM (guia do professor &#8212; n&#227;o imprimir)</div>
+      ${questoes.map(q => `<div style="font-size:10pt;margin-bottom:3px;">Quest&#227;o ${q.numero}${q.titulo ? ` (${q.titulo})` : ''}: ${q.imageQuery}</div>`).join('')}
     </div>`;
   }
 
@@ -325,7 +351,7 @@ export function IAIdeiasAvaliacoes() {
 
   function exportarWord() {
     const nome = alunoNome || '____________________________________________';
-    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>Avaliacao Adaptada</title><style>body{font-family:Arial,sans-serif;font-size:10pt;}@page{size:A4 portrait;margin:10mm;}</style></head><body>${cabecalhoHtml(nome)}${questoesWordStr()}${gabaritoHtmlStr()}</body></html>`;
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>Avaliacao Adaptada</title><style>body{font-family:Arial,sans-serif;font-size:10pt;}@page{size:A4 portrait;margin:10mm;}</style></head><body>${cabecalhoHtml(nome)}${questoesWordStr()}${gabaritoHtmlStr()}${sugestoesImagemHtmlStr()}</body></html>`;
     const blob = new Blob([html], { type: 'application/msword' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -449,16 +475,15 @@ export function IAIdeiasAvaliacoes() {
           {questoes.map(q => (
             <div key={q.numero} className="bg-surface border border-outline-variant rounded-2xl overflow-hidden">
               <div className="bg-indigo-600 px-4 py-2">
-                <p className="text-white font-bold text-sm">Questao {q.numero}</p>
+                <p className="text-white font-bold text-sm">Questao {q.numero}{q.titulo ? ` — ${q.titulo}` : ''}</p>
               </div>
               <div className="p-4 space-y-3">
                 <div className="w-full h-24 rounded-xl border-2 border-dashed border-outline-variant flex items-center justify-center text-center px-3">
-                  <span className="text-xs text-on-surface-variant">
-                    Espaço para imagem{q.imageQuery ? <><br />(sugestão: {q.imageQuery})</> : ''}
-                  </span>
+                  <span className="text-xs text-on-surface-variant">Espaço para imagem</span>
                 </div>
-                <p className="text-sm font-medium text-on-surface">{q.pergunta}</p>
-                <div className="space-y-2">
+                {q.contexto && <p className="text-sm text-on-surface">{q.contexto}</p>}
+                <p className="text-sm font-bold text-on-surface">{q.pergunta}</p>
+                <div className="space-y-2 pt-1">
                   <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-surface-variant">
                     <span className="font-bold text-sm text-primary">A)</span>
                     <span className="text-sm text-on-surface">{q.opcaoA}</span>
@@ -489,6 +514,17 @@ export function IAIdeiasAvaliacoes() {
                 <span key={q.numero} className="text-sm font-semibold text-on-surface">
                   {q.numero}) <span className="text-primary">{q.resposta}</span>
                 </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-surface border border-outline-variant rounded-2xl p-4">
+            <p className="text-xs font-bold text-on-surface-variant mb-2">SUGESTÕES DE IMAGEM (guia pra você — não vai impresso)</p>
+            <div className="space-y-1.5">
+              {questoes.map(q => (
+                <p key={q.numero} className="text-sm text-on-surface">
+                  <span className="font-semibold">Questão {q.numero}{q.titulo ? ` (${q.titulo})` : ''}:</span> {q.imageQuery}
+                </p>
               ))}
             </div>
           </div>
