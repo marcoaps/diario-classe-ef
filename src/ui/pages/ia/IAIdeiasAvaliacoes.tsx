@@ -19,8 +19,62 @@ interface Questao {
   pergunta: string;
   opcaoA: string;
   opcaoB: string;
+  opcaoC?: string;
   resposta: string;
   habilidade: string;
+}
+
+// "apoio": mais apoio — 2 alternativas, reconhecimento pela imagem, conceitos
+// concretos. "ano": conteúdo do ano com situação curta e 3 alternativas — pra
+// NEE que costuma ter capacidade cognitiva típica e precisa de apoio de
+// formato (não de conteúdo mais fácil).
+type Nivel = 'apoio' | 'ano';
+
+function nivelPadraoDaNee(nee: string): Nivel {
+  return ['Deficiencia Intelectual (DI)', 'Autismo (TEA)', 'Deficiencia Multipla'].includes(nee) ? 'apoio' : 'ano';
+}
+
+const ADAPTACAO_POR_NEE: Record<string, string> = {
+  'Deficiencia Intelectual (DI)': 'frases curtas, conceitos concretos e sem ambiguidade.',
+  'Autismo (TEA)': 'linguagem literal, sem figuras de linguagem nem ironia, formato previsível e repetitivo entre as questões.',
+  'Deficiencia Fisica': 'foco no conteúdo conceitual, sem exigir resposta motora.',
+  'Deficiencia Auditiva': 'reforço visual máximo, sem depender de instrução sonora; frases diretas e simples.',
+  'Deficiencia Visual': 'descrição textual detalhada da cena, complementando ou substituindo a imagem.',
+  'TDAH': 'enunciados curtos, um único comando por vez, a palavra-chave da pergunta em destaque no começo da frase.',
+  'Dislexia': 'frases curtas, palavras comuns e fáceis de decodificar, sem blocos de texto.',
+  'Deficiencia Multipla': 'frases curtas e concretas, forte apoio visual, um único comando por questão.',
+};
+
+function montarPromptQuestoes(p: { tema: string; serie: string; nee: string; nivel: Nivel; objetivo: string }): string {
+  const tresAlternativas = p.nivel === 'ano';
+  const regrasNivel = tresAlternativas
+    ? `NÍVEL DO ANO: cada questão tem EXATAMENTE 3 alternativas (A, B e C). O enunciado traz um contexto de 1 a 2 frases curtas (uma situação de jogo ou de aula) e depois a pergunta. O conteúdo é o do ${p.serie}, sem simplificá-lo demais: o apoio está no FORMATO (frases curtas, um comando por vez, imagem de apoio), não em perguntar coisas triviais.`
+    : `NÍVEL DE MAIOR APOIO: cada questão tem EXATAMENTE 2 alternativas (A e B). O enunciado tem 1 frase curta e concreta que descreve o que aparece na imagem, seguida da pergunta. Conceitos concretos e visíveis: a resposta deve poder ser encontrada olhando a imagem.`;
+  const letras = tresAlternativas ? 'A, B e C' : 'A e B';
+  const exemploOpcoes = tresAlternativas
+    ? '"opcaoA":"opção A","opcaoB":"opção B","opcaoC":"opção C","resposta":"A, B ou C (varie)"'
+    : '"opcaoA":"opção A","opcaoB":"opção B","resposta":"A ou B (varie)"';
+
+  return `Você é especialista em educação inclusiva e em Educação Física adaptada. Crie EXATAMENTE 7 questões de múltipla escolha, com apoio visual, para uma avaliação adaptada.
+
+CONTEXTO: Tema: ${p.tema}. Série: ${p.serie}. NEE do aluno: ${p.nee}. Objetivo: ${p.objetivo}.
+ADAPTAÇÃO PARA ${p.nee}: ${ADAPTACAO_POR_NEE[p.nee] ?? 'linguagem simples e direta.'}
+
+${regrasNivel}
+
+DIFICULDADE EM DEGRAUS nas 7 questões: 1 a 3 = reconhecer (identificar ou nomear algo); 4 e 5 = relacionar/compreender (para que serve, por que acontece); 6 e 7 = aplicar numa situação concreta.
+
+REGRAS DE LINGUAGEM (importantes):
+- Um único comando por questão. Sem negativas ("não", "exceto", "incorreta") e sem pegadinhas.
+- Evite palavras com duplo sentido. Exemplo: "gol" pode ser o ponto marcado ou a estrutura onde a bola entra — use "trave" para a estrutura e "gol" só para o ponto marcado. Use "falta", "quadra" e "jogo" só quando o contexto deixar claro o sentido.
+- Prefira "onde", "qual" e "o que" a "quantos" quando a resposta exigir noção abstrata de número; só pergunte quantidade se ela puder ser vista na imagem.
+- Alternativas curtas, de tamanho parecido, sem que a correta seja sempre a mais longa.
+- Alterne a alternativa correta entre TODAS as letras (${letras}) ao longo das 7 questões; não deixe a resposta certa sempre na mesma letra.
+- O campo "pergunta" traz o enunciado completo (contexto + pergunta) em texto corrido.
+- O campo "imageQuery" descreve em português, em poucas palavras, a cena que a imagem dessa questão deve mostrar — vira uma legenda para o professor saber qual imagem colar depois, NÃO é usado em busca automática.
+
+Responda APENAS com JSON válido, sem texto antes ou depois:
+{"questoes":[{"numero":1,"imageQuery":"jogador sacando a bola de voleibol por cima da rede","pergunta":"enunciado completo",${exemploOpcoes},"habilidade":"habilidade pedagógica"}]}`;
 }
 
 // Deduz o tipo de NEE a partir do texto do CID/diagnóstico cadastrado em
@@ -47,6 +101,7 @@ export function IAIdeiasAvaliacoes() {
   const [serie, setSerie] = useState('8º Ano');
   const [turma, setTurma] = useState('');
   const [deficiencia, setDeficiencia] = useState('Deficiencia Intelectual (DI)');
+  const [nivel, setNivel] = useState<Nivel>('apoio');
   const [objetivo, setObjetivo] = useState('');
   const [aluno, setAluno] = useState('');
   const [alunoNome, setAlunoNome] = useState('');
@@ -87,9 +142,12 @@ export function IAIdeiasAvaliacoes() {
   // Retorna o texto gerado (além de já preencher o campo Objetivo) pra que
   // quem chamar (ex: o botão Gerar) possa usar o valor na hora, sem esperar
   // o próximo render — o state `objetivo` só atualiza depois.
-  async function gerarObjetivo(temaAtual: string, neeAtual: string): Promise<string> {
+  async function gerarObjetivo(temaAtual: string, neeAtual: string, nivelAtual: Nivel): Promise<string> {
     if (!temaAtual.trim()) return '';
     setGerandoObjetivo(true);
+    const foco = nivelAtual === 'apoio'
+      ? 'Foco em reconhecimento visual e compreensao basica.'
+      : 'Foco em compreender e aplicar o conteudo do ano em situacoes simples, com apoio visual.';
     try {
       const res = await fetch('/api/claude', {
         method: 'POST',
@@ -97,7 +155,7 @@ export function IAIdeiasAvaliacoes() {
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
           max_tokens: 200,
-          messages: [{ role: 'user', content: `Gere UM objetivo de aprendizagem curto (1 frase) para uma avaliacao adaptada de Educacao Fisica sobre "${temaAtual}" para aluno com ${neeAtual}. Foco em reconhecimento visual e compreensao basica. Responda APENAS a frase do objetivo, sem introducao.` }]
+          messages: [{ role: 'user', content: `Gere UM objetivo de aprendizagem curto (1 frase) para uma avaliacao adaptada de Educacao Fisica sobre "${temaAtual}" para aluno com ${neeAtual}. ${foco} Responda APENAS a frase do objetivo, sem introducao.` }]
         })
       });
       const data = await res.json();
@@ -111,12 +169,19 @@ export function IAIdeiasAvaliacoes() {
   }
 
   function handleNeeChange(novaNee: string) {
+    const novoNivel = nivelPadraoDaNee(novaNee);
     setDeficiencia(novaNee);
-    gerarObjetivo(tema, novaNee);
+    setNivel(novoNivel);
+    gerarObjetivo(tema, novaNee, novoNivel);
+  }
+
+  function handleNivelChange(novoNivel: Nivel) {
+    setNivel(novoNivel);
+    gerarObjetivo(tema, deficiencia, novoNivel);
   }
 
   function handleTemaBlur() {
-    gerarObjetivo(tema, deficiencia);
+    gerarObjetivo(tema, deficiencia, nivel);
   }
 
   async function gerar() {
@@ -132,7 +197,7 @@ export function IAIdeiasAvaliacoes() {
     let objetivoFinal = objetivo.trim();
     if (!objetivoFinal) {
       setEtapa('Gerando objetivo...');
-      objetivoFinal = await gerarObjetivo(tema, deficiencia);
+      objetivoFinal = await gerarObjetivo(tema, deficiencia, nivel);
       if (!objetivoFinal) {
         setErro('Não consegui gerar o objetivo automaticamente. Preencha o campo Objetivo à mão e tente de novo.');
         setGerando(false); setEtapa('');
@@ -142,11 +207,13 @@ export function IAIdeiasAvaliacoes() {
 
     setEtapa('Gerando questoes com IA...');
     try {
-      const prompt = 'Voce e especialista em educacao inclusiva. Crie EXATAMENTE 7 questoes adaptadas para: Tema: ' + tema + ', Serie: ' + serie + ', NEE: ' + deficiencia + ', Objetivo: ' + objetivoFinal + '. REGRAS: linguagem simples e curta, apenas 2 alternativas (A e B), questoes visuais. O campo imageQuery deve descrever em portugues, em poucas palavras, a cena que a foto dessa questao precisa mostrar — isso vira uma legenda pro professor saber qual imagem colar depois, NAO e usado em busca automatica. IMPORTANTE: alterne a alternativa correta entre A e B ao longo das 7 questoes (nao deixe a resposta certa sempre na mesma letra) — o campo "resposta" no exemplo abaixo e so ilustrativo, no JSON final ele deve variar entre "A" e "B" questao a questao. Responda APENAS JSON valido sem texto extra: {"questoes":[{"numero":1,"imageQuery":"jogador sacando a bola de voleibol por cima da rede","pergunta":"pergunta simples","opcaoA":"opcao A","opcaoB":"opcao B","resposta":"A ou B, varie","habilidade":"habilidade pedagogica"}]}';
+      // Só o tipo de NEE e o nível vão pro prompt — nunca o nome do aluno nem
+      // o texto do CID (que traz número de processo etc.).
+      const prompt = montarPromptQuestoes({ tema, serie, nee: deficiencia, nivel, objetivo: objetivoFinal });
       const res = await fetch('/api/claude', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 3000, messages: [{ role: 'user', content: prompt }] })
+        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 4000, messages: [{ role: 'user', content: prompt }] })
       });
       const data = await res.json();
       const text = data.content?.[0]?.text || '';
@@ -199,6 +266,7 @@ export function IAIdeiasAvaliacoes() {
       <div style="font-size:11pt;margin-bottom:4px;">${q.pergunta}</div>
       <div style="clear:both;margin-left:6px;font-size:11pt;">A) ${q.opcaoA}</div>
       <div style="margin-left:6px;font-size:11pt;">B) ${q.opcaoB}</div>
+      ${q.opcaoC ? `<div style="margin-left:6px;font-size:11pt;">C) ${q.opcaoC}</div>` : ''}
       <div style="clear:both;"></div>
     </div>`;
   }
@@ -231,7 +299,8 @@ export function IAIdeiasAvaliacoes() {
             <td style="vertical-align:top;">
               <div style="font-size:10pt;margin-bottom:4px;">${q.pergunta}</div>
               <div style="font-size:10pt;margin-bottom:2px;">A) ${q.opcaoA}</div>
-              <div style="font-size:10pt;">B) ${q.opcaoB}</div>
+              <div style="font-size:10pt;margin-bottom:2px;">B) ${q.opcaoB}</div>
+              ${q.opcaoC ? `<div style="font-size:10pt;">C) ${q.opcaoC}</div>` : ''}
             </td>
           </tr>
         </table>
@@ -298,6 +367,14 @@ export function IAIdeiasAvaliacoes() {
               {['Deficiencia Intelectual (DI)','Autismo (TEA)','Deficiencia Visual','Deficiencia Auditiva','Deficiencia Fisica','TDAH','Dislexia','Deficiencia Multipla'].map(d => <option key={d}>{d}</option>)}
             </select>
           </div>
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-on-surface-variant block mb-1">Nível das questões</label>
+          <select value={nivel} onChange={e => handleNivelChange(e.target.value as Nivel)} className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface">
+            <option value="apoio">Maior apoio — 2 alternativas, reconhecer pela imagem</option>
+            <option value="ano">Nível do ano — 3 alternativas, situação curta</option>
+          </select>
+          <p className="text-[11px] text-on-surface-variant mt-1">Sugerido automaticamente pelo NEE; você pode trocar.</p>
         </div>
         <div>
           <label className="text-xs font-semibold text-on-surface-variant block mb-1">
@@ -390,6 +467,12 @@ export function IAIdeiasAvaliacoes() {
                     <span className="font-bold text-sm text-primary">B)</span>
                     <span className="text-sm text-on-surface">{q.opcaoB}</span>
                   </div>
+                  {q.opcaoC && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-surface-variant">
+                      <span className="font-bold text-sm text-primary">C)</span>
+                      <span className="text-sm text-on-surface">{q.opcaoC}</span>
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded-lg">Resp: {q.resposta}</span>
