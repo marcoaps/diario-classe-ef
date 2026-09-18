@@ -11,7 +11,6 @@ import { revisarEAprovarQuestao, revisarLote } from './revisaoAutomaticaQuestoes
 import { OPCOES_EXPORTACAO_PADRAO, exportarQuestoesPDF, exportarQuestoesWord } from './exportarQuestoesGerador';
 import type { OpcoesExportacao } from './exportarQuestoesGerador';
 import { salvarQuestoesNoBanco } from './bancoQuestoesData';
-import { preencherImagensDasQuestoes } from './buscarImagensGerador';
 
 type Etapa = 'formulario' | 'gerando' | 'revisando' | 'buscando_imagens' | 'resultado';
 
@@ -131,15 +130,10 @@ export function GeradorQuestoes() {
       setProgresso({ concluidas: 0, total: geradas.length });
       const revisadas = await revisarLote(geradas, params, (concluidas, total) => setProgresso({ concluidas, total }));
 
-      const precisamDeImagem = revisadas.filter(q => q.imagemQuery).length;
-      if (precisamDeImagem > 0) {
-        setEtapa('buscando_imagens');
-        setProgresso({ concluidas: 0, total: precisamDeImagem });
-        const comImagens = await preencherImagensDasQuestoes(revisadas, (concluidas, total) => setProgresso({ concluidas, total }));
-        setQuestoes(comImagens);
-      } else {
-        setQuestoes(revisadas);
-      }
+      // Busca de imagens (Pexels) desabilitada por decisão do usuário, pra
+      // reduzir custo/complexidade — só a correção de prova com IA continua
+      // ativa. As questões saem sem foto mesmo quando pedem uma.
+      setQuestoes(revisadas);
       setEtapa('resultado');
     } catch (e) {
       setErro(`Erro ao gerar questões: ${mensagemErroAmigavel(e)}`);

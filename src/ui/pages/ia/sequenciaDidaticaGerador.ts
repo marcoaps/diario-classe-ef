@@ -5,9 +5,7 @@
 
 import { chamarClaudeProxy } from "../../../utils/claudeProxy";
 import { buscarReferenciaVideo } from "../../../data/referenciaVideosHandebol";
-import type { Estacao, Sequencia } from "./sequenciaDidaticaTypes";
-import { buscarImagemPexels, baixarImagemBase64 } from "./sequenciaDidaticaImagens";
-import { termoObrigatorioImagem } from "./sequenciaDidaticaHelpers";
+import type { Sequencia } from "./sequenciaDidaticaTypes";
 
 // Referência BNCC por grupo de série.
 const BNCC_POR_SERIE: Record<string, string> = {
@@ -101,28 +99,8 @@ Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
   if (start === -1) throw new Error("Resposta inesperada da API");
   const seq: Sequencia = JSON.parse(texto.slice(start, end + 1));
 
-  const termoObrigatorio = termoObrigatorioImagem(tema);
-
-  const situacoesComImg = await Promise.all(
-    seq.situacoes.map(async (s, idx) => {
-      const img = await buscarImagemPexels(s.imageQuery, idx, termoObrigatorio);
-      if (!img) return s;
-      const b64 = await baixarImagemBase64(img.url);
-      return { ...s, imageUrl: img.url, imageAuthor: img.author, imageBase64: b64?.base64 ?? "", imageType: b64?.contentType ?? "image/jpeg" };
-    })
-  );
-
-  let estacoesComImg: Estacao[] = [];
-  if (seq.estacoes && seq.estacoes.length > 0) {
-    estacoesComImg = await Promise.all(
-      seq.estacoes.map(async (es, idx) => {
-        const img = await buscarImagemPexels(es.imageQuery, situacoesComImg.length + idx, termoObrigatorio);
-        if (!img) return es;
-        const b64 = await baixarImagemBase64(img.url);
-        return { ...es, imageUrl: img.url, imageAuthor: img.author, imageBase64: b64?.base64 ?? "", imageType: b64?.contentType ?? "image/jpeg" };
-      })
-    );
-  }
-
-  return { ...seq, situacoes: situacoesComImg, estacoes: estacoesComImg };
+  // Busca de imagens (Pexels) desabilitada por decisão do usuário, pra
+  // reduzir custo/complexidade — só a correção de prova com IA continua
+  // ativa. Situações/estações saem sem foto.
+  return { ...seq, situacoes: seq.situacoes, estacoes: seq.estacoes ?? [] };
 }

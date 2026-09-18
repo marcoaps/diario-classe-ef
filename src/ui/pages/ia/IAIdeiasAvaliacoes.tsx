@@ -42,16 +42,6 @@ function inferirNeeDoCid(cid: string): string | null {
   return Array.from(encontradas)[0];
 }
 
-async function buscarImagemPexels(query: string, index = 0): Promise<string | null> {
-  try {
-    const page = (index % 5) + 1;
-    const res = await fetch(`/api/pexels?query=${encodeURIComponent(query)}&page=${page}`);
-    const data = await res.json();
-    if (data.photos?.length > 0) return data.photos[0].src.medium;
-  } catch (_) {}
-  return null;
-}
-
 export function IAIdeiasAvaliacoes() {
   const navigate = useNavigate();
   const [tema, setTema] = useState('');
@@ -164,12 +154,10 @@ export function IAIdeiasAvaliacoes() {
       const clean = text.replace(/```json|```/g, '').trim();
       const parsed = JSON.parse(clean);
       const qs: Questao[] = parsed.questoes || [];
-      setEtapa('Buscando imagens...');
-      const comImagens = await Promise.all(qs.map(async (q, idx) => {
-        const url = await buscarImagemPexels(q.imageQuery, idx);
-        return { ...q, imageUrl: url || undefined };
-      }));
-      setQuestoes(comImagens);
+      // Busca de imagens (Pexels) desabilitada por decisão do usuário, pra
+      // reduzir custo/complexidade — só a correção de prova com IA continua
+      // ativa. As questões saem sem foto.
+      setQuestoes(qs);
       setEtapa('');
     } catch (e: any) {
       setErro('Erro: ' + e.message);
