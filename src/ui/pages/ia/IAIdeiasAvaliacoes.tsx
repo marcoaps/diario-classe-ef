@@ -59,12 +59,17 @@ const CUIDADO_IMAGEM_POR_NEE: Record<string, string> = {
 // Montado por template — sem chamar IA, então não gasta crédito. A parte de
 // estilo é IGUAL em todas as questões pra as imagens saírem parecidas entre si,
 // e o "sem texto" evita a imagem vir com letras (que não dá pra editar depois).
+// Vocabulário SÓ de imagem (nada de "aula", "questão", "regras", "série de
+// imagens"): o Canva já interpretou uma versão com essas palavras como pedido
+// de folha de atividade e devolveu uma avaliação inteira em vez da ilustração.
 function montarPromptImagem(p: { tema: string; serie: string; nee: string; cena: string }): string {
   const cuidado = CUIDADO_IMAGEM_POR_NEE[p.nee] ?? 'composição clara, com poucos elementos';
   // Só o assunto principal ("Handebol:História,Fundamentos e Regras" -> "Handebol"):
   // o resto do tema faz o gerador puxar elementos que não são da cena.
   const temaPrincipal = p.tema.split(/[:;,\n]/)[0].trim() || p.tema;
-  return `Ilustração educativa em estilo cartoon vetorial simples, cores vivas, traços limpos e fundo neutro, proporção horizontal 4:3, no mesmo estilo visual para toda a série de imagens. Cena: ${p.cena}. Contexto: aula de Educação Física do ${p.serie} sobre ${temaPrincipal}; represente corretamente os equipamentos, a quadra e as regras desse esporte/tema. Cuidados: ${cuidado}; um único assunto em destaque. Sem nenhum texto, letra, número, logotipo, legenda ou placar escrito na imagem.`;
+  const numeroSerie = parseInt(p.serie, 10);
+  const idade = Number.isNaN(numeroSerie) ? '' : ` Personagens: estudantes de ${numeroSerie + 5} a ${numeroSerie + 6} anos.`;
+  return `Ilustração em estilo cartoon vetorial simples, cores vivas, traços limpos e fundo neutro, formato horizontal 4:3. UMA única imagem com UMA única cena, sem colagem, sem painéis e sem moldura. Cena: ${p.cena}. Esporte: ${temaPrincipal} — desenhe corretamente a quadra, os equipamentos e os uniformes desse esporte.${idade} ${cuidado}; um único assunto em destaque. Não escreva nenhum texto, letra, número, logotipo, legenda ou placar na imagem. Não crie prova, folha de exercícios nem layout de documento: apenas a ilustração.`;
 }
 
 function montarPromptQuestoes(p: { tema: string; serie: string; nee: string; nivel: Nivel; objetivo: string }): string {
@@ -93,7 +98,7 @@ REGRAS DE LINGUAGEM (importantes):
 - Alternativas curtas, de tamanho parecido, sem que a correta seja sempre a mais longa.
 - Alterne a alternativa correta entre TODAS as letras (${letras}) ao longo das 7 questões; não deixe a resposta certa sempre na mesma letra.
 - Cada questão tem 3 campos de texto SEPARADOS: "titulo" (uma palavra-chave em MAIÚSCULAS que nomeia o assunto, ex: BOLA, TRAVE, REGRA), "contexto" (a frase de observação/situação, SEM a pergunta) e "pergunta" (somente a pergunta, em uma frase, terminando em "?"). Não repita o contexto dentro da pergunta.
-- O campo "imageQuery" descreve em português, em poucas palavras, a cena que a imagem dessa questão deve mostrar — vira uma legenda para o professor saber qual imagem colar depois, NÃO é usado em busca automática.
+- O campo "imageQuery" descreve em português, em poucas palavras, a cena que a imagem dessa questão deve mostrar — vira o pedido de um gerador de imagem, NÃO é usado em busca automática. Descreva UMA única cena (nunca sequência de quadros, colagem, comparação lado a lado nem painéis) e não use palavras como "questão", "prova" ou "atividade".
 
 Responda APENAS com JSON válido, sem texto antes ou depois:
 {"questoes":[{"numero":1,"titulo":"PALAVRA-CHAVE","imageQuery":"jogador sacando a bola de voleibol por cima da rede","contexto":"frase de contexto ou de observação da imagem","pergunta":"a pergunta?",${exemploOpcoes},"habilidade":"habilidade pedagógica"}]}`;
@@ -371,7 +376,7 @@ export function IAIdeiasAvaliacoes() {
   function sugestoesImagemHtmlStr(): string {
     return `<div style="margin-top:16px;border-top:2px dashed #94a3b8;padding-top:10px;">
       <div style="font-weight:bold;font-size:10pt;margin-bottom:4px;">PROMPTS DE IMAGEM (guia do professor &#8212; n&#227;o imprimir; cole um por vez no gerador de imagem)</div>
-      ${questoes.map(q => `<div style="font-size:9pt;margin-bottom:6px;"><strong>Quest&#227;o ${q.numero}${q.titulo ? ` (${q.titulo})` : ''}:</strong> ${promptImagem(q)}</div>`).join('')}
+      ${questoes.map(q => `<div style="font-size:9pt;font-weight:bold;margin-top:6px;">Imagem da quest&#227;o ${q.numero}${q.titulo ? ` (${q.titulo})` : ''}</div><div style="font-size:9pt;margin-bottom:4px;">${promptImagem(q)}</div>`).join('')}
     </div>`;
   }
 
