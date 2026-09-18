@@ -95,8 +95,11 @@ export function IAIdeiasAvaliacoes() {
     buscarAlunos();
   }, [serie, turma]);
 
-  async function gerarObjetivo(temaAtual: string, neeAtual: string) {
-    if (!temaAtual.trim()) return;
+  // Retorna o texto gerado (além de já preencher o campo Objetivo) pra que
+  // quem chamar (ex: o botão Gerar) possa usar o valor na hora, sem esperar
+  // o próximo render — o state `objetivo` só atualiza depois.
+  async function gerarObjetivo(temaAtual: string, neeAtual: string): Promise<string> {
+    if (!temaAtual.trim()) return '';
     setGerandoObjetivo(true);
     try {
       const res = await fetch('/api/claude', {
@@ -109,10 +112,13 @@ export function IAIdeiasAvaliacoes() {
         })
       });
       const data = await res.json();
-      const text = data.content?.[0]?.text || '';
-      setObjetivo(text.trim());
-    } catch (_) {}
-    finally { setGerandoObjetivo(false); }
+      const text = (data.content?.[0]?.text || '').trim();
+      setObjetivo(text);
+      return text;
+    } catch (e) {
+      console.error('Erro ao gerar objetivo:', e);
+      return '';
+    } finally { setGerandoObjetivo(false); }
   }
 
   function handleNeeChange(novaNee: string) {
@@ -125,13 +131,29 @@ export function IAIdeiasAvaliacoes() {
   }
 
   async function gerar() {
-    if (!tema.trim() || !objetivo.trim() || !alunoNome.trim()) {
-      setErro('Preencha o Tema, Objetivo e selecione o Aluno.');
+    if (!tema.trim() || !alunoNome.trim()) {
+      setErro('Preencha o Tema e selecione o Aluno.');
       return;
     }
-    setErro(''); setGerando(true); setQuestoes([]); setEtapa('Gerando questoes com IA...');
+    setErro(''); setGerando(true); setQuestoes([]);
+
+    // Se o Objetivo ainda não foi gerado (ex: escolheu o aluno antes de
+    // digitar o tema, ou o disparo automático no blur não rodou a tempo),
+    // gera agora mesmo em vez de travar o professor com um erro.
+    let objetivoFinal = objetivo.trim();
+    if (!objetivoFinal) {
+      setEtapa('Gerando objetivo...');
+      objetivoFinal = await gerarObjetivo(tema, deficiencia);
+      if (!objetivoFinal) {
+        setErro('Não consegui gerar o objetivo automaticamente. Preencha o campo Objetivo à mão e tente de novo.');
+        setGerando(false); setEtapa('');
+        return;
+      }
+    }
+
+    setEtapa('Gerando questoes com IA...');
     try {
-      const prompt = 'Voce e especialista em educacao inclusiva. Crie EXATAMENTE 7 questoes adaptadas para: Tema: ' + tema + ', Serie: ' + serie + ', NEE: ' + deficiencia + ', Objetivo: ' + objetivo + '. REGRAS: linguagem simples e curta, apenas 2 alternativas (A e B), questoes visuais, imageQuery SEMPRE em ingles para busca Pexels. Responda APENAS JSON valido sem texto extra: {"questoes":[{"numero":1,"imageQuery":"volleyball players court","pergunta":"pergunta simples","opcaoA":"opcao A","opcaoB":"opcao B","resposta":"A","habilidade":"habilidade pedagogica"}]}';
+      const prompt = 'Voce e especialista em educacao inclusiva. Crie EXATAMENTE 7 questoes adaptadas para: Tema: ' + tema + ', Serie: ' + serie + ', NEE: ' + deficiencia + ', Objetivo: ' + objetivoFinal + '. REGRAS: linguagem simples e curta, apenas 2 alternativas (A e B), questoes visuais, imageQuery SEMPRE em ingles para busca Pexels. Responda APENAS JSON valido sem texto extra: {"questoes":[{"numero":1,"imageQuery":"volleyball players court","pergunta":"pergunta simples","opcaoA":"opcao A","opcaoB":"opcao B","resposta":"A","habilidade":"habilidade pedagogica"}]}';
       const res = await fetch('/api/claude', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
