@@ -126,7 +126,9 @@ async function gerarNoServidor(prompt: string): Promise<string> {
     if (resp.ok && dados.base64) {
       return ajustarImagem(`data:${dados.contentType || 'image/png'};base64,${dados.base64}`);
     }
-    if (resp.status === 429 && tentativa < 2) {
+    // "limit: 0" / plano gratuito / limite do dia: esperar não adianta (só faturamento resolve).
+    const semCota = resp.status === 429 && /limit: 0|free tier|per day|billing|upgrade/i.test(String(dados.error || ''));
+    if (resp.status === 429 && !semCota && tentativa < 2) {
       await new Promise(r => setTimeout(r, 20000));
       continue;
     }
@@ -134,7 +136,7 @@ async function gerarNoServidor(prompt: string): Promise<string> {
       ? 'A geração demorou demais. Tente de novo.'
       : dados.error || `Erro ${resp.status}.`;
     const erro: ErroImagem = new Error(mensagem);
-    erro.fatal = [401, 402, 403].includes(resp.status) || dados.codigo === 'sem_chave';
+    erro.fatal = semCota || [401, 402, 403].includes(resp.status) || dados.codigo === 'sem_chave';
     throw erro;
   }
   throw new Error('Não foi possível gerar a imagem.');
