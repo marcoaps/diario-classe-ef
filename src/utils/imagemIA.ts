@@ -59,7 +59,8 @@ RULES:
 - If the question asks to identify equipment, a space or a rule, show that item clearly and completely (e.g. the whole goal, the goal area seen from above).
 - Clearly recognizable action, few elements, plain background. Represent equipment, court and rules of the sport correctly.
 - Do not mention options, letters or the answer key; no text, numbers, scores or captions in the image.
-Reply ONLY with the description, in English, in 2 to 4 sentences.`;
+- The image model is simple: put the MOST important thing first, always name the ball or object explicitly and say where it is (in the hand, in the air, on the floor), and keep it to concrete visible things. If the question asks for a name, rule or concept, show ONE clear, typical, correctly proportioned example of it.
+Reply ONLY with the description, in English, in 2 to 3 short sentences.`;
 }
 
 export function montarPromptDaImagem(_ctx: ContextoImagem, cena: string): string {

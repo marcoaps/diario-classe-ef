@@ -552,7 +552,7 @@ function PreviewQuestao({
           <img
             src={imgUrl}
             alt={q.imagem}
-            className="w-full max-h-48 object-cover rounded-xl border border-gray-100"
+            className="w-full max-w-md aspect-[3/2] object-contain rounded-xl border border-gray-100"
           />
           <div className="flex gap-3 mt-1">
             <button onClick={onGerar} disabled={bloqueado} className="flex items-center gap-1 text-xs font-semibold text-teal-600 disabled:opacity-40">

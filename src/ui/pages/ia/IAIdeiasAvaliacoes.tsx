@@ -600,7 +600,7 @@ export function IAIdeiasAvaliacoes() {
               <div className="p-4 space-y-3">
                 {q.imagemDataUrl ? (
                   <div className="space-y-1.5">
-                    <img src={q.imagemDataUrl} alt={q.imageQuery} className="w-full max-h-56 object-cover rounded-xl" />
+                    <img src={q.imagemDataUrl} alt={q.imageQuery} className="w-full max-w-md aspect-[3/2] object-contain rounded-xl border border-gray-100" />
                     <div className="flex gap-2">
                       <button
                         onClick={() => gerarImagens(q.numero)}
