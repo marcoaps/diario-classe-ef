@@ -64,7 +64,8 @@ function questaoParaLinha(
     objetivo_questao: questao.objetivoQuestao || null,
     contexto_suporte: questao.contexto,
     imagem_query: questao.imagemQuery,
-    imagem_url: questao.imagemUrl,
+    // Imagem gerada por IA é um data URL grande (fica só na sessão/exportação); só URL real vai pro banco.
+    imagem_url: questao.imagemUrl?.startsWith('data:') ? null : questao.imagemUrl,
     enunciado: questao.enunciado,
     alternativas: questao.alternativas,
     resposta_correta: questao.respostaCorreta,

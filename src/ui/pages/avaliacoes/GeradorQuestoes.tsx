@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ClipboardCheck, Database, FileDown, FileText, Sparkles } from 'lucide-react';
+import { ArrowLeft, ClipboardCheck, Database, FileDown, FileText, ImagePlus, Loader2, Sparkles } from 'lucide-react';
+import { gerarImagemDaQuestao, type ErroImagem } from '../../../utils/imagemIA';
 import { GeradorQuestoesFormulario } from './GeradorQuestoesFormulario';
 import { GeradorQuestoesCard } from './GeradorQuestoesCard';
 import { criarParametrosPadrao } from './tiposGeradorQuestoes';
@@ -98,6 +99,9 @@ export function GeradorQuestoes() {
   const [mensagemBanco, setMensagemBanco] = useState('');
   const [revisandoIdIndividual, setRevisandoIdIndividual] = useState<string | null>(null);
   const [incluirNaoConformes, setIncluirNaoConformes] = useState(false);
+  const [progressoImagens, setProgressoImagens] = useState<{ feitas: number; total: number } | null>(null);
+  const [gerandoImagemId, setGerandoImagemId] = useState<string | null>(null);
+  const [erroImagens, setErroImagens] = useState('');
 
   function atualizarParametro<K extends keyof ParametrosGeracao>(campo: K, valor: ParametrosGeracao[K]) {
     setParams(prev => ({ ...prev, [campo]: valor }));
@@ -130,9 +134,9 @@ export function GeradorQuestoes() {
       setProgresso({ concluidas: 0, total: geradas.length });
       const revisadas = await revisarLote(geradas, params, (concluidas, total) => setProgresso({ concluidas, total }));
 
-      // Busca de imagens (Pexels) desabilitada por decisão do usuário, pra
-      // reduzir custo/complexidade — só a correção de prova com IA continua
-      // ativa. As questões saem sem foto mesmo quando pedem uma.
+      // As imagens NÃO são geradas sozinhas: cada uma custa cerca de US$ 0,13 e
+      // leva de 20 a 40 s. O professor dispara pelo botão "Gerar imagens" na
+      // tela de resultado (antes vinham de uma busca por palavra-chave no Pexels).
       setQuestoes(revisadas);
       setEtapa('resultado');
     } catch (e) {
@@ -157,6 +161,44 @@ export function GeradorQuestoes() {
     } finally {
       setRevisandoIdIndividual(null);
     }
+  }
+
+  // Sem `somenteId`: gera as que pedem imagem (têm imagemQuery) e ainda não
+  // têm, uma de cada vez. Com `somenteId`: gera (ou refaz) só essa. Se já há
+  // imagem, nunca gera outra sozinha. O enunciado, as alternativas e a
+  // resposta certa vão como contexto pra imagem mostrar a ação da questão.
+  async function gerarImagensDasQuestoes(somenteId?: string) {
+    if (progressoImagens !== null) return;
+    const alvo = questoes.filter(q => (somenteId ? q.idTemporario === somenteId : q.imagemQuery && !q.imagemUrl));
+    if (alvo.length === 0) return;
+    setErroImagens('');
+    setProgressoImagens({ feitas: 0, total: alvo.length });
+    const erros: string[] = [];
+    let feitas = 0;
+    for (const q of alvo) {
+      setGerandoImagemId(q.idTemporario);
+      try {
+        const correta = q.alternativas?.find(a => a.correta);
+        const url = await gerarImagemDaQuestao({
+          disciplina: params.componenteCurricular,
+          serie: `${params.anoEscolar}º ano`,
+          tema: params.conteudo,
+          enunciado: [q.contexto, q.enunciado].filter(Boolean).join(' '),
+          alternativas: q.alternativas?.map(a => ({ letra: a.letra, texto: a.texto })),
+          respostaCorreta: correta?.letra ?? q.respostaCorreta ?? undefined,
+          dica: q.imagemQuery ?? undefined,
+        });
+        handleEditarQuestao(q.idTemporario, { imagemUrl: url });
+      } catch (e) {
+        erros.push(`${q.tituloInterno || 'Questão'}: ${(e as Error).message}`);
+        if ((e as ErroImagem).fatal) break;
+      }
+      feitas++;
+      setProgressoImagens({ feitas, total: alvo.length });
+    }
+    setGerandoImagemId(null);
+    setProgressoImagens(null);
+    setErroImagens(erros.join(' · '));
   }
 
   function opcoesExportacaoAtuais(): OpcoesExportacao {
@@ -261,6 +303,7 @@ export function GeradorQuestoes() {
 
   const aprovadas = questoes.filter(q => q.statusRevisao === 'aprovada').length;
   const pendentes = questoes.filter(q => q.statusRevisao === 'requer_revisao_manual').length;
+  const semImagem = questoes.filter(q => q.imagemQuery && !q.imagemUrl).length;
 
   return (
     <div className="py-4 pb-24 space-y-4">
@@ -343,6 +386,27 @@ export function GeradorQuestoes() {
             {mensagemBanco && <p className="text-xs text-primary font-semibold">{mensagemBanco}</p>}
           </div>
 
+          {(semImagem > 0 || progressoImagens !== null || erroImagens) && (
+            <div className="bg-surface border border-outline-variant rounded-2xl p-4 space-y-2">
+              <button
+                onClick={() => gerarImagensDasQuestoes()}
+                disabled={progressoImagens !== null || semImagem === 0}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-semibold disabled:opacity-60"
+              >
+                {progressoImagens ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
+                {progressoImagens
+                  ? `Gerando imagens ${progressoImagens.feitas}/${progressoImagens.total}...`
+                  : `Gerar imagens com IA (${semImagem} questão${semImagem === 1 ? '' : 'ões'} pedem imagem)`}
+              </button>
+              <p className="text-[11px] text-on-surface-variant leading-snug">
+                A IA lê o enunciado, as alternativas e a resposta certa de cada questão e gera uma imagem que mostra exatamente o que ela pede.
+                Uma por vez (20 a 40 s cada) — não feche a tela. Custa cerca de US$ 0,13 por imagem na sua conta do Google (Gemini).
+                Salvar no Banco de Questões guarda só a descrição da imagem, não a imagem gerada.
+              </p>
+              {erroImagens && <p className="text-xs text-error font-semibold">{erroImagens}</p>}
+            </div>
+          )}
+
           <div className="space-y-3">
             {questoes.map(questao => (
               <GeradorQuestoesCard
@@ -351,6 +415,10 @@ export function GeradorQuestoes() {
                 onEditar={handleEditarQuestao}
                 onRevisarNovamente={handleRevisarNovamente}
                 revisando={revisandoIdIndividual === questao.idTemporario}
+                onGerarImagem={gerarImagensDasQuestoes}
+                onRemoverImagem={id => handleEditarQuestao(id, { imagemUrl: null })}
+                gerandoImagem={gerandoImagemId === questao.idTemporario}
+                bloqueioImagens={progressoImagens !== null}
               />
             ))}
           </div>

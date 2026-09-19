@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Pencil, RefreshCw } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, ImagePlus, Loader2, Pencil, RefreshCw } from 'lucide-react';
 import { DIFICULDADES, TIPOS_QUESTAO } from './tiposGeradorQuestoes';
 import type { QuestaoGerada } from './tiposGeradorQuestoes';
 
@@ -8,6 +8,13 @@ export interface GeradorQuestoesCardProps {
   onEditar: (idTemporario: string, alteracoes: Partial<QuestaoGerada>) => void;
   onRevisarNovamente: (idTemporario: string) => void;
   revisando: boolean;
+  /** Geração de imagem por IA (opcionais: sem eles o card só mostra a imagem, se houver). */
+  onGerarImagem?: (idTemporario: string) => void;
+  onRemoverImagem?: (idTemporario: string) => void;
+  /** Esta questão está gerando imagem agora. */
+  gerandoImagem?: boolean;
+  /** Alguma questão está gerando imagem — bloqueia novos disparos. */
+  bloqueioImagens?: boolean;
 }
 
 function labelDificuldade(valor: QuestaoGerada['dificuldade']): string {
@@ -18,7 +25,7 @@ function labelTipoQuestao(valor: QuestaoGerada['tipoQuestao']): string {
   return TIPOS_QUESTAO.find(t => t.valor === valor)?.label ?? valor;
 }
 
-export function GeradorQuestoesCard({ questao, onEditar, onRevisarNovamente, revisando }: GeradorQuestoesCardProps) {
+export function GeradorQuestoesCard({ questao, onEditar, onRevisarNovamente, revisando, onGerarImagem, onRemoverImagem, gerandoImagem, bloqueioImagens }: GeradorQuestoesCardProps) {
   const [expandido, setExpandido] = useState(true);
   const [editando, setEditando] = useState(false);
   const [enunciadoRascunho, setEnunciadoRascunho] = useState(questao.enunciado);
@@ -80,15 +87,42 @@ export function GeradorQuestoesCard({ questao, onEditar, onRevisarNovamente, rev
           )}
 
           {questao.imagemQuery && (
-            questao.imagemUrl ? (
-              <img
-                src={questao.imagemUrl}
-                alt={questao.imagemQuery}
-                className="w-full max-w-sm rounded-xl border border-outline-variant"
-              />
-            ) : (
-              <p className="text-[11px] text-on-surface-variant italic">Nenhuma foto encontrada para "{questao.imagemQuery}" — a questão será exportada sem imagem.</p>
-            )
+            <div className="space-y-1.5">
+              {questao.imagemUrl ? (
+                <img
+                  src={questao.imagemUrl}
+                  alt={questao.imagemQuery}
+                  className="w-full max-w-sm rounded-xl border border-outline-variant"
+                />
+              ) : gerandoImagem ? (
+                <div className="w-full max-w-sm h-24 rounded-xl border border-dashed border-outline-variant flex items-center justify-center gap-2 text-xs text-on-surface-variant">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Gerando imagem (20 a 40 s)...
+                </div>
+              ) : (
+                <p className="text-[11px] text-on-surface-variant italic">Esta questão pede uma imagem — ainda não gerada. Sem ela, a questão será exportada sem imagem.</p>
+              )}
+              {onGerarImagem && !gerandoImagem && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => onGerarImagem(questao.idTemporario)}
+                    disabled={bloqueioImagens}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-secondary-container text-on-secondary-container text-xs font-semibold disabled:opacity-50"
+                  >
+                    {questao.imagemUrl ? <RefreshCw className="w-3.5 h-3.5" /> : <ImagePlus className="w-3.5 h-3.5" />}
+                    {questao.imagemUrl ? 'Gerar novamente' : 'Gerar imagem'}
+                  </button>
+                  {questao.imagemUrl && onRemoverImagem && (
+                    <button
+                      onClick={() => onRemoverImagem(questao.idTemporario)}
+                      disabled={bloqueioImagens}
+                      className="px-2.5 py-1 rounded-lg bg-surface-variant text-on-surface-variant text-xs font-semibold disabled:opacity-50"
+                    >
+                      Remover
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           )}
 
           {editando ? (

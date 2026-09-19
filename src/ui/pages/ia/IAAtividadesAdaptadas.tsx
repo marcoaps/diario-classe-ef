@@ -1,6 +1,7 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Sparkles, Copy, CheckCircle, Loader2, RefreshCw, FileDown } from 'lucide-react';
+import { ArrowLeft, Sparkles, Copy, CheckCircle, Loader2, RefreshCw, FileDown, ImagePlus } from 'lucide-react';
+import { gerarImagemDaQuestao, type ErroImagem } from '../../../utils/imagemIA';
 import {
   Document, Packer, Paragraph, Table, TableRow, TableCell, ImageRun,
   TextRun, AlignmentType, WidthType, BorderStyle, ShadingType,
@@ -258,21 +259,11 @@ function parsearAtividade(textoOriginal: string): DadosAtividade {
   return { instrucoes, questoes, gabarito, textoLimpo: t };
 }
 
-// ── PEXELS ───────────────────────────────────────────────────────────────────
-// FIX 2: buscar imagens reais via /api/pexels
-async function buscarFotoPexels(descricao: string): Promise<string | null> {
-  try {
-    // Usar apenas as primeiras palavras-chave para query mais eficiente
-    const query = descricao.split(/[,;]/)[0].trim().slice(0, 60);
-    const resp = await fetch(`/api/pexels?query=${encodeURIComponent(query)}&per_page=1`);
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    // Pexels retorna medium (~350px) ideal para preview e Word
-    return data.photos?.[0]?.src?.medium ?? data.photos?.[0]?.src?.small ?? null;
-  } catch { return null; }
-}
+// ── IMAGENS ──────────────────────────────────────────────────────────────────
+// As imagens das questões são geradas por IA (utils/imagemIA.ts) a partir do
+// enunciado — antes vinham de uma busca por palavra-chave no Pexels.
 
-// Converte URL de imagem para ArrayBuffer (para inserir no Word)
+// Converte URL de imagem (ou data URL) para ArrayBuffer (para inserir no Word)
 async function urlParaBuffer(url: string): Promise<ArrayBuffer | null> {
   try {
     const resp = await fetch(url);
@@ -339,21 +330,21 @@ async function carregarLogoBase64(): Promise<string | null> {
   } catch { return null; }
 }
 
-// FIX 3: exportarWord recebe imagensPexels e insere imagens reais
+// FIX 3: exportarWord recebe as imagens geradas e as insere na questão
 async function exportarWord(
   textoOriginal: string,
   valores: Record<string, string>,
-  imagensPexels: Record<number, string> = {}
+  imagensQuestoes: Record<number, string> = {}
 ) {
   const d = parsearAtividade(textoOriginal);
   const logoB64 = await carregarLogoBase64();
   const esp = (n = 80) => new Paragraph({ children: [], spacing: { before: n, after: 0 } });
   const quebraPage = new Paragraph({ children: [new PageBreak()], spacing: { before: 0, after: 0 } });
 
-  // FIX 3a: pré-carregar buffers das imagens do Pexels
+  // FIX 3a: pré-carregar buffers das imagens geradas
   const imageBuffers: Record<number, ArrayBuffer> = {};
   await Promise.all(
-    Object.entries(imagensPexels).map(async ([numStr, url]) => {
+    Object.entries(imagensQuestoes).map(async ([numStr, url]) => {
       const buf = await urlParaBuffer(url);
       if (buf) imageBuffers[parseInt(numStr)] = buf;
     })
@@ -418,7 +409,7 @@ async function exportarWord(
     ], AlignmentType.LEFT, 80, 20));
 
     if (imageBuffers[q.numero]) {
-      // Imagem real do Pexels
+      // Imagem gerada pela IA para esta questão
       pars.push(new Paragraph({
         alignment: AlignmentType.CENTER,
         children: [new ImageRun({
@@ -529,11 +520,18 @@ function PreviewQuestao({
   imgUrl,
   carregando,
   gabResposta,
+  bloqueado,
+  onGerar,
+  onRemover,
 }: {
   q: QuestaoAtiv;
   imgUrl?: string;
   carregando: boolean;
   gabResposta?: string;
+  /** Alguma imagem está sendo gerada — desabilita os botões pra não duplicar chamadas. */
+  bloqueado: boolean;
+  onGerar: () => void;
+  onRemover: () => void;
 }) {
   return (
     <div className="mb-5 pb-5 border-b border-gray-100 last:border-0">
@@ -546,20 +544,33 @@ function PreviewQuestao({
       {carregando && (
         <div className="w-full h-24 rounded-xl bg-gray-50 border border-dashed border-gray-200 flex items-center justify-center mb-2">
           <Loader2 className="w-4 h-4 text-teal-400 animate-spin mr-1" />
-          <span className="text-xs text-gray-400">Buscando imagem...</span>
+          <span className="text-xs text-gray-400">Gerando imagem (20 a 40 s)...</span>
         </div>
       )}
       {!carregando && imgUrl && (
-        <img
-          src={imgUrl}
-          alt={q.imagem}
-          className="w-full max-h-36 object-cover rounded-xl mb-2 border border-gray-100"
-        />
+        <div className="mb-2">
+          <img
+            src={imgUrl}
+            alt={q.imagem}
+            className="w-full max-h-48 object-cover rounded-xl border border-gray-100"
+          />
+          <div className="flex gap-3 mt-1">
+            <button onClick={onGerar} disabled={bloqueado} className="flex items-center gap-1 text-xs font-semibold text-teal-600 disabled:opacity-40">
+              <RefreshCw className="w-3 h-3" /> Gerar novamente
+            </button>
+            <button onClick={onRemover} disabled={bloqueado} className="text-xs font-semibold text-gray-400 disabled:opacity-40">
+              Remover
+            </button>
+          </div>
+        </div>
       )}
       {!carregando && !imgUrl && q.imagem && (
         <div className="w-full rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-2 mb-2 flex items-start gap-2">
           <span className="text-base">🖼️</span>
-          <span className="text-xs text-gray-400 leading-snug">{q.imagem}</span>
+          <span className="text-xs text-gray-400 leading-snug flex-1">{q.imagem}</span>
+          <button onClick={onGerar} disabled={bloqueado} className="shrink-0 flex items-center gap-1 text-xs font-semibold text-teal-600 disabled:opacity-40">
+            <ImagePlus className="w-3.5 h-3.5" /> Gerar imagem
+          </button>
         </div>
       )}
 
@@ -580,9 +591,12 @@ export function IAAtividadesAdaptadas() {
   const [valores, setValores] = useState<Record<string, string>>({});
   const [resultado, setResultado] = useState('');
   const [dadosAtividade, setDadosAtividade] = useState<DadosAtividade | null>(null);
-  const [imagensPexels, setImagensPexels] = useState<Record<number, string>>({});
+  const [imagensQuestoes, setImagensQuestoes] = useState<Record<number, string>>({});
   const [gerando, setGerando] = useState(false);
-  const [buscandoImagens, setBuscandoImagens] = useState(false);
+  const [progressoImagens, setProgressoImagens] = useState<{ feitas: number; total: number } | null>(null);
+  const [gerandoNumero, setGerandoNumero] = useState<number | null>(null);
+  const [erroImagens, setErroImagens] = useState('');
+  const buscandoImagens = progressoImagens !== null;
   const [exportando, setExportando] = useState(false);
   const [copiado, setCopiado] = useState(false);
   const [erro, setErro] = useState('');
@@ -596,7 +610,8 @@ export function IAAtividadesAdaptadas() {
     setGerando(true);
     setResultado('');
     setDadosAtividade(null);
-    setImagensPexels({});
+    setImagensQuestoes({});
+    setErroImagens('');
 
     try {
       // FIX 4: modelo corrigido para claude-sonnet-4-6
@@ -615,31 +630,59 @@ export function IAAtividadesAdaptadas() {
       const texto = data.content?.[0]?.text || '';
       setResultado(texto);
 
-      // Parsear e buscar imagens em paralelo
       const dados = parsearAtividade(texto);
       setDadosAtividade(dados);
-
-      // FIX 2: buscar imagens do Pexels após gerar
-      if (dados.questoes.length > 0) {
-        setBuscandoImagens(true);
-        const imgs: Record<number, string> = {};
-        await Promise.all(
-          dados.questoes
-            .filter(q => q.imagem)
-            .map(async q => {
-              const url = await buscarFotoPexels(q.imagem);
-              if (url) imgs[q.numero] = url;
-            })
-        );
-        setImagensPexels(imgs);
-        setBuscandoImagens(false);
-      }
+      // As imagens NÃO são geradas sozinhas: cada uma custa cerca de US$ 0,13 e
+      // leva de 20 a 40 s, então o professor dispara pelo botão "Gerar imagens".
     } catch (e: any) {
       setErro('Erro ao gerar: ' + e.message);
     } finally {
       setGerando(false);
     }
   };
+
+  // Sem `somenteNumero`: gera as questões que pedem imagem e ainda não têm, uma
+  // de cada vez. Com `somenteNumero`: gera (ou refaz) só essa. Se já há imagem,
+  // nunca gera outra sozinha. O enunciado, as alternativas e a resposta certa
+  // vão como contexto pra imagem mostrar exatamente a ação da questão.
+  const gerarImagens = async (somenteNumero?: number) => {
+    if (!dadosAtividade || progressoImagens !== null) return;
+    const alvo = dadosAtividade.questoes.filter(q =>
+      somenteNumero ? q.numero === somenteNumero : q.imagem && !imagensQuestoes[q.numero]
+    );
+    if (alvo.length === 0) return;
+    setErroImagens('');
+    setProgressoImagens({ feitas: 0, total: alvo.length });
+    const erros: string[] = [];
+    let feitas = 0;
+    for (const q of alvo) {
+      setGerandoNumero(q.numero);
+      try {
+        const url = await gerarImagemDaQuestao({
+          disciplina: 'Educação Física',
+          serie: valores.turma || '',
+          tema: valores.tema || '',
+          enunciado: q.enunciado,
+          alternativas: q.alternativas,
+          respostaCorreta: dadosAtividade.gabarito.find(g => g.numero === q.numero)?.resposta,
+          dica: q.imagem,
+          cuidado: 'poucos elementos, fundo liso e sem detalhes que distraiam',
+        });
+        setImagensQuestoes(prev => ({ ...prev, [q.numero]: url }));
+      } catch (e) {
+        erros.push(`Questão ${q.numero}: ${(e as Error).message}`);
+        if ((e as ErroImagem).fatal) break;
+      }
+      feitas++;
+      setProgressoImagens({ feitas, total: alvo.length });
+    }
+    setGerandoNumero(null);
+    setProgressoImagens(null);
+    setErroImagens(erros.join(' · '));
+  };
+
+  const removerImagem = (numero: number) =>
+    setImagensQuestoes(prev => { const novo = { ...prev }; delete novo[numero]; return novo; });
 
   const copiar = () => {
     navigator.clipboard.writeText(resultado);
@@ -651,8 +694,8 @@ export function IAAtividadesAdaptadas() {
     if (!resultado) return;
     setExportando(true);
     try {
-      // FIX 3: passa imagensPexels para inserir imagens reais no Word
-      await exportarWord(resultado, valores, imagensPexels);
+      // FIX 3: passa as imagens geradas para inserir no Word
+      await exportarWord(resultado, valores, imagensQuestoes);
     } catch (e: any) {
       alert('Erro ao gerar Word: ' + e.message);
     } finally {
@@ -660,7 +703,8 @@ export function IAAtividadesAdaptadas() {
     }
   };
 
-  const temImagens = Object.keys(imagensPexels).length > 0;
+  const temImagens = Object.keys(imagensQuestoes).length > 0;
+  const faltamImagens = !!dadosAtividade && dadosAtividade.questoes.some(q => q.imagem && !imagensQuestoes[q.numero]);
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 pb-36">
@@ -718,14 +762,14 @@ export function IAAtividadesAdaptadas() {
               <div className="flex items-center gap-2">
                 <CheckCircle className="w-4 h-4 text-teal-600" />
                 <span className="text-sm font-black text-teal-700">Atividade gerada!</span>
-                {buscandoImagens && (
+                {buscandoImagens && progressoImagens && (
                   <span className="flex items-center gap-1 text-xs text-teal-500">
-                    <Loader2 className="w-3 h-3 animate-spin" /> buscando imagens...
+                    <Loader2 className="w-3 h-3 animate-spin" /> gerando imagens {progressoImagens.feitas}/{progressoImagens.total}...
                   </span>
                 )}
                 {!buscandoImagens && temImagens && (
                   <span className="text-xs text-teal-500 font-semibold">
-                    📸 {Object.keys(imagensPexels).length}/8 imagens
+                    📸 {Object.keys(imagensQuestoes).length}/{dadosAtividade.questoes.filter(q => q.imagem).length} imagens
                   </span>
                 )}
               </div>
@@ -751,13 +795,37 @@ export function IAAtividadesAdaptadas() {
             <div className="p-4">
               {dadosAtividade.questoes.length > 0 ? (
                 <>
+                  {(faltamImagens || buscandoImagens || erroImagens) && (
+                    <div className="mb-4 p-3 rounded-xl border border-teal-100 bg-teal-50 space-y-2">
+                      <button
+                        onClick={() => gerarImagens()}
+                        disabled={buscandoImagens || !faltamImagens}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-sm font-black disabled:opacity-60"
+                        style={{ background: 'linear-gradient(135deg, #0f766e, #0d9488)' }}
+                      >
+                        {buscandoImagens ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
+                        {buscandoImagens && progressoImagens
+                          ? `Gerando imagens ${progressoImagens.feitas}/${progressoImagens.total}...`
+                          : temImagens ? 'Gerar as imagens que faltam' : 'Gerar imagens com IA'}
+                      </button>
+                      <p className="text-[11px] text-teal-800 leading-snug">
+                        A IA lê o enunciado, as alternativas e a resposta certa de cada questão e gera uma imagem que mostra exatamente aquela ação.
+                        Uma por vez (20 a 40 s cada) — não feche a tela. Custa cerca de US$ 0,13 por imagem na sua conta do Google (Gemini).
+                      </p>
+                      {erroImagens && <p className="text-xs text-red-600 font-semibold">{erroImagens}</p>}
+                    </div>
+                  )}
+
                   {dadosAtividade.questoes.map(q => (
                     <PreviewQuestao
                       key={q.numero}
                       q={q}
-                      imgUrl={imagensPexels[q.numero]}
-                      carregando={buscandoImagens}
+                      imgUrl={imagensQuestoes[q.numero]}
+                      carregando={gerandoNumero === q.numero}
                       gabResposta={dadosAtividade.gabarito.find(g => g.numero === q.numero)?.resposta}
+                      bloqueado={buscandoImagens}
+                      onGerar={() => gerarImagens(q.numero)}
+                      onRemover={() => removerImagem(q.numero)}
                     />
                   ))}
 

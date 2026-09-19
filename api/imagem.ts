@@ -1,15 +1,48 @@
-// Gera UMA imagem por chamada (a geração leva de 10 a 40s e a OpenAI limita as
-// imagens por minuto, então o app pede uma de cada vez). Só responde a
-// professor logado: cada imagem custa dinheiro e, sem isso, qualquer pessoa
-// com a URL poderia gastar o saldo.
+// Gera UMA imagem por chamada com o Nano Banana Pro (Gemini). A geração leva
+// de 10 a 40s, então o app pede uma de cada vez. Só responde a professor
+// logado: cada imagem custa dinheiro e, sem isso, qualquer pessoa com a URL
+// poderia gastar o saldo. A chave (GEMINI_API_KEY) fica só aqui, no servidor.
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://rsifjxeqitgiecqwvien.supabase.co';
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_Vw7h5WZ5BF-GzaAM0hOECg_TMjwdiby';
 
-// Modelo e qualidade podem ser trocados no Vercel sem mexer no código
-// (OPENAI_IMAGE_MODEL / OPENAI_IMAGE_QUALITY). "low" sai bem mais barato.
-const MODELO = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
-const QUALIDADE = process.env.OPENAI_IMAGE_QUALITY || 'medium';
+// Trocáveis no Vercel sem mexer no código. Ex: GEMINI_IMAGE_MODEL=gemini-3.1-flash-image
+// (versão mais barata da família) ou GEMINI_IMAGE_SIZE=2K.
+const MODELO = process.env.GEMINI_IMAGE_MODEL || 'gemini-3-pro-image';
+const TAMANHO = process.env.GEMINI_IMAGE_SIZE || '1K';
+
+const URL_INTERACTIONS = 'https://generativelanguage.googleapis.com/v1beta/interactions';
+
+// A resposta da API muda de formato entre versões (output_image, outputs[],
+// candidates[].content.parts[].inlineData...). Em vez de depender de um
+// caminho fixo, procura o primeiro objeto que tenha uma imagem em base64.
+function acharImagem(no: any, profundidade = 0): { base64: string; contentType: string } | null {
+  if (!no || typeof no !== 'object' || profundidade > 8) return null;
+  const dados = no.data ?? no.inlineData?.data ?? no.inline_data?.data;
+  const mime = no.mime_type ?? no.mimeType ?? no.inlineData?.mimeType ?? no.inline_data?.mime_type;
+  if (typeof dados === 'string' && dados.length > 1000 && typeof mime === 'string' && mime.startsWith('image/')) {
+    return { base64: dados, contentType: mime };
+  }
+  for (const valor of Object.values(no)) {
+    const achada = acharImagem(valor, profundidade + 1);
+    if (achada) return achada;
+  }
+  return null;
+}
+
+async function chamarGemini(chave: string, prompt: string, comFormato: boolean) {
+  const corpo: any = { model: MODELO, input: [{ type: 'text', text: prompt }] };
+  if (comFormato) {
+    corpo.response_format = { type: 'image', aspect_ratio: '3:2', image_size: TAMANHO };
+  }
+  const resposta = await fetch(URL_INTERACTIONS, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': chave },
+    body: JSON.stringify(corpo),
+  });
+  const dados: any = await resposta.json().catch(() => ({}));
+  return { resposta, dados };
+}
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido.' });
@@ -26,43 +59,47 @@ export default async function handler(req: any, res: any) {
     return res.status(502).json({ error: 'Não consegui validar o login. Tente de novo.' });
   }
 
-  const chave = process.env.OPENAI_API_KEY;
+  const chave = process.env.GEMINI_API_KEY;
   if (!chave) {
-    return res.status(500).json({ error: 'A chave OPENAI_API_KEY ainda não foi configurada no Vercel.', codigo: 'sem_chave' });
+    return res.status(500).json({ error: 'A chave GEMINI_API_KEY ainda não foi configurada no Vercel.', codigo: 'sem_chave' });
   }
 
   const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim() : '';
-  if (!prompt || prompt.length > 2000) {
+  if (!prompt || prompt.length > 4000) {
     return res.status(400).json({ error: 'Prompt vazio ou longo demais.' });
   }
 
   try {
-    const resposta = await fetch('https://api.openai.com/v1/images/generations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${chave}` },
-      body: JSON.stringify({
-        model: MODELO,
-        prompt,
-        n: 1,
-        size: '1536x1024',
-        quality: QUALIDADE,
-        output_format: 'jpeg',
-        output_compression: 80,
-      }),
-    });
-    const dados: any = await resposta.json().catch(() => ({}));
+    let { resposta, dados } = await chamarGemini(chave, prompt, true);
+
+    // Se a API recusar os campos de formato (nome/valor diferente do esperado),
+    // tenta de novo sem eles — melhor uma imagem em tamanho padrão que nenhuma.
+    if (resposta.status === 400) {
+      console.error('Gemini 400 com response_format, repetindo sem ele:', JSON.stringify(dados).slice(0, 500));
+      ({ resposta, dados } = await chamarGemini(chave, prompt, false));
+    }
 
     if (!resposta.ok) {
-      console.error('OpenAI image error:', resposta.status, dados);
+      console.error('Gemini image error:', resposta.status, JSON.stringify(dados).slice(0, 800));
       return res.status(resposta.status).json({
-        error: dados?.error?.message || 'Erro na API de imagem.',
-        codigo: dados?.error?.code || null,
+        error: dados?.error?.message || 'Erro na API de imagem do Gemini.',
+        codigo: dados?.error?.status || null,
       });
     }
 
-    const base64 = dados?.data?.[0]?.b64_json;
-    if (!base64) return res.status(502).json({ error: 'A API não devolveu imagem.' });
-    return res.status(200).json({ base64, contentType: 'image/jpeg' });
+    const imagem = acharImagem(dados);
+    if (!imagem) {
+      console.error('Gemini sem imagem na resposta:', JSON.stringify(dados).slice(0, 800));
+      return res.status(422).json({
+        error: 'O Gemini não devolveu imagem (pode ter sido bloqueada pelo filtro de segurança). Tente gerar de novo.',
+        codigo: 'sem_imagem',
+      });
+    }
+    // Limite de ~4,5MB de resposta das funções do Vercel.
+    if (imagem.base64.length > 4_200_000) {
+      return res.status(502).json({ error: 'A imagem veio grande demais. Tente de novo ou use GEMINI_IMAGE_SIZE=1K.', codigo: 'grande_demais' });
+    }
+    return res.status(200).json(imagem);
   } catch (e) {
     console.error('imagem proxy error:', e);
     return res.status(500).json({ error: String(e) });

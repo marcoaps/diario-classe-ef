@@ -1,17 +1,14 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig, loadEnv} from 'vite';
+import {defineConfig} from 'vite';
 
-export default defineConfig(({mode}) => {
-  const env = loadEnv(mode, '.', '');
+export default defineConfig(() => {
   return {
     base: '/',
     assetsInclude: ['**/*.jpeg', '**/*.jpg', '**/*.png'],
     plugins: [react(), tailwindcss()],
-    define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-    },
+    // A chave GEMINI_API_KEY fica só no servidor (api/imagem.ts): nunca é injetada no bundle do navegador.
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
