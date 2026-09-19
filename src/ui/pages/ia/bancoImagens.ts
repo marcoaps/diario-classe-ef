@@ -1,24 +1,27 @@
-// Banco de imagens aprovadas pelo professor: pictogramas (ARASAAC) e fotos
-// (Wikimedia Commons), guardados em public/banco-imagens. Só entra aqui imagem
+import { DIAGRAMAS_QUADRA } from './diagramasQuadra';
+
+// Banco de imagens aprovadas pelo professor: pictogramas (ARASAAC), fotos
+// (Wikimedia Commons), guardados em public/banco-imagens, e diagramas da quadra
+// desenhados por código (diagramasQuadra.ts). Só entra aqui imagem
 // que o professor viu e aprovou. Para acrescentar uma, coloque o arquivo em
 // public/banco-imagens e crie um item nesta lista (com o crédito certo).
 // As tags são palavras sem acento e em minúsculas, usadas para sugerir imagens
 // conforme o texto da questão.
 
-export type TipoImagemBanco = 'pictograma' | 'foto';
+export type TipoImagemBanco = 'pictograma' | 'foto' | 'diagrama';
 
 export interface ItemBancoImagem {
   id: string;
-  /** Caminho público do arquivo (public/banco-imagens/...). */
+  /** Caminho público do arquivo (public/banco-imagens/...) ou, nos diagramas, um data URL SVG. */
   arquivo: string;
   tipo: TipoImagemBanco;
   titulo: string;
   tags: string[];
-  /** Crédito que sai no rodapé da prova (exigido pelas licenças). */
+  /** Crédito que sai no rodapé da prova (exigido pelas licenças). Vazio nos diagramas, que são desenhados aqui. */
   credito: string;
 }
 
-export const BANCO_IMAGENS: ItemBancoImagem[] = [
+const ITENS_DE_ARQUIVO: ItemBancoImagem[] = [
   {
     id: 'pic-34112',
     arquivo: '/banco-imagens/pictogramas/34112.png',
@@ -204,6 +207,9 @@ export const BANCO_IMAGENS: ItemBancoImagem[] = [
     credito: 'Foto: Max Petershans, Wikimedia Commons, CC BY-SA 4.0',
   },
 ];
+
+/** Tudo que aparece no seletor: imagens de arquivo + diagramas da quadra (desenhados por código). */
+export const BANCO_IMAGENS: ItemBancoImagem[] = [...ITENS_DE_ARQUIVO, ...DIAGRAMAS_QUADRA];
 
 function semAcento(texto: string): string {
   return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();

@@ -14,6 +14,7 @@ const FILTROS: { valor: TipoImagemBanco | 'todos'; rotulo: string }[] = [
   { valor: 'todos', rotulo: 'Todas' },
   { valor: 'pictograma', rotulo: 'Pictogramas' },
   { valor: 'foto', rotulo: 'Fotos' },
+  { valor: 'diagrama', rotulo: 'Diagramas' },
 ];
 
 function semAcento(texto: string): string {
@@ -96,7 +97,7 @@ export function SeletorBancoImagens({ textoQuestao, onEscolher, onFechar }: Prop
                   <div className="px-2 py-1.5">
                     <p className="text-xs font-semibold text-on-surface leading-tight">{item.titulo}</p>
                     <p className="text-[10px] text-on-surface-variant">
-                      {item.tipo === 'foto' ? 'Foto' : 'Pictograma'}{semBusca && pontos > 0 ? ' · sugerida' : ''}
+                      {item.tipo === 'foto' ? 'Foto' : item.tipo === 'diagrama' ? 'Diagrama' : 'Pictograma'}{semBusca && pontos > 0 ? ' · sugerida' : ''}
                     </p>
                   </div>
                 </button>
@@ -106,7 +107,7 @@ export function SeletorBancoImagens({ textoQuestao, onEscolher, onFechar }: Prop
         </div>
 
         <p className="px-4 py-2 text-[10px] text-on-surface-variant border-t border-outline-variant">
-          Os créditos das imagens escolhidas saem sozinhos no fim da prova (impressão e Word).
+          Os créditos das fotos e pictogramas escolhidos saem sozinhos no fim da prova (impressão e Word). Diagramas não precisam de crédito.
         </p>
       </div>
     </div>
