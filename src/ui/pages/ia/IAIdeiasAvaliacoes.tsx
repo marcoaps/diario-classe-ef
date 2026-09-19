@@ -587,7 +587,7 @@ export function IAIdeiasAvaliacoes() {
             <p className="text-[11px] text-on-surface-variant">
               A IA lê o enunciado, as alternativas e a resposta certa de cada questão e gera uma imagem que mostra exatamente aquela ação.
               É uma imagem por vez (cerca de 20 a 40 segundos cada) — não feche a tela durante a geração.
-              Custa cerca de US$ 0,13 por imagem na sua conta do Google (Gemini). Se alguma sair errada, refaça só ela.
+              O custo por imagem depende do serviço configurado (Gemini pago, Cloudflare com cota gratuita diária). Se alguma sair errada, refaça só ela.
             </p>
             {erroImagens && <p className="text-xs text-error">{erroImagens}</p>}
           </div>

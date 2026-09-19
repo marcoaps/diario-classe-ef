@@ -1,10 +1,13 @@
-// Geração de imagem de questão com o Nano Banana Pro (Gemini), em dois passos:
+// Geração de imagem de questão (Nano Banana/Gemini ou FLUX/Cloudflare, conforme
+// IMAGE_PROVIDER no Vercel), em dois passos:
 //  1. O Claude lê a questão inteira (enunciado, alternativas, resposta correta)
 //     e descreve a CENA que a imagem precisa mostrar — a ação exata, não só o
 //     assunto. É isso que evita "foto genérica de jogador de handebol" quando
 //     a questão pede, por exemplo, o drible.
 //  2. O servidor (/api/imagem) gera a imagem a partir dessa descrição.
-// A chave do Gemini fica só no servidor; aqui só passa o login do professor.
+// A cena e o prompt saem em inglês: os modelos de imagem seguem melhor o inglês
+// (o FLUX quase não entende português). As chaves ficam só no servidor; aqui só
+// passa o login do professor.
 
 import { supabase } from '../data/supabase';
 
@@ -36,29 +39,34 @@ export function montarPedidoDeCena(ctx: ContextoImagem): string {
     ? (ctx.alternativas?.find(a => a.letra === ctx.respostaCorreta)
         ? `${ctx.respostaCorreta}) ${ctx.alternativas?.find(a => a.letra === ctx.respostaCorreta)?.texto}`
         : ctx.respostaCorreta)
-    : 'não informada';
-  return `Você cria a cena de UMA ilustração didática que acompanha uma questão de prova escolar. A imagem é o que o aluno vai observar para responder.
+    : 'not informed';
+  return `You write the scene of ONE educational illustration that accompanies a school exam question (in Portuguese). The image is what the student will look at to answer.
 
-DADOS DA QUESTÃO
-Disciplina: ${ctx.disciplina}. Ano: ${ctx.serie}. Tema: ${assuntoPrincipal(ctx.tema)}.
-Enunciado: ${ctx.enunciado}
-${alternativas ? `Alternativas:\n${alternativas}\n` : ''}Resposta correta: ${correta}
-${ctx.dica ? `Sugestão de cena de quem escreveu a questão (pode estar vaga): ${ctx.dica}\n` : ''}
-TAREFA: descreva a cena que a imagem precisa mostrar, de modo que um aluno reconheça o conceito ou a ação que responde à questão olhando SÓ para a imagem.
-REGRAS:
-- Mostre exatamente a ação ou o conceito da resposta correta, e NUNCA o de uma alternativa errada.
-- Traduza o enunciado numa ação corporal visível: quem faz (1 ou 2 jovens estudantes), o que o corpo faz (braços, mãos, pernas, pés), o que acontece com a bola ou o objeto, onde (cenário) e o ponto de vista (de lado ou de frente, personagem de corpo inteiro).
-- Se a questão pedir para identificar um equipamento, um espaço ou uma regra, mostre esse item de forma clara e completa (ex.: a trave inteira, a área do goleiro vista de cima).
-- Ação claramente reconhecível, poucos elementos, fundo simples. Represente corretamente os equipamentos, a quadra e as regras do esporte.
-- Não mencione alternativas, letras nem gabarito; não inclua textos, números, placares ou legendas na imagem.
-Responda APENAS com a descrição, em português, em 2 a 4 frases.`;
+QUESTION DATA
+Subject: ${ctx.disciplina}. Grade: ${ctx.serie}. Topic: ${assuntoPrincipal(ctx.tema)}.
+Question: ${ctx.enunciado}
+${alternativas ? `Options:
+${alternativas}
+` : ''}Correct answer: ${correta}
+${ctx.dica ? `Scene suggestion from the question's author (may be vague): ${ctx.dica}
+` : ''}${ctx.cuidado ? `Visual care required: ${ctx.cuidado}
+` : ''}
+TASK: describe the scene the image must show, so that a student recognizes the concept or action that answers the question by looking ONLY at the image.
+RULES:
+- Show exactly the action or concept of the correct answer, and NEVER that of a wrong option.
+- Name the sport or subject explicitly in English (e.g. "handball", "volleyball") in the first sentence.
+- Turn the question into a visible body action: who does it (1 or 2 teenage students), what the body does (arms, hands, legs, feet), what happens to the ball or object, where (setting) and the point of view (side or front view, full-body characters).
+- If the question asks to identify equipment, a space or a rule, show that item clearly and completely (e.g. the whole goal, the goal area seen from above).
+- Clearly recognizable action, few elements, plain background. Represent equipment, court and rules of the sport correctly.
+- Do not mention options, letters or the answer key; no text, numbers, scores or captions in the image.
+Reply ONLY with the description, in English, in 2 to 4 sentences.`;
 }
 
-export function montarPromptDaImagem(ctx: ContextoImagem, cena: string): string {
-  return `Ilustração didática para uma prova escolar de ${ctx.disciplina} (${ctx.serie}, tema: ${assuntoPrincipal(ctx.tema)}).
-Cena: ${cena}
-Estilo: ilustração digital limpa e colorida, traços nítidos, composição clara com o assunto principal em destaque, personagens de corpo inteiro quando houver ação corporal, fundo limpo e simples, poucos elementos. Formato horizontal, proporção 3:2.${ctx.cuidado ? `\nCuidados visuais: ${ctx.cuidado}.` : ''}
-Não inclua nenhum texto, letra, número, logotipo, marca, placar escrito ou legenda na imagem. Uma única cena, sem colagem e sem painéis; não é uma prova nem uma folha de exercícios, apenas a ilustração.`;
+export function montarPromptDaImagem(_ctx: ContextoImagem, cena: string): string {
+  return `Educational illustration for a school exam question.
+Scene: ${cena}
+Style: clean, colorful flat digital illustration, sharp outlines, main subject clearly in focus, full-body characters when there is body action, plain simple background, few elements. Horizontal composition.
+No text, letters, numbers, logos, brands, written scoreboards or captions anywhere in the image. A single scene, no collage, no panels; it is not an exam sheet, only the illustration.`;
 }
 
 // Passo 1. Se o Claude falhar (rede, saldo), segue com a sugestão da própria
@@ -83,24 +91,33 @@ async function descreverCena(ctx: ContextoImagem): Promise<string> {
   }
 }
 
-// Reduz a imagem (a do Gemini vem grande), recorta ao centro na proporção 3:2
-// (as exportações assumem essa proporção; sem o recorte a imagem ficaria
-// esticada no Word) e devolve JPEG leve.
+// Reduz a imagem e a põe na proporção 3:2 (as exportações assumem essa
+// proporção; sem isso ela ficaria esticada no Word). Imagem larga (Gemini) é
+// recortada ao centro; quase quadrada ou em pé (FLUX) vai inteira sobre fundo
+// branco, pra não cortar cabeça e pés. Devolve JPEG leve.
 export function ajustarImagem(dataUrl: string, larguraMax = 800): Promise<string> {
   return new Promise(resolve => {
     const img = new Image();
     img.onload = () => {
       const alvo = 3 / 2;
-      let sx = 0, sy = 0, sw = img.width, sh = img.height;
-      if (sw / sh > alvo) { sw = Math.round(sh * alvo); sx = Math.round((img.width - sw) / 2); }
-      else { sh = Math.round(sw / alvo); sy = Math.round((img.height - sh) / 2); }
-      const largura = Math.min(larguraMax, sw);
+      const largura = Math.min(larguraMax, Math.round(Math.max(img.width, img.height) * alvo));
       const canvas = document.createElement('canvas');
       canvas.width = largura;
       canvas.height = Math.round(largura / alvo);
       const ctx = canvas.getContext('2d');
       if (!ctx) return resolve(dataUrl);
-      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+      if (img.width / img.height >= 1.35) {
+        let sx = 0, sy = 0, sw = img.width, sh = img.height;
+        if (sw / sh > alvo) { sw = Math.round(sh * alvo); sx = Math.round((img.width - sw) / 2); }
+        else { sh = Math.round(sw / alvo); sy = Math.round((img.height - sh) / 2); }
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+      } else {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        const escala = Math.min(canvas.width / img.width, canvas.height / img.height);
+        const w = Math.round(img.width * escala), h = Math.round(img.height * escala);
+        ctx.drawImage(img, Math.round((canvas.width - w) / 2), Math.round((canvas.height - h) / 2), w, h);
+      }
       resolve(canvas.toDataURL('image/jpeg', 0.85));
     };
     img.onerror = () => resolve(dataUrl);
@@ -127,7 +144,7 @@ async function gerarNoServidor(prompt: string): Promise<string> {
       return ajustarImagem(`data:${dados.contentType || 'image/png'};base64,${dados.base64}`);
     }
     // "limit: 0" / plano gratuito / limite do dia: esperar não adianta (só faturamento resolve).
-    const semCota = resp.status === 429 && /limit: 0|free tier|per day|billing|upgrade/i.test(String(dados.error || ''));
+    const semCota = resp.status === 429 && /limit: 0|free tier|per day|billing|upgrade|daily|allocation|neurons/i.test(String(dados.error || ''));
     if (resp.status === 429 && !semCota && tentativa < 2) {
       await new Promise(r => setTimeout(r, 20000));
       continue;

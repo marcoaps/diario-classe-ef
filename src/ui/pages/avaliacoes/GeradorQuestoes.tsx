@@ -134,7 +134,7 @@ export function GeradorQuestoes() {
       setProgresso({ concluidas: 0, total: geradas.length });
       const revisadas = await revisarLote(geradas, params, (concluidas, total) => setProgresso({ concluidas, total }));
 
-      // As imagens NÃO são geradas sozinhas: cada uma custa cerca de US$ 0,13 e
+      // As imagens NÃO são geradas sozinhas: cada uma pode ter custo (Gemini) e
       // leva de 20 a 40 s. O professor dispara pelo botão "Gerar imagens" na
       // tela de resultado (antes vinham de uma busca por palavra-chave no Pexels).
       setQuestoes(revisadas);
@@ -400,7 +400,7 @@ export function GeradorQuestoes() {
               </button>
               <p className="text-[11px] text-on-surface-variant leading-snug">
                 A IA lê o enunciado, as alternativas e a resposta certa de cada questão e gera uma imagem que mostra exatamente o que ela pede.
-                Uma por vez (20 a 40 s cada) — não feche a tela. Custa cerca de US$ 0,13 por imagem na sua conta do Google (Gemini).
+                Uma por vez (20 a 40 s cada) — não feche a tela. O custo por imagem depende do serviço configurado (Gemini pago, Cloudflare com cota gratuita diária).
                 Salvar no Banco de Questões guarda só a descrição da imagem, não a imagem gerada.
               </p>
               {erroImagens && <p className="text-xs text-error font-semibold">{erroImagens}</p>}

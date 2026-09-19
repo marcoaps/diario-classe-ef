@@ -632,7 +632,7 @@ export function IAAtividadesAdaptadas() {
 
       const dados = parsearAtividade(texto);
       setDadosAtividade(dados);
-      // As imagens NÃO são geradas sozinhas: cada uma custa cerca de US$ 0,13 e
+      // As imagens NÃO são geradas sozinhas: cada uma pode ter custo (Gemini) e
       // leva de 20 a 40 s, então o professor dispara pelo botão "Gerar imagens".
     } catch (e: any) {
       setErro('Erro ao gerar: ' + e.message);
@@ -810,7 +810,7 @@ export function IAAtividadesAdaptadas() {
                       </button>
                       <p className="text-[11px] text-teal-800 leading-snug">
                         A IA lê o enunciado, as alternativas e a resposta certa de cada questão e gera uma imagem que mostra exatamente aquela ação.
-                        Uma por vez (20 a 40 s cada) — não feche a tela. Custa cerca de US$ 0,13 por imagem na sua conta do Google (Gemini).
+                        Uma por vez (20 a 40 s cada) — não feche a tela. O custo por imagem depende do serviço configurado (Gemini pago, Cloudflare com cota gratuita diária).
                       </p>
                       {erroImagens && <p className="text-xs text-red-600 font-semibold">{erroImagens}</p>}
                     </div>
