@@ -154,13 +154,22 @@ REGRAS DE LINGUAGEM (importantes):
 - Prefira "onde", "qual" e "o que" a "quantos" quando a resposta exigir noção abstrata de número; só pergunte quantidade se ela puder ser vista na imagem.
 - Alternativas curtas, de tamanho parecido, sem que a correta seja sempre a mais longa.
 - Alterne a alternativa correta entre TODAS as letras (${letras}) ao longo das 7 questões; não deixe a resposta certa sempre na mesma letra.
-- Cada questão tem 3 campos de texto SEPARADOS: "titulo" (uma palavra-chave em MAIÚSCULAS que nomeia o assunto, ex: BOLA, TRAVE, REGRA), "contexto" (a frase de observação/situação, SEM a pergunta) e "pergunta" (somente a pergunta, em uma frase, terminando em "?"). Não repita o contexto dentro da pergunta.
+- Cada questão tem 3 campos de texto SEPARADOS: "titulo" (uma palavra-chave em MAIÚSCULAS que nomeia o assunto, ex: BOLA, TRAVE, REGRA), "contexto" (a frase de observação/situação, SEM a pergunta) e "pergunta" (somente a pergunta, em uma frase, terminando em "?"). Não repita o contexto dentro da pergunta e não comece a pergunta com o título ("BOLA: qual...?"): o título já aparece acima.
 - O campo "imageQuery" descreve em português, em poucas palavras, a cena que a imagem dessa questão deve mostrar — vira o pedido de um gerador de imagem, NÃO é usado em busca automática. Descreva UMA única cena (nunca sequência de quadros, colagem, comparação lado a lado nem painéis) e não use palavras como "questão", "prova" ou "atividade".
 - O campo "tipoImagem" diz de onde vem a melhor imagem dessa questão. Use exatamente um destes valores: "diagrama" (quadra, linhas, áreas, medidas ou posições dos jogadores na quadra, em desenho técnico visto de cima); "pictograma" (desenho simples de um objeto, gesto ou ação bem conhecida, como bola, trave, apito, cartão, correr, passar — o preferido para alunos com Deficiência Intelectual, Autismo ou Deficiência Múltipla); "foto" (foto real de um equipamento ou de uma situação de jogo, como a bola, o árbitro, um arremesso); "acao" (movimento específico que só uma cena desenhada mostra, como drible, marcação, contra-ataque ou uma jogada). Escolha o que melhor mostra o que a pergunta pede.
 - A imagem da questão costuma ser um desenho simples e genérico (uma bola, uma trave, um goleiro, a quadra vista de cima), NÃO uma cena feita sob medida. Por isso a pergunta e as alternativas NÃO podem depender de cor, de uniforme, de comparar vários jogadores nem de qualquer detalhe que um desenho genérico não traga (ex.: não escreva "bola laranja", "o jogador de uniforme diferente", "o time da esquerda"). Pergunte sobre o objeto, o gesto ou o espaço em si: o nome, a função ou o lugar.
 
 Responda APENAS com JSON válido, sem texto antes ou depois:
 {"questoes":[{"numero":1,"titulo":"PALAVRA-CHAVE","imageQuery":"jogador sacando a bola de voleibol por cima da rede","tipoImagem":"foto|pictograma|diagrama|acao","contexto":"frase de contexto ou de observação da imagem","pergunta":"a pergunta?",${exemploOpcoes},"habilidade":"habilidade pedagógica"}]}`;
+}
+
+// A IA às vezes começa a pergunta repetindo o título em maiúsculas ("BOLA: qual é
+// o formato...?"), que já aparece acima da questão. Tira esse prefixo.
+function limparTituloDaPergunta(q: Questao): Questao {
+  if (typeof q.pergunta !== 'string') return q;
+  const resto = q.pergunta.replace(/^\s*[A-ZÀ-Ý][A-ZÀ-Ý ]{2,}\s*:\s*/, '');
+  if (resto === q.pergunta || !resto.trim()) return q;
+  return { ...q, pergunta: resto.charAt(0).toUpperCase() + resto.slice(1) };
 }
 
 // Tipo de imagem sugerido pela IA; se vier vazio ou inválido, deduz pelo texto.
@@ -345,7 +354,7 @@ export function IAIdeiasAvaliacoes() {
       const text = data.content?.[0]?.text || '';
       const clean = text.replace(/```json|```/g, '').trim();
       const parsed = JSON.parse(clean);
-      const qs: Questao[] = parsed.questoes || [];
+      const qs: Questao[] = (parsed.questoes || []).map(limparTituloDaPergunta);
       // Busca automática de imagem (Pexels) abandonada — mesmo exigindo o
       // esporte certo, várias questões ficavam sem imagem boa ou vinham com
       // foto de outro esporte. Cada questão sai com um espaço em branco
