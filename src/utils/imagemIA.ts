@@ -95,8 +95,9 @@ async function descreverCena(ctx: ContextoImagem): Promise<string> {
 // Reduz a imagem e a põe na proporção 3:2 (as exportações assumem essa
 // proporção; sem isso ela ficaria esticada no Word). Imagem larga (Gemini) é
 // recortada ao centro; quase quadrada ou em pé (FLUX) vai inteira sobre fundo
-// branco, pra não cortar cabeça e pés. Devolve JPEG leve.
-export function ajustarImagem(dataUrl: string, larguraMax = 800): Promise<string> {
+// branco, pra não cortar cabeça e pés. Com `inteira` (imagem enviada pelo
+// professor) nunca recorta. Devolve JPEG leve.
+export function ajustarImagem(dataUrl: string, larguraMax = 800, inteira = false): Promise<string> {
   return new Promise(resolve => {
     const img = new Image();
     img.onload = () => {
@@ -107,7 +108,7 @@ export function ajustarImagem(dataUrl: string, larguraMax = 800): Promise<string
       canvas.height = Math.round(largura / alvo);
       const ctx = canvas.getContext('2d');
       if (!ctx) return resolve(dataUrl);
-      if (img.width / img.height >= 1.35) {
+      if (!inteira && img.width / img.height >= 1.35) {
         let sx = 0, sy = 0, sw = img.width, sh = img.height;
         if (sw / sh > alvo) { sw = Math.round(sh * alvo); sx = Math.round((img.width - sw) / 2); }
         else { sh = Math.round(sw / alvo); sy = Math.round((img.height - sh) / 2); }
@@ -164,4 +165,31 @@ async function gerarNoServidor(prompt: string): Promise<string> {
 export async function gerarImagemDaQuestao(ctx: ContextoImagem): Promise<string> {
   const cena = await descreverCena(ctx);
   return gerarNoServidor(montarPromptDaImagem(ctx, cena));
+}
+
+/**
+ * Imagem enviada ou colada pelo professor (ex.: gerada no chat do Gemini): vira
+ * o mesmo data URL JPEG 3:2 das imagens geradas pelo app, sem recortar nada.
+ */
+export function imagemDeArquivo(arquivo: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!arquivo.type.startsWith('image/')) {
+      reject(new Error('Esse arquivo não é uma imagem.'));
+      return;
+    }
+    if (arquivo.size > 15 * 1024 * 1024) {
+      reject(new Error('Imagem grande demais (máximo 15 MB).'));
+      return;
+    }
+    const leitor = new FileReader();
+    leitor.onload = () => {
+      const original = String(leitor.result);
+      const teste = new Image();
+      teste.onload = () => ajustarImagem(original, 800, true).then(resolve);
+      teste.onerror = () => reject(new Error('Não consegui abrir essa imagem.'));
+      teste.src = original;
+    };
+    leitor.onerror = () => reject(new Error('Não consegui ler o arquivo.'));
+    leitor.readAsDataURL(arquivo);
+  });
 }
