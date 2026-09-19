@@ -91,7 +91,7 @@ const ITENS_DE_ARQUIVO: ItemBancoImagem[] = [
     arquivo: '/banco-imagens/pictogramas/8371.png',
     tipo: 'pictograma',
     titulo: 'Cartão vermelho',
-    tags: ['cartao vermelho', 'exclusao', 'falta', 'punicao', 'regra', 'arbitro'],
+    tags: ['cartao vermelho', 'exclusao', 'falta', 'punicao', 'arbitro'],
     credito: 'Pictogramas: ARASAAC (arasaac.org), autor Sergio Palao, propriedade do Governo de Aragão (Espanha), licença CC BY-NC-SA',
   },
   {
@@ -195,7 +195,7 @@ const ITENS_DE_ARQUIVO: ItemBancoImagem[] = [
     arquivo: '/banco-imagens/fotos/foto-arbitro.jpg',
     tipo: 'foto',
     titulo: 'Árbitro em quadra',
-    tags: ['arbitro', 'juiz', 'jogo passivo', 'sinal', 'regra'],
+    tags: ['arbitro', 'juiz', 'jogo passivo', 'sinal'],
     credito: 'Foto: Wenflou, Wikimedia Commons, CC0',
   },
   {
@@ -213,6 +213,15 @@ export const BANCO_IMAGENS: ItemBancoImagem[] = [...ITENS_DE_ARQUIVO, ...DIAGRAM
 
 function semAcento(texto: string): string {
   return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+/**
+ * Pontuação do item para uma questão: o título da questão (a palavra-chave que
+ * nomeia o assunto, ex.: BOLA, ÁRBITRO) pesa mais que o resto do texto, para uma
+ * palavra solta como "jogo" não vencer o assunto de verdade.
+ */
+export function pontuarItemComTitulo(item: ItemBancoImagem, titulo: string, textoQuestao: string): number {
+  return pontuarItem(item, textoQuestao) + 3 * pontuarItem(item, titulo);
 }
 
 /** Quantas tags do item aparecem no texto da questão (0 = não tem relação). */

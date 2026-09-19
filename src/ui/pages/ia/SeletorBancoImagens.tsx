@@ -1,10 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { Search, X } from 'lucide-react';
-import { BANCO_IMAGENS, pontuarItem } from './bancoImagens';
+import { BANCO_IMAGENS, pontuarItemComTitulo } from './bancoImagens';
 import type { ItemBancoImagem, TipoImagemBanco } from './bancoImagens';
 
 interface Props {
-  /** Texto da questão (título, contexto, pergunta): usado para sugerir imagens. */
+  /** Título da questão (palavra-chave do assunto): pesa mais na sugestão. */
+  tituloQuestao?: string;
+  /** Texto da questão (contexto, pergunta): usado para sugerir imagens. */
   textoQuestao: string;
   onEscolher: (item: ItemBancoImagem) => void;
   onFechar: () => void;
@@ -22,18 +24,18 @@ function semAcento(texto: string): string {
 }
 
 /** Janela para escolher uma imagem do banco. As mais ligadas à questão aparecem primeiro. */
-export function SeletorBancoImagens({ textoQuestao, onEscolher, onFechar }: Props) {
+export function SeletorBancoImagens({ tituloQuestao = '', textoQuestao, onEscolher, onFechar }: Props) {
   const [busca, setBusca] = useState('');
   const [filtro, setFiltro] = useState<TipoImagemBanco | 'todos'>('todos');
 
   const itens = useMemo(() => {
     const termo = semAcento(busca.trim());
     return BANCO_IMAGENS
-      .map((item, ordem) => ({ item, ordem, pontos: pontuarItem(item, textoQuestao) }))
+      .map((item, ordem) => ({ item, ordem, pontos: pontuarItemComTitulo(item, tituloQuestao, textoQuestao) }))
       .filter(({ item }) => filtro === 'todos' || item.tipo === filtro)
       .filter(({ item }) => !termo || semAcento(`${item.titulo} ${item.tags.join(' ')}`).includes(termo))
       .sort((a, b) => b.pontos - a.pontos || a.ordem - b.ordem);
-  }, [busca, filtro, textoQuestao]);
+  }, [busca, filtro, tituloQuestao, textoQuestao]);
 
   const semBusca = !busca.trim();
 
