@@ -148,6 +148,7 @@ export function IAIdeiasAvaliacoes() {
   const [copiado, setCopiado] = useState<string | null>(null);
   const [progressoImagens, setProgressoImagens] = useState<{ feitas: number; total: number } | null>(null);
   const [erroImagens, setErroImagens] = useState('');
+  const [avisoImagens, setAvisoImagens] = useState('');
 
   // Buscar alunos quando série ou turma mudar — só os cadastrados como AEE
   // nessa turma (esta tela é justamente pra gerar a versão adaptada deles).
@@ -323,12 +324,41 @@ export function IAIdeiasAvaliacoes() {
   async function usarImagemManual(numero: number, arquivo: Blob | null | undefined) {
     if (!arquivo) return;
     setErroImagens('');
+    setAvisoImagens('');
     try {
       const url = await imagemDeArquivo(arquivo);
       setQuestoes(prev => prev.map(x => (x.numero === numero ? { ...x, imagemDataUrl: url } : x)));
     } catch (e) {
       setErroImagens(`Questão ${numero}: ${(e as Error).message}`);
     }
+  }
+
+  // Vários arquivos de uma vez: ordenados pelo nome (1, 2, ... 10, com número
+  // no lugar certo) e distribuídos nas questões 1, 2, 3... nessa ordem.
+  async function enviarVariasImagens(lista: FileList | null) {
+    const arquivos = Array.from(lista ?? [])
+      .filter(f => f.type.startsWith('image/'))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+    if (arquivos.length === 0) {
+      setErroImagens('Nenhuma imagem encontrada nos arquivos escolhidos.');
+      return;
+    }
+    setErroImagens('');
+    setAvisoImagens('');
+    const alvo = questoes.slice(0, arquivos.length);
+    const resultados = await Promise.allSettled(alvo.map((_, i) => imagemDeArquivo(arquivos[i])));
+    const novas = new Map<number, string>();
+    const erros: string[] = [];
+    resultados.forEach((r, i) => {
+      if (r.status === 'fulfilled') novas.set(alvo[i].numero, r.value);
+      else erros.push(`Questão ${alvo[i].numero} (${arquivos[i].name}): ${(r.reason as Error).message}`);
+    });
+    setQuestoes(prev => prev.map(x => (novas.has(x.numero) ? { ...x, imagemDataUrl: novas.get(x.numero) } : x)));
+    const partes: string[] = [];
+    if (novas.size > 0) partes.push(`${novas.size} imagem${novas.size === 1 ? '' : 'ns'} colocada${novas.size === 1 ? '' : 's'} nas questões ${alvo[0].numero} a ${alvo[alvo.length - 1].numero}, na ordem dos nomes dos arquivos. Confira se cada uma combina com a pergunta.`);
+    if (arquivos.length > questoes.length) partes.push(`${arquivos.length - questoes.length} arquivo(s) a mais que questões foram ignorados.`);
+    setAvisoImagens(partes.join(' '));
+    setErroImagens(erros.join(' · '));
   }
 
   function arquivoDeImagem(dados: DataTransfer | null): File | null {
@@ -638,6 +668,22 @@ export function IAIdeiasAvaliacoes() {
               Gere as imagens no chat do Gemini (a partir dos prompts do guia abaixo) e, em cada questão, use <b>Enviar imagem</b>, <b>Colar imagem</b>,
               arraste o arquivo para a caixa ou clique nela e aperte Ctrl+V. O app ajusta o tamanho sem cortar a imagem.
             </p>
+            <label className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-semibold cursor-pointer ${progressoImagens !== null ? 'opacity-60 pointer-events-none' : ''}`}>
+              <Upload className="w-4 h-4" /> Enviar todas as imagens de uma vez
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={e => {
+                  const lista = e.target.files;
+                  enviarVariasImagens(lista).finally(() => { e.target.value = ''; });
+                }}
+              />
+            </label>
+            <p className="text-[11px] text-on-surface-variant">
+              Escolha todos os arquivos juntos. Eles vão para as questões 1, 2, 3... na ordem dos nomes, então nomeie 1, 2, 3... antes. Substitui as imagens que já estiverem nessas questões.
+            </p>
             {(progressoImagens !== null || questoes.some(q => !q.imagemDataUrl)) && (
               <button
                 onClick={() => gerarImagens()}
@@ -650,6 +696,7 @@ export function IAIdeiasAvaliacoes() {
                   : 'Ou gerar as que faltam com IA do app (pode ter custo)'}
               </button>
             )}
+            {avisoImagens && <p className="text-xs text-primary font-semibold">{avisoImagens}</p>}
             {erroImagens && <p className="text-xs text-error">{erroImagens}</p>}
           </div>
 
