@@ -173,9 +173,10 @@ function tipoDaQuestao(q: Questao): TipoImagemSugerido {
 
 // Melhor imagem do banco para a questão: primeiro do tipo sugerido; se nenhuma
 // combinar, aceita de outro tipo só quando a ligação com o texto é forte.
-function sugerirItemDoBanco(q: Questao): ItemBancoImagem | null {
-  const tipo = tipoDaQuestao(q);
-  if (tipo === 'acao') return null;
+function sugerirItemDoBanco(q: Questao, preferirPictograma = false): ItemBancoImagem | null {
+  const tipoIA = tipoDaQuestao(q);
+  // Para DI, autismo e deficiência múltipla, o pictograma (limpo, sem fundo) vale mais que a foto.
+  const tipo: TipoImagemSugerido = preferirPictograma && tipoIA === 'foto' ? 'pictograma' : tipoIA;
   const letra = q.resposta?.trim().charAt(0).toUpperCase();
   const correta = letra === 'A' ? q.opcaoA : letra === 'B' ? q.opcaoB : letra === 'C' ? q.opcaoC : '';
   const titulo = q.titulo ?? '';
@@ -190,7 +191,9 @@ function sugerirItemDoBanco(q: Questao): ItemBancoImagem | null {
     }
     return escolhido;
   };
-  return melhor(i => i.tipo === tipo, 3) ?? melhor(i => i.tipo !== tipo, 5);
+  // Cena de ação: o banco só entra se o assunto bater com um item (título da questão = tag do item).
+  if (tipo === 'acao') return (preferirPictograma ? melhor(i => i.tipo === 'pictograma', 4) : null) ?? melhor(() => true, 4);
+  return melhor(i => i.tipo === tipo, 3) ?? melhor(i => i.tipo !== tipo, 4);
 }
 
 // Deduz o tipo de NEE a partir do texto do CID/diagnóstico cadastrado em
@@ -236,6 +239,7 @@ export function IAIdeiasAvaliacoes() {
   const [erroImagens, setErroImagens] = useState('');
   const [avisoImagens, setAvisoImagens] = useState('');
   const [bancoAbertoPara, setBancoAbertoPara] = useState<number | null>(null);
+  const preferePictograma = /Intelectual|Autismo|Multipla/i.test(deficiencia);
 
   // Buscar alunos quando série ou turma mudar — só os cadastrados como AEE
   // nessa turma (esta tela é justamente pra gerar a versão adaptada deles).
@@ -475,7 +479,7 @@ export function IAIdeiasAvaliacoes() {
     setAvisoImagens('');
     const alvo = questoes
       .filter(q => !q.imagemDataUrl)
-      .map(q => ({ q, item: sugerirItemDoBanco(q) }))
+      .map(q => ({ q, item: sugerirItemDoBanco(q, preferePictograma) }))
       .filter((x): x is { q: Questao; item: ItemBancoImagem } => x.item !== null);
     if (alvo.length === 0) {
       setAvisoImagens('Nenhuma questão sem imagem tem uma sugestão do banco. As de cena de ação pedem o Gemini; nas outras, use "Banco de imagens".');
@@ -598,7 +602,7 @@ export function IAIdeiasAvaliacoes() {
 
   function tituloQuestaoHtml(q: Questao, tamanho: number): string {
     const tag = q.titulo ? ` &#8212; <span style="color:#1e3a5f;">${q.titulo}</span>` : '';
-    return `<div style="font-weight:bold;font-size:${tamanho}pt;margin-bottom:4px;">Quest&#227;o ${q.numero}${tag}</div>`;
+    return `<div style="font-weight:bold;font-size:${tamanho}pt;margin-bottom:4px;page-break-after:avoid;">Quest&#227;o ${q.numero}${tag}</div>`;
   }
 
   // Contexto (observação/situação) numa linha e a pergunta, em negrito, em outra.
@@ -833,10 +837,10 @@ export function IAIdeiasAvaliacoes() {
             </p>
             <button
               onClick={aplicarSugestoesDoBanco}
-              disabled={progressoImagens !== null || questoes.every(q => q.imagemDataUrl || !sugerirItemDoBanco(q))}
+              disabled={progressoImagens !== null || questoes.every(q => q.imagemDataUrl || !sugerirItemDoBanco(q, preferePictograma))}
               className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-semibold disabled:opacity-50"
             >
-              <Images className="w-4 h-4" /> Aplicar sugestões do banco ({questoes.filter(q => !q.imagemDataUrl && sugerirItemDoBanco(q)).length} questões)
+              <Images className="w-4 h-4" /> Aplicar sugestões do banco ({questoes.filter(q => !q.imagemDataUrl && sugerirItemDoBanco(q, preferePictograma)).length} questões)
             </button>
             <p className="text-[11px] text-on-surface-variant">
               Para cada questão sem imagem, a IA sugeriu o tipo (diagrama, pictograma, foto ou cena de ação) e o app escolhe a imagem do banco que combina com o texto.
@@ -920,11 +924,11 @@ export function IAIdeiasAvaliacoes() {
                       <span className="text-xs text-on-surface-variant">Espaço para imagem — arraste um arquivo aqui ou clique e aperte Ctrl+V</span>
                       {(() => {
                         const tipo = tipoDaQuestao(q);
-                        const sugerido = sugerirItemDoBanco(q);
+                        const sugerido = sugerirItemDoBanco(q, preferePictograma);
                         return (
                           <div className="flex flex-wrap items-center justify-center gap-2">
                             <span className="text-[11px] text-on-surface-variant">Sugestão da IA: <strong>{ROTULO_TIPO_IMAGEM[tipo]}</strong></span>
-                            {sugerido ? (
+                            {sugerido && (
                               <button
                                 onClick={() => usarItemDoBanco(q.numero, sugerido)}
                                 disabled={progressoImagens !== null}
@@ -932,7 +936,8 @@ export function IAIdeiasAvaliacoes() {
                               >
                                 <Images className="w-3.5 h-3.5" /> Usar: {sugerido.titulo}
                               </button>
-                            ) : tipo === 'acao' ? (
+                            )}
+                            {tipo === 'acao' ? (
                               <button
                                 onClick={() => copiar(String(q.numero), promptImagem(q))}
                                 className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary text-on-primary text-xs font-semibold"
@@ -940,9 +945,9 @@ export function IAIdeiasAvaliacoes() {
                                 {copiado === String(q.numero) ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                                 {copiado === String(q.numero) ? 'Copiado!' : 'Copiar prompt para o Gemini'}
                               </button>
-                            ) : (
+                            ) : !sugerido ? (
                               <span className="text-[11px] text-on-surface-variant italic">nenhuma imagem parecida no banco</span>
-                            )}
+                            ) : null}
                           </div>
                         );
                       })()}

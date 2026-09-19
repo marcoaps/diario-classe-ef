@@ -179,7 +179,7 @@ const ITENS_DE_ARQUIVO: ItemBancoImagem[] = [
     arquivo: '/banco-imagens/fotos/foto-arremesso-gol.jpg',
     tipo: 'foto',
     titulo: 'Arremesso em direção ao gol',
-    tags: ['gol', 'arremesso', 'goleiro', 'trave', 'rede', 'salto'],
+    tags: ['gol', 'arremesso', 'trave', 'rede', 'salto'],
     credito: 'Foto: Armin Kübelbeck, Wikimedia Commons, CC BY-SA 3.0',
   },
   {
@@ -187,7 +187,7 @@ const ITENS_DE_ARQUIVO: ItemBancoImagem[] = [
     arquivo: '/banco-imagens/fotos/foto-quadra-vista-alto.jpg',
     tipo: 'foto',
     titulo: 'Quadra vista de cima, com goleiro',
-    tags: ['quadra', 'area do goleiro', 'goleiro', 'linhas', 'visao de cima', 'posicao'],
+    tags: ['quadra', 'area do goleiro', 'linhas', 'visao de cima', 'posicao'],
     credito: 'Foto: Ahodges7, Wikimedia Commons, CC BY-SA 3.0',
   },
   {
@@ -224,8 +224,16 @@ export function pontuarItemComTitulo(item: ItemBancoImagem, titulo: string, text
   return pontuarItem(item, textoQuestao) + 3 * pontuarItem(item, titulo);
 }
 
-/** Quantas tags do item aparecem no texto da questão (0 = não tem relação). */
+/**
+ * Quantas tags do item aparecem no texto da questão (0 = não tem relação).
+ * A tag só vale como PALAVRA inteira (com plural): "gol" não pode casar com
+ * "goleiro", nem "area" com "areia".
+ */
 export function pontuarItem(item: ItemBancoImagem, textoQuestao: string): number {
   const texto = semAcento(textoQuestao);
-  return item.tags.reduce((total, tag) => total + (texto.includes(tag) ? 1 + Math.floor(tag.length / 8) : 0), 0);
+  return item.tags.reduce((total, tag) => {
+    const escapada = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const aparece = new RegExp(`(^|[^a-z0-9])${escapada}(s|es)?(?![a-z0-9])`).test(texto);
+    return total + (aparece ? 1 + Math.floor(tag.length / 8) : 0);
+  }, 0);
 }
