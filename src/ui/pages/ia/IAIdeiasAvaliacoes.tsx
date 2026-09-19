@@ -644,21 +644,32 @@ export function IAIdeiasAvaliacoes() {
     </table>`;
   }
 
+  // Word: parágrafos soltos, SEM tabelas — assim o professor consegue editar e
+  // mexer no layout à vontade. As questões ficam numa seção de 2 colunas de
+  // verdade (ver exportarWord); a imagem vai acima do texto de cada questão.
+  function imagemWordHtml(q: Questao, largura: number): string {
+    const altura = Math.round(largura / 1.5);
+    if (!q.imagemDataUrl) {
+      // Caixa tracejada (borda de parágrafo, não tabela) para colar a imagem depois.
+      return `<p style="margin:0 0 4pt 0;border:1.5px dashed #94a3b8;line-height:${Math.round(altura * 0.75)}pt;mso-line-height-rule:exactly;page-break-after:avoid;">&nbsp;</p>`;
+    }
+    return `<p style="margin:0 0 4pt 0;font-size:2pt;line-height:normal;page-break-after:avoid;"><img src="${q.imagemDataUrl}" width="${largura}" height="${altura}" style="width:${largura}px;height:${altura}px;border:1px solid #cbd5e1;" /></p>`;
+  }
+
+  function questaoWordHtml(q: Questao): string {
+    const tag = q.titulo ? ` &#8212; <span style="color:#1e3a5f;">${q.titulo}</span>` : '';
+    const opcoes: [string, string][] = [['A', q.opcaoA], ['B', q.opcaoB]];
+    if (q.opcaoC) opcoes.push(['C', q.opcaoC]);
+    // "page-break-after:avoid" mantém a questão inteira junta, sem cortar entre colunas/páginas.
+    return `<p style="margin:8pt 0 3pt 0;font-size:11pt;font-weight:bold;page-break-after:avoid;">Quest&#227;o ${q.numero}${tag}</p>
+      ${imagemWordHtml(q, 150)}
+      ${q.contexto ? `<p style="margin:0 0 3pt 0;font-size:10pt;page-break-after:avoid;">${q.contexto}</p>` : ''}
+      <p style="margin:0 0 4pt 0;font-size:10pt;font-weight:bold;page-break-after:avoid;">${q.pergunta}</p>
+      ${opcoes.map(([letra, texto], i) => `<p style="margin:0 0 2pt 6pt;font-size:10pt;${i < opcoes.length - 1 ? 'page-break-after:avoid;' : ''}"><strong style="color:#1e3a5f;">${letra})</strong> ${texto}</p>`).join('')}`;
+  }
+
   function questoesWordStr(): string {
-    // Word: coluna única, imagem ao lado do texto via float
-    return questoes.map(q => `
-      <div style="margin-bottom:14px;overflow:hidden;">
-        ${tituloQuestaoHtml(q, 11)}
-        <table width="100%" style="border-collapse:collapse;">
-          <tr>
-            <td width="210" style="vertical-align:top;padding-right:8px;">${imagemQuestaoHtml(q, 200)}</td>
-            <td style="vertical-align:top;">
-              ${enunciadoHtml(q, 10)}
-              <div style="margin-top:6px;">${alternativasHtml(q, 10)}</div>
-            </td>
-          </tr>
-        </table>
-      </div>`).join('');
+    return questoes.map(questaoWordHtml).join('');
   }
 
   // Créditos exigidos pelas licenças das imagens do banco (ARASAAC e Wikimedia
@@ -698,7 +709,13 @@ export function IAIdeiasAvaliacoes() {
 
   function exportarWord() {
     const nome = alunoNome || '____________________________________________';
-    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>Avaliacao Adaptada</title><style>body{font-family:Arial,sans-serif;font-size:10pt;}@page{size:A4 portrait;margin:10mm;}</style></head><body>${cabecalhoHtml(nome)}${questoesWordStr()}${creditosHtmlStr()}${gabaritoHtmlStr()}${sugestoesImagemHtmlStr()}</body></html>`;
+    // 3 seções: cabeçalho (1 coluna), questões (2 colunas de verdade, contínuo) e
+    // créditos + gabarito + guia (1 coluna). O "mso-columns" só vale com as margens
+    // de cabeçalho/rodapé, como o próprio Word grava; testado no Word.
+    const pagina = (colunas: string) => `size:595.3pt 841.9pt;margin:28.0pt 28.0pt 28.0pt 28.0pt;mso-header-margin:35.4pt;mso-footer-margin:35.4pt;${colunas}mso-paper-source:0;`;
+    const css = `body{font-family:Arial,sans-serif;font-size:10pt;}@page WordSection1 {${pagina('')}}@page WordSection2 {${pagina('mso-columns:2 even 36.0pt;')}}@page WordSection3 {${pagina('')}}div.WordSection1 {page:WordSection1;}div.WordSection2 {page:WordSection2;}div.WordSection3 {page:WordSection3;}`;
+    const quebraDeSecao = `<br clear=all style='mso-special-character:line-break;page-break-before:auto;mso-break-type:section-break'>`;
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>Avaliacao Adaptada</title><style>${css}</style></head><body><div class=WordSection1>${cabecalhoHtml(nome)}</div>${quebraDeSecao}<div class=WordSection2>${questoesWordStr()}</div>${quebraDeSecao}<div class=WordSection3>${creditosHtmlStr()}${gabaritoHtmlStr()}${sugestoesImagemHtmlStr()}</div></body></html>`;
     const blob = new Blob([html], { type: 'application/msword' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
