@@ -225,7 +225,7 @@ export const DIAGRAMAS_QUADRA: ItemBancoImagem[] = [
   item('quadra-medidas', 'Quadra com medidas (40 m × 20 m)', [...TAGS_QUADRA, 'medidas', 'metros', 'comprimento', 'largura', 'tamanho', 'dimensoes'], quadraInteira({ medidas: true })),
   item('linha-central', 'Linha central destacada', [...TAGS_QUADRA, 'linha central', 'meio', 'meio da quadra', 'campo de ataque', 'campo de defesa'], quadraInteira({ destaque: 'central' })),
   item('meia-quadra', 'Meia quadra (sem nomes)', [...TAGS_QUADRA, 'meia quadra', 'area', 'gol'], meiaQuadra({})),
-  item('area-goleiro', 'Área do goleiro (6 m) destacada', [...TAGS_QUADRA, 'area do goleiro', 'area', 'seis metros', '6 m', 'goleiro', 'gol'], meiaQuadra({ destaque: 'area6' })),
+  item('area-goleiro', 'Área do goleiro (6 m) destacada', [...TAGS_QUADRA, 'area do goleiro', 'area de gol', 'area exclusiva', 'linha da area', 'area', 'seis metros', '6 m', 'goleiro'], meiaQuadra({ destaque: 'area6' })),
   item('linha-9m', 'Linha de tiro livre (9 m) destacada', [...TAGS_QUADRA, 'linha de 9', 'nove metros', '9 m', 'tiro livre', 'linha tracejada', 'falta'], meiaQuadra({ destaque: 'linha9' })),
   item('linha-7m', 'Linha de 7 metros destacada', [...TAGS_QUADRA, 'sete metros', '7 m', 'tiro de 7', 'penalti', 'sete', 'falta'], meiaQuadra({ destaque: 'linha7' })),
   item('gol', 'Gol destacado', [...TAGS_QUADRA, 'gol', 'trave', 'baliza', 'rede', 'meta'], meiaQuadra({ destaque: 'gol' })),

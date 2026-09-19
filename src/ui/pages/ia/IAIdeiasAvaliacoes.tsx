@@ -17,19 +17,26 @@ interface Aluno {
 }
 
 
-type TipoImagemSugerido = 'diagrama' | 'pictograma' | 'foto' | 'acao';
+// ilustracao = desenho/foto de uma cena (banco ou Gemini); svg = quadra, mapa, tabela
+// ou gráfico, que pedem medidas e posições exatas; nenhuma = a imagem não ajuda.
+type TipoImagemSugerido = 'ilustracao' | 'svg' | 'nenhuma';
 
 const ROTULO_TIPO_IMAGEM: Record<TipoImagemSugerido, string> = {
-  diagrama: 'diagrama da quadra',
-  pictograma: 'pictograma',
-  foto: 'foto real',
-  acao: 'cena de ação (gerar no Gemini)',
+  ilustracao: 'ilustração (banco ou Gemini)',
+  svg: 'diagrama (SVG)',
+  nenhuma: 'sem imagem',
+};
+
+// Valores do formato antigo, caso a IA ainda devolva algum.
+const TIPO_IMAGEM_ANTIGO: Record<string, TipoImagemSugerido> = {
+  diagrama: 'svg', pictograma: 'ilustracao', foto: 'ilustracao', acao: 'ilustracao',
 };
 
 interface Questao {
   numero: number;
   titulo?: string;
-  imageQuery: string;
+  /** Formato antigo (português); hoje o pedido de imagem é `promptImagem`. */
+  imageQuery?: string;
   contexto?: string;
   pergunta: string;
   opcaoA: string;
@@ -42,6 +49,10 @@ interface Questao {
   imagemCredito?: string;
   /** De onde vem a melhor imagem dessa questão (sugerido pela IA ao criar a prova). */
   tipoImagem?: TipoImagemSugerido;
+  /** Pedido da ilustração, em inglês (até 40 palavras, uma cena); vazio se o tipo não for 'ilustracao'. */
+  promptImagem?: string;
+  /** Por que a IA escolheu esse tipo de imagem. */
+  motivoImagem?: string;
 }
 
 
@@ -91,49 +102,35 @@ function montarPromptImagem(p: { tema: string; serie: string; nee: string; cena:
   return `Ilustração em estilo cartoon vetorial simples, cores vivas, traços limpos e fundo neutro, formato horizontal 4:3. UMA única imagem com UMA única cena, sem colagem, sem painéis e sem moldura. Cena: ${p.cena}. Esporte: ${temaPrincipal} — desenhe corretamente a quadra, os equipamentos e os uniformes desse esporte.${idade} Estilo da cena: ${cuidado}; um único assunto em destaque. Não escreva nenhum texto, letra, número, logotipo, legenda ou placar na imagem. Não crie prova, folha de exercícios nem layout de documento: apenas a ilustração.`;
 }
 
-// Mensagem única para o chat do Gemini: ele lê as questões inteiras (enunciado,
-// alternativas e resposta certa) e gera UMA imagem por vez, esperando o professor
-// escrever "próxima". Assim cada imagem vem sozinha, sem precisar recortar folha.
+// Mensagem única para o chat do Gemini: só as questões que pedem ILUSTRAÇÃO, cada
+// uma com o pedido curto (em inglês, uma cena) que a própria IA escreveu. O Gemini
+// gera UMA imagem por vez e espera o professor escrever "próxima".
 function montarPromptSequencia(p: { tema: string; serie: string; nee: string; questoes: Questao[] }): string {
   const cuidado = CUIDADO_IMAGEM_POR_NEE[p.nee] ?? 'composição clara, com poucos elementos';
   const temaPrincipal = p.tema.split(/[:;,\n]/)[0].trim() || p.tema;
-  const numeroSerie = parseInt(p.serie, 10);
-  const idade = Number.isNaN(numeroSerie) ? '' : ` Personagens: estudantes de ${numeroSerie + 5} a ${numeroSerie + 6} anos.`;
-  const lista = p.questoes.map(q => {
-    const opcoes = [['A', q.opcaoA], ['B', q.opcaoB], ['C', q.opcaoC]].filter(([, t]) => t) as string[][];
-    const letra = q.resposta?.trim().charAt(0).toUpperCase();
-    const correta = opcoes.find(([l]) => l === letra);
-    return [
-      `IMAGEM ${q.numero}${q.titulo ? ` (${q.titulo})` : ''}`,
-      `Texto que o aluno lê: ${[q.contexto, q.pergunta].filter(Boolean).join(' ')}`,
-      `Alternativas: ${opcoes.map(([l, t]) => `${l}) ${t}`).join(' | ')}`,
-      `Resposta correta: ${correta ? `${correta[0]}) ${correta[1]}` : q.resposta}`,
-      q.imageQuery ? `Sugestão de cena: ${q.imageQuery}` : '',
-    ].filter(Boolean).join('\n');
-  }).join('\n\n');
-  return `Vou pedir ilustrações didáticas para ${p.questoes.length} questões de uma prova de Educação Física (tema: ${temaPrincipal}, ${p.serie}). Cada imagem acompanha uma questão e é o que o aluno vai observar para responder.
+  const pedidos = p.questoes
+    .filter(q => tipoDaQuestao(q) === 'ilustracao' && (q.promptImagem || q.imageQuery))
+    .map(q => `IMAGEM ${q.numero}${q.titulo ? ` (${q.titulo})` : ''}: ${q.promptImagem || q.imageQuery}`);
+  if (pedidos.length === 0) return 'Nenhuma questão desta prova pede ilustração.';
+  return `Vou pedir ${pedidos.length} ilustrações para uma prova escolar de Educação Física (tema: ${temaPrincipal}, ${p.serie}).
 
 COMO TRABALHAR:
-- Gere UMA imagem por vez, uma por resposta. Comece agora só pela IMAGEM 1. Depois de cada imagem, espere eu escrever "próxima" para gerar a seguinte. Nunca gere mais de uma imagem na mesma resposta e nunca junte várias cenas na mesma imagem.
-- Cada imagem é UMA única cena, sem colagem, sem painéis, sem moldura. Não crie prova nem folha de exercícios: apenas a ilustração.
-- A imagem deve mostrar o conceito ou a ação da RESPOSTA CORRETA, de modo que o aluno a reconheça olhando só a imagem. Nunca mostre a ação de uma alternativa errada e não escreva a resposta na imagem.
-- Traduza o enunciado em algo visível: quem faz (1 ou 2 estudantes), o que o corpo faz, onde está a bola ou o objeto e o local. Se a questão pede para identificar um equipamento ou um espaço, mostre esse item inteiro e bem claro.
-- Estilo IGUAL em todas as imagens: ilustração em cartoon vetorial simples, cores vivas, traços limpos, fundo neutro, formato horizontal 3:2, um único assunto em destaque. Cuidado visual: ${cuidado}.${idade}
-- Desenhe corretamente a quadra, os equipamentos e os uniformes de ${temaPrincipal}.
-- Não escreva nenhum texto, letra, número, logotipo, legenda ou placar dentro da imagem.
+- Gere UMA imagem por vez. Comece só pela primeira da lista. Depois de cada imagem, espere eu escrever "próxima" para gerar a seguinte.
+- Cada pedido descreve UMA cena. Desenhe exatamente o que a descrição diz, em um único quadro.
+- Estilo igual em todas: ilustração em cartoon vetorial simples, cores vivas, traços limpos, fundo neutro, formato horizontal 3:2. Cuidado visual: ${cuidado}.
 
-QUESTÕES:
+PEDIDOS:
 
-${lista}
+${pedidos.join('\n\n')}
 
-Comece agora pela IMAGEM 1.`;
+Comece agora pela primeira imagem da lista.`;
 }
 
 function montarPromptQuestoes(p: { tema: string; serie: string; nee: string; nivel: Nivel; objetivo: string }): string {
   const tresAlternativas = p.nivel === 'ano';
   const regrasNivel = tresAlternativas
     ? `NÍVEL DO ANO: cada questão tem EXATAMENTE 3 alternativas (A, B e C). O "contexto" tem 1 a 2 frases curtas (uma situação de jogo ou de aula) e a "pergunta" vem depois, separada. O conteúdo é o do ${p.serie}, sem simplificá-lo demais: o apoio está no FORMATO (frases curtas, um comando por vez, imagem de apoio), não em perguntar coisas triviais.`
-    : `NÍVEL DE MAIOR APOIO: cada questão tem EXATAMENTE 2 alternativas (A e B). O "contexto" tem 1 frase curta e concreta que descreve o que aparece na imagem, e a "pergunta" vem depois, separada. Conceitos concretos e visíveis: a resposta deve poder ser encontrada olhando a imagem.`;
+    : `NÍVEL DE MAIOR APOIO: cada questão tem EXATAMENTE 2 alternativas (A e B). O "contexto" tem 1 frase curta e concreta que apresenta a situação, sem dizer o que a imagem mostra e sem entregar a resposta, e a "pergunta" vem depois, separada. Conceitos concretos e visíveis.`;
   const letras = tresAlternativas ? 'A, B e C' : 'A e B';
   const exemploOpcoes = tresAlternativas
     ? '"opcaoA":"opção A","opcaoB":"opção B","opcaoC":"opção C","resposta":"A, B ou C (varie)"'
@@ -155,12 +152,14 @@ REGRAS DE LINGUAGEM (importantes):
 - Alternativas curtas, de tamanho parecido, sem que a correta seja sempre a mais longa.
 - Alterne a alternativa correta entre TODAS as letras (${letras}) ao longo das 7 questões; não deixe a resposta certa sempre na mesma letra.
 - Cada questão tem 3 campos de texto SEPARADOS: "titulo" (uma palavra-chave em MAIÚSCULAS que nomeia o assunto, ex: BOLA, TRAVE, REGRA), "contexto" (a frase de observação/situação, SEM a pergunta) e "pergunta" (somente a pergunta, em uma frase, terminando em "?"). Não repita o contexto dentro da pergunta e não comece a pergunta com o título ("BOLA: qual...?"): o título já aparece acima.
-- O campo "imageQuery" descreve em português, em poucas palavras, a cena que a imagem dessa questão deve mostrar — vira o pedido de um gerador de imagem, NÃO é usado em busca automática. Descreva UMA única cena (nunca sequência de quadros, colagem, comparação lado a lado nem painéis) e não use palavras como "questão", "prova" ou "atividade".
-- O campo "tipoImagem" diz de onde vem a melhor imagem dessa questão. Use exatamente um destes valores: "diagrama" (quadra, linhas, áreas, medidas ou posições dos jogadores na quadra, em desenho técnico visto de cima); "pictograma" (desenho simples de um objeto, gesto ou ação bem conhecida, como bola, trave, apito, cartão, correr, passar — o preferido para alunos com Deficiência Intelectual, Autismo ou Deficiência Múltipla); "foto" (foto real de um equipamento ou de uma situação de jogo, como a bola, o árbitro, um arremesso); "acao" (movimento específico que só uma cena desenhada mostra, como drible, marcação, contra-ataque ou uma jogada). Escolha o que melhor mostra o que a pergunta pede.
+- IMAGEM DE CADA QUESTÃO. Decida o "tipoImagem" (exatamente um destes valores): "svg" para mapas, quadras, tabelas, gráficos e qualquer coisa que exija medidas ou posições exatas; "nenhuma" se a imagem não ajuda a resolver a questão; "ilustracao" nos demais casos. Assunto de geografia, história ou ciências: prefira "svg" ou "nenhuma" a uma cena inventada.
+- "promptImagem": preencha só quando o tipo for "ilustracao" (nos outros, use ""). Escreva em inglês, com no máximo 40 palavras, descrevendo UMA cena com no máximo 3 elementos. Descreva só o que aparece na cena. Nunca escreva "no ...", "without ..." nem "not": em vez de "no text on it", descreva apenas o objeto. Não inclua texto, números, letras nem placar na cena. Personagens: estudantes com a idade da turma (${p.serie}: ${Number.isNaN(parseInt(p.serie, 10)) ? '11 a 15' : `${parseInt(p.serie, 10) + 5} a ${parseInt(p.serie, 10) + 6}`} anos), camisas lisas de uma cor.
+- "motivoImagem": uma frase curta que explica a escolha do tipo.
+- A imagem NÃO pode revelar a resposta da questão: o "contexto" e a "pergunta" não descrevem o que a imagem mostra (ex.: não escreva "na imagem aparece a bola de handebol" nem "esta é a bola usada no handebol"). Pergunte pelo NOME, pela FUNÇÃO ou pelo LUGAR do que a imagem mostra, e nunca por algo que dá para ver nela (formato, cor, quantidade de jogadores, uma cena que já é a resposta). Antes de escolher o tipo, pergunte-se "a imagem mostraria a resposta?": se sim, use "nenhuma" ou reescreva a pergunta.
 - A imagem da questão costuma ser um desenho simples e genérico (uma bola, uma trave, um goleiro, a quadra vista de cima), NÃO uma cena feita sob medida. Por isso a pergunta e as alternativas NÃO podem depender de cor, de uniforme, de comparar vários jogadores nem de qualquer detalhe que um desenho genérico não traga (ex.: não escreva "bola laranja", "o jogador de uniforme diferente", "o time da esquerda"). Pergunte sobre o objeto, o gesto ou o espaço em si: o nome, a função ou o lugar.
 
 Responda APENAS com JSON válido, sem texto antes ou depois:
-{"questoes":[{"numero":1,"titulo":"PALAVRA-CHAVE","imageQuery":"jogador sacando a bola de voleibol por cima da rede","tipoImagem":"foto|pictograma|diagrama|acao","contexto":"frase de contexto ou de observação da imagem","pergunta":"a pergunta?",${exemploOpcoes},"habilidade":"habilidade pedagógica"}]}`;
+{"questoes":[{"numero":1,"titulo":"PALAVRA-CHAVE","tipoImagem":"ilustracao|svg|nenhuma","promptImagem":"A student in a plain blue shirt serves a volleyball over the net on an indoor court.","motivoImagem":"frase curta","contexto":"frase de contexto ou de situação","pergunta":"a pergunta?",${exemploOpcoes},"habilidade":"habilidade pedagógica"}]}`;
 }
 
 // A IA às vezes começa a pergunta repetindo o título em maiúsculas ("BOLA: qual é
@@ -172,25 +171,50 @@ function limparTituloDaPergunta(q: Questao): Questao {
   return { ...q, pergunta: resto.charAt(0).toUpperCase() + resto.slice(1) };
 }
 
+// A IA às vezes escreve "no text", "without labels": os geradores de imagem entendem
+// mal a negação (e chegam a desenhar o que foi negado). Corta os trechos separados
+// por vírgula (", no text on it"), sem mexer no meio de uma frase.
+function semNegacoes(prompt: string): string {
+  return prompt
+    .replace(/[,;]\s*(?:with\s+)?(?:no|without)\b[^,.;]*/gi, '')
+    .replace(/\s+([,.;])/g, '$1')
+    .replace(/([,;])\s*([,.;])/g, '$2')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/[,;]\s*$/, '')
+    .trim();
+}
+
+// Arruma os campos de imagem que a IA devolve: aceita os valores do formato antigo e
+// garante que promptImagem/motivoImagem sejam texto.
+function normalizarImagemDaQuestao(q: Questao): Questao {
+  const bruto = String(q.tipoImagem ?? '').toLowerCase().trim();
+  const tipo = (bruto in ROTULO_TIPO_IMAGEM ? bruto : TIPO_IMAGEM_ANTIGO[bruto]) as TipoImagemSugerido | undefined;
+  return {
+    ...q,
+    tipoImagem: tipo,
+    promptImagem: typeof q.promptImagem === 'string' ? semNegacoes(q.promptImagem.trim()) : '',
+    motivoImagem: typeof q.motivoImagem === 'string' ? q.motivoImagem.trim() : '',
+  };
+}
+
 // Tipo de imagem sugerido pela IA; se vier vazio ou inválido, deduz pelo texto.
 function tipoDaQuestao(q: Questao): TipoImagemSugerido {
   if (q.tipoImagem && q.tipoImagem in ROTULO_TIPO_IMAGEM) return q.tipoImagem;
   const t = [q.titulo, q.contexto, q.pergunta, q.imageQuery].filter(Boolean).join(' ').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-  if (/quadra|linha|area|metros|posicao|posicoes|zona|medida/.test(t)) return 'diagrama';
-  if (/drible|driblar|arremesso|salto|marcacao|contra-?ataque|jogada|finta/.test(t)) return 'acao';
-  return 'pictograma';
+  if (/quadra|linha|area|metros|posicao|posicoes|zona|medida/.test(t)) return 'svg';
+  return 'ilustracao';
 }
 
-// Melhor imagem do banco para a questão: primeiro do tipo sugerido; se nenhuma
-// combinar, aceita de outro tipo só quando a ligação com o texto é forte.
+// Melhor imagem do banco para a questão. "svg" só procura entre os diagramas;
+// "ilustracao" procura entre pictogramas e fotos (DI, autismo e deficiência múltipla
+// preferem pictograma) e só aceita diagrama se a ligação com o texto for forte.
 function sugerirItemDoBanco(q: Questao, preferirPictograma = false): ItemBancoImagem | null {
-  const tipoIA = tipoDaQuestao(q);
-  // Para DI, autismo e deficiência múltipla, o pictograma (limpo, sem fundo) vale mais que a foto.
-  const tipo: TipoImagemSugerido = preferirPictograma && tipoIA === 'foto' ? 'pictograma' : tipoIA;
-  const letra = q.resposta?.trim().charAt(0).toUpperCase();
-  const correta = letra === 'A' ? q.opcaoA : letra === 'B' ? q.opcaoB : letra === 'C' ? q.opcaoC : '';
+  const tipo = tipoDaQuestao(q);
+  if (tipo === 'nenhuma') return null;
+  // Só o texto que o aluno lê entra na busca. A resposta certa NÃO entra: ela puxaria
+  // justamente a imagem que entrega a resposta (ex.: "cartão vermelho" numa pergunta de falta).
   const titulo = q.titulo ?? '';
-  const texto = [q.titulo, q.contexto, q.pergunta, correta, q.imageQuery].filter(Boolean).join(' ');
+  const texto = [q.titulo, q.contexto, q.pergunta, q.imageQuery].filter(Boolean).join(' ');
   const melhor = (aceita: (i: ItemBancoImagem) => boolean, minimo: number): ItemBancoImagem | null => {
     let escolhido: ItemBancoImagem | null = null;
     let pontos = minimo - 1;
@@ -201,9 +225,9 @@ function sugerirItemDoBanco(q: Questao, preferirPictograma = false): ItemBancoIm
     }
     return escolhido;
   };
-  // Cena de ação: o banco só entra se o assunto bater com um item (título da questão = tag do item).
-  if (tipo === 'acao') return (preferirPictograma ? melhor(i => i.tipo === 'pictograma', 4) : null) ?? melhor(() => true, 4);
-  return melhor(i => i.tipo === tipo, 3) ?? melhor(i => i.tipo !== tipo, 4);
+  if (tipo === 'svg') return melhor(i => i.tipo === 'diagrama', 3);
+  const pictograma = preferirPictograma ? melhor(i => i.tipo === 'pictograma', 3) : null;
+  return pictograma ?? melhor(i => i.tipo !== 'diagrama', 3) ?? melhor(i => i.tipo === 'diagrama', 5);
 }
 
 // Deduz o tipo de NEE a partir do texto do CID/diagnóstico cadastrado em
@@ -354,7 +378,7 @@ export function IAIdeiasAvaliacoes() {
       const text = data.content?.[0]?.text || '';
       const clean = text.replace(/```json|```/g, '').trim();
       const parsed = JSON.parse(clean);
-      const qs: Questao[] = (parsed.questoes || []).map(limparTituloDaPergunta);
+      const qs: Questao[] = (parsed.questoes || []).map((q: Questao) => normalizarImagemDaQuestao(limparTituloDaPergunta(q)));
       // Busca automática de imagem (Pexels) abandonada — mesmo exigindo o
       // esporte certo, várias questões ficavam sem imagem boa ou vinham com
       // foto de outro esporte. Cada questão sai com um espaço em branco
@@ -370,7 +394,8 @@ export function IAIdeiasAvaliacoes() {
   }
 
   function promptImagem(q: Questao): string {
-    return montarPromptImagem({ tema, serie, nee: deficiencia, cena: q.imageQuery });
+    // Pedido curto em inglês escrito pela IA; o modelo antigo (em português) só entra se ele faltar.
+    return q.promptImagem || montarPromptImagem({ tema, serie, nee: deficiencia, cena: q.imageQuery ?? '' });
   }
 
   // Tudo que a IA precisa pra entender O QUE a imagem deve mostrar: o enunciado
@@ -387,7 +412,7 @@ export function IAIdeiasAvaliacoes() {
         ...(q.opcaoC ? [{ letra: 'C', texto: q.opcaoC }] : []),
       ],
       respostaCorreta: q.resposta?.trim().charAt(0).toUpperCase(),
-      dica: q.imageQuery,
+      dica: q.promptImagem || q.imageQuery,
       cuidado: CUIDADO_IMAGEM_POR_NEE[deficiencia],
     };
   }
@@ -606,7 +631,7 @@ export function IAIdeiasAvaliacoes() {
   // Imagem gerada (proporção 3:2) ou, se não houver, a caixa em branco.
   function imagemQuestaoHtml(q: Questao, largura: number): string {
     const altura = Math.round(largura / 1.5);
-    if (!q.imagemDataUrl) return espacoImagemHtml(largura, altura);
+    if (!q.imagemDataUrl) return q.tipoImagem === 'nenhuma' ? '' : espacoImagemHtml(largura, altura);
     return `<img src="${q.imagemDataUrl}" width="${largura}" height="${altura}" style="width:${largura}px;height:${altura}px;display:block;border:1px solid #cbd5e1;" />`;
   }
 
@@ -628,9 +653,10 @@ export function IAIdeiasAvaliacoes() {
   }
 
   function questaoHtmlCompacto(q: Questao): string {
+    const imagem = imagemQuestaoHtml(q, 140);
     return `<div style="margin-bottom:14px;page-break-inside:avoid;overflow:hidden;">
       ${tituloQuestaoHtml(q, 12)}
-      <div style="float:left;margin-right:8px;margin-bottom:6px;">${imagemQuestaoHtml(q, 140)}</div>
+      ${imagem ? `<div style="float:left;margin-right:8px;margin-bottom:6px;">${imagem}</div>` : ''}
       ${enunciadoHtml(q, 11)}
       <div style="clear:both;margin-top:6px;">${alternativasHtml(q, 11)}</div>
     </div>`;
@@ -659,6 +685,7 @@ export function IAIdeiasAvaliacoes() {
   function imagemWordHtml(q: Questao, largura: number): string {
     const altura = Math.round(largura / 1.5);
     if (!q.imagemDataUrl) {
+      if (q.tipoImagem === 'nenhuma') return '';
       // Caixa tracejada (borda de parágrafo, não tabela) para colar a imagem depois.
       return `<p style="margin:0 0 4pt 0;border:1.5px dashed #94a3b8;line-height:${Math.round(altura * 0.75)}pt;mso-line-height-rule:exactly;page-break-after:avoid;">&nbsp;</p>`;
     }
@@ -703,7 +730,7 @@ export function IAIdeiasAvaliacoes() {
   function sugestoesImagemHtmlStr(): string {
     return `<div style="margin-top:16px;border-top:2px dashed #94a3b8;padding-top:10px;">
       <div style="font-weight:bold;font-size:10pt;margin-bottom:4px;">PROMPTS DE IMAGEM (guia do professor &#8212; n&#227;o imprimir; cole um por vez no gerador de imagem)</div>
-      ${questoes.map(q => `<div style="font-size:9pt;font-weight:bold;margin-top:6px;">Imagem da quest&#227;o ${q.numero}${q.titulo ? ` (${q.titulo})` : ''}</div><div style="font-size:9pt;margin-bottom:4px;">${promptImagem(q)}</div>`).join('')}
+      ${questoes.filter(q => tipoDaQuestao(q) === 'ilustracao').map(q => `<div style="font-size:9pt;font-weight:bold;margin-top:6px;">Imagem da quest&#227;o ${q.numero}${q.titulo ? ` (${q.titulo})` : ''}</div><div style="font-size:9pt;margin-bottom:4px;">${promptImagem(q)}</div>`).join('')}
     </div>`;
   }
 
@@ -926,7 +953,7 @@ export function IAIdeiasAvaliacoes() {
                 >
                   {q.imagemDataUrl ? (
                     <div className="space-y-1.5">
-                      <img src={q.imagemDataUrl} alt={q.imageQuery} className="w-full max-w-md aspect-[3/2] object-contain rounded-xl border border-gray-100" />
+                      <img src={q.imagemDataUrl} alt={q.titulo ?? 'Imagem da questão'} className="w-full max-w-md aspect-[3/2] object-contain rounded-xl border border-gray-100" />
                       {q.imagemCredito && <p className="text-[10px] text-on-surface-variant max-w-md">{q.imagemCredito}</p>}
                       <div className="flex flex-wrap gap-2">
                         {botoesImagemManual(q.numero)}
@@ -954,7 +981,9 @@ export function IAIdeiasAvaliacoes() {
                         const sugerido = sugerirItemDoBanco(q, preferePictograma);
                         return (
                           <div className="flex flex-wrap items-center justify-center gap-2">
-                            <span className="text-[11px] text-on-surface-variant">Sugestão da IA: <strong>{ROTULO_TIPO_IMAGEM[tipo]}</strong></span>
+                            <span className="text-[11px] text-on-surface-variant">
+                              Sugestão da IA: <strong>{ROTULO_TIPO_IMAGEM[tipo]}</strong>{tipo === 'nenhuma' && q.motivoImagem ? ` — ${q.motivoImagem}` : ''}
+                            </span>
                             {sugerido && (
                               <button
                                 onClick={() => usarItemDoBanco(q.numero, sugerido)}
@@ -964,17 +993,18 @@ export function IAIdeiasAvaliacoes() {
                                 <Images className="w-3.5 h-3.5" /> Usar: {sugerido.titulo}
                               </button>
                             )}
-                            {tipo === 'acao' ? (
+                            {tipo === 'ilustracao' && promptImagem(q) && (
                               <button
                                 onClick={() => copiar(String(q.numero), promptImagem(q))}
-                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary text-on-primary text-xs font-semibold"
+                                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold ${sugerido ? 'bg-secondary-container text-on-secondary-container' : 'bg-primary text-on-primary'}`}
                               >
                                 {copiado === String(q.numero) ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                                 {copiado === String(q.numero) ? 'Copiado!' : 'Copiar prompt para o Gemini'}
                               </button>
-                            ) : !sugerido ? (
-                              <span className="text-[11px] text-on-surface-variant italic">nenhuma imagem parecida no banco</span>
-                            ) : null}
+                            )}
+                            {tipo === 'svg' && !sugerido && (
+                              <span className="text-[11px] text-on-surface-variant italic">nenhum diagrama parecido no banco — escolha no Banco de imagens</span>
+                            )}
                           </div>
                         );
                       })()}
@@ -1033,9 +1063,9 @@ export function IAIdeiasAvaliacoes() {
               <div>
                 <p className="text-xs font-bold text-on-surface-variant">PROMPTS DE IMAGEM (guia pra você — não vai impresso)</p>
                 <p className="text-[11px] text-on-surface-variant mt-1">
-                  <strong>No chat do Gemini:</strong> use "Copiar para o Gemini (1 por vez)", cole uma única vez e, depois de cada imagem, escreva <strong>próxima</strong>.
-                  Ele lê as questões inteiras, gera uma imagem por resposta e cada uma sai separada — é só baixar e usar "Enviar todas as imagens de uma vez" (nomeie 1, 2, 3...).
-                  No Canva (Mídia Mágica) cole <strong>um prompt por vez</strong> dos abaixo — vários juntos podem virar colagem ou até uma prova.
+                  Só as questões que pedem <strong>ilustração</strong> aparecem aqui, cada uma com um pedido curto em inglês (uma cena).
+                  <strong>No chat do Gemini:</strong> use "Copiar para o Gemini (1 por vez)", cole uma única vez e, depois de cada imagem, escreva <strong>próxima</strong>;
+                  baixe as imagens e use "Enviar todas as imagens de uma vez" (nomeie 1, 2, 3...). No Canva ou em outro gerador, cole <strong>um pedido por vez</strong>.
                 </p>
               </div>
               <button
@@ -1046,7 +1076,7 @@ export function IAIdeiasAvaliacoes() {
                 {copiado === 'todos' ? 'Copiado!' : 'Copiar para o Gemini (1 por vez)'}
               </button>
             </div>
-            {questoes.map(q => (
+            {questoes.filter(q => tipoDaQuestao(q) === 'ilustracao').map(q => (
               <div key={q.numero} className="space-y-1">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm font-semibold text-on-surface">Questão {q.numero}{q.titulo ? ` (${q.titulo})` : ''}</p>
