@@ -75,6 +75,44 @@ function montarPromptImagem(p: { tema: string; serie: string; nee: string; cena:
   return `Ilustração em estilo cartoon vetorial simples, cores vivas, traços limpos e fundo neutro, formato horizontal 4:3. UMA única imagem com UMA única cena, sem colagem, sem painéis e sem moldura. Cena: ${p.cena}. Esporte: ${temaPrincipal} — desenhe corretamente a quadra, os equipamentos e os uniformes desse esporte.${idade} Estilo da cena: ${cuidado}; um único assunto em destaque. Não escreva nenhum texto, letra, número, logotipo, legenda ou placar na imagem. Não crie prova, folha de exercícios nem layout de documento: apenas a ilustração.`;
 }
 
+// Mensagem única para o chat do Gemini: ele lê as questões inteiras (enunciado,
+// alternativas e resposta certa) e gera UMA imagem por vez, esperando o professor
+// escrever "próxima". Assim cada imagem vem sozinha, sem precisar recortar folha.
+function montarPromptSequencia(p: { tema: string; serie: string; nee: string; questoes: Questao[] }): string {
+  const cuidado = CUIDADO_IMAGEM_POR_NEE[p.nee] ?? 'composição clara, com poucos elementos';
+  const temaPrincipal = p.tema.split(/[:;,\n]/)[0].trim() || p.tema;
+  const numeroSerie = parseInt(p.serie, 10);
+  const idade = Number.isNaN(numeroSerie) ? '' : ` Personagens: estudantes de ${numeroSerie + 5} a ${numeroSerie + 6} anos.`;
+  const lista = p.questoes.map(q => {
+    const opcoes = [['A', q.opcaoA], ['B', q.opcaoB], ['C', q.opcaoC]].filter(([, t]) => t) as string[][];
+    const letra = q.resposta?.trim().charAt(0).toUpperCase();
+    const correta = opcoes.find(([l]) => l === letra);
+    return [
+      `IMAGEM ${q.numero}${q.titulo ? ` (${q.titulo})` : ''}`,
+      `Texto que o aluno lê: ${[q.contexto, q.pergunta].filter(Boolean).join(' ')}`,
+      `Alternativas: ${opcoes.map(([l, t]) => `${l}) ${t}`).join(' | ')}`,
+      `Resposta correta: ${correta ? `${correta[0]}) ${correta[1]}` : q.resposta}`,
+      q.imageQuery ? `Sugestão de cena: ${q.imageQuery}` : '',
+    ].filter(Boolean).join('\n');
+  }).join('\n\n');
+  return `Vou pedir ilustrações didáticas para ${p.questoes.length} questões de uma prova de Educação Física (tema: ${temaPrincipal}, ${p.serie}). Cada imagem acompanha uma questão e é o que o aluno vai observar para responder.
+
+COMO TRABALHAR:
+- Gere UMA imagem por vez, uma por resposta. Comece agora só pela IMAGEM 1. Depois de cada imagem, espere eu escrever "próxima" para gerar a seguinte. Nunca gere mais de uma imagem na mesma resposta e nunca junte várias cenas na mesma imagem.
+- Cada imagem é UMA única cena, sem colagem, sem painéis, sem moldura. Não crie prova nem folha de exercícios: apenas a ilustração.
+- A imagem deve mostrar o conceito ou a ação da RESPOSTA CORRETA, de modo que o aluno a reconheça olhando só a imagem. Nunca mostre a ação de uma alternativa errada e não escreva a resposta na imagem.
+- Traduza o enunciado em algo visível: quem faz (1 ou 2 estudantes), o que o corpo faz, onde está a bola ou o objeto e o local. Se a questão pede para identificar um equipamento ou um espaço, mostre esse item inteiro e bem claro.
+- Estilo IGUAL em todas as imagens: ilustração em cartoon vetorial simples, cores vivas, traços limpos, fundo neutro, formato horizontal 3:2, um único assunto em destaque. Cuidado visual: ${cuidado}.${idade}
+- Desenhe corretamente a quadra, os equipamentos e os uniformes de ${temaPrincipal}.
+- Não escreva nenhum texto, letra, número, logotipo, legenda ou placar dentro da imagem.
+
+QUESTÕES:
+
+${lista}
+
+Comece agora pela IMAGEM 1.`;
+}
+
 function montarPromptQuestoes(p: { tema: string; serie: string; nee: string; nivel: Nivel; objetivo: string }): string {
   const tresAlternativas = p.nivel === 'ano';
   const regrasNivel = tresAlternativas
@@ -798,16 +836,17 @@ export function IAIdeiasAvaliacoes() {
               <div>
                 <p className="text-xs font-bold text-on-surface-variant">PROMPTS DE IMAGEM (guia pra você — não vai impresso)</p>
                 <p className="text-[11px] text-on-surface-variant mt-1">
-                  No Canva (Mídia Mágica) cole <strong>um prompt por vez</strong> — vários juntos podem virar colagem ou até uma prova.
-                  O "Copiar todos" serve pra guardar a lista ou pra um chat de IA (Copilot, ChatGPT), que nem sempre gera várias imagens de uma vez.
+                  <strong>No chat do Gemini:</strong> use "Copiar para o Gemini (1 por vez)", cole uma única vez e, depois de cada imagem, escreva <strong>próxima</strong>.
+                  Ele lê as questões inteiras, gera uma imagem por resposta e cada uma sai separada — é só baixar e usar "Enviar todas as imagens de uma vez" (nomeie 1, 2, 3...).
+                  No Canva (Mídia Mágica) cole <strong>um prompt por vez</strong> dos abaixo — vários juntos podem virar colagem ou até uma prova.
                 </p>
               </div>
               <button
-                onClick={() => copiar('todos', `Gere UMA imagem separada para cada um dos ${questoes.length} pedidos abaixo, na ordem, sem juntar em colagem:\n\n${questoes.map((q, i) => `${i + 1}) ${promptImagem(q)}`).join('\n\n')}`)}
+                onClick={() => copiar('todos', montarPromptSequencia({ tema, serie, nee: deficiencia, questoes }))}
                 className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-secondary-container text-on-secondary-container text-xs font-semibold"
               >
                 {copiado === 'todos' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                {copiado === 'todos' ? 'Copiado!' : 'Copiar todos'}
+                {copiado === 'todos' ? 'Copiado!' : 'Copiar para o Gemini (1 por vez)'}
               </button>
             </div>
             {questoes.map(q => (
