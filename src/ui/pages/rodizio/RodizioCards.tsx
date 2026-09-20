@@ -3,7 +3,7 @@ import { Check, Crown, Flag, Loader2, Minus, Plus, RotateCcw, Trash2, Undo2, Use
 import { cn } from '../../AppLayout';
 import type { AlunoSupabase } from '../../../domain/useAlunosPresentesHoje';
 import { useCardsRodizio } from '../../../domain/useCardsRodizio';
-import { mediaDoTime, nomeDoCapitao, resumoEquilibrio, resumoJogos, totalDoTime, type JogadorCard, type TimeCard } from '../../../domain/rodizioCardsLogica';
+import { mediaDoTime, nomeDoCapitao, proximosConfrontos, resumoEquilibrio, resumoJogos, totalDoTime, type Confronto, type JogadorCard, type JogoRealizado, type TimeCard } from '../../../domain/rodizioCardsLogica';
 
 interface Props {
   /** Onde guardar (turmas + gênero + dia). Trocou a chave, troca o conjunto de cards. */
@@ -105,6 +105,123 @@ const LinhaJogador: React.FC<PropsLinhaJogador> = ({ jogador, ehCapitao, situaca
   );
 };
 
+interface PropsPainelConfrontos {
+  times: TimeCard[];
+  proximos: Confronto[];
+  realizados: JogoRealizado[];
+  onRegistrar: (aId: string, bId: string) => void;
+  onTrocar: (aId: string, bId: string) => void;
+  onAutomatico: () => void;
+}
+
+// Jogo atual, próximos jogos e jogos já feitos. O app sugere sempre os dois times que jogaram
+// MENOS (sem repetir confronto nem colocar quem acabou de jogar); o professor pode trocar à mão.
+const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, realizados, onRegistrar, onTrocar, onAutomatico }) => {
+  const [trocando, setTrocando] = useState(false);
+  const atual = proximos[0];
+  if (!atual) return null;
+
+  const porId = new Map<string, TimeCard>(times.map((t): [string, TimeCard] => [t.id, t]));
+  const nome = (id: string) => porId.get(id)?.nome ?? '—';
+  const jogosDe = (id: string) => porId.get(id)?.jogos ?? 0;
+  const esperando = times.filter(t => t.id !== atual.aId && t.id !== atual.bId);
+  const seguintes = proximos.slice(1);
+
+  // Escolher num seletor o time que está do outro lado troca os dois de lugar.
+  const escolher = (lado: 'a' | 'b', id: string) => {
+    if (lado === 'a') onTrocar(id, id === atual.bId ? atual.aId : atual.bId);
+    else onTrocar(id === atual.aId ? atual.bId : atual.aId, id);
+  };
+  const classeSeletor = 'w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-on-surface outline-none focus:border-primary';
+
+  return (
+    <div data-testid="painel-confrontos" className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col gap-3">
+      <div className="flex items-center gap-2 flex-wrap text-xs font-bold text-gray-400 tracking-wide">
+        <Flag className="w-3.5 h-3.5 shrink-0" /> JOGO ATUAL · JOGO {atual.numero}
+        {atual.manual && (
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-tertiary-container text-on-tertiary-container">escolhido por você</span>
+        )}
+      </div>
+
+      <div data-testid="jogo-atual" className="flex items-center justify-center gap-3 flex-wrap text-center">
+        <span className="text-lg font-bold text-on-surface">{nome(atual.aId)}</span>
+        <span className="text-gray-300 font-bold">×</span>
+        <span className="text-lg font-bold text-on-surface">{nome(atual.bId)}</span>
+      </div>
+
+      <div className="text-[11px] text-gray-500 text-center">
+        Jogos até agora: {jogosDe(atual.aId)} × {jogosDe(atual.bId)}
+        {esperando.length > 0 && <> · Esperando: {esperando.map(t => t.nome).join(', ')}</>}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <button type="button" data-testid="registrar-jogo" onClick={() => onRegistrar(atual.aId, atual.bId)}
+          className="flex-1 min-w-[180px] h-11 rounded-xl bg-primary text-white font-bold text-sm active:scale-95 flex items-center justify-center gap-2">
+          <Check className="w-4 h-4" /> Registrar jogo
+        </button>
+        <button type="button" onClick={() => setTrocando(v => !v)}
+          className="h-11 px-3 rounded-xl bg-white border border-gray-200 text-xs font-bold text-gray-600 active:scale-95">
+          {trocando ? 'Fechar' : 'Trocar confronto'}
+        </button>
+      </div>
+      <p className="text-[11px] text-gray-400 -mt-1">
+        "Registrar jogo" soma 1 jogo para os dois times e 1 vez para todos os jogadores deles — não precisa apertar "Time jogou" nos cards.
+      </p>
+
+      {trocando && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-gray-50 rounded-xl p-3">
+          <label className="text-[11px] font-semibold text-gray-500 flex flex-col gap-1">
+            Time A
+            <select value={atual.aId} onChange={e => escolher('a', e.target.value)} aria-label="Time A do confronto" className={classeSeletor}>
+              {times.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+            </select>
+          </label>
+          <label className="text-[11px] font-semibold text-gray-500 flex flex-col gap-1">
+            Time B
+            <select value={atual.bId} onChange={e => escolher('b', e.target.value)} aria-label="Time B do confronto" className={classeSeletor}>
+              {times.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+            </select>
+          </label>
+          {atual.manual && (
+            <button type="button" onClick={onAutomatico}
+              className="sm:col-span-2 h-9 rounded-lg bg-white border border-gray-200 text-xs font-bold text-primary active:scale-95">
+              Voltar à sugestão automática
+            </button>
+          )}
+        </div>
+      )}
+
+      {seguintes.length > 0 && (
+        <div data-testid="proximos-jogos">
+          <div className="text-xs font-bold text-gray-400 tracking-wide mb-1">PRÓXIMOS JOGOS</div>
+          <ol className="flex flex-col gap-1">
+            {seguintes.map(c => (
+              <li key={c.numero} className="flex items-baseline gap-2 text-sm">
+                <span className="text-[11px] font-bold text-gray-400 w-14 shrink-0">Jogo {c.numero}</span>
+                <span className="font-semibold text-on-surface">{nome(c.aId)} × {nome(c.bId)}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      {realizados.length > 0 && (
+        <details data-testid="jogos-realizados" className="text-sm">
+          <summary className="cursor-pointer text-xs font-bold text-primary">Jogos realizados ({realizados.length})</summary>
+          <ul className="flex flex-col gap-1 mt-2">
+            {[...realizados].reverse().map(j => (
+              <li key={j.numero} className="flex items-baseline gap-2">
+                <span className="text-[11px] font-bold text-gray-400 w-14 shrink-0">Jogo {j.numero}</span>
+                <span className="text-on-surface">{nome(j.aId)} × {nome(j.bId)}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+};
+
 export function RodizioCards({ chave, alunos, presentesIds, loading }: Props) {
   const cards = useCardsRodizio(chave);
   const [soPresentes, setSoPresentes] = useState(false);
@@ -118,6 +235,7 @@ export function RodizioCards({ chave, alunos, presentesIds, loading }: Props) {
   const disponiveis = useMemo(() => lista.filter(a => !idsNosCards.has(a.id)), [lista, idsNosCards]);
   const resumo = useMemo(() => resumoEquilibrio(cards.times), [cards.times]);
   const jogos = useMemo(() => resumoJogos(cards.times), [cards.times]);
+  const proximos = useMemo(() => proximosConfrontos(cards.estado, 5), [cards.estado]);
 
   const situacaoDe = (alunoId: string): Situacao =>
     resumo.prioridade.has(alunoId) ? 'prioridade' : resumo.adiantados.has(alunoId) ? 'adiantado' : 'normal';
@@ -175,6 +293,21 @@ export function RodizioCards({ chave, alunos, presentesIds, loading }: Props) {
         <div className="text-center text-gray-500 py-6 font-medium px-4">Nenhum aluno encontrado nessas turmas.</div>
       )}
 
+      {cards.times.length === 1 && (
+        <p className="text-xs text-gray-500 text-center px-2">Crie pelo menos 2 cards para o app sugerir os confrontos e os próximos jogos.</p>
+      )}
+
+      {cards.times.length >= 2 && (
+        <PainelConfrontos
+          times={cards.times}
+          proximos={proximos}
+          realizados={cards.jogosRealizados}
+          onRegistrar={cards.registrarJogo}
+          onTrocar={cards.definirConfrontoManual}
+          onAutomatico={cards.limparConfrontoManual}
+        />
+      )}
+
       {cards.times.length > 0 && (
         <div
           role="status"
@@ -226,7 +359,7 @@ export function RodizioCards({ chave, alunos, presentesIds, loading }: Props) {
               className="flex items-center gap-1.5 px-3 h-9 rounded-xl bg-white border border-gray-200 text-xs font-bold text-gray-600 disabled:opacity-40 active:scale-95">
               <Undo2 className="w-3.5 h-3.5" /> Desfazer
             </button>
-            <button type="button" onClick={() => confirmar('Zerar os contadores de todos os alunos? Os cards e jogadores continuam.', cards.zerarContadores)}
+            <button type="button" onClick={() => confirmar('Zerar os contadores de todos os alunos e apagar os jogos registrados? Os cards e jogadores continuam.', cards.zerarContadores)}
               className="flex items-center gap-1.5 px-3 h-9 rounded-xl bg-white border border-gray-200 text-xs font-bold text-gray-600 active:scale-95">
               <RotateCcw className="w-3.5 h-3.5" /> Zerar contadores
             </button>

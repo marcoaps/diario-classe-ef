@@ -150,6 +150,143 @@ export function novoTime(id: string, capitao: { id: string; nome: string }, nome
   return { id, nome: nome?.trim() || `Time ${primeiro}`, capitaoAlunoId: capitao.id, jogadores: [{ alunoId: capitao.id, nome: capitao.nome, vezes: 0 }], jogos: 0 };
 }
 
+// ── Confrontos: jogo atual e próximos jogos ─────────────────────────────────
+
+export interface JogoRealizado {
+  numero: number;
+  aId: string;
+  bId: string;
+}
+
+/** Confronto escolhido à mão pelo professor; vale só para o próximo jogo. */
+export interface ConfrontoManual {
+  aId: string;
+  bId: string;
+}
+
+/** Tudo que a aba Cards guarda: os cards, os jogos já registrados e o confronto manual (se houver). */
+export interface EstadoCards {
+  times: TimeCard[];
+  jogosRealizados: JogoRealizado[];
+  confrontoManual: ConfrontoManual | null;
+}
+
+export interface Confronto {
+  numero: number;
+  aId: string;
+  bId: string;
+  /** true = foi o professor quem escolheu (não a sugestão automática). */
+  manual: boolean;
+}
+
+export function estadoVazio(): EstadoCards {
+  return { times: [], jogosRealizados: [], confrontoManual: null };
+}
+
+const chaveDoPar = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+
+function menorQue(a: number[], b: number[]): boolean {
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return a[i] < b[i];
+  }
+  return false;
+}
+
+/**
+ * Sugere o jogo atual e os próximos. A cada jogo, na ordem de importância:
+ *  1. jogam os dois times com MENOS jogos (é o que garante o equilíbrio);
+ *  2. evita repetir um confronto que já aconteceu;
+ *  3. evita quem acabou de jogar (dá descanso);
+ *  4. desempate pela ordem dos cards.
+ * Cada jogo sugerido já entra na conta do seguinte. O confronto manual, se existir, vale só para o
+ * primeiro jogo da lista.
+ */
+export function proximosConfrontos(estado: EstadoCards, quantidade = 5): Confronto[] {
+  const { times, jogosRealizados, confrontoManual } = estado;
+  if (times.length < 2) return [];
+
+  const posicao = new Map(times.map((t, i) => [t.id, i]));
+  const jogosSim = new Map(times.map(t => [t.id, t.jogos]));
+  const pares = new Map<string, number>();
+  const validos = jogosRealizados.filter(j => posicao.has(j.aId) && posicao.has(j.bId));
+  for (const j of validos) pares.set(chaveDoPar(j.aId, j.bId), (pares.get(chaveDoPar(j.aId, j.bId)) ?? 0) + 1);
+  const ultimo = validos[validos.length - 1];
+  let acabaramDeJogar = new Set<string>(ultimo ? [ultimo.aId, ultimo.bId] : []);
+
+  const saida: Confronto[] = [];
+  for (let k = 0; k < quantidade; k++) {
+    let escolhido: [string, string] | null = null;
+    let manual = false;
+
+    if (k === 0 && confrontoManual && confrontoManual.aId !== confrontoManual.bId
+        && posicao.has(confrontoManual.aId) && posicao.has(confrontoManual.bId)) {
+      escolhido = [confrontoManual.aId, confrontoManual.bId];
+      manual = true;
+    } else {
+      let melhor: number[] | null = null;
+      for (let i = 0; i < times.length; i++) {
+        for (let j = i + 1; j < times.length; j++) {
+          const a = times[i].id;
+          const b = times[j].id;
+          const chave = [
+            (jogosSim.get(a) ?? 0) + (jogosSim.get(b) ?? 0),
+            pares.get(chaveDoPar(a, b)) ?? 0,
+            (acabaramDeJogar.has(a) ? 1 : 0) + (acabaramDeJogar.has(b) ? 1 : 0),
+            i,
+            j,
+          ];
+          if (!melhor || menorQue(chave, melhor)) { melhor = chave; escolhido = [a, b]; }
+        }
+      }
+    }
+    if (!escolhido) break;
+
+    const [a, b] = escolhido;
+    saida.push({ numero: validos.length + k + 1, aId: a, bId: b, manual });
+    jogosSim.set(a, (jogosSim.get(a) ?? 0) + 1);
+    jogosSim.set(b, (jogosSim.get(b) ?? 0) + 1);
+    pares.set(chaveDoPar(a, b), (pares.get(chaveDoPar(a, b)) ?? 0) + 1);
+    acabaramDeJogar = new Set([a, b]);
+  }
+  return saida;
+}
+
+/** O jogo aconteceu: soma 1 jogo para os dois times e 1 vez para todos os jogadores deles. */
+export function registrarJogo(estado: EstadoCards, aId: string, bId: string): EstadoCards {
+  const existe = (id: string) => estado.times.some(t => t.id === id);
+  if (aId === bId || !existe(aId) || !existe(bId)) return estado;
+  return {
+    times: somarUmParaTodos(somarUmParaTodos(estado.times, aId), bId),
+    jogosRealizados: [...estado.jogosRealizados, { numero: estado.jogosRealizados.length + 1, aId, bId }],
+    confrontoManual: null,
+  };
+}
+
+export function definirConfrontoManual(estado: EstadoCards, aId: string, bId: string): EstadoCards {
+  const existe = (id: string) => estado.times.some(t => t.id === id);
+  if (aId === bId || !existe(aId) || !existe(bId)) return estado;
+  return { ...estado, confrontoManual: { aId, bId } };
+}
+
+export function limparConfrontoManual(estado: EstadoCards): EstadoCards {
+  return estado.confrontoManual ? { ...estado, confrontoManual: null } : estado;
+}
+
+/** Tira o card e tudo que o cita (jogos já registrados e confronto manual). */
+export function removerTimeDoEstado(estado: EstadoCards, timeId: string): EstadoCards {
+  const usa = (j: { aId: string; bId: string }) => j.aId === timeId || j.bId === timeId;
+  return {
+    times: estado.times.filter(t => t.id !== timeId),
+    jogosRealizados: estado.jogosRealizados.filter(j => !usa(j)).map((j, i) => ({ ...j, numero: i + 1 })),
+    confrontoManual: estado.confrontoManual && usa(estado.confrontoManual) ? null : estado.confrontoManual,
+  };
+}
+
+/** Recomeça: zera jogos e vezes de todos e apaga os jogos registrados (os cards continuam). */
+export function zerarEstado(estado: EstadoCards): EstadoCards {
+  return { times: zerarContadores(estado.times), jogosRealizados: [], confrontoManual: null };
+}
+
 // ── Leitura segura do que foi guardado no navegador ──
 
 export function lerTimesSalvos(texto: string | null): TimeCard[] {
@@ -176,4 +313,26 @@ export function lerTimesSalvos(texto: string | null): TimeCard[] {
 
 export function textoParaSalvar(times: TimeCard[]): string {
   return JSON.stringify({ versao: 1, times });
+}
+
+/** Lê o estado completo. Dados guardados antes dos confrontos (só cards) abrem sem jogos registrados. */
+export function lerEstadoSalvo(texto: string | null): EstadoCards {
+  const times = lerTimesSalvos(texto);
+  if (!texto || times.length === 0) return { ...estadoVazio(), times };
+  try {
+    const dados = JSON.parse(texto);
+    const ids = new Set(times.map(t => t.id));
+    const par = (x: any) => x && typeof x.aId === 'string' && typeof x.bId === 'string' && x.aId !== x.bId && ids.has(x.aId) && ids.has(x.bId);
+    const jogosRealizados: JogoRealizado[] = (Array.isArray(dados.jogosRealizados) ? dados.jogosRealizados : [])
+      .filter(par)
+      .map((j: any, i: number): JogoRealizado => ({ numero: i + 1, aId: j.aId, bId: j.bId }));
+    const confrontoManual = par(dados.confrontoManual) ? { aId: dados.confrontoManual.aId, bId: dados.confrontoManual.bId } : null;
+    return { times, jogosRealizados, confrontoManual };
+  } catch {
+    return { ...estadoVazio(), times };
+  }
+}
+
+export function textoParaSalvarEstado(estado: EstadoCards): string {
+  return JSON.stringify({ versao: 1, times: estado.times, jogosRealizados: estado.jogosRealizados, confrontoManual: estado.confrontoManual });
 }
