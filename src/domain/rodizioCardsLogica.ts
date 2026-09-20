@@ -15,6 +15,8 @@ export interface TimeCard {
   capitaoAlunoId: string;
   /** O capitão é sempre o primeiro da lista. */
   jogadores: JogadorCard[];
+  /** Quantos jogos o time (o capitão) já fez. */
+  jogos: number;
 }
 
 export interface ResumoEquilibrio {
@@ -70,6 +72,38 @@ export function resumoEquilibrio(times: TimeCard[]): ResumoEquilibrio {
   return { jogadores: todos.length, minimo, maximo, diferenca, prioridade, adiantados };
 }
 
+export interface ResumoJogos {
+  times: number;
+  minimo: number;
+  maximo: number;
+  /** maximo - minimo: 0 = todos os capitães fizeram o mesmo número de jogos. */
+  diferenca: number;
+  /** Times com menos jogos (só preenchido se houver diferença): são os próximos a jogar. */
+  comMenos: TimeCard[];
+  /** Total de jogos de todos os times. */
+  totalJogos: number;
+}
+
+/** Jogos por time (capitão), para o aviso do topo. */
+export function resumoJogos(times: TimeCard[]): ResumoJogos {
+  if (times.length === 0) return { times: 0, minimo: 0, maximo: 0, diferenca: 0, comMenos: [], totalJogos: 0 };
+  const jogos = times.map(t => t.jogos);
+  const minimo = Math.min(...jogos);
+  const maximo = Math.max(...jogos);
+  const diferenca = maximo - minimo;
+  return {
+    times: times.length, minimo, maximo, diferenca,
+    comMenos: diferenca > 0 ? times.filter(t => t.jogos === minimo) : [],
+    totalJogos: jogos.reduce((soma, n) => soma + n, 0),
+  };
+}
+
+/** Primeiro nome do capitão (o card se chama "Time X", mas o aviso fala do capitão). */
+export function nomeDoCapitao(time: TimeCard): string {
+  const capitao = time.jogadores.find(j => j.alunoId === time.capitaoAlunoId) ?? time.jogadores[0];
+  return (capitao?.nome ?? time.nome).trim().split(/\s+/)[0];
+}
+
 // ── Alterações (sempre devolvem uma cópia nova; nunca mexem no estado recebido) ──
 
 function trocarJogador(times: TimeCard[], timeId: string, alunoId: string, fn: (j: JogadorCard) => JogadorCard): TimeCard[] {
@@ -84,13 +118,22 @@ export function ajustarVezes(times: TimeCard[], timeId: string, alunoId: string,
   return trocarJogador(times, timeId, alunoId, j => ({ ...j, vezes: limitarVezes(j.vezes + delta) }));
 }
 
-/** O time inteiro jogou uma vez: soma 1 em todos os jogadores do card. */
+/** O time inteiro jogou uma vez: soma 1 jogo do time e 1 vez em todos os jogadores do card. */
 export function somarUmParaTodos(times: TimeCard[], timeId: string): TimeCard[] {
-  return times.map(t => (t.id !== timeId ? t : { ...t, jogadores: t.jogadores.map(j => ({ ...j, vezes: limitarVezes(j.vezes + 1) })) }));
+  return times.map(t => (t.id !== timeId ? t : {
+    ...t,
+    jogos: limitarVezes(t.jogos + 1),
+    jogadores: t.jogadores.map(j => ({ ...j, vezes: limitarVezes(j.vezes + 1) })),
+  }));
+}
+
+/** Acerta só o número de jogos do time (ex.: registrar um jogo em que só alguns jogadores foram marcados). */
+export function ajustarJogos(times: TimeCard[], timeId: string, delta: number): TimeCard[] {
+  return times.map(t => (t.id !== timeId ? t : { ...t, jogos: limitarVezes(t.jogos + delta) }));
 }
 
 export function zerarContadores(times: TimeCard[]): TimeCard[] {
-  return times.map(t => ({ ...t, jogadores: t.jogadores.map(j => ({ ...j, vezes: 0 })) }));
+  return times.map(t => ({ ...t, jogos: 0, jogadores: t.jogadores.map(j => ({ ...j, vezes: 0 })) }));
 }
 
 export function adicionarJogador(times: TimeCard[], timeId: string, aluno: { id: string; nome: string }): TimeCard[] {
@@ -104,7 +147,7 @@ export function removerJogador(times: TimeCard[], timeId: string, alunoId: strin
 
 export function novoTime(id: string, capitao: { id: string; nome: string }, nome?: string): TimeCard {
   const primeiro = capitao.nome.trim().split(/\s+/)[0];
-  return { id, nome: nome?.trim() || `Time ${primeiro}`, capitaoAlunoId: capitao.id, jogadores: [{ alunoId: capitao.id, nome: capitao.nome, vezes: 0 }] };
+  return { id, nome: nome?.trim() || `Time ${primeiro}`, capitaoAlunoId: capitao.id, jogadores: [{ alunoId: capitao.id, nome: capitao.nome, vezes: 0 }], jogos: 0 };
 }
 
 // ── Leitura segura do que foi guardado no navegador ──
@@ -120,6 +163,8 @@ export function lerTimesSalvos(texto: string | null): TimeCard[] {
         id: t.id,
         nome: t.nome,
         capitaoAlunoId: String(t.capitaoAlunoId ?? ''),
+        // Cards guardados antes desta versão não tinham "jogos": começam em 0.
+        jogos: limitarVezes(Number(t.jogos)),
         jogadores: t.jogadores
           .filter((j: any) => j && typeof j.alunoId === 'string' && typeof j.nome === 'string')
           .map((j: any): JogadorCard => ({ alunoId: j.alunoId, nome: j.nome, vezes: limitarVezes(Number(j.vezes)) })),

@@ -71,6 +71,7 @@ export function useCardsRodizio(chave: string) {
     definirVezes: (timeId: string, alunoId: string, vezes: number) => aplicar(t => L.definirVezes(t, timeId, alunoId, vezes)),
     ajustarVezes: (timeId: string, alunoId: string, delta: number) => aplicar(t => L.ajustarVezes(t, timeId, alunoId, delta)),
     somarUmParaTodos: (timeId: string) => aplicar(t => L.somarUmParaTodos(t, timeId)),
+    ajustarJogos: (timeId: string, delta: number) => aplicar(t => L.ajustarJogos(t, timeId, delta)),
     zerarContadores: () => aplicar(t => L.zerarContadores(t)),
     apagarTudo: () => aplicar(() => []),
   };

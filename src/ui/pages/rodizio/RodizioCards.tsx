@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { Check, Crown, Loader2, Minus, Plus, RotateCcw, Trash2, Undo2, Users, X } from 'lucide-react';
+import { Check, Crown, Flag, Loader2, Minus, Plus, RotateCcw, Trash2, Undo2, Users, X } from 'lucide-react';
 import { cn } from '../../AppLayout';
 import type { AlunoSupabase } from '../../../domain/useAlunosPresentesHoje';
 import { useCardsRodizio } from '../../../domain/useCardsRodizio';
-import { mediaDoTime, resumoEquilibrio, totalDoTime, type JogadorCard, type TimeCard } from '../../../domain/rodizioCardsLogica';
+import { mediaDoTime, nomeDoCapitao, resumoEquilibrio, resumoJogos, totalDoTime, type JogadorCard, type TimeCard } from '../../../domain/rodizioCardsLogica';
 
 interface Props {
   /** Onde guardar (turmas + gênero + dia). Trocou a chave, troca o conjunto de cards. */
@@ -16,6 +16,8 @@ interface Props {
 }
 
 type Situacao = 'prioridade' | 'adiantado' | 'normal';
+
+const nJogos = (n: number) => `${n} ${n === 1 ? 'jogo' : 'jogos'}`;
 
 function rotuloAluno(a: AlunoSupabase) {
   return `${a.turma_id} ${a.numero_chamada ? `${a.numero_chamada} · ` : '· '}${a.nome}`;
@@ -111,6 +113,7 @@ export function RodizioCards({ chave, alunos, presentesIds, loading }: Props) {
   const idsNosCards = useMemo(() => new Set(cards.times.flatMap(t => t.jogadores.map(j => j.alunoId))), [cards.times]);
   const disponiveis = useMemo(() => lista.filter(a => !idsNosCards.has(a.id)), [lista, idsNosCards]);
   const resumo = useMemo(() => resumoEquilibrio(cards.times), [cards.times]);
+  const jogos = useMemo(() => resumoJogos(cards.times), [cards.times]);
 
   const situacaoDe = (alunoId: string): Situacao =>
     resumo.prioridade.has(alunoId) ? 'prioridade' : resumo.adiantados.has(alunoId) ? 'adiantado' : 'normal';
@@ -118,6 +121,16 @@ export function RodizioCards({ chave, alunos, presentesIds, loading }: Props) {
   const nomesPrioridade = cards.times.flatMap(t => t.jogadores).filter(j => resumo.prioridade.has(j.alunoId)).map(j => j.nome.split(/\s+/)[0]);
 
   const confirmar = (texto: string, acao: () => void) => { if (window.confirm(texto)) acao(); };
+
+  // Aviso do topo: quantos jogos cada capitão já fez e de quem é a vez (quem fez menos).
+  const capitaesComMais = jogos.diferenca > 0 ? cards.times.filter(t => t.jogos === jogos.maximo) : [];
+  const mensagemJogos = jogos.totalJogos === 0
+    ? 'Nenhum jogo registrado ainda. Toque em "Time jogou" no card quando o time entrar em quadra.'
+    : jogos.diferenca === 0
+      ? `Todos os capitães fizeram ${nJogos(jogos.maximo)} — jogos equilibrados.`
+      : `Vez de: ${jogos.comMenos.map(nomeDoCapitao).join(', ')} (${nJogos(jogos.minimo)}). ` +
+        `Mais jogos: ${capitaesComMais.map(nomeDoCapitao).join(', ')} (${nJogos(jogos.maximo)}).` +
+        (jogos.diferenca >= 2 ? ` Diferença de ${nJogos(jogos.diferenca)} — coloque quem jogou menos em quadra.` : '');
 
   if (loading) {
     return (
@@ -156,6 +169,29 @@ export function RodizioCards({ chave, alunos, presentesIds, loading }: Props) {
 
       {alunos.length === 0 && (
         <div className="text-center text-gray-500 py-6 font-medium px-4">Nenhum aluno encontrado nessas turmas.</div>
+      )}
+
+      {cards.times.length > 0 && (
+        <div
+          role="status"
+          data-testid="aviso-jogos"
+          className={cn('rounded-2xl border px-4 py-3', jogos.diferenca >= 2 ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-100 shadow-sm')}
+        >
+          <div className="flex items-center gap-2 text-sm font-bold text-on-surface">
+            <Flag className="w-4 h-4 text-primary shrink-0" /> Jogos de cada capitão
+          </div>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {cards.times.map(t => (
+              <span key={t.id} className={cn(
+                'text-xs font-semibold px-2.5 py-1 rounded-full',
+                jogos.diferenca > 0 && t.jogos === jogos.minimo ? 'bg-secondary-container text-on-secondary-container' : 'bg-gray-100 text-gray-700'
+              )}>
+                {nomeDoCapitao(t)}: {nJogos(t.jogos)}
+              </span>
+            ))}
+          </div>
+          <p className="text-xs text-gray-600 mt-2">{mensagemJogos}</p>
+        </div>
       )}
 
       {resumo.jogadores > 0 && (
@@ -214,11 +250,29 @@ export function RodizioCards({ chave, alunos, presentesIds, loading }: Props) {
                   </button>
                 </div>
 
-                <div className="flex items-center justify-between gap-2 text-[11px] text-gray-500 px-0.5">
-                  <span>{time.jogadores.length} jogador{time.jogadores.length !== 1 ? 'es' : ''} · média {mediaDoTime(time)}× · total {totalDoTime(time)}</span>
+                <div className="text-[11px] text-gray-500 px-0.5">
+                  {time.jogadores.length} jogador{time.jogadores.length !== 1 ? 'es' : ''} · média {mediaDoTime(time)}× · total {totalDoTime(time)}
+                </div>
+
+                <div className="flex items-center justify-between gap-2 flex-wrap px-0.5">
+                  <div className="flex items-center gap-1.5" data-testid="jogos-do-time">
+                    <span className="text-xs font-bold text-gray-500">Jogos</span>
+                    <button type="button" onClick={() => cards.ajustarJogos(time.id, -1)} disabled={time.jogos === 0}
+                      aria-label={`Tirar um jogo do ${time.nome}`}
+                      className="h-8 w-8 rounded-lg bg-white border border-gray-200 text-gray-500 flex items-center justify-center active:scale-95 disabled:opacity-30">
+                      <Minus className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="min-w-[1.5rem] text-center text-base font-bold tabular-nums text-on-surface" aria-label={`${nJogos(time.jogos)} do ${time.nome}`}>{time.jogos}</span>
+                    <button type="button" onClick={() => cards.ajustarJogos(time.id, 1)}
+                      aria-label={`Registrar mais um jogo do ${time.nome}`}
+                      className="h-8 w-8 rounded-lg bg-white border border-gray-200 text-primary flex items-center justify-center active:scale-95">
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                   <button type="button" onClick={() => cards.somarUmParaTodos(time.id)}
-                    className="px-2 py-1 rounded-lg bg-primary/10 text-primary font-bold active:scale-95">
-                    Time jogou (+1 em todos)
+                    title="Soma 1 jogo do time e 1 vez em todos os jogadores do card"
+                    className="px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-[11px] font-bold active:scale-95">
+                    Time jogou (+1 jogo)
                   </button>
                 </div>
 
