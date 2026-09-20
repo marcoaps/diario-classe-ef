@@ -176,7 +176,10 @@ export interface RegraConfronto {
   limite: number | null;
 }
 
-export const REGRA_PADRAO: RegraConfronto = { modo: 'vencedor-fica', limite: 2 };
+export const REGRA_PADRAO: RegraConfronto = { modo: 'vencedor-fica', limite: null };
+
+/** Versão da regra guardada: antes da 2 o padrão era sair depois de 2 vitórias; agora o Rei fica até perder ou empatar. */
+const VERSAO_DA_REGRA = 2;
 
 /** Tudo que a aba Cards guarda: os cards, os jogos já registrados, o confronto manual e a regra de escolha. */
 export interface EstadoCards {
@@ -517,8 +520,10 @@ export function lerEstadoSalvo(texto: string | null): EstadoCards {
       .map((j: any, i: number): JogoRealizado => ({ numero: i + 1, aId: j.aId, bId: j.bId, ...normalizarPlacar(j.placarA, j.placarB) }));
     const confrontoManual = par(dados.confrontoManual) ? { aId: dados.confrontoManual.aId, bId: dados.confrontoManual.bId } : null;
     // Dados guardados antes da regra (ou com regra inválida) abrem com a regra padrão.
+    // O limite guardado por versão antiga era só o padrão da época (2): passa a valer o padrão novo.
+    const regraAntiga = dados.regraVersao !== VERSAO_DA_REGRA;
     const regra = dados.regra && typeof dados.regra === 'object'
-      ? definirRegra({ ...estadoVazio(), times }, { modo: dados.regra.modo, limite: dados.regra.limite === undefined ? REGRA_PADRAO.limite : dados.regra.limite }).regra
+      ? definirRegra({ ...estadoVazio(), times }, { modo: dados.regra.modo, limite: dados.regra.limite === undefined || regraAntiga ? REGRA_PADRAO.limite : dados.regra.limite }).regra
       : { ...REGRA_PADRAO };
     return { times, jogosRealizados, confrontoManual, regra };
   } catch {
@@ -527,5 +532,5 @@ export function lerEstadoSalvo(texto: string | null): EstadoCards {
 }
 
 export function textoParaSalvarEstado(estado: EstadoCards): string {
-  return JSON.stringify({ versao: 1, times: estado.times, jogosRealizados: estado.jogosRealizados, confrontoManual: estado.confrontoManual, regra: estado.regra });
+  return JSON.stringify({ versao: 1, times: estado.times, jogosRealizados: estado.jogosRealizados, confrontoManual: estado.confrontoManual, regra: estado.regra, regraVersao: VERSAO_DA_REGRA });
 }

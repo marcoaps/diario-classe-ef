@@ -272,20 +272,20 @@ const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, re
         {modoVencedor ? (
           <div className="flex items-center gap-2 flex-wrap text-[11px] text-gray-500">
             <label className="flex items-center gap-1.5">
-              Vencedor sai depois de
+              Rei da Quadra:
               <select
                 value={regra.limite === null ? 'sem' : String(regra.limite)}
                 onChange={e => onRegra({ limite: e.target.value === 'sem' ? null : Number(e.target.value) })}
                 aria-label="Limite de vitórias seguidas"
                 className="bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs font-bold text-on-surface outline-none focus:border-primary"
               >
-                <option value="sem">sem limite</option>
-                <option value="2">2 vitórias seguidas</option>
-                <option value="3">3 vitórias seguidas</option>
-                <option value="4">4 vitórias seguidas</option>
+                <option value="sem">fica até perder ou empatar</option>
+                <option value="2">sai após 2 vitórias seguidas</option>
+                <option value="3">sai após 3 vitórias seguidas</option>
+                <option value="4">sai após 4 vitórias seguidas</option>
               </select>
             </label>
-            <span>Quem perde vai para o fim da fila.</span>
+            <span>{regra.limite === null ? 'Sai se perder ou empatar; quem sai vai para o fim da fila.' : 'Quem perde vai para o fim da fila.'}</span>
           </div>
         ) : (
           <p className="text-[11px] text-gray-500">Entram sempre os dois times que jogaram menos, sem repetir confronto e sem deixar ninguém esperando demais.</p>
@@ -437,7 +437,9 @@ export function RodizioCards({ chave, alunos, presentesIds, loading }: Props) {
   // Aviso do topo: quantos jogos cada capitão já fez e de quem é a vez (quem fez menos).
   const capitaesComMais = jogos.diferenca > 0 ? cards.times.filter(t => t.jogos === jogos.maximo) : [];
   const nomesMenosJogos = jogos.diferenca > 0 ? jogos.comMenos.map(nomeDoCapitao).join(', ') : '';
-  const mensagemVencedor = `Vencedor continua${cards.regra.limite !== null ? ` (sai depois de ${cards.regra.limite} vitórias seguidas)` : ' (sem limite)'}: quem perde vai para o fim da fila.`
+  const mensagemVencedor = cards.regra.limite !== null
+    ? `Vencedor continua (sai depois de ${cards.regra.limite} vitórias seguidas): quem perde vai para o fim da fila.`
+    : 'Rei da Quadra: o vencedor continua até perder ou empatar; quem sai vai para o fim da fila.'
     + (nomesMenosJogos ? ` Menos jogos: ${nomesMenosJogos} (${nJogos(jogos.minimo)}).` : '');
   const mensagemJogos = jogos.totalJogos === 0
     ? 'Nenhum jogo registrado ainda. Toque em "Time jogou" no card quando o time entrar em quadra.'
