@@ -644,7 +644,9 @@ export function IAIdeiasAvaliacoes() {
     const blob = new Blob([htmlWord(dadosDaProva(), sugestoesImagemHtmlStr())], { type: 'application/msword' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'Avaliacao_Adaptada_' + serie + '_' + Date.now() + '.doc';
+    // Nome do arquivo com o aluno (sem os caracteres que o Windows não aceita); sem nome, a hora.
+    const limpo = (t: string) => t.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim();
+    a.download = `Avaliacao_Adaptada_${limpo(serie)}_${limpo(alunoNome) || Date.now()}.doc`;
     a.click();
   }
 
