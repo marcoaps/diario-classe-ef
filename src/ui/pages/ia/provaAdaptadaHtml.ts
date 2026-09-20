@@ -124,7 +124,7 @@ function questaoImpressaoHtml(q: QuestaoProva, dens: Densidade): string {
     .map(([letra, texto]) => `<div style="margin-left:6px;margin-bottom:1px;font-size:${t}pt;"><strong style="color:${AZUL};">${letra})</strong> ${texto}</div>`)
     .join('');
   return `<div style="margin-bottom:5px;page-break-inside:avoid;">
-      <div style="margin:5px 0 1px 0;font-size:${dens.numero}pt;font-weight:bold;color:${AZUL};">${q.numero}.</div>
+      <div style="margin:5px 0 1px 0;font-size:${dens.numero}pt;font-weight:bold;color:${AZUL};">Quest&#227;o ${q.numero}</div>
       ${imagem ? `<div style="margin-bottom:3px;">${imagem}</div>` : ''}
       ${q.contexto ? `<div style="font-size:${t}pt;margin-bottom:2px;">${q.contexto}</div>` : ''}
       <div style="font-size:${t}pt;font-weight:bold;margin-bottom:2px;">${q.pergunta}</div>
@@ -178,7 +178,7 @@ function imagemWordHtml(q: QuestaoProva, largura: number): string {
 function questaoWordHtml(q: QuestaoProva, dens: Densidade): string {
   const t = dens.texto;
   // "page-break-after:avoid" mantém a questão inteira junta, sem cortar entre colunas/páginas.
-  return `<p style="margin:5pt 0 1pt 0;font-size:${dens.numero}pt;font-weight:bold;color:${AZUL};page-break-after:avoid;">${q.numero}.</p>
+  return `<p style="margin:5pt 0 1pt 0;font-size:${dens.numero}pt;font-weight:bold;color:${AZUL};page-break-after:avoid;">Quest&#227;o ${q.numero}</p>
       ${imagemWordHtml(q, dens.imagem)}
       ${q.contexto ? `<p style="margin:0 0 2pt 0;font-size:${t}pt;page-break-after:avoid;">${q.contexto}</p>` : ''}
       <p style="margin:0 0 2pt 0;font-size:${t}pt;font-weight:bold;page-break-after:avoid;">${q.pergunta}</p>
