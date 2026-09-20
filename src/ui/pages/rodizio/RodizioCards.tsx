@@ -163,8 +163,10 @@ const ItemJogoRealizado: React.FC<{
   jogo: JogoRealizado;
   nome: (id: string) => string;
   penaltisNoEmpate: boolean;
+  /** Vencedor continua com 4+ times: o empate tira os dois times. */
+  empateTiraOsDois: boolean;
   onEditarPlacar: (numero: number, golsA: string, golsB: string, penaltisVencedorId?: string | null) => void;
-}> = ({ jogo, nome, penaltisNoEmpate, onEditarPlacar }) => {
+}> = ({ jogo, nome, penaltisNoEmpate, empateTiraOsDois, onEditarPlacar }) => {
   const [editando, setEditando] = useState(false);
   const [golsA, setGolsA] = useState('');
   const [golsB, setGolsB] = useState('');
@@ -205,7 +207,7 @@ const ItemJogoRealizado: React.FC<{
           </span>
         )}
         {resultado.tipo === 'empate' && (
-          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 shrink-0">empate</span>
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 shrink-0">{empateTiraOsDois ? 'empate · saem os 2' : 'empate'}</span>
         )}
         {resultado.tipo === 'sem-placar' && <span className="text-[10px] text-gray-400 shrink-0">sem placar</span>}
         {!editando && (
@@ -446,7 +448,7 @@ const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, re
           <summary className="cursor-pointer text-xs font-bold text-primary">Jogos realizados ({realizados.length})</summary>
           <ul className="flex flex-col gap-2 mt-2">
             {[...realizados].reverse().map(j => (
-              <ItemJogoRealizado key={j.numero} jogo={j} nome={nome} penaltisNoEmpate={penaltisNoEmpate} onEditarPlacar={onEditarPlacar} />
+              <ItemJogoRealizado key={j.numero} jogo={j} nome={nome} penaltisNoEmpate={penaltisNoEmpate} empateTiraOsDois={modoVencedor && times.length >= 4} onEditarPlacar={onEditarPlacar} />
             ))}
           </ul>
         </details>
