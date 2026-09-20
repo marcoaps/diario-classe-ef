@@ -156,6 +156,9 @@ export interface JogoRealizado {
   numero: number;
   aId: string;
   bId: string;
+  /** Gols do time A e do time B; null nos dois = jogo registrado sem placar. */
+  placarA: number | null;
+  placarB: number | null;
 }
 
 /** Confronto escolhido à mão pelo professor; vale só para o próximo jogo. */
@@ -251,15 +254,60 @@ export function proximosConfrontos(estado: EstadoCards, quantidade = 5): Confron
   return saida;
 }
 
-/** O jogo aconteceu: soma 1 jogo para os dois times e 1 vez para todos os jogadores deles. */
-export function registrarJogo(estado: EstadoCards, aId: string, bId: string): EstadoCards {
+const PLACAR_MAXIMO = 99;
+
+function lerPlacar(x: unknown): number | null {
+  if (x === null || x === undefined || (typeof x === 'string' && x.trim() === '')) return null;
+  const n = Number(x);
+  return Number.isFinite(n) ? Math.min(PLACAR_MAXIMO, Math.max(0, Math.floor(n))) : null;
+}
+
+/** Placar válido tem os dois números; se só um vier preenchido o outro conta como 0; nenhum = sem placar. */
+export function normalizarPlacar(a: unknown, b: unknown): { placarA: number | null; placarB: number | null } {
+  const pa = lerPlacar(a);
+  const pb = lerPlacar(b);
+  if (pa === null && pb === null) return { placarA: null, placarB: null };
+  return { placarA: pa ?? 0, placarB: pb ?? 0 };
+}
+
+export type ResultadoJogo =
+  | { tipo: 'sem-placar' }
+  | { tipo: 'empate' }
+  | { tipo: 'vitoria'; vencedorId: string; perdedorId: string };
+
+/** Quem venceu, deduzido do placar. */
+export function resultadoDoJogo(jogo: JogoRealizado): ResultadoJogo {
+  if (jogo.placarA === null || jogo.placarB === null) return { tipo: 'sem-placar' };
+  if (jogo.placarA === jogo.placarB) return { tipo: 'empate' };
+  return jogo.placarA > jogo.placarB
+    ? { tipo: 'vitoria', vencedorId: jogo.aId, perdedorId: jogo.bId }
+    : { tipo: 'vitoria', vencedorId: jogo.bId, perdedorId: jogo.aId };
+}
+
+/** O jogo aconteceu: soma 1 jogo para os dois times e 1 vez para todos os jogadores deles (placar opcional). */
+export function registrarJogo(estado: EstadoCards, aId: string, bId: string, placarA: unknown = null, placarB: unknown = null): EstadoCards {
   const existe = (id: string) => estado.times.some(t => t.id === id);
   if (aId === bId || !existe(aId) || !existe(bId)) return estado;
   return {
     times: somarUmParaTodos(somarUmParaTodos(estado.times, aId), bId),
-    jogosRealizados: [...estado.jogosRealizados, { numero: estado.jogosRealizados.length + 1, aId, bId }],
+    jogosRealizados: [
+      ...estado.jogosRealizados,
+      { numero: estado.jogosRealizados.length + 1, aId, bId, ...normalizarPlacar(placarA, placarB) },
+    ],
     confrontoManual: null,
   };
+}
+
+/** Corrige (ou apaga, deixando em branco) o placar de um jogo já registrado. */
+export function editarPlacar(estado: EstadoCards, numero: number, placarA: unknown, placarB: unknown): EstadoCards {
+  const novo = normalizarPlacar(placarA, placarB);
+  let mudou = false;
+  const jogosRealizados = estado.jogosRealizados.map(j => {
+    if (j.numero !== numero || (j.placarA === novo.placarA && j.placarB === novo.placarB)) return j;
+    mudou = true;
+    return { ...j, ...novo };
+  });
+  return mudou ? { ...estado, jogosRealizados } : estado;
 }
 
 export function definirConfrontoManual(estado: EstadoCards, aId: string, bId: string): EstadoCards {
@@ -325,7 +373,7 @@ export function lerEstadoSalvo(texto: string | null): EstadoCards {
     const par = (x: any) => x && typeof x.aId === 'string' && typeof x.bId === 'string' && x.aId !== x.bId && ids.has(x.aId) && ids.has(x.bId);
     const jogosRealizados: JogoRealizado[] = (Array.isArray(dados.jogosRealizados) ? dados.jogosRealizados : [])
       .filter(par)
-      .map((j: any, i: number): JogoRealizado => ({ numero: i + 1, aId: j.aId, bId: j.bId }));
+      .map((j: any, i: number): JogoRealizado => ({ numero: i + 1, aId: j.aId, bId: j.bId, ...normalizarPlacar(j.placarA, j.placarB) }));
     const confrontoManual = par(dados.confrontoManual) ? { aId: dados.confrontoManual.aId, bId: dados.confrontoManual.bId } : null;
     return { times, jogosRealizados, confrontoManual };
   } catch {

@@ -1,9 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Check, Crown, Flag, Loader2, Minus, Plus, RotateCcw, Trash2, Undo2, Users, X } from 'lucide-react';
 import { cn } from '../../AppLayout';
 import type { AlunoSupabase } from '../../../domain/useAlunosPresentesHoje';
 import { useCardsRodizio } from '../../../domain/useCardsRodizio';
-import { mediaDoTime, nomeDoCapitao, proximosConfrontos, resumoEquilibrio, resumoJogos, totalDoTime, type Confronto, type JogadorCard, type JogoRealizado, type TimeCard } from '../../../domain/rodizioCardsLogica';
+import { mediaDoTime, nomeDoCapitao, normalizarPlacar, proximosConfrontos, resultadoDoJogo, resumoEquilibrio, resumoJogos, totalDoTime, type Confronto, type JogadorCard, type JogoRealizado, type TimeCard } from '../../../domain/rodizioCardsLogica';
 
 interface Props {
   /** Onde guardar (turmas + gênero + dia). Trocou a chave, troca o conjunto de cards. */
@@ -109,16 +109,102 @@ interface PropsPainelConfrontos {
   times: TimeCard[];
   proximos: Confronto[];
   realizados: JogoRealizado[];
-  onRegistrar: (aId: string, bId: string) => void;
+  onRegistrar: (aId: string, bId: string, golsA: string, golsB: string) => void;
+  onEditarPlacar: (numero: number, golsA: string, golsB: string) => void;
   onTrocar: (aId: string, bId: string) => void;
   onAutomatico: () => void;
 }
 
+const CampoGols: React.FC<{ valor: string; onChange: (v: string) => void; rotulo: string }> = ({ valor, onChange, rotulo }) => (
+  <input
+    type="number"
+    inputMode="numeric"
+    min={0}
+    max={99}
+    value={valor}
+    onChange={e => onChange(e.target.value)}
+    placeholder="–"
+    aria-label={rotulo}
+    className="w-16 h-12 text-center text-xl font-bold rounded-xl border border-gray-200 bg-white outline-none focus:border-primary tabular-nums"
+  />
+);
+
+// Um jogo da lista "Jogos realizados": placar, quem venceu e a opção de corrigir o placar.
+const ItemJogoRealizado: React.FC<{
+  jogo: JogoRealizado;
+  nome: (id: string) => string;
+  onEditarPlacar: (numero: number, golsA: string, golsB: string) => void;
+}> = ({ jogo, nome, onEditarPlacar }) => {
+  const [editando, setEditando] = useState(false);
+  const [golsA, setGolsA] = useState('');
+  const [golsB, setGolsB] = useState('');
+  const resultado = resultadoDoJogo(jogo);
+  const temPlacar = jogo.placarA !== null && jogo.placarB !== null;
+  const venceuA = resultado.tipo === 'vitoria' && resultado.vencedorId === jogo.aId;
+  const venceuB = resultado.tipo === 'vitoria' && resultado.vencedorId === jogo.bId;
+
+  const abrirEdicao = () => {
+    setGolsA(jogo.placarA === null ? '' : String(jogo.placarA));
+    setGolsB(jogo.placarB === null ? '' : String(jogo.placarB));
+    setEditando(true);
+  };
+  const salvar = () => {
+    onEditarPlacar(jogo.numero, golsA, golsB);
+    setEditando(false);
+  };
+
+  return (
+    <li className="flex flex-col gap-1.5" data-testid="jogo-realizado">
+      <div className="flex items-baseline gap-2 flex-wrap">
+        <span className="text-[11px] font-bold text-gray-400 w-14 shrink-0">Jogo {jogo.numero}</span>
+        <span className="flex items-baseline gap-1.5 flex-wrap text-on-surface" data-testid="resultado-do-jogo">
+          <span className={cn(venceuA && 'font-bold text-green-700')}>{nome(jogo.aId)}</span>
+          {temPlacar
+            ? <span className="font-bold tabular-nums">{jogo.placarA} × {jogo.placarB}</span>
+            : <span className="text-gray-300 font-bold">×</span>}
+          <span className={cn(venceuB && 'font-bold text-green-700')}>{nome(jogo.bId)}</span>
+        </span>
+        {resultado.tipo === 'vitoria' && (
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-100 text-green-800 shrink-0">
+            {nome(resultado.vencedorId)} venceu
+          </span>
+        )}
+        {resultado.tipo === 'empate' && (
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 shrink-0">empate</span>
+        )}
+        {resultado.tipo === 'sem-placar' && <span className="text-[10px] text-gray-400 shrink-0">sem placar</span>}
+        {!editando && (
+          <button type="button" onClick={abrirEdicao} className="text-[11px] font-bold text-primary underline underline-offset-2 shrink-0">
+            {temPlacar ? 'corrigir placar' : 'lançar placar'}
+          </button>
+        )}
+      </div>
+      {editando && (
+        <div className="flex items-center gap-2 flex-wrap pl-0 sm:pl-16 bg-gray-50 rounded-xl p-2">
+          <CampoGols valor={golsA} onChange={setGolsA} rotulo={`Gols do ${nome(jogo.aId)} no jogo ${jogo.numero}`} />
+          <span className="text-gray-300 font-bold">×</span>
+          <CampoGols valor={golsB} onChange={setGolsB} rotulo={`Gols do ${nome(jogo.bId)} no jogo ${jogo.numero}`} />
+          <button type="button" onClick={salvar} className="h-10 px-3 rounded-xl bg-primary text-white text-xs font-bold active:scale-95">Salvar</button>
+          <button type="button" onClick={() => setEditando(false)} className="h-10 px-3 rounded-xl bg-white border border-gray-200 text-xs font-bold text-gray-600 active:scale-95">Cancelar</button>
+        </div>
+      )}
+    </li>
+  );
+};
+
 // Jogo atual, próximos jogos e jogos já feitos. O app sugere sempre os dois times que jogaram
 // MENOS (sem repetir confronto nem colocar quem acabou de jogar); o professor pode trocar à mão.
-const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, realizados, onRegistrar, onTrocar, onAutomatico }) => {
+// O placar é opcional: em branco, o jogo é registrado sem resultado.
+const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, realizados, onRegistrar, onEditarPlacar, onTrocar, onAutomatico }) => {
   const [trocando, setTrocando] = useState(false);
+  const [golsA, setGolsA] = useState('');
+  const [golsB, setGolsB] = useState('');
   const atual = proximos[0];
+  const chaveDoJogo = atual ? `${atual.numero}|${atual.aId}|${atual.bId}` : '';
+
+  // Jogo novo (ou confronto trocado): os campos de placar começam em branco.
+  useEffect(() => { setGolsA(''); setGolsB(''); }, [chaveDoJogo]);
+
   if (!atual) return null;
 
   const porId = new Map<string, TimeCard>(times.map((t): [string, TimeCard] => [t.id, t]));
@@ -134,6 +220,14 @@ const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, re
   };
   const classeSeletor = 'w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-on-surface outline-none focus:border-primary';
 
+  // Prévia de quem vence, com o que está digitado.
+  const placar = normalizarPlacar(golsA, golsB);
+  const previa = placar.placarA === null || placar.placarB === null
+    ? 'Sem placar: o jogo é registrado sem resultado.'
+    : placar.placarA === placar.placarB
+      ? `Empate em ${placar.placarA} × ${placar.placarB}.`
+      : `${nome(placar.placarA > placar.placarB ? atual.aId : atual.bId)} vence por ${Math.max(placar.placarA, placar.placarB)} × ${Math.min(placar.placarA, placar.placarB)}.`;
+
   return (
     <div data-testid="painel-confrontos" className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col gap-3">
       <div className="flex items-center gap-2 flex-wrap text-xs font-bold text-gray-400 tracking-wide">
@@ -143,11 +237,22 @@ const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, re
         )}
       </div>
 
-      <div data-testid="jogo-atual" className="flex items-center justify-center gap-3 flex-wrap text-center">
-        <span className="text-lg font-bold text-on-surface">{nome(atual.aId)}</span>
-        <span className="text-gray-300 font-bold">×</span>
-        <span className="text-lg font-bold text-on-surface">{nome(atual.bId)}</span>
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-3 gap-y-2">
+        <div data-testid="jogo-atual" className="contents">
+          <span className="text-lg font-bold text-on-surface text-right break-words">{nome(atual.aId)}</span>
+          <span className="text-gray-300 font-bold">×</span>
+          <span className="text-lg font-bold text-on-surface break-words">{nome(atual.bId)}</span>
+        </div>
+        <div className="flex justify-end">
+          <CampoGols valor={golsA} onChange={setGolsA} rotulo={`Gols do ${nome(atual.aId)}`} />
+        </div>
+        <span className="text-gray-300 font-bold text-center">×</span>
+        <div className="flex justify-start">
+          <CampoGols valor={golsB} onChange={setGolsB} rotulo={`Gols do ${nome(atual.bId)}`} />
+        </div>
       </div>
+
+      <div data-testid="previa-resultado" className="text-xs font-semibold text-center text-gray-600">{previa}</div>
 
       <div className="text-[11px] text-gray-500 text-center">
         Jogos até agora: {jogosDe(atual.aId)} × {jogosDe(atual.bId)}
@@ -155,7 +260,7 @@ const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, re
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <button type="button" data-testid="registrar-jogo" onClick={() => onRegistrar(atual.aId, atual.bId)}
+        <button type="button" data-testid="registrar-jogo" onClick={() => onRegistrar(atual.aId, atual.bId, golsA, golsB)}
           className="flex-1 min-w-[180px] h-11 rounded-xl bg-primary text-white font-bold text-sm active:scale-95 flex items-center justify-center gap-2">
           <Check className="w-4 h-4" /> Registrar jogo
         </button>
@@ -208,12 +313,9 @@ const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, re
       {realizados.length > 0 && (
         <details data-testid="jogos-realizados" className="text-sm">
           <summary className="cursor-pointer text-xs font-bold text-primary">Jogos realizados ({realizados.length})</summary>
-          <ul className="flex flex-col gap-1 mt-2">
+          <ul className="flex flex-col gap-2 mt-2">
             {[...realizados].reverse().map(j => (
-              <li key={j.numero} className="flex items-baseline gap-2">
-                <span className="text-[11px] font-bold text-gray-400 w-14 shrink-0">Jogo {j.numero}</span>
-                <span className="text-on-surface">{nome(j.aId)} × {nome(j.bId)}</span>
-              </li>
+              <ItemJogoRealizado key={j.numero} jogo={j} nome={nome} onEditarPlacar={onEditarPlacar} />
             ))}
           </ul>
         </details>
@@ -303,6 +405,7 @@ export function RodizioCards({ chave, alunos, presentesIds, loading }: Props) {
           proximos={proximos}
           realizados={cards.jogosRealizados}
           onRegistrar={cards.registrarJogo}
+          onEditarPlacar={cards.editarPlacar}
           onTrocar={cards.definirConfrontoManual}
           onAutomatico={cards.limparConfrontoManual}
         />
