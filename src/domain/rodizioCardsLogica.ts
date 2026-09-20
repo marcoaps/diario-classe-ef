@@ -197,10 +197,11 @@ function menorQue(a: number[], b: number[]): boolean {
 
 /**
  * Sugere o jogo atual e os próximos. A cada jogo, na ordem de importância:
- *  1. jogam os dois times com MENOS jogos (é o que garante o equilíbrio);
- *  2. evita repetir um confronto que já aconteceu;
- *  3. evita quem acabou de jogar (dá descanso);
- *  4. desempate pela ordem dos cards.
+ *  1. jogam os dois times com MENOS jogos (é o que garante o equilíbrio; o placar não entra);
+ *  2. ninguém que ficou de fora pode passar do limite de espera (jogos seguidos sem jogar);
+ *  3. evita repetir um confronto que já aconteceu;
+ *  4. entre as opções restantes, entra quem está esperando há mais tempo;
+ *  5. desempate pela ordem dos cards.
  * Cada jogo sugerido já entra na conta do seguinte. O confronto manual, se existir, vale só para o
  * primeiro jogo da lista.
  */
@@ -213,11 +214,23 @@ export function proximosConfrontos(estado: EstadoCards, quantidade = 5): Confron
   const pares = new Map<string, number>();
   const validos = jogosRealizados.filter(j => posicao.has(j.aId) && posicao.has(j.bId));
   for (const j of validos) pares.set(chaveDoPar(j.aId, j.bId), (pares.get(chaveDoPar(j.aId, j.bId)) ?? 0) + 1);
-  const ultimo = validos[validos.length - 1];
-  let acabaramDeJogar = new Set<string>(ultimo ? [ultimo.aId, ultimo.bId] : []);
+
+  // "Jogos desde que jogou": 1 = jogou no jogo anterior; NUNCA = ainda não jogou.
+  const NUNCA = 1000;
+  const ultimoJogo = new Map<string, number>();
+  validos.forEach((j, i) => { ultimoJogo.set(j.aId, i); ultimoJogo.set(j.bId, i); });
+  // Espera considerada aceitável: o ideal para o número de times (2 jogos com 5 times, 3 com 8) + 1.
+  // Só acima disso a espera passa na frente da variedade de confrontos; abaixo, os confrontos variam.
+  const limiteDeEspera = Math.max(1, Math.ceil(times.length / 2) - 1) + 1;
 
   const saida: Confronto[] = [];
   for (let k = 0; k < quantidade; k++) {
+    const jogoAtual = validos.length + k;
+    const desde = (id: string) => {
+      const ultimo = ultimoJogo.get(id);
+      return ultimo === undefined ? NUNCA : jogoAtual - ultimo;
+    };
+
     let escolhido: [string, string] | null = null;
     let manual = false;
 
@@ -231,10 +244,13 @@ export function proximosConfrontos(estado: EstadoCards, quantidade = 5): Confron
         for (let j = i + 1; j < times.length; j++) {
           const a = times[i].id;
           const b = times[j].id;
+          let esperaDeQuemFicaFora = 0;
+          for (const t of times) if (t.id !== a && t.id !== b) esperaDeQuemFicaFora = Math.max(esperaDeQuemFicaFora, desde(t.id));
           const chave = [
             (jogosSim.get(a) ?? 0) + (jogosSim.get(b) ?? 0),
+            Math.max(0, Math.min(esperaDeQuemFicaFora, NUNCA - 1) - limiteDeEspera),
             pares.get(chaveDoPar(a, b)) ?? 0,
-            (acabaramDeJogar.has(a) ? 1 : 0) + (acabaramDeJogar.has(b) ? 1 : 0),
+            -(desde(a) + desde(b)),
             i,
             j,
           ];
@@ -245,11 +261,12 @@ export function proximosConfrontos(estado: EstadoCards, quantidade = 5): Confron
     if (!escolhido) break;
 
     const [a, b] = escolhido;
-    saida.push({ numero: validos.length + k + 1, aId: a, bId: b, manual });
+    saida.push({ numero: jogoAtual + 1, aId: a, bId: b, manual });
     jogosSim.set(a, (jogosSim.get(a) ?? 0) + 1);
     jogosSim.set(b, (jogosSim.get(b) ?? 0) + 1);
     pares.set(chaveDoPar(a, b), (pares.get(chaveDoPar(a, b)) ?? 0) + 1);
-    acabaramDeJogar = new Set([a, b]);
+    ultimoJogo.set(a, jogoAtual);
+    ultimoJogo.set(b, jogoAtual);
   }
   return saida;
 }
