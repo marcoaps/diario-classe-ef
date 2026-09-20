@@ -159,6 +159,8 @@ export interface JogoRealizado {
   /** Gols do time A e do time B; null nos dois = jogo registrado sem placar. */
   placarA: number | null;
   placarB: number | null;
+  /** Empate decidido nos pênaltis (só vale com placar empatado): quem ganhou. Com 3 times o desempate é assim. */
+  penaltisVencedorId?: string | null;
 }
 
 /** Confronto escolhido à mão pelo professor; vale só para o próximo jogo. */
@@ -294,8 +296,42 @@ function proximoNoModoVencedor(estado: EstadoCards): Confronto[] {
       if (desafiante) return [{ numero, aId: resultado.vencedorId, bId: desafiante.id, manual: false }];
     }
   }
+  // Com 3 times só 1 espera: se os dois saíssem, um deles voltaria na hora. Empate sem pênaltis (ou jogo sem
+  // placar) tira só quem está há mais tempo em quadra; o outro continua contra quem esperava.
+  if (times.length === 3 && ultimo && resultado && resultado.tipo !== 'vitoria') {
+    const sai = quemSaiSemVencedor(estado, validos, ultimo);
+    const fica = sai === ultimo.aId ? ultimo.bId : ultimo.aId;
+    const desafiante = filaPorEspera(estado, [ultimo.aId, ultimo.bId])[0];
+    if (desafiante) return [{ numero, aId: fica, bId: desafiante.id, manual: false }];
+  }
   const [a, b] = filaPorEspera(estado, []);
   return a && b ? [{ numero, aId: a.id, bId: b.id, manual: false }] : [];
+}
+
+/** Quantos jogos seguidos o time está em quadra, contando do último jogo para trás. */
+function jogosSeguidosEmQuadra(validos: JogoRealizado[], timeId: string): number {
+  let total = 0;
+  for (let i = validos.length - 1; i >= 0; i--) {
+    if (validos[i].aId === timeId || validos[i].bId === timeId) total++;
+    else break;
+  }
+  return total;
+}
+
+/** Sem vencedor: sai quem está há mais jogos seguidos em quadra; empatado, quem jogou mais no dia; depois a ordem dos cards. */
+function quemSaiSemVencedor(estado: EstadoCards, validos: JogoRealizado[], jogo: JogoRealizado): string {
+  const jogos = (id: string) => estado.times.find(t => t.id === id)?.jogos ?? 0;
+  const seguidosA = jogosSeguidosEmQuadra(validos, jogo.aId);
+  const seguidosB = jogosSeguidosEmQuadra(validos, jogo.bId);
+  if (seguidosA !== seguidosB) return seguidosA > seguidosB ? jogo.aId : jogo.bId;
+  if (jogos(jogo.aId) !== jogos(jogo.bId)) return jogos(jogo.aId) > jogos(jogo.bId) ? jogo.aId : jogo.bId;
+  const posicao = (id: string) => estado.times.findIndex(t => t.id === id);
+  return posicao(jogo.aId) <= posicao(jogo.bId) ? jogo.aId : jogo.bId;
+}
+
+/** No modo "vencedor continua" com exatamente 3 times, um empate é decidido nos pênaltis. */
+export function pedePenaltis(estado: EstadoCards): boolean {
+  return estado.regra.modo === 'vencedor-fica' && estado.times.length === 3;
 }
 
 /**
@@ -412,29 +448,46 @@ export function normalizarPlacar(a: unknown, b: unknown): { placarA: number | nu
   return { placarA: pa ?? 0, placarB: pb ?? 0 };
 }
 
+/** O vencedor dos pênaltis só vale se o placar é um empate e o time é um dos dois do jogo. */
+function lerPenaltis(placar: { placarA: number | null; placarB: number | null }, aId: string, bId: string, vencedorId: unknown): string | null {
+  if (placar.placarA === null || placar.placarA !== placar.placarB) return null;
+  return vencedorId === aId || vencedorId === bId ? (vencedorId as string) : null;
+}
+
+/** Junta o vencedor dos pênaltis ao jogo só quando existe (jogos sem pênaltis ficam sem o campo). */
+function comPenaltis(jogo: JogoRealizado, penaltis: string | null): JogoRealizado {
+  const { penaltisVencedorId: _antigo, ...base } = jogo;
+  return penaltis ? { ...base, penaltisVencedorId: penaltis } : base;
+}
+
 export type ResultadoJogo =
   | { tipo: 'sem-placar' }
   | { tipo: 'empate' }
-  | { tipo: 'vitoria'; vencedorId: string; perdedorId: string };
+  | { tipo: 'vitoria'; vencedorId: string; perdedorId: string; penaltis?: boolean };
 
-/** Quem venceu, deduzido do placar. */
+/** Quem venceu, deduzido do placar (ou, no empate, de quem ganhou nos pênaltis). */
 export function resultadoDoJogo(jogo: JogoRealizado): ResultadoJogo {
   if (jogo.placarA === null || jogo.placarB === null) return { tipo: 'sem-placar' };
-  if (jogo.placarA === jogo.placarB) return { tipo: 'empate' };
+  if (jogo.placarA === jogo.placarB) {
+    if (jogo.penaltisVencedorId === jogo.aId) return { tipo: 'vitoria', vencedorId: jogo.aId, perdedorId: jogo.bId, penaltis: true };
+    if (jogo.penaltisVencedorId === jogo.bId) return { tipo: 'vitoria', vencedorId: jogo.bId, perdedorId: jogo.aId, penaltis: true };
+    return { tipo: 'empate' };
+  }
   return jogo.placarA > jogo.placarB
     ? { tipo: 'vitoria', vencedorId: jogo.aId, perdedorId: jogo.bId }
     : { tipo: 'vitoria', vencedorId: jogo.bId, perdedorId: jogo.aId };
 }
 
 /** O jogo aconteceu: soma 1 jogo para os dois times e 1 vez para todos os jogadores deles (placar opcional). */
-export function registrarJogo(estado: EstadoCards, aId: string, bId: string, placarA: unknown = null, placarB: unknown = null): EstadoCards {
+export function registrarJogo(estado: EstadoCards, aId: string, bId: string, placarA: unknown = null, placarB: unknown = null, penaltisVencedorId: unknown = null): EstadoCards {
   const existe = (id: string) => estado.times.some(t => t.id === id);
   if (aId === bId || !existe(aId) || !existe(bId)) return estado;
+  const placar = normalizarPlacar(placarA, placarB);
   return {
     times: somarUmParaTodos(somarUmParaTodos(estado.times, aId), bId),
     jogosRealizados: [
       ...estado.jogosRealizados,
-      { numero: estado.jogosRealizados.length + 1, aId, bId, ...normalizarPlacar(placarA, placarB) },
+      comPenaltis({ numero: estado.jogosRealizados.length + 1, aId, bId, ...placar }, lerPenaltis(placar, aId, bId, penaltisVencedorId)),
     ],
     confrontoManual: null,
     regra: estado.regra,
@@ -442,13 +495,15 @@ export function registrarJogo(estado: EstadoCards, aId: string, bId: string, pla
 }
 
 /** Corrige (ou apaga, deixando em branco) o placar de um jogo já registrado. */
-export function editarPlacar(estado: EstadoCards, numero: number, placarA: unknown, placarB: unknown): EstadoCards {
+export function editarPlacar(estado: EstadoCards, numero: number, placarA: unknown, placarB: unknown, penaltisVencedorId: unknown = null): EstadoCards {
   const novo = normalizarPlacar(placarA, placarB);
   let mudou = false;
   const jogosRealizados = estado.jogosRealizados.map(j => {
-    if (j.numero !== numero || (j.placarA === novo.placarA && j.placarB === novo.placarB)) return j;
+    if (j.numero !== numero) return j;
+    const penaltis = lerPenaltis(novo, j.aId, j.bId, penaltisVencedorId);
+    if (j.placarA === novo.placarA && j.placarB === novo.placarB && (j.penaltisVencedorId ?? null) === penaltis) return j;
     mudou = true;
-    return { ...j, ...novo };
+    return comPenaltis({ ...j, ...novo }, penaltis);
   });
   return mudou ? { ...estado, jogosRealizados } : estado;
 }
@@ -517,7 +572,10 @@ export function lerEstadoSalvo(texto: string | null): EstadoCards {
     const par = (x: any) => x && typeof x.aId === 'string' && typeof x.bId === 'string' && x.aId !== x.bId && ids.has(x.aId) && ids.has(x.bId);
     const jogosRealizados: JogoRealizado[] = (Array.isArray(dados.jogosRealizados) ? dados.jogosRealizados : [])
       .filter(par)
-      .map((j: any, i: number): JogoRealizado => ({ numero: i + 1, aId: j.aId, bId: j.bId, ...normalizarPlacar(j.placarA, j.placarB) }));
+      .map((j: any, i: number): JogoRealizado => {
+        const placar = normalizarPlacar(j.placarA, j.placarB);
+        return comPenaltis({ numero: i + 1, aId: j.aId, bId: j.bId, ...placar }, lerPenaltis(placar, j.aId, j.bId, j.penaltisVencedorId));
+      });
     const confrontoManual = par(dados.confrontoManual) ? { aId: dados.confrontoManual.aId, bId: dados.confrontoManual.bId } : null;
     // Dados guardados antes da regra (ou com regra inválida) abrem com a regra padrão.
     // O limite guardado por versão antiga era só o padrão da época (2): passa a valer o padrão novo.

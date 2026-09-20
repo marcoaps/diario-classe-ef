@@ -3,7 +3,7 @@ import { Check, Crown, Flag, Loader2, Minus, Plus, RotateCcw, Trash2, Undo2, Use
 import { cn } from '../../AppLayout';
 import type { AlunoSupabase } from '../../../domain/useAlunosPresentesHoje';
 import { useCardsRodizio } from '../../../domain/useCardsRodizio';
-import { campeaoAtual, filaDeEspera, mediaDoTime, nomeDoCapitao, normalizarPlacar, proximosConfrontos, resultadoDoJogo, resumoEquilibrio, resumoJogos, totalDoTime, type Confronto, type JogadorCard, type JogoRealizado, type RegraConfronto, type TimeCard } from '../../../domain/rodizioCardsLogica';
+import { campeaoAtual, filaDeEspera, mediaDoTime, nomeDoCapitao, normalizarPlacar, pedePenaltis, proximosConfrontos, resultadoDoJogo, resumoEquilibrio, resumoJogos, totalDoTime, type Confronto, type JogadorCard, type JogoRealizado, type RegraConfronto, type TimeCard } from '../../../domain/rodizioCardsLogica';
 
 interface Props {
   /** Onde guardar (turmas + gênero + dia). Trocou a chave, troca o conjunto de cards. */
@@ -109,8 +109,10 @@ interface PropsPainelConfrontos {
   times: TimeCard[];
   proximos: Confronto[];
   realizados: JogoRealizado[];
-  onRegistrar: (aId: string, bId: string, golsA: string, golsB: string) => void;
-  onEditarPlacar: (numero: number, golsA: string, golsB: string) => void;
+  onRegistrar: (aId: string, bId: string, golsA: string, golsB: string, penaltisVencedorId?: string | null) => void;
+  onEditarPlacar: (numero: number, golsA: string, golsB: string, penaltisVencedorId?: string | null) => void;
+  /** Com 3 times (Vencedor continua) o empate é decidido nos pênaltis. */
+  penaltisNoEmpate: boolean;
   onTrocar: (aId: string, bId: string) => void;
   onAutomatico: () => void;
   regra: RegraConfronto;
@@ -135,15 +137,38 @@ const CampoGols: React.FC<{ valor: string; onChange: (v: string) => void; rotulo
   />
 );
 
+// Escolha de quem ganhou nos pênaltis (dois botões, um por time).
+const EscolhaPenaltis: React.FC<{
+  aId: string;
+  bId: string;
+  nome: (id: string) => string;
+  valor: string;
+  onChange: (id: string) => void;
+}> = ({ aId, bId, nome, valor, onChange }) => (
+  <div data-testid="penaltis" className="flex flex-col gap-1.5 items-center bg-amber-50 rounded-xl p-2 w-full">
+    <span className="text-[11px] font-bold text-amber-800">Empate: decidam nos pênaltis. Quem ganhou?</span>
+    <div className="flex gap-2 flex-wrap justify-center">
+      {[aId, bId].map(id => (
+        <button key={id} type="button" aria-pressed={valor === id} onClick={() => onChange(valor === id ? '' : id)}
+          className={cn('h-10 px-3 rounded-xl text-xs font-bold border active:scale-95', valor === id ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-200')}>
+          {nome(id)}
+        </button>
+      ))}
+    </div>
+  </div>
+);
+
 // Um jogo da lista "Jogos realizados": placar, quem venceu e a opção de corrigir o placar.
 const ItemJogoRealizado: React.FC<{
   jogo: JogoRealizado;
   nome: (id: string) => string;
-  onEditarPlacar: (numero: number, golsA: string, golsB: string) => void;
-}> = ({ jogo, nome, onEditarPlacar }) => {
+  penaltisNoEmpate: boolean;
+  onEditarPlacar: (numero: number, golsA: string, golsB: string, penaltisVencedorId?: string | null) => void;
+}> = ({ jogo, nome, penaltisNoEmpate, onEditarPlacar }) => {
   const [editando, setEditando] = useState(false);
   const [golsA, setGolsA] = useState('');
   const [golsB, setGolsB] = useState('');
+  const [penaltis, setPenaltis] = useState('');
   const resultado = resultadoDoJogo(jogo);
   const temPlacar = jogo.placarA !== null && jogo.placarB !== null;
   const venceuA = resultado.tipo === 'vitoria' && resultado.vencedorId === jogo.aId;
@@ -152,10 +177,14 @@ const ItemJogoRealizado: React.FC<{
   const abrirEdicao = () => {
     setGolsA(jogo.placarA === null ? '' : String(jogo.placarA));
     setGolsB(jogo.placarB === null ? '' : String(jogo.placarB));
+    setPenaltis(jogo.penaltisVencedorId ?? '');
     setEditando(true);
   };
+  const novoPlacar = normalizarPlacar(golsA, golsB);
+  const novoEmpate = novoPlacar.placarA !== null && novoPlacar.placarA === novoPlacar.placarB;
+  const faltaPenaltis = penaltisNoEmpate && novoEmpate && !penaltis;
   const salvar = () => {
-    onEditarPlacar(jogo.numero, golsA, golsB);
+    onEditarPlacar(jogo.numero, golsA, golsB, novoEmpate && penaltis ? penaltis : null);
     setEditando(false);
   };
 
@@ -172,7 +201,7 @@ const ItemJogoRealizado: React.FC<{
         </span>
         {resultado.tipo === 'vitoria' && (
           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-100 text-green-800 shrink-0">
-            {nome(resultado.vencedorId)} venceu
+            {nome(resultado.vencedorId)} venceu{resultado.penaltis ? ' nos pênaltis' : ''}
           </span>
         )}
         {resultado.tipo === 'empate' && (
@@ -190,7 +219,10 @@ const ItemJogoRealizado: React.FC<{
           <CampoGols valor={golsA} onChange={setGolsA} rotulo={`Gols do ${nome(jogo.aId)} no jogo ${jogo.numero}`} />
           <span className="text-gray-300 font-bold">×</span>
           <CampoGols valor={golsB} onChange={setGolsB} rotulo={`Gols do ${nome(jogo.bId)} no jogo ${jogo.numero}`} />
-          <button type="button" onClick={salvar} className="h-10 px-3 rounded-xl bg-primary text-white text-xs font-bold active:scale-95">Salvar</button>
+          {(novoEmpate && (penaltisNoEmpate || !!penaltis)) && (
+            <EscolhaPenaltis aId={jogo.aId} bId={jogo.bId} nome={nome} valor={penaltis} onChange={setPenaltis} />
+          )}
+          <button type="button" onClick={salvar} disabled={faltaPenaltis} className="h-10 px-3 rounded-xl bg-primary text-white text-xs font-bold active:scale-95 disabled:opacity-40">Salvar</button>
           <button type="button" onClick={() => setEditando(false)} className="h-10 px-3 rounded-xl bg-white border border-gray-200 text-xs font-bold text-gray-600 active:scale-95">Cancelar</button>
         </div>
       )}
@@ -201,15 +233,16 @@ const ItemJogoRealizado: React.FC<{
 // Jogo atual, próximos jogos e jogos já feitos. O app sugere sempre os dois times que jogaram
 // MENOS (sem repetir confronto nem colocar quem acabou de jogar); o professor pode trocar à mão.
 // O placar é opcional: em branco, o jogo é registrado sem resultado.
-const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, realizados, onRegistrar, onEditarPlacar, onTrocar, onAutomatico, regra, onRegra, fila, campeao }) => {
+const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, realizados, onRegistrar, onEditarPlacar, penaltisNoEmpate, onTrocar, onAutomatico, regra, onRegra, fila, campeao }) => {
   const [trocando, setTrocando] = useState(false);
   const [golsA, setGolsA] = useState('');
   const [golsB, setGolsB] = useState('');
+  const [penaltis, setPenaltis] = useState('');
   const atual = proximos[0];
   const chaveDoJogo = atual ? `${atual.numero}|${atual.aId}|${atual.bId}` : '';
 
-  // Jogo novo (ou confronto trocado): os campos de placar começam em branco.
-  useEffect(() => { setGolsA(''); setGolsB(''); }, [chaveDoJogo]);
+  // Jogo novo (ou confronto trocado): os campos de placar e dos pênaltis começam em branco.
+  useEffect(() => { setGolsA(''); setGolsB(''); setPenaltis(''); }, [chaveDoJogo]);
 
   if (!atual) return null;
 
@@ -230,12 +263,22 @@ const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, re
   const modoVencedor = regra.modo === 'vencedor-fica';
   const placar = normalizarPlacar(golsA, golsB);
   let previa: string;
+  const soDoisTimes = times.length <= 2;
+  const comTresTimes = times.length === 3;
+  const empatou = placar.placarA !== null && placar.placarA === placar.placarB;
+  const precisaPenaltis = penaltisNoEmpate && empatou;
   if (placar.placarA === null || placar.placarB === null) {
-    previa = modoVencedor
-      ? 'Sem placar: ninguém venceu, então os dois times saem e entram os que esperam há mais tempo.'
-      : 'Sem placar: o jogo é registrado sem resultado.';
+    previa = !modoVencedor
+      ? 'Sem placar: o jogo é registrado sem resultado.'
+      : soDoisTimes ? 'Sem placar: só há dois times, a mesma dupla joga de novo.'
+      : comTresTimes ? 'Sem placar: sai quem está há mais tempo em quadra e o outro continua.'
+      : 'Sem placar: ninguém venceu, então os dois times saem e entram os que esperam há mais tempo.';
   } else if (placar.placarA === placar.placarB) {
-    previa = modoVencedor ? `Empate em ${placar.placarA} × ${placar.placarB}: os dois times saem.` : `Empate em ${placar.placarA} × ${placar.placarB}.`;
+    const empate = `Empate em ${placar.placarA} × ${placar.placarB}`;
+    previa = !modoVencedor ? `${empate}.`
+      : soDoisTimes ? `${empate}: só há dois times, a mesma dupla joga de novo.`
+      : comTresTimes ? (penaltis ? `${empate}: ${nome(penaltis)} ganha nos pênaltis e continua em quadra.` : `${empate}: decidam nos pênaltis.`)
+      : `${empate}: os dois times saem.`;
   } else {
     const vencedorId = placar.placarA > placar.placarB ? atual.aId : atual.bId;
     const base = `${nome(vencedorId)} vence por ${Math.max(placar.placarA, placar.placarB)} × ${Math.min(placar.placarA, placar.placarB)}`;
@@ -309,6 +352,8 @@ const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, re
 
       <div data-testid="previa-resultado" className="text-xs font-semibold text-center text-gray-600">{previa}</div>
 
+      {precisaPenaltis && <EscolhaPenaltis aId={atual.aId} bId={atual.bId} nome={nome} valor={penaltis} onChange={setPenaltis} />}
+
       {campeaoEmQuadra && (
         <div data-testid="campeao-atual" className="text-[11px] font-bold text-center text-green-700 bg-green-50 rounded-lg px-2 py-1.5">
           {nome(campeaoEmQuadra.timeId)} continua em quadra: {campeaoEmQuadra.vitorias} {campeaoEmQuadra.vitorias === 1 ? 'vitória seguida' : 'vitórias seguidas'}
@@ -327,8 +372,9 @@ const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, re
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <button type="button" data-testid="registrar-jogo" onClick={() => onRegistrar(atual.aId, atual.bId, golsA, golsB)}
-          className="flex-1 min-w-[180px] h-11 rounded-xl bg-primary text-white font-bold text-sm active:scale-95 flex items-center justify-center gap-2">
+        <button type="button" data-testid="registrar-jogo" disabled={precisaPenaltis && !penaltis}
+          onClick={() => onRegistrar(atual.aId, atual.bId, golsA, golsB, empatou && penaltis ? penaltis : null)}
+          className="flex-1 min-w-[180px] h-11 rounded-xl bg-primary text-white font-bold text-sm active:scale-95 disabled:opacity-40 flex items-center justify-center gap-2">
           <Check className="w-4 h-4" /> Registrar jogo
         </button>
         <button type="button" onClick={() => setTrocando(v => !v)}
@@ -400,7 +446,7 @@ const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, re
           <summary className="cursor-pointer text-xs font-bold text-primary">Jogos realizados ({realizados.length})</summary>
           <ul className="flex flex-col gap-2 mt-2">
             {[...realizados].reverse().map(j => (
-              <ItemJogoRealizado key={j.numero} jogo={j} nome={nome} onEditarPlacar={onEditarPlacar} />
+              <ItemJogoRealizado key={j.numero} jogo={j} nome={nome} penaltisNoEmpate={penaltisNoEmpate} onEditarPlacar={onEditarPlacar} />
             ))}
           </ul>
         </details>
@@ -501,6 +547,7 @@ export function RodizioCards({ chave, alunos, presentesIds, loading }: Props) {
           realizados={cards.jogosRealizados}
           onRegistrar={cards.registrarJogo}
           onEditarPlacar={cards.editarPlacar}
+          penaltisNoEmpate={pedePenaltis(cards.estado)}
           onTrocar={cards.definirConfrontoManual}
           onAutomatico={cards.limparConfrontoManual}
           regra={cards.regra}
