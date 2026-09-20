@@ -574,6 +574,32 @@ const ITENS_DE_ARQUIVO: ItemBancoImagem[] = [
     tags: ['tempo tecnico', 'equipe', 'tecnico', 'conversa', 'olimpiadas'],
     credito: 'Foto: Daieuxetdailleurs, Wikimedia Commons, CC BY 4.0',
   },
+  // Geografia: apoio para perguntas de origem e de continente. Nenhum dos três traz nome de continente,
+  // então não entregam a resposta.
+  {
+    id: 'pic-34547',
+    arquivo: '/banco-imagens/pictogramas/34547.png',
+    tipo: 'pictograma',
+    titulo: 'Mapa-múndi com os continentes (cores diferentes)',
+    tags: ['continente', 'mapa', 'mundo', 'origem', 'pais', 'geografia'],
+    credito: 'Pictogramas: ARASAAC (arasaac.org), autor Sergio Palao, propriedade do Governo de Aragão (Espanha), licença CC BY-NC-SA',
+  },
+  {
+    id: 'pic-30014',
+    arquivo: '/banco-imagens/pictogramas/30014.png',
+    tipo: 'pictograma',
+    titulo: 'Planeta Terra (globo)',
+    tags: ['mundo', 'planeta', 'globo', 'planeta terra'],
+    credito: 'Pictogramas: ARASAAC (arasaac.org), autor Sergio Palao, propriedade do Governo de Aragão (Espanha), licença CC BY-NC-SA',
+  },
+  {
+    id: 'pic-30015',
+    arquivo: '/banco-imagens/pictogramas/30015.png',
+    tipo: 'pictograma',
+    titulo: 'Globo terrestre (visto de perto)',
+    tags: ['mundo', 'planeta', 'globo'],
+    credito: 'Pictogramas: ARASAAC (arasaac.org), autor Sergio Palao, propriedade do Governo de Aragão (Espanha), licença CC BY-NC-SA',
+  },
 ];
 
 /** Tudo que aparece no seletor: imagens de arquivo + diagramas da quadra (desenhados por código). */
