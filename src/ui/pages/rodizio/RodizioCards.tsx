@@ -27,17 +27,10 @@ function rotuloAluno(a: AlunoSupabase) {
 // e +/- para passar de 4. O número ao lado é sempre o total.
 function ContadorVezes({ jogador, onDefinir, onAjustar }: { jogador: JogadorCard; onDefinir: (v: number) => void; onAjustar: (d: number) => void }) {
   const { vezes, nome } = jogador;
+  // Dois grupos: os 4 checks e o "− 3× +". Num card largo ficam lado a lado; num card estreito
+  // (várias colunas) o segundo grupo desce para a linha de baixo — nada pode passar da borda.
   return (
-    <div className="flex items-center justify-between gap-2">
-      <button
-        type="button"
-        onClick={() => onAjustar(-1)}
-        disabled={vezes === 0}
-        aria-label={`Tirar uma vez de ${nome}`}
-        className="h-9 w-9 rounded-xl bg-white border border-gray-200 text-gray-500 flex items-center justify-center active:scale-95 disabled:opacity-30"
-      >
-        <Minus className="w-4 h-4" />
-      </button>
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
       <div className="flex items-center gap-1.5">
         {[1, 2, 3, 4].map(n => (
           <button
@@ -55,15 +48,26 @@ function ContadorVezes({ jogador, onDefinir, onAjustar }: { jogador: JogadorCard
           </button>
         ))}
       </div>
-      <span className="w-9 text-center text-base font-bold tabular-nums text-on-surface" aria-label={`${vezes} vezes`}>{vezes}×</span>
-      <button
-        type="button"
-        onClick={() => onAjustar(1)}
-        aria-label={`Marcar mais uma vez para ${nome}`}
-        className="h-9 w-9 rounded-xl bg-primary text-white flex items-center justify-center active:scale-95"
-      >
-        <Plus className="w-4 h-4" />
-      </button>
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => onAjustar(-1)}
+          disabled={vezes === 0}
+          aria-label={`Tirar uma vez de ${nome}`}
+          className="h-9 w-9 rounded-xl bg-white border border-gray-200 text-gray-500 flex items-center justify-center active:scale-95 disabled:opacity-30"
+        >
+          <Minus className="w-4 h-4" />
+        </button>
+        <span className="min-w-[2rem] text-center text-base font-bold tabular-nums text-on-surface" aria-label={`${vezes} vezes`}>{vezes}×</span>
+        <button
+          type="button"
+          onClick={() => onAjustar(1)}
+          aria-label={`Marcar mais uma vez para ${nome}`}
+          className="h-9 w-9 rounded-xl bg-primary text-white flex items-center justify-center active:scale-95"
+        >
+          <Plus className="w-4 h-4" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -232,7 +236,7 @@ export function RodizioCards({ chave, alunos, presentesIds, loading }: Props) {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 330px), 1fr))' }}>
             {cards.times.map((time: TimeCard, idx) => (
               <div key={time.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3.5 flex flex-col gap-2.5" data-testid="card-time">
                 <div className="flex items-center gap-2">
