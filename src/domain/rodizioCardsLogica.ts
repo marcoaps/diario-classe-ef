@@ -196,12 +196,28 @@ function menorQue(a: number[], b: number[]): boolean {
 }
 
 /**
+ * Os times de `pool` ainda devem um jogo nesta rodada: dá para formar as duplas entre eles só com
+ * confrontos que ainda não aconteceram? (Com número ímpar, um deles pode ficar de fora.)
+ * Sem essa conferência, os dois últimos times de cada rodada eram obrigados a se enfrentar de novo.
+ */
+function podeCompletarRodada(pool: string[], pares: Map<string, number>, podeSobrarUm: boolean): boolean {
+  if (pool.length <= 1) return true;
+  const [x, ...resto] = pool;
+  for (let i = 0; i < resto.length; i++) {
+    if ((pares.get(chaveDoPar(x, resto[i])) ?? 0) === 0
+        && podeCompletarRodada(resto.filter((_, k) => k !== i), pares, podeSobrarUm)) return true;
+  }
+  return podeSobrarUm ? podeCompletarRodada(resto, pares, false) : false;
+}
+
+/**
  * Sugere o jogo atual e os próximos. A cada jogo, na ordem de importância:
  *  1. jogam os dois times com MENOS jogos (é o que garante o equilíbrio; o placar não entra);
  *  2. ninguém que ficou de fora pode passar do limite de espera (jogos seguidos sem jogar);
- *  3. evita repetir um confronto que já aconteceu;
- *  4. entre as opções restantes, entra quem está esperando há mais tempo;
- *  5. desempate pela ordem dos cards.
+ *  3. os times que ainda faltam nesta rodada precisam conseguir se enfrentar em confrontos novos;
+ *  4. evita repetir um confronto que já aconteceu;
+ *  5. entre as opções restantes, entra quem está esperando há mais tempo;
+ *  6. desempate pela ordem dos cards.
  * Cada jogo sugerido já entra na conta do seguinte. O confronto manual, se existir, vale só para o
  * primeiro jogo da lista.
  */
@@ -233,6 +249,7 @@ export function proximosConfrontos(estado: EstadoCards, quantidade = 5): Confron
 
     let escolhido: [string, string] | null = null;
     let manual = false;
+    const menosJogos = Math.min(...times.map(t => jogosSim.get(t.id) ?? 0));
 
     if (k === 0 && confrontoManual && confrontoManual.aId !== confrontoManual.bId
         && posicao.has(confrontoManual.aId) && posicao.has(confrontoManual.bId)) {
@@ -246,9 +263,13 @@ export function proximosConfrontos(estado: EstadoCards, quantidade = 5): Confron
           const b = times[j].id;
           let esperaDeQuemFicaFora = 0;
           for (const t of times) if (t.id !== a && t.id !== b) esperaDeQuemFicaFora = Math.max(esperaDeQuemFicaFora, desde(t.id));
+          // Quem ainda deve jogo nesta rodada (menos jogos) e não está neste confronto.
+          const faltamNaRodada = times.filter(t => t.id !== a && t.id !== b && (jogosSim.get(t.id) ?? 0) === menosJogos).map(t => t.id);
+          const forcaRepeticao = faltamNaRodada.length >= 2 && !podeCompletarRodada(faltamNaRodada, pares, faltamNaRodada.length % 2 === 1) ? 1 : 0;
           const chave = [
             (jogosSim.get(a) ?? 0) + (jogosSim.get(b) ?? 0),
             Math.max(0, Math.min(esperaDeQuemFicaFora, NUNCA - 1) - limiteDeEspera),
+            forcaRepeticao,
             pares.get(chaveDoPar(a, b)) ?? 0,
             -(desde(a) + desde(b)),
             i,
