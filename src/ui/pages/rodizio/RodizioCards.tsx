@@ -3,7 +3,7 @@ import { Check, Crown, Flag, Loader2, Minus, Plus, RotateCcw, Trash2, Undo2, Use
 import { cn } from '../../AppLayout';
 import type { AlunoSupabase } from '../../../domain/useAlunosPresentesHoje';
 import { useCardsRodizio } from '../../../domain/useCardsRodizio';
-import { mediaDoTime, nomeDoCapitao, normalizarPlacar, proximosConfrontos, resultadoDoJogo, resumoEquilibrio, resumoJogos, totalDoTime, type Confronto, type JogadorCard, type JogoRealizado, type TimeCard } from '../../../domain/rodizioCardsLogica';
+import { campeaoAtual, filaDeEspera, mediaDoTime, nomeDoCapitao, normalizarPlacar, proximosConfrontos, resultadoDoJogo, resumoEquilibrio, resumoJogos, totalDoTime, type Confronto, type JogadorCard, type JogoRealizado, type RegraConfronto, type TimeCard } from '../../../domain/rodizioCardsLogica';
 
 interface Props {
   /** Onde guardar (turmas + gênero + dia). Trocou a chave, troca o conjunto de cards. */
@@ -113,6 +113,12 @@ interface PropsPainelConfrontos {
   onEditarPlacar: (numero: number, golsA: string, golsB: string) => void;
   onTrocar: (aId: string, bId: string) => void;
   onAutomatico: () => void;
+  regra: RegraConfronto;
+  onRegra: (regra: Partial<RegraConfronto>) => void;
+  /** Quem espera para entrar, na ordem. */
+  fila: TimeCard[];
+  /** Vencedor do último jogo e suas vitórias seguidas (null se não houve vencedor). */
+  campeao: { timeId: string; vitorias: number } | null;
 }
 
 const CampoGols: React.FC<{ valor: string; onChange: (v: string) => void; rotulo: string }> = ({ valor, onChange, rotulo }) => (
@@ -195,7 +201,7 @@ const ItemJogoRealizado: React.FC<{
 // Jogo atual, próximos jogos e jogos já feitos. O app sugere sempre os dois times que jogaram
 // MENOS (sem repetir confronto nem colocar quem acabou de jogar); o professor pode trocar à mão.
 // O placar é opcional: em branco, o jogo é registrado sem resultado.
-const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, realizados, onRegistrar, onEditarPlacar, onTrocar, onAutomatico }) => {
+const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, realizados, onRegistrar, onEditarPlacar, onTrocar, onAutomatico, regra, onRegra, fila, campeao }) => {
   const [trocando, setTrocando] = useState(false);
   const [golsA, setGolsA] = useState('');
   const [golsB, setGolsB] = useState('');
@@ -220,13 +226,30 @@ const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, re
   };
   const classeSeletor = 'w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-on-surface outline-none focus:border-primary';
 
-  // Prévia de quem vence, com o que está digitado.
+  // Prévia de quem vence e do que acontece em seguida, com o que está digitado.
+  const modoVencedor = regra.modo === 'vencedor-fica';
   const placar = normalizarPlacar(golsA, golsB);
-  const previa = placar.placarA === null || placar.placarB === null
-    ? 'Sem placar: o jogo é registrado sem resultado.'
-    : placar.placarA === placar.placarB
-      ? `Empate em ${placar.placarA} × ${placar.placarB}.`
-      : `${nome(placar.placarA > placar.placarB ? atual.aId : atual.bId)} vence por ${Math.max(placar.placarA, placar.placarB)} × ${Math.min(placar.placarA, placar.placarB)}.`;
+  let previa: string;
+  if (placar.placarA === null || placar.placarB === null) {
+    previa = modoVencedor
+      ? 'Sem placar: ninguém venceu, então os dois times saem e entram os que esperam há mais tempo.'
+      : 'Sem placar: o jogo é registrado sem resultado.';
+  } else if (placar.placarA === placar.placarB) {
+    previa = modoVencedor ? `Empate em ${placar.placarA} × ${placar.placarB}: os dois times saem.` : `Empate em ${placar.placarA} × ${placar.placarB}.`;
+  } else {
+    const vencedorId = placar.placarA > placar.placarB ? atual.aId : atual.bId;
+    const base = `${nome(vencedorId)} vence por ${Math.max(placar.placarA, placar.placarB)} × ${Math.min(placar.placarA, placar.placarB)}`;
+    if (!modoVencedor) previa = `${base}.`;
+    else {
+      const anteriores = campeao && campeao.timeId === vencedorId ? campeao.vitorias : 0;
+      previa = regra.limite !== null && anteriores + 1 >= regra.limite
+        ? `${base} e sai: chegou a ${regra.limite} vitórias seguidas.`
+        : `${base} e continua em quadra.`;
+    }
+  }
+  const campeaoEmQuadra = modoVencedor && !atual.manual && campeao && (campeao.timeId === atual.aId || campeao.timeId === atual.bId) ? campeao : null;
+  const saiuPeloLimite = modoVencedor && !atual.manual && campeao && regra.limite !== null && campeao.vitorias >= regra.limite
+    && campeao.timeId !== atual.aId && campeao.timeId !== atual.bId ? campeao : null;
 
   return (
     <div data-testid="painel-confrontos" className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col gap-3">
@@ -234,6 +257,38 @@ const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, re
         <Flag className="w-3.5 h-3.5 shrink-0" /> JOGO ATUAL · JOGO {atual.numero}
         {atual.manual && (
           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-tertiary-container text-on-tertiary-container">escolhido por você</span>
+        )}
+      </div>
+
+      <div data-testid="regra-confrontos" className="flex flex-col gap-2">
+        <div className="grid grid-cols-2 gap-1 bg-gray-100 p-1 rounded-xl" role="group" aria-label="Como escolher os jogos">
+          {([['vencedor-fica', 'Vencedor continua'], ['equilibrar', 'Equilibrar jogos']] as const).map(([modo, rotulo]) => (
+            <button key={modo} type="button" aria-pressed={regra.modo === modo} onClick={() => onRegra({ modo })}
+              className={cn('py-2 rounded-lg text-xs font-bold transition-all active:scale-95', regra.modo === modo ? 'bg-white text-primary shadow-sm' : 'text-gray-500')}>
+              {rotulo}
+            </button>
+          ))}
+        </div>
+        {modoVencedor ? (
+          <div className="flex items-center gap-2 flex-wrap text-[11px] text-gray-500">
+            <label className="flex items-center gap-1.5">
+              Vencedor sai depois de
+              <select
+                value={regra.limite === null ? 'sem' : String(regra.limite)}
+                onChange={e => onRegra({ limite: e.target.value === 'sem' ? null : Number(e.target.value) })}
+                aria-label="Limite de vitórias seguidas"
+                className="bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs font-bold text-on-surface outline-none focus:border-primary"
+              >
+                <option value="sem">sem limite</option>
+                <option value="2">2 vitórias seguidas</option>
+                <option value="3">3 vitórias seguidas</option>
+                <option value="4">4 vitórias seguidas</option>
+              </select>
+            </label>
+            <span>Quem perde vai para o fim da fila.</span>
+          </div>
+        ) : (
+          <p className="text-[11px] text-gray-500">Entram sempre os dois times que jogaram menos, sem repetir confronto e sem deixar ninguém esperando demais.</p>
         )}
       </div>
 
@@ -253,6 +308,18 @@ const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, re
       </div>
 
       <div data-testid="previa-resultado" className="text-xs font-semibold text-center text-gray-600">{previa}</div>
+
+      {campeaoEmQuadra && (
+        <div data-testid="campeao-atual" className="text-[11px] font-bold text-center text-green-700 bg-green-50 rounded-lg px-2 py-1.5">
+          {nome(campeaoEmQuadra.timeId)} continua em quadra: {campeaoEmQuadra.vitorias} {campeaoEmQuadra.vitorias === 1 ? 'vitória seguida' : 'vitórias seguidas'}
+          {regra.limite !== null && ` (sai depois de ${regra.limite})`}.
+        </div>
+      )}
+      {saiuPeloLimite && (
+        <div data-testid="campeao-saiu" className="text-[11px] font-bold text-center text-gray-600 bg-gray-50 rounded-lg px-2 py-1.5">
+          {nome(saiuPeloLimite.timeId)} chegou a {saiuPeloLimite.vitorias} vitórias seguidas e saiu. Entram os dois que esperam há mais tempo.
+        </div>
+      )}
 
       <div className="text-[11px] text-gray-500 text-center">
         Jogos até agora: {jogosDe(atual.aId)} × {jogosDe(atual.bId)}
@@ -296,7 +363,23 @@ const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, re
         </div>
       )}
 
-      {seguintes.length > 0 && (
+      {modoVencedor ? (
+        fila.length > 0 && (
+          <div data-testid="fila-de-espera">
+            <div className="text-xs font-bold text-gray-400 tracking-wide mb-1">FILA DE ESPERA</div>
+            <ol className="flex flex-col gap-1">
+              {fila.map((t, i) => (
+                <li key={t.id} className="flex items-baseline gap-2 text-sm">
+                  <span className="text-[11px] font-bold text-gray-400 w-14 shrink-0">{i === 0 ? 'Próximo' : `${i + 1}º`}</span>
+                  <span className="font-semibold text-on-surface">{t.nome}</span>
+                </li>
+              ))}
+            </ol>
+            <p className="text-[11px] text-gray-400 mt-1">O próximo da fila entra no lugar de quem perder; o vencedor continua.</p>
+          </div>
+        )
+      ) : (
+        seguintes.length > 0 && (
         <div data-testid="proximos-jogos">
           <div className="text-xs font-bold text-gray-400 tracking-wide mb-1">PRÓXIMOS JOGOS</div>
           <ol className="flex flex-col gap-1">
@@ -308,6 +391,8 @@ const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, re
             ))}
           </ol>
         </div>
+      
+        )
       )}
 
       {realizados.length > 0 && (
@@ -338,6 +423,9 @@ export function RodizioCards({ chave, alunos, presentesIds, loading }: Props) {
   const resumo = useMemo(() => resumoEquilibrio(cards.times), [cards.times]);
   const jogos = useMemo(() => resumoJogos(cards.times), [cards.times]);
   const proximos = useMemo(() => proximosConfrontos(cards.estado, 5), [cards.estado]);
+  const fila = useMemo(() => (proximos[0] ? filaDeEspera(cards.estado, proximos[0]) : []), [cards.estado, proximos]);
+  const campeao = useMemo(() => campeaoAtual(cards.estado), [cards.estado]);
+  const modoVencedor = cards.regra.modo === 'vencedor-fica';
 
   const situacaoDe = (alunoId: string): Situacao =>
     resumo.prioridade.has(alunoId) ? 'prioridade' : resumo.adiantados.has(alunoId) ? 'adiantado' : 'normal';
@@ -348,9 +436,14 @@ export function RodizioCards({ chave, alunos, presentesIds, loading }: Props) {
 
   // Aviso do topo: quantos jogos cada capitão já fez e de quem é a vez (quem fez menos).
   const capitaesComMais = jogos.diferenca > 0 ? cards.times.filter(t => t.jogos === jogos.maximo) : [];
+  const nomesMenosJogos = jogos.diferenca > 0 ? jogos.comMenos.map(nomeDoCapitao).join(', ') : '';
+  const mensagemVencedor = `Vencedor continua${cards.regra.limite !== null ? ` (sai depois de ${cards.regra.limite} vitórias seguidas)` : ' (sem limite)'}: quem perde vai para o fim da fila.`
+    + (nomesMenosJogos ? ` Menos jogos: ${nomesMenosJogos} (${nJogos(jogos.minimo)}).` : '');
   const mensagemJogos = jogos.totalJogos === 0
     ? 'Nenhum jogo registrado ainda. Toque em "Time jogou" no card quando o time entrar em quadra.'
-    : jogos.diferenca === 0
+    : modoVencedor
+      ? mensagemVencedor
+      : jogos.diferenca === 0
       ? `Todos os capitães fizeram ${nJogos(jogos.maximo)} — jogos equilibrados.`
       : `Vez de: ${jogos.comMenos.map(nomeDoCapitao).join(', ')} (${nJogos(jogos.minimo)}). ` +
         `Mais jogos: ${capitaesComMais.map(nomeDoCapitao).join(', ')} (${nJogos(jogos.maximo)}).` +
@@ -408,6 +501,10 @@ export function RodizioCards({ chave, alunos, presentesIds, loading }: Props) {
           onEditarPlacar={cards.editarPlacar}
           onTrocar={cards.definirConfrontoManual}
           onAutomatico={cards.limparConfrontoManual}
+          regra={cards.regra}
+          onRegra={cards.definirRegra}
+          fila={fila}
+          campeao={campeao}
         />
       )}
 
@@ -415,7 +512,7 @@ export function RodizioCards({ chave, alunos, presentesIds, loading }: Props) {
         <div
           role="status"
           data-testid="aviso-jogos"
-          className={cn('rounded-2xl border px-4 py-3', jogos.diferenca >= 2 ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-100 shadow-sm')}
+          className={cn('rounded-2xl border px-4 py-3', !modoVencedor && jogos.diferenca >= 2 ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-100 shadow-sm')}
         >
           <div className="flex items-center gap-2 text-sm font-bold text-on-surface">
             <Flag className="w-4 h-4 text-primary shrink-0" /> Jogos de cada capitão

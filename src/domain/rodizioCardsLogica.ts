@@ -167,11 +167,23 @@ export interface ConfrontoManual {
   bId: string;
 }
 
-/** Tudo que a aba Cards guarda: os cards, os jogos já registrados e o confronto manual (se houver). */
+/** Como escolher o próximo jogo: equilibrar os jogos, ou o vencedor continua em quadra. */
+export type ModoConfronto = 'equilibrar' | 'vencedor-fica';
+
+export interface RegraConfronto {
+  modo: ModoConfronto;
+  /** No modo "vencedor continua": quantas vitórias seguidas ele pode ter antes de sair (null = sem limite). */
+  limite: number | null;
+}
+
+export const REGRA_PADRAO: RegraConfronto = { modo: 'vencedor-fica', limite: 2 };
+
+/** Tudo que a aba Cards guarda: os cards, os jogos já registrados, o confronto manual e a regra de escolha. */
 export interface EstadoCards {
   times: TimeCard[];
   jogosRealizados: JogoRealizado[];
   confrontoManual: ConfrontoManual | null;
+  regra: RegraConfronto;
 }
 
 export interface Confronto {
@@ -183,7 +195,18 @@ export interface Confronto {
 }
 
 export function estadoVazio(): EstadoCards {
-  return { times: [], jogosRealizados: [], confrontoManual: null };
+  return { times: [], jogosRealizados: [], confrontoManual: null, regra: { ...REGRA_PADRAO } };
+}
+
+/** Escolhe a regra (modo e limite de vitórias seguidas), corrigindo valores fora do normal. */
+export function definirRegra(estado: EstadoCards, regra: Partial<RegraConfronto>): EstadoCards {
+  const modo: ModoConfronto = regra.modo === 'equilibrar' || regra.modo === 'vencedor-fica' ? regra.modo : estado.regra.modo;
+  let limite = estado.regra.limite;
+  if ('limite' in regra) {
+    const n = regra.limite === null || regra.limite === undefined ? null : Math.floor(Number(regra.limite));
+    limite = n === null ? null : Number.isFinite(n) ? Math.min(9, Math.max(1, n)) : estado.regra.limite;
+  }
+  return modo === estado.regra.modo && limite === estado.regra.limite ? estado : { ...estado, regra: { modo, limite } };
 }
 
 const chaveDoPar = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
@@ -193,6 +216,83 @@ function menorQue(a: number[], b: number[]): boolean {
     if (a[i] !== b[i]) return a[i] < b[i];
   }
   return false;
+}
+
+// ── Modo "vencedor continua" (como o Rei da Quadra, mas sem fila gravada: sai do histórico) ─────────────
+
+const NUNCA_JOGOU = 1000;
+
+function jogosValidos(estado: EstadoCards): JogoRealizado[] {
+  const existe = (id: string) => estado.times.some(t => t.id === id);
+  return estado.jogosRealizados.filter(j => existe(j.aId) && existe(j.bId));
+}
+
+/** Times fora dos jogos de `excluir`, do que espera há mais tempo para o que jogou agora há pouco. */
+function filaPorEspera(estado: EstadoCards, excluir: string[]): TimeCard[] {
+  const validos = jogosValidos(estado);
+  const ultimo = new Map<string, number>();
+  validos.forEach((j, i) => { ultimo.set(j.aId, i); ultimo.set(j.bId, i); });
+  const desde = (id: string) => (ultimo.has(id) ? validos.length - (ultimo.get(id) as number) : NUNCA_JOGOU);
+  const posicao = new Map(estado.times.map((t, i) => [t.id, i]));
+  return estado.times
+    .filter(t => !excluir.includes(t.id))
+    .sort((x, y) => desde(y.id) - desde(x.id) || (posicao.get(x.id) ?? 0) - (posicao.get(y.id) ?? 0));
+}
+
+/** Quantas vitórias seguidas o time tem, contando do último jogo para trás. */
+function vitoriasSeguidas(validos: JogoRealizado[], timeId: string): number {
+  let total = 0;
+  for (let i = validos.length - 1; i >= 0; i--) {
+    const r = resultadoDoJogo(validos[i]);
+    if (r.tipo === 'vitoria' && r.vencedorId === timeId) total++;
+    else break;
+  }
+  return total;
+}
+
+/** Quem é o vencedor do último jogo e quantas vitórias seguidas ele já tem (null se o último jogo não teve vencedor). */
+export function campeaoAtual(estado: EstadoCards): { timeId: string; vitorias: number } | null {
+  const validos = jogosValidos(estado);
+  const ultimo = validos[validos.length - 1];
+  if (!ultimo) return null;
+  const r = resultadoDoJogo(ultimo);
+  return r.tipo === 'vitoria' ? { timeId: r.vencedorId, vitorias: vitoriasSeguidas(validos, r.vencedorId) } : null;
+}
+
+/** Quem espera para entrar, na ordem (mais tempo parado primeiro), sem os dois que estão jogando. */
+export function filaDeEspera(estado: EstadoCards, atual: { aId: string; bId: string }): TimeCard[] {
+  return filaPorEspera(estado, [atual.aId, atual.bId]);
+}
+
+/**
+ * Próximo jogo no modo "vencedor continua": quem venceu o último jogo fica, e o desafiante é quem
+ * espera há mais tempo (o perdedor vai para o fim da fila). Quando o vencedor chega ao limite de
+ * vitórias seguidas, ou o jogo terminou empatado / sem placar, os dois saem e entram os dois que
+ * esperam há mais tempo. O resultado de um jogo ainda não jogado é desconhecido, então a lista tem
+ * só o jogo atual; quem vem depois está em `filaDeEspera`.
+ */
+function proximoNoModoVencedor(estado: EstadoCards): Confronto[] {
+  const { times, confrontoManual, regra } = estado;
+  const validos = jogosValidos(estado);
+  const numero = validos.length + 1;
+  const existe = (id: string) => times.some(t => t.id === id);
+
+  if (confrontoManual && confrontoManual.aId !== confrontoManual.bId && existe(confrontoManual.aId) && existe(confrontoManual.bId)) {
+    return [{ numero, aId: confrontoManual.aId, bId: confrontoManual.bId, manual: true }];
+  }
+
+  const ultimo = validos[validos.length - 1];
+  const resultado = ultimo ? resultadoDoJogo(ultimo) : null;
+  if (resultado && resultado.tipo === 'vitoria' && times.length >= 3) {
+    const sequencia = vitoriasSeguidas(validos, resultado.vencedorId);
+    const atingiuLimite = regra.limite !== null && sequencia >= regra.limite;
+    if (!atingiuLimite) {
+      const desafiante = filaPorEspera(estado, [resultado.vencedorId, resultado.perdedorId])[0];
+      if (desafiante) return [{ numero, aId: resultado.vencedorId, bId: desafiante.id, manual: false }];
+    }
+  }
+  const [a, b] = filaPorEspera(estado, []);
+  return a && b ? [{ numero, aId: a.id, bId: b.id, manual: false }] : [];
 }
 
 /**
@@ -224,6 +324,7 @@ function podeCompletarRodada(pool: string[], pares: Map<string, number>, podeSob
 export function proximosConfrontos(estado: EstadoCards, quantidade = 5): Confronto[] {
   const { times, jogosRealizados, confrontoManual } = estado;
   if (times.length < 2) return [];
+  if (estado.regra.modo === 'vencedor-fica') return proximoNoModoVencedor(estado);
 
   const posicao = new Map(times.map((t, i) => [t.id, i]));
   const jogosSim = new Map(times.map(t => [t.id, t.jogos]));
@@ -333,6 +434,7 @@ export function registrarJogo(estado: EstadoCards, aId: string, bId: string, pla
       { numero: estado.jogosRealizados.length + 1, aId, bId, ...normalizarPlacar(placarA, placarB) },
     ],
     confrontoManual: null,
+    regra: estado.regra,
   };
 }
 
@@ -365,12 +467,13 @@ export function removerTimeDoEstado(estado: EstadoCards, timeId: string): Estado
     times: estado.times.filter(t => t.id !== timeId),
     jogosRealizados: estado.jogosRealizados.filter(j => !usa(j)).map((j, i) => ({ ...j, numero: i + 1 })),
     confrontoManual: estado.confrontoManual && usa(estado.confrontoManual) ? null : estado.confrontoManual,
+    regra: estado.regra,
   };
 }
 
 /** Recomeça: zera jogos e vezes de todos e apaga os jogos registrados (os cards continuam). */
 export function zerarEstado(estado: EstadoCards): EstadoCards {
-  return { times: zerarContadores(estado.times), jogosRealizados: [], confrontoManual: null };
+  return { times: zerarContadores(estado.times), jogosRealizados: [], confrontoManual: null, regra: estado.regra };
 }
 
 // ── Leitura segura do que foi guardado no navegador ──
@@ -413,12 +516,16 @@ export function lerEstadoSalvo(texto: string | null): EstadoCards {
       .filter(par)
       .map((j: any, i: number): JogoRealizado => ({ numero: i + 1, aId: j.aId, bId: j.bId, ...normalizarPlacar(j.placarA, j.placarB) }));
     const confrontoManual = par(dados.confrontoManual) ? { aId: dados.confrontoManual.aId, bId: dados.confrontoManual.bId } : null;
-    return { times, jogosRealizados, confrontoManual };
+    // Dados guardados antes da regra (ou com regra inválida) abrem com a regra padrão.
+    const regra = dados.regra && typeof dados.regra === 'object'
+      ? definirRegra({ ...estadoVazio(), times }, { modo: dados.regra.modo, limite: dados.regra.limite === undefined ? REGRA_PADRAO.limite : dados.regra.limite }).regra
+      : { ...REGRA_PADRAO };
+    return { times, jogosRealizados, confrontoManual, regra };
   } catch {
     return { ...estadoVazio(), times };
   }
 }
 
 export function textoParaSalvarEstado(estado: EstadoCards): string {
-  return JSON.stringify({ versao: 1, times: estado.times, jogosRealizados: estado.jogosRealizados, confrontoManual: estado.confrontoManual });
+  return JSON.stringify({ versao: 1, times: estado.times, jogosRealizados: estado.jogosRealizados, confrontoManual: estado.confrontoManual, regra: estado.regra });
 }

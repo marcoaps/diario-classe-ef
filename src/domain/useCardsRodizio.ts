@@ -70,6 +70,7 @@ export function useCardsRodizio(chave: string) {
     times: estado.times,
     jogosRealizados: estado.jogosRealizados,
     confrontoManual: estado.confrontoManual,
+    regra: estado.regra,
     podeDesfazer,
     desfazer,
     adicionarCapitao: (aluno: { id: string; nome: string }) =>
@@ -88,6 +89,8 @@ export function useCardsRodizio(chave: string) {
     definirConfrontoManual: (aId: string, bId: string) => aplicarEstado(e => L.definirConfrontoManual(e, aId, bId)),
     limparConfrontoManual: () => aplicarEstado(e => L.limparConfrontoManual(e)),
     zerarContadores: () => aplicarEstado(e => L.zerarEstado(e)),
-    apagarTudo: () => aplicarEstado(() => L.estadoVazio()),
+    apagarTudo: () => aplicarEstado(e => ({ ...L.estadoVazio(), regra: e.regra })),
+    // Trocar a regra não entra no "desfazer" (é uma configuração, não uma jogada).
+    definirRegra: (regra: Partial<L.RegraConfronto>) => aplicarEstado(e => L.definirRegra(e, regra), false),
   };
 }
