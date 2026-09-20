@@ -384,7 +384,12 @@ export function IAIdeiasAvaliacoes() {
       // foto de outro esporte. Cada questão sai com um espaço em branco
       // (com a sugestão da IA como legenda) pra você colar a imagem certa
       // manualmente na hora de imprimir/exportar.
+      // Já o banco de imagens aprovadas (pictogramas, fotos e diagramas) é consultado
+      // sozinho: cada questão sai com a melhor imagem do banco e, se não combinar, o
+      // professor troca pelo botão "Banco de imagens" da própria questão.
       setQuestoes(qs);
+      setEtapa('Escolhendo imagens do banco...');
+      await aplicarSugestoesDoBanco(qs, true);
       setEtapa('');
     } catch (e: any) {
       setErro('Erro: ' + e.message);
@@ -509,10 +514,11 @@ export function IAIdeiasAvaliacoes() {
 
   // Preenche, de uma vez, as questões SEM imagem com a melhor sugestão do banco.
   // Não mexe em imagem que já está lá. Cenas de ação ficam para o Gemini.
-  async function aplicarSugestoesDoBanco() {
+  // Roda sozinho logo depois que a avaliação é gerada e também pelo botão "Aplicar sugestões do banco".
+  async function aplicarSugestoesDoBanco(lista: Questao[] = questoes, automatico = false) {
     setErroImagens('');
     setAvisoImagens('');
-    const alvo = questoes
+    const alvo = lista
       .filter(q => !q.imagemDataUrl)
       .map(q => ({ q, item: sugerirItemDoBanco(q, preferePictograma) }))
       .filter((x): x is { q: Questao; item: ItemBancoImagem } => x.item !== null);
@@ -531,8 +537,16 @@ export function IAIdeiasAvaliacoes() {
       const nova = novas.get(x.numero);
       return nova ? { ...x, imagemDataUrl: nova.url, imagemCredito: nova.credito } : x;
     }));
-    const numeros = alvo.filter(x => novas.has(x.q.numero)).map(x => x.q.numero).join(', ');
-    setAvisoImagens(`Sugestões do banco aplicadas nas questões ${numeros}. Confira se cada imagem combina com a pergunta e troque pelo "Banco de imagens" se precisar. As questões de cena de ação e as sem imagem parecida continuam em branco.`);
+    const colocadas = alvo.filter(x => novas.has(x.q.numero)).map(x => x.q.numero);
+    // Questões que continuam em branco e que pedem imagem (as "sem imagem" não contam).
+    const emBranco = lista
+      .filter(q => !colocadas.includes(q.numero) && !q.imagemDataUrl && tipoDaQuestao(q) !== 'nenhuma')
+      .map(q => q.numero);
+    setAvisoImagens(
+      `${automatico ? 'Imagens do banco colocadas automaticamente' : 'Sugestões do banco aplicadas'} nas questões ${colocadas.join(', ')}. ` +
+      'Confira se cada imagem combina com a pergunta; se não combinar, clique em "Banco de imagens" na questão e escolha outra.' +
+      (emBranco.length ? ` Sem imagem parecida no banco (questões ${emBranco.join(', ')}): escolha no "Banco de imagens" ou use o Gemini.` : '')
+    );
     setErroImagens(erros.join(' · '));
   }
 
@@ -890,15 +904,16 @@ export function IAIdeiasAvaliacoes() {
               arraste o arquivo para a caixa ou clique nela e aperte Ctrl+V. O app ajusta o tamanho sem cortar a imagem.
             </p>
             <button
-              onClick={aplicarSugestoesDoBanco}
+              onClick={() => aplicarSugestoesDoBanco()}
               disabled={progressoImagens !== null || questoes.every(q => q.imagemDataUrl || !sugerirItemDoBanco(q, preferePictograma))}
               className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-semibold disabled:opacity-50"
             >
               <Images className="w-4 h-4" /> Aplicar sugestões do banco ({questoes.filter(q => !q.imagemDataUrl && sugerirItemDoBanco(q, preferePictograma)).length} questões)
             </button>
             <p className="text-[11px] text-on-surface-variant">
-              Para cada questão sem imagem, a IA sugeriu o tipo (diagrama, pictograma, foto ou cena de ação) e o app escolhe a imagem do banco que combina com o texto.
-              Cenas de ação ficam para o Gemini. Você confere e troca o que quiser.
+              Ao gerar a avaliação, o app já procura no banco a imagem que combina com cada questão (a IA sugere o tipo: diagrama, pictograma, foto ou cena de ação).
+              Se alguma não combinar, clique em <b>Banco de imagens</b> na questão e escolha outra. Este botão refaz a busca nas questões que ficaram sem imagem.
+              Cenas de ação ficam para o Gemini.
             </p>
             <label className={`w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-surface-variant text-on-surface-variant text-xs font-semibold cursor-pointer ${progressoImagens !== null ? 'opacity-60 pointer-events-none' : ''}`}>
               <Upload className="w-4 h-4" /> Enviar todas as imagens de uma vez
