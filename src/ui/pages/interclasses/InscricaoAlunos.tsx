@@ -537,7 +537,7 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
         </div>
 
         <form onSubmit={usaListaOficial ? handleSubmitLote : handleSubmit} className="flex flex-col gap-3">
-          {modoPublico || editingId ? (
+          {editingId ? (
             <div>
               <label className={cn('font-semibold text-gray-500 mb-1 block', modoPublico ? 'text-sm' : 'text-xs')}>Turma/Série *</label>
               <select
@@ -555,7 +555,7 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
             </div>
           ) : (
             <div>
-              <label className="text-xs font-semibold text-gray-500 mb-1 block">
+              <label className={cn('font-semibold text-gray-500 mb-1 block', modoPublico ? 'text-sm' : 'text-xs')}>
                 Turma(s)/Série(s) * {turmasSelecionadas.length > 0 && `(${turmasSelecionadas.length} selecionada${turmasSelecionadas.length !== 1 ? 's' : ''})`}
               </label>
               <div className="flex flex-wrap gap-1.5">
@@ -567,7 +567,8 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
                       type="button"
                       onClick={() => toggleTurma(t)}
                       className={cn(
-                        'px-3 py-1.5 rounded-full text-sm font-semibold border transition',
+                        'rounded-full font-semibold border transition',
+                        modoPublico ? 'px-4 py-2 text-base' : 'px-3 py-1.5 text-sm',
                         marcada ? 'bg-primary text-white border-primary' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-primary'
                       )}
                     >
