@@ -289,8 +289,11 @@ export function IAIdeiasAvaliacoes() {
         supabase.from('alunos').select('id, nome, numero_chamada, turma_id').eq('turma_id', turmaId).order('numero_chamada'),
         supabase.from('alunos_especiais').select('nome, cid_diagnostico').eq('turma_id', turmaId),
       ]);
+      // Pedido de atendimento Indeferido = não conta como AEE pra fins de prova
+      // adaptada (a lista geral de Alunos Especiais continua mostrando todos).
+      const elegiveis = (especiais || []).filter((e: any) => !/indefer/i.test(e.cid_diagnostico || ''));
       const mapaCid = new Map<string, string | null>(
-        (especiais || []).map((e: any) => [e.nome?.toLowerCase().trim(), e.cid_diagnostico ?? null])
+        elegiveis.map((e: any) => [e.nome?.toLowerCase().trim(), e.cid_diagnostico ?? null])
       );
       const soAEE = (todosAlunos || []).filter((a: any) => mapaCid.has(a.nome.toLowerCase().trim()));
       setListaAlunos(soAEE);
