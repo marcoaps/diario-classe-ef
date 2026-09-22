@@ -11,7 +11,7 @@ import {
   type Modalidade, type InscricaoInterclasses, type EquipeInterclasses,
 } from '../../../domain/interclasses';
 import {
-  ADAPTERS, REGRAS_PADRAO, FORMATOS, gerarJogosIniciais, aplicarResultado, aplicarResultadoDuplo, calcSt, genElim, genSwiss,
+  ADAPTERS, REGRAS_PADRAO, FORMATOS, gerarJogosIniciais, aplicarResultado, aplicarResultadoDuplo, calcSt, genElim, genSwiss, contarDerrotas,
   type Jogo, type Resultado, type Standing, type ResultadoAdapter,
 } from '../../../domain/interclassesCampeonato';
 
@@ -33,6 +33,10 @@ export function linhaParaJogo(row: JogoInterclasses): Jogo {
     vencedor: row.vencedor, resultado: row.resultado as Resultado | null,
     rodada: row.rodada, fase: row.fase, grupo: row.grupo_nome,
     bracketIdx: row.bracket_idx ?? undefined, isBye: row.is_bye,
+    chave: row.chave ?? undefined,
+    destinoVencedor: row.destino_vencedor ?? undefined,
+    destinoPerdedor: row.destino_perdedor ?? undefined,
+    ladoAusenteFixo: row.lado_ausente_fixo ?? undefined,
   };
 }
 
@@ -41,6 +45,13 @@ function jogoParaLinha(j: Jogo): Omit<JogoInterclasses, 'id' | 'campeonato_id' |
     equipe_a: j.equipeA, equipe_b: j.equipeB, grupo_nome: j.grupo, fase: j.fase, rodada: j.rodada,
     bracket_idx: j.bracketIdx ?? null, is_bye: !!j.isBye, jogado: j.jogado, vencedor: j.vencedor,
     resultado: j.resultado,
+    chave: j.chave ?? null,
+    // destino_vencedor/destino_perdedor ainda apontam pro id PROVISÓRIO do
+    // jogo (gerado em memória, antes de existir no banco) — precisam ser
+    // reescritos com os ids de verdade depois do insert, ver iniciarCampeonato.
+    destino_vencedor: j.destinoVencedor ?? null,
+    destino_perdedor: j.destinoPerdedor ?? null,
+    lado_ausente_fixo: j.ladoAusenteFixo ?? null,
   };
 }
 
@@ -102,7 +113,23 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
     try {
       const camp = await criarCampeonato({ edicao: EDICAO, modalidade, categoria: categoriaAtiva, formato });
       const { jogos: iniciais } = gerarJogosIniciais(equipesProntas, formato);
-      await criarJogos(camp.id, iniciais.map(jogoParaLinha));
+      const inseridos = await criarJogos(camp.id, iniciais.map(jogoParaLinha));
+
+      // Mata-Mata Duplo: destinoVencedor/destinoPerdedor foram gerados
+      // referenciando os ids PROVISÓRIOS dos jogos (uid() em memória, antes
+      // de existir no banco) — o insert acima criou ids de verdade (na mesma
+      // ordem de `iniciais`), então reescreve as referências pros ids reais.
+      if (formato === 'double_elim') {
+        const idReal = new Map(iniciais.map((j, i) => [j.id, inseridos[i].id]));
+        for (let i = 0; i < iniciais.length; i++) {
+          const original = iniciais[i];
+          const patch: Partial<JogoInterclasses> = {};
+          if (original.destinoVencedor) patch.destino_vencedor = { jogoId: idReal.get(original.destinoVencedor.jogoId)!, slot: original.destinoVencedor.slot };
+          if (original.destinoPerdedor) patch.destino_perdedor = { jogoId: idReal.get(original.destinoPerdedor.jogoId)!, slot: original.destinoPerdedor.slot };
+          if (Object.keys(patch).length > 0) await atualizarJogo(inseridos[i].id, patch);
+        }
+      }
+
       await carregar();
     } catch (e: any) {
       if (e?.code === '23505') {
@@ -135,14 +162,29 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
     const jogoAtualizado = r.jogos.find(j => j.id === jogoId)!;
     await salvarResultadoJogo(jogoId, { jogado: true, vencedor: jogoAtualizado.vencedor, resultado: jogoAtualizado.resultado as any });
 
-    // Persiste qualquer outro jogo cujas equipes mudaram (avanço de
-    // vencedor/perdedor) — no mata-mata simples é só o próximo confronto, no
-    // duplo pode ser até dois (chave de vencedores + chave de perdedores).
+    // Persiste qualquer outro jogo que mudou (avanço de vencedor/perdedor) —
+    // no mata-mata simples é só o próximo confronto ganhando uma equipe; no
+    // duplo pode ser até dois (chave de vencedores + de perdedores) e, quando
+    // um lado é permanentemente ausente (ladoAusenteFixo), o outro jogo já
+    // "se joga sozinho" em cascata (entregarECascatear) sem ninguém lançar
+    // placar — precisa persistir jogado/vencedor/is_bye também, não só as equipes.
     for (const jNovo of r.jogos) {
       if (jNovo.id === jogoId) continue;
       const jAntigo = jogos.find(x => x.id === jNovo.id);
-      if (jAntigo && (jAntigo.equipeA !== jNovo.equipeA || jAntigo.equipeB !== jNovo.equipeB)) {
-        await atualizarJogo(jNovo.id, { equipe_a: jNovo.equipeA, equipe_b: jNovo.equipeB });
+      if (!jAntigo) {
+        // Jogo que não existia antes desse placar — só acontece no Mata-Mata
+        // Duplo quando o time da chave de perdedores vence a Grande Final e
+        // isso cria a partida de "reset" (decisão) entre os mesmos dois times.
+        await criarJogos(campeonato!.id, [jogoParaLinha(jNovo)]);
+        continue;
+      }
+      const mudouEquipes = jAntigo.equipeA !== jNovo.equipeA || jAntigo.equipeB !== jNovo.equipeB;
+      const mudouResultado = jAntigo.jogado !== jNovo.jogado || jAntigo.vencedor !== jNovo.vencedor || !!jAntigo.isBye !== !!jNovo.isBye;
+      if (mudouEquipes || mudouResultado) {
+        await atualizarJogo(jNovo.id, {
+          equipe_a: jNovo.equipeA, equipe_b: jNovo.equipeB,
+          jogado: jNovo.jogado, vencedor: jNovo.vencedor, is_bye: !!jNovo.isBye,
+        });
       }
     }
 
@@ -268,6 +310,7 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
 
               {aba === 'jogos' && (
                 <div className="flex flex-col gap-4">
+                  {campeonato.formato === 'double_elim' && <SituacaoEquipesDuplo equipes={equipesDoCampeonato} jogos={jogos} />}
                   {gruposCompletos && (
                     <button onClick={iniciarMataMataDosGrupos} className="w-full py-3 rounded-xl bg-primary text-white text-sm font-bold hover:bg-primary-dark transition-colors">
                       🏆 Iniciar mata-mata (classificados dos grupos)
@@ -354,6 +397,35 @@ function SetupCampeonato({ equipesProntas, equipesIncompletas, onIniciar, criand
   );
 }
 
+// Mata-Mata Duplo: mostra quantas derrotas cada equipe já tem (2 = fora) —
+// sem isso não dá pra saber, só olhando a lista de jogos, se um time ainda
+// tem chance ou já está eliminado.
+function SituacaoEquipesDuplo({ equipes, jogos }: { equipes: string[]; jogos: Jogo[] }) {
+  if (equipes.length === 0) return null;
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+      <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2.5">Situação das equipes</h4>
+      <div className="flex flex-col gap-1.5">
+        {equipes.map(eq => {
+          const derrotas = contarDerrotas(eq, jogos);
+          const eliminada = derrotas >= 2;
+          return (
+            <div key={eq} className={cn('flex items-center justify-between px-3 py-2 rounded-xl', eliminada ? 'bg-gray-50' : 'bg-secondary-container/20')}>
+              <span className={cn('flex items-center gap-2 text-sm font-medium', eliminada ? 'text-gray-400 line-through' : 'text-on-surface')}>
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: corDaEquipe(eq) }} />
+                {eq}
+              </span>
+              <span className={cn('text-xs font-bold whitespace-nowrap', eliminada ? 'text-error' : derrotas === 1 ? 'text-amber-600' : 'text-on-secondary-container')}>
+                {eliminada ? '❌ Eliminado, sem mais chances' : derrotas === 1 ? '⚠️ 1 derrota — só pode perder mais 1' : '✅ Invicto'}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function ListaJogos({ titulo, jogos, adapter, onLancar, mostrarGrupo, somenteLeitura, grande, colunas = 2 }: {
   titulo: string; jogos: Jogo[]; adapter: ResultadoAdapter; onLancar?: (id: string, r: Resultado) => void; mostrarGrupo?: boolean; somenteLeitura?: boolean; grande?: boolean; colunas?: 1 | 2;
 }) {
@@ -374,9 +446,15 @@ export function CardJogo({ jogo, adapter, onLancar, compacto, mostrarGrupo = tru
   const [editando, setEditando] = useState(false);
   const [a, setA] = useState(jogo.resultado ? String(adapter.valorA(jogo.resultado)) : '');
   const [b, setB] = useState(jogo.resultado ? String(adapter.valorB(jogo.resultado)) : '');
+  const [erro, setErro] = useState<string | null>(null);
   const ehVencedorOnly = adapter.labelA === '';
   const vencedorA = jogo.jogado && !!jogo.vencedor && jogo.vencedor === jogo.equipeA;
   const vencedorB = jogo.jogado && !!jogo.vencedor && jogo.vencedor === jogo.equipeB;
+  // Fora de liga/grupo/suíço é jogo eliminatório (mata-mata simples ou duplo)
+  // — precisa sempre de um vencedor pra avançar a chave, então não aceita
+  // empate como resultado final (o professor decide no desempate/pênaltis
+  // e lança o placar já refletindo quem passou).
+  const eliminatorio = !FASES_LIGA.has(jogo.fase);
 
   function confirmar(vencedorForcado?: 'A' | 'B') {
     if (!onLancar) return;
@@ -386,8 +464,13 @@ export function CardJogo({ jogo, adapter, onLancar, compacto, mostrarGrupo = tru
     } else {
       const na = parseInt(a, 10), nb = parseInt(b, 10);
       if (isNaN(na) || isNaN(nb) || na < 0 || nb < 0) return;
+      if (eliminatorio && na === nb) {
+        setErro(`Esse jogo é eliminatório — não pode terminar empatado. ${adapter.mensagemDesempate}`);
+        return;
+      }
       resultado = adapter.criarResultado(na, nb);
     }
+    setErro(null);
     onLancar(jogo.id, resultado);
     setEditando(false);
   }
@@ -409,6 +492,11 @@ export function CardJogo({ jogo, adapter, onLancar, compacto, mostrarGrupo = tru
           {!FASES_LIGA.has(jogo.fase) && (
             <span className={cn('font-semibold text-gray-400 uppercase tracking-wider', grande ? 'text-xs' : 'text-[10px]')}>{jogo.fase}</span>
           )}
+        </div>
+      )}
+      {jogo.fase === 'Grande Final (decisão)' && !jogo.jogado && (
+        <div className={cn('text-center font-bold text-error mb-2', grande ? 'text-xs' : 'text-[10px]')}>
+          🔥 DECISÃO — quem vencer é o campeão
         </div>
       )}
       <div className={cn('flex items-center justify-center text-center flex-wrap', grande ? 'gap-2.5 mb-3' : 'gap-1.5 mb-2.5')}>
@@ -446,18 +534,18 @@ export function CardJogo({ jogo, adapter, onLancar, compacto, mostrarGrupo = tru
       {!somenteLeitura && editando && jogo.equipeA && jogo.equipeB && (
         <ModalPlacar
           equipeA={jogo.equipeA} equipeB={jogo.equipeB} adapter={adapter}
-          a={a} b={b} setA={setA} setB={setB} ehVencedorOnly={ehVencedorOnly}
-          onConfirmar={confirmar} onFechar={() => setEditando(false)}
+          a={a} b={b} setA={v => { setA(v); setErro(null); }} setB={v => { setB(v); setErro(null); }} ehVencedorOnly={ehVencedorOnly}
+          erro={erro} onConfirmar={confirmar} onFechar={() => { setEditando(false); setErro(null); }}
         />
       )}
     </div>
   );
 }
 
-function ModalPlacar({ equipeA, equipeB, adapter, a, b, setA, setB, ehVencedorOnly, onConfirmar, onFechar }: {
+function ModalPlacar({ equipeA, equipeB, adapter, a, b, setA, setB, ehVencedorOnly, erro, onConfirmar, onFechar }: {
   equipeA: string; equipeB: string; adapter: ResultadoAdapter;
   a: string; b: string; setA: (v: string) => void; setB: (v: string) => void;
-  ehVencedorOnly: boolean; onConfirmar: (v?: 'A' | 'B') => void; onFechar: () => void;
+  ehVencedorOnly: boolean; erro?: string | null; onConfirmar: (v?: 'A' | 'B') => void; onFechar: () => void;
 }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onFechar}>
@@ -482,6 +570,7 @@ function ModalPlacar({ equipeA, equipeB, adapter, a, b, setA, setB, ehVencedorOn
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-center text-lg font-bold outline-none focus:border-primary" />
               </div>
             </div>
+            {erro && <p className="text-[11px] text-error mb-3">⚠️ {erro}</p>}
             <button onClick={() => onConfirmar()} className="w-full py-2.5 rounded-xl bg-primary text-white text-sm font-bold">Salvar placar</button>
           </>
         )}

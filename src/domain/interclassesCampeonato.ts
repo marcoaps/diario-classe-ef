@@ -64,6 +64,10 @@ export interface ResultadoAdapter {
   criarResultado(valorA: number, valorB: number): Resultado;
   labelA: string;
   labelB: string;
+  // Mostrado quando o professor tenta salvar um empate num jogo eliminatório
+  // (não pode — precisa de vencedor pra avançar a chave). Cada modalidade
+  // resolve o empate à sua própria maneira em quadra antes de lançar o placar.
+  mensagemDesempate: string;
 }
 
 export const ADAPTER_GOLS: ResultadoAdapter = {
@@ -73,6 +77,7 @@ export const ADAPTER_GOLS: ResultadoAdapter = {
   formatarPlacar: (r) => { const x = r as ResultadoGols; return `${x.golsA} – ${x.golsB}`; },
   criarResultado: (a, b) => ({ tipo: 'gols', golsA: a, golsB: b }),
   labelA: 'Gols', labelB: 'Gols',
+  mensagemDesempate: 'Jogue a prorrogação/pênaltis em quadra e lance o placar já com um vencedor.',
 };
 
 export const ADAPTER_SETS: ResultadoAdapter = {
@@ -82,6 +87,7 @@ export const ADAPTER_SETS: ResultadoAdapter = {
   formatarPlacar: (r) => { const x = r as ResultadoSets; return `${x.setsA} sets – ${x.setsB} sets`; },
   criarResultado: (a, b) => ({ tipo: 'sets', setsA: a, setsB: b }),
   labelA: 'Sets', labelB: 'Sets',
+  mensagemDesempate: 'Jogue um set decisivo em quadra e lance o total de sets já com um vencedor (ex.: 2 × 1).',
 };
 
 export const ADAPTER_VENCEDOR: ResultadoAdapter = {
@@ -91,6 +97,7 @@ export const ADAPTER_VENCEDOR: ResultadoAdapter = {
   formatarPlacar: (r) => (r as ResultadoVencedor).vencedor === 'A' ? 'Vitória — Equipe A' : 'Vitória — Equipe B',
   criarResultado: (a) => ({ tipo: 'vencedor', vencedor: a >= 1 ? 'A' : 'B' }),
   labelA: '', labelB: '',
+  mensagemDesempate: '', // nunca empata -- o placar já é só "quem venceu"
 };
 
 export const ADAPTERS: Record<Modalidade, ResultadoAdapter> = {
@@ -315,6 +322,15 @@ export function genDoubleElim(equipes: string[]): Jogo[] {
   return todos.filter(j => !mortos.has(j.id));
 }
 
+// Mata-mata duplo: nº de derrotas reais (não conta bye) de uma equipe em
+// toda a chave (W + L) — com 2 chega a estar eliminada. Serve pra mostrar
+// a situação de cada equipe (invicta / 1 derrota / eliminada) na tela.
+export function contarDerrotas(equipe: string, jogos: Jogo[]): number {
+  return jogos.filter(j =>
+    j.jogado && !j.isBye && j.vencedor && j.vencedor !== equipe && (j.equipeA === equipe || j.equipeB === equipe)
+  ).length;
+}
+
 export function genGroups(equipes: string[]): { grupos: Grupo[]; jogos: Jogo[] } {
   // Grupos pequenos demais (ex: 2 times, 1 jogo só) fazem a fase de grupos
   // parecer inútil — só divide em mais de um grupo quando dá pra manter
@@ -485,9 +501,27 @@ export function aplicarResultadoDuplo(
     entregarECascatear(js, atual.destinoPerdedor.jogoId, atual.destinoPerdedor.slot, nomePerdedor);
   }
 
-  const gf = js.find(x => x.chave === 'GF');
-  if (gf?.jogado && gf.vencedor) {
-    return { jogos: js, campeao: gf.vencedor };
+  // Grande Final: por construção (genDoubleElim), o lado A do PRIMEIRO jogo
+  // da Grande Final é sempre quem veio invicto da chave de vencedores, e o
+  // lado B é sempre quem veio com 1 derrota da chave de perdedores. Se o
+  // lado A vencer, ele continua invicto e o adversário chega a 2 derrotas —
+  // acabou. Mas se o lado B vencer, os dois ficam empatados em 1 derrota
+  // (o lado A perdeu pela 1ª vez agora) — no mata-mata duplo isso exige uma
+  // segunda partida decisiva ("reset") entre os mesmos dois times.
+  const gfJogos = js.filter(x => x.chave === 'GF').sort((x, y) => x.rodada - y.rodada);
+  const gfAtual = gfJogos[gfJogos.length - 1];
+  if (gfAtual?.jogado && gfAtual.vencedor) {
+    const primeiraFinal = gfJogos.length === 1;
+    const venceuQuemVeioDaChaveL = gfAtual.vencedor === gfAtual.equipeB;
+    if (primeiraFinal && venceuQuemVeioDaChaveL) {
+      js.push({
+        id: `de_gf_reset_${uid()}`, equipeA: gfAtual.equipeA, equipeB: gfAtual.equipeB,
+        jogado: false, vencedor: null, resultado: null,
+        rodada: gfAtual.rodada + 1, fase: 'Grande Final (decisão)', grupo: null, chave: 'GF',
+      });
+      return { jogos: js };
+    }
+    return { jogos: js, campeao: gfAtual.vencedor };
   }
   return { jogos: js };
 }

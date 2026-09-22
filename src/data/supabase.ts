@@ -628,6 +628,13 @@ export interface JogoInterclasses {
   jogado: boolean;
   vencedor: string | null;
   resultado: Record<string, unknown> | null;
+  // Só usados no Mata-Mata Duplo — roteamento pra chave de vencedores (W),
+  // de perdedores (L) e Grande Final (GF). Ver genDoubleElim/aplicarResultadoDuplo
+  // em src/domain/interclassesCampeonato.ts.
+  chave: 'W' | 'L' | 'GF' | null;
+  destino_vencedor: { jogoId: string; slot: 'A' | 'B' } | null;
+  destino_perdedor: { jogoId: string; slot: 'A' | 'B' } | null;
+  lado_ausente_fixo: 'A' | 'B' | null;
   criado_em: string;
   atualizado_em: string;
 }

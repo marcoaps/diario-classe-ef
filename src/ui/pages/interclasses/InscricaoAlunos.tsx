@@ -39,14 +39,15 @@ function formatarDataBR(d: Date) {
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-function LinhaAlunoSelecao({ aluno, marcado, valorCamisa, onToggle, onCamisaChange, grande }: {
+function LinhaAlunoSelecao({ aluno, marcado, valorCamisa, onToggle, onCamisaChange, grande, mostrarTurma }: {
   aluno: AlunoOficial; marcado: boolean; valorCamisa?: string;
-  onToggle: () => void; onCamisaChange: (v: string) => void; grande?: boolean;
+  onToggle: () => void; onCamisaChange: (v: string) => void; grande?: boolean; mostrarTurma?: boolean;
 }) {
   return (
     <label className={cn('flex items-center gap-2 cursor-pointer hover:bg-gray-50', marcado && 'bg-primary/5', grande ? 'px-4 py-3.5' : 'px-3 py-2')}>
       <input type="checkbox" checked={marcado} onChange={onToggle} className={cn('accent-primary flex-shrink-0', grande ? 'w-6 h-6' : 'w-4 h-4')} />
       <span className={cn('flex-1 text-on-surface truncate', grande ? 'text-lg' : 'text-sm')}>{aluno.nome}</span>
+      {mostrarTurma && <span className={cn('text-primary/70 font-mono font-semibold flex-shrink-0', grande ? 'text-sm' : 'text-[11px]')}>{aluno.turma_id}</span>}
       {aluno.numero_chamada != null && <span className={cn('text-gray-400 flex-shrink-0', grande ? 'text-sm' : 'text-xs')}>chamada #{aluno.numero_chamada}</span>}
       {marcado && (
         <input
@@ -66,6 +67,10 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
   const [form, setForm] = useState(FORM_VAZIO);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [alunoIdVinculado, setAlunoIdVinculado] = useState<string | null>(null);
+  // Uma ou mais turmas marcadas de uma vez (professor combina salas, ex.:
+  // 6ºA + 6ºB, quando a regra de elegibilidade — mais de uma nota vermelha
+  // não participa — deixa alguma turma sozinha sem o mínimo de jogadores).
+  const [turmasSelecionadas, setTurmasSelecionadas] = useState<string[]>([]);
   const [alunosDaTurma, setAlunosDaTurma] = useState<AlunoOficial[]>([]);
   // Seleção múltipla — aluno.id -> nº de camisa (texto) — usada quando a turma
   // tem alunos cadastrados oficialmente (permite marcar vários de uma vez em
@@ -75,6 +80,11 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
   const [erro, setErro] = useState<string | null>(null);
   const [sucesso, setSucesso] = useState<string | null>(null);
   const [excluindoId, setExcluindoId] = useState<string | null>(null);
+  // Marcados na tabela de "Alunos Inscritos" pra excluir vários de uma vez
+  // (ex.: ajustar um time que passou do máximo de jogadores) — não confundir
+  // com `selecionados`, que é a lista de seleção do formulário de inscrição.
+  const [selecionadosLote, setSelecionadosLote] = useState<Set<string>>(new Set());
+  const [excluindoLote, setExcluindoLote] = useState(false);
 
   const [busca, setBusca] = useState('');
   const [filtroTurma, setFiltroTurma] = useState('TODAS');
@@ -87,26 +97,38 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
 
   const formRef = useRef<HTMLDivElement>(null);
 
-  // Alunos já cadastrados oficialmente na turma selecionada — usados para a
-  // lista de seleção múltipla (ou, se a turma não tiver cadastro oficial,
-  // ficam vazios e cai no modo de digitação manual).
+  // Alunos já cadastrados oficialmente nas turmas selecionadas (uma ou mais)
+  // — usados para a lista de seleção múltipla (ou, se nenhuma turma marcada
+  // tiver cadastro oficial, ficam vazios e cai no modo de digitação manual).
   useEffect(() => {
-    if (!form.turmaId) { setAlunosDaTurma([]); return; }
+    if (editingId || turmasSelecionadas.length === 0) { setAlunosDaTurma([]); return; }
     let mounted = true;
-    buscarAlunos(form.turmaId).then(data => {
-      if (mounted) setAlunosDaTurma((data || []) as AlunoOficial[]);
+    Promise.all(turmasSelecionadas.map(t => buscarAlunos(t))).then(resultados => {
+      if (mounted) setAlunosDaTurma(resultados.flat() as AlunoOficial[]);
     });
     return () => { mounted = false; };
-  }, [form.turmaId]);
+  }, [turmasSelecionadas, editingId]);
 
-  // A cada troca de turma, a seleção múltipla anterior não faz mais sentido.
-  useEffect(() => { setSelecionados({}); }, [form.turmaId]);
+  // A cada troca nas turmas marcadas, a seleção múltipla anterior não faz mais sentido.
+  useEffect(() => { setSelecionados({}); }, [turmasSelecionadas]);
+
+  // Cadastro manual (sem lista oficial) continua exigindo uma única turma
+  // por aluno digitado — mantém form.turmaId sincronizado só quando dá pra
+  // saber qual é (exatamente uma turma marcada) e fora do modo de edição.
+  useEffect(() => {
+    if (editingId) return;
+    setForm(f => ({ ...f, turmaId: turmasSelecionadas.length === 1 ? turmasSelecionadas[0] : '' }));
+  }, [turmasSelecionadas, editingId]);
 
   const usaListaOficial = !editingId && alunosDaTurma.length > 0;
 
   function handleTurmaChange(turmaId: string) {
     setForm(f => ({ ...f, turmaId, nomeCompleto: '', numeroChamada: '' }));
     setAlunoIdVinculado(null);
+  }
+
+  function toggleTurma(turmaId: string) {
+    setTurmasSelecionadas(prev => prev.includes(turmaId) ? prev.filter(t => t !== turmaId) : [...prev, turmaId]);
   }
 
   function selecionarTimeSugestao(nome: string) {
@@ -127,6 +149,7 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
   function iniciarEdicao(insc: InscricaoInterclasses) {
     setEditingId(insc.id);
     setAlunoIdVinculado(insc.aluno_id);
+    setTurmasSelecionadas([insc.turma_id]);
     setForm({
       nomeCompleto: insc.nome_completo,
       turmaId: insc.turma_id,
@@ -307,6 +330,19 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
       validos.push({ aluno, camisa });
     }
 
+    // Trava do máximo de jogadores por time — sem isso, marcar "todos" numa
+    // seleção com várias turmas combinadas cria um time gigante (ex.: 17-24
+    // jogadoras) em vez dos ~10 de um time de verdade. Cabe o que der pra
+    // caber e o resto vira aviso (nada é perdido — o professor cria outro
+    // time com um nome diferente pro restante).
+    const timeNorm = nomeTime.trim().toLowerCase();
+    const jogadoresNoTimeAtual = inscricoes.filter(i => i.nome_time.trim().toLowerCase() === timeNorm).length;
+    const vagasRestantes = Math.max(0, MAXIMO_JOGADORES_TIME - jogadoresNoTimeAtual);
+    const cabem = validos.slice(0, vagasRestantes);
+    const naoCoube = validos.slice(vagasRestantes);
+    naoCoube.forEach(({ aluno }) => erros.push(`${aluno.nome}: não coube no time (máximo ${MAXIMO_JOGADORES_TIME} jogadores) — crie outro time pro restante`));
+    validos.length = 0; validos.push(...cabem);
+
     if (validos.length === 0) { setErro(erros.join(' | ') || 'Nenhum aluno válido para inscrever.'); return; }
 
     setSalvando(true);
@@ -316,12 +352,12 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
           edicao,
           aluno_id: aluno.id,
           nome_completo: aluno.nome,
-          turma_id: form.turmaId,
+          turma_id: aluno.turma_id,
           numero_chamada: aluno.numero_chamada!,
           numero_camisa: camisa,
           nome_time: nomeTime,
           modalidade,
-          categoria: categoriaFromTurma(form.turmaId),
+          categoria: categoriaFromTurma(aluno.turma_id),
           genero: aluno.sexo,
         });
       }
@@ -348,6 +384,34 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
       alert('Erro ao excluir a inscrição. Tente novamente.');
     } finally {
       setExcluindoId(null);
+    }
+  }
+
+  function toggleSelecionadoLote(id: string) {
+    setSelecionadosLote(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  // Ajusta um time que passou do máximo (ou remove quem entrou errado) sem
+  // precisar excluir aluno por aluno — marca vários na tabela filtrada e
+  // apaga tudo de uma vez, com uma única confirmação.
+  async function excluirSelecionadosLote() {
+    const ids = listaFiltrada.filter(i => selecionadosLote.has(i.id)).map(i => i.id);
+    if (ids.length === 0) return;
+    if (!window.confirm(`Excluir ${ids.length} inscrição(ões) selecionada(s)? Essa ação não pode ser desfeita.`)) return;
+    setExcluindoLote(true);
+    try {
+      for (const id of ids) await excluirInscricaoInterclasses(id);
+      setSelecionadosLote(new Set());
+      if (editingId && ids.includes(editingId)) limparFormulario();
+      await onRefetch();
+    } catch (e) {
+      alert('Erro ao excluir as inscrições selecionadas. Tente novamente.');
+    } finally {
+      setExcluindoLote(false);
     }
   }
 
@@ -472,21 +536,54 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
         </div>
 
         <form onSubmit={usaListaOficial ? handleSubmitLote : handleSubmit} className="flex flex-col gap-3">
-          <div>
-            <label className={cn('font-semibold text-gray-500 mb-1 block', modoPublico ? 'text-sm' : 'text-xs')}>Turma/Série *</label>
-            <select
-              value={form.turmaId}
-              onChange={e => handleTurmaChange(e.target.value)}
-              required
-              className={cn('w-full bg-gray-50 border border-gray-200 rounded-xl text-on-surface outline-none focus:border-primary', modoPublico ? 'px-4 py-3.5 text-lg' : 'px-3 py-2.5 text-sm')}
-            >
-              <option value="" disabled>Selecione a turma</option>
-              {turmas.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-            {turmas.length === 0 && (
-              <p className="text-[11px] text-gray-400 mt-1">Nenhuma turma encontrada no cadastro de alunos.</p>
-            )}
-          </div>
+          {modoPublico || editingId ? (
+            <div>
+              <label className={cn('font-semibold text-gray-500 mb-1 block', modoPublico ? 'text-sm' : 'text-xs')}>Turma/Série *</label>
+              <select
+                value={form.turmaId}
+                onChange={e => handleTurmaChange(e.target.value)}
+                required
+                className={cn('w-full bg-gray-50 border border-gray-200 rounded-xl text-on-surface outline-none focus:border-primary', modoPublico ? 'px-4 py-3.5 text-lg' : 'px-3 py-2.5 text-sm')}
+              >
+                <option value="" disabled>Selecione a turma</option>
+                {turmas.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+              {turmas.length === 0 && (
+                <p className="text-[11px] text-gray-400 mt-1">Nenhuma turma encontrada no cadastro de alunos.</p>
+              )}
+            </div>
+          ) : (
+            <div>
+              <label className="text-xs font-semibold text-gray-500 mb-1 block">
+                Turma(s)/Série(s) * {turmasSelecionadas.length > 0 && `(${turmasSelecionadas.length} selecionada${turmasSelecionadas.length !== 1 ? 's' : ''})`}
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {turmas.map(t => {
+                  const marcada = turmasSelecionadas.includes(t);
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => toggleTurma(t)}
+                      className={cn(
+                        'px-3 py-1.5 rounded-full text-sm font-semibold border transition',
+                        marcada ? 'bg-primary text-white border-primary' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-primary'
+                      )}
+                    >
+                      {t}
+                    </button>
+                  );
+                })}
+              </div>
+              {turmas.length === 0 ? (
+                <p className="text-[11px] text-gray-400 mt-1">Nenhuma turma encontrada no cadastro de alunos.</p>
+              ) : (
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Marque mais de uma turma pra juntar salas na hora de formar o time (ex.: turmas A e B), quando a regra de elegibilidade — mais de uma nota vermelha não participa — deixa alguma turma sem o mínimo de jogadores.
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="relative">
             <label className={cn('font-semibold text-gray-500 mb-1 block', modoPublico ? 'text-sm' : 'text-xs')}>Nome do time *</label>
@@ -540,7 +637,7 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
                       </div>
                       <div className="divide-y divide-gray-50">
                         {alunosDoGrupo.map(a => (
-                          <LinhaAlunoSelecao key={a.id} aluno={a} marcado={a.id in selecionados} valorCamisa={selecionados[a.id]} grande={modoPublico}
+                          <LinhaAlunoSelecao key={a.id} aluno={a} marcado={a.id in selecionados} valorCamisa={selecionados[a.id]} grande={modoPublico} mostrarTurma={turmasSelecionadas.length > 1}
                             onToggle={() => toggleSelecionado(a)} onCamisaChange={v => setSelecionados(prev => ({ ...prev, [a.id]: v }))} />
                         ))}
                       </div>
@@ -557,7 +654,7 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
                     )}
                     <div className="divide-y divide-gray-200">
                       {alunosPorGenero.semGenero.map(a => (
-                        <LinhaAlunoSelecao key={a.id} aluno={a} marcado={a.id in selecionados} valorCamisa={selecionados[a.id]} grande={modoPublico}
+                        <LinhaAlunoSelecao key={a.id} aluno={a} marcado={a.id in selecionados} valorCamisa={selecionados[a.id]} grande={modoPublico} mostrarTurma={turmasSelecionadas.length > 1}
                           onToggle={() => toggleSelecionado(a)} onCamisaChange={v => setSelecionados(prev => ({ ...prev, [a.id]: v }))} />
                       ))}
                     </div>
@@ -570,6 +667,11 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
             </div>
           ) : (
             <>
+              {!editingId && turmasSelecionadas.length > 1 && (
+                <p className="text-[11px] text-amber-600 -mt-1">
+                  Nenhuma das turmas marcadas tem lista oficial de alunos. Pra digitar o nome na mão, marque só uma turma por vez.
+                </p>
+              )}
               <div>
                 <label className="text-xs font-semibold text-gray-500 mb-1 block">Nome completo do aluno *</label>
                 <input
@@ -706,6 +808,22 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
           )}
         </div>
 
+        {!modoPublico && selecionadosLote.size > 0 && (
+          <div className="flex items-center justify-between gap-2 bg-error-container/40 border border-error/20 rounded-xl px-3 py-2 mb-3">
+            <span className="text-xs font-medium text-on-surface">{selecionadosLote.size} selecionado{selecionadosLote.size !== 1 ? 's' : ''}</span>
+            <div className="flex items-center gap-3">
+              <button onClick={() => setSelecionadosLote(new Set())} className="text-xs text-gray-500 hover:text-on-surface">Limpar seleção</button>
+              <button
+                onClick={excluirSelecionadosLote}
+                disabled={excluindoLote}
+                className="flex items-center gap-1 text-xs text-error font-bold hover:underline disabled:opacity-40"
+              >
+                <Trash2 className="w-3 h-3" /> {excluindoLote ? 'Excluindo...' : 'Excluir selecionados'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="flex gap-2 items-center justify-center py-8 text-gray-500 text-sm">
             <Loader2 className="w-4 h-4 animate-spin" /> Carregando inscrições...
@@ -746,6 +864,20 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
             <table className="w-full text-xs min-w-[560px]">
               <thead>
                 <tr className="text-left text-gray-500 border-b border-gray-100">
+                  {!modoPublico && (
+                    <th className="py-2 px-1 w-6">
+                      <input
+                        type="checkbox"
+                        title="Marcar todos os filtrados"
+                        checked={listaFiltrada.length > 0 && listaFiltrada.every(i => selecionadosLote.has(i.id))}
+                        onChange={() => {
+                          const todosMarcados = listaFiltrada.every(i => selecionadosLote.has(i.id));
+                          setSelecionadosLote(todosMarcados ? new Set() : new Set(listaFiltrada.map(i => i.id)));
+                        }}
+                        className="accent-error w-3.5 h-3.5"
+                      />
+                    </th>
+                  )}
                   <th className="py-2 px-1 font-semibold">Nº</th>
                   <th className="py-2 px-1 font-semibold">Nome completo</th>
                   <th className="py-2 px-1 font-semibold">Turma</th>
@@ -758,6 +890,16 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
               <tbody>
                 {listaFiltrada.map((insc, i) => (
                   <tr key={insc.id} className="border-b border-gray-50 last:border-0">
+                    {!modoPublico && (
+                      <td className="py-2 px-1">
+                        <input
+                          type="checkbox"
+                          checked={selecionadosLote.has(insc.id)}
+                          onChange={() => toggleSelecionadoLote(insc.id)}
+                          className="accent-error w-3.5 h-3.5"
+                        />
+                      </td>
+                    )}
                     <td className="py-2 px-1 text-gray-400">{i + 1}</td>
                     <td className="py-2 px-1 font-medium text-on-surface whitespace-nowrap">{insc.nome_completo}</td>
                     <td className="py-2 px-1 text-gray-500 font-mono">{insc.turma_id}</td>

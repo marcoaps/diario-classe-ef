@@ -50,7 +50,7 @@ export function unirTurmas(turmasDoBanco: string[]): string[] {
 // esporte (ex: vôlei precisa de mais gente em quadra que futsal).
 export const MINIMO_JOGADORES_POR_MODALIDADE: Record<Modalidade, number> = {
   futsal: 5,
-  voleibol: 6,
+  voleibol: 8,
   handebol: 7,
   queimada: 10,
 };

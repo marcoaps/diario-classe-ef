@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Loader2, Pencil, Check, X } from 'lucide-react';
+import { Loader2, Pencil, Check, X, Trash2 } from 'lucide-react';
 import { agruparPorTime, MAXIMO_JOGADORES_TIME, mensagemMinimoNaoAtingido } from '../../../domain/interclasses';
 import type { InscricaoInterclasses } from '../../../domain/interclasses';
-import { renomearTimeInterclasses } from '../../../data/supabase';
+import { renomearTimeInterclasses, excluirInscricaoInterclasses } from '../../../data/supabase';
 
 interface Props {
   inscricoes: InscricaoInterclasses[];
@@ -17,10 +17,43 @@ export function Equipes({ inscricoes, loading, onRefetch }: Props) {
   const [renomeando, setRenomeando] = useState<string | null>(null);
   const [novoNome, setNovoNome] = useState('');
   const [salvando, setSalvando] = useState(false);
+  // Marcados pra exclusão em lote — usado pra ajustar o time ao tamanho
+  // exigido (mín. 8 / máx. 10) sem precisar ir até a aba "Inscrição de
+  // Alunos" e excluir um por um.
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const [excluindoLote, setExcluindoLote] = useState(false);
 
   function iniciarRenomear(nomeAtual: string) {
     setRenomeando(nomeAtual);
     setNovoNome(nomeAtual);
+  }
+
+  function toggleSelecionado(id: string) {
+    setSelecionados(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  async function excluirSelecionados(eq: { nomeTime: string; alunos: InscricaoInterclasses[] }) {
+    const alunosMarcados = eq.alunos.filter(a => selecionados.has(a.id));
+    if (alunosMarcados.length === 0) return;
+    if (!window.confirm(`Excluir ${alunosMarcados.length} aluno(s) selecionado(s) do time "${eq.nomeTime}"? Essa ação não pode ser desfeita.`)) return;
+    setExcluindoLote(true);
+    try {
+      for (const a of alunosMarcados) await excluirInscricaoInterclasses(a.id);
+      setSelecionados(prev => {
+        const next = new Set(prev);
+        alunosMarcados.forEach(a => next.delete(a.id));
+        return next;
+      });
+      await onRefetch();
+    } catch (e) {
+      alert('Erro ao excluir os alunos selecionados. Tente novamente.');
+    } finally {
+      setExcluindoLote(false);
+    }
   }
 
   async function confirmarRenomear(eq: { nomeTime: string; alunos: InscricaoInterclasses[] }) {
@@ -94,15 +127,33 @@ export function Equipes({ inscricoes, loading, onRefetch }: Props) {
           </div>
           <div className="flex flex-col gap-1">
             {eq.alunos.map((a, i) => (
-              <div key={a.id} className="flex items-center gap-2 text-sm">
+              <label key={a.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 -mx-1 px-1 rounded-lg">
+                <input
+                  type="checkbox"
+                  checked={selecionados.has(a.id)}
+                  onChange={() => toggleSelecionado(a.id)}
+                  className="accent-error w-4 h-4 flex-shrink-0"
+                />
                 <span className="text-gray-400 text-xs w-5 flex-shrink-0">{i + 1}.</span>
                 <span className="text-primary font-mono text-xs w-8 flex-shrink-0">#{a.numero_camisa}</span>
                 <span className="flex-1 text-on-surface truncate">{a.nome_completo}</span>
                 <span className="text-gray-400 text-xs flex-shrink-0">{a.turma_id}</span>
-              </div>
+              </label>
             ))}
           </div>
-          <div className="text-[11px] text-gray-400 mt-2">{eq.alunos.length} jogador{eq.alunos.length !== 1 ? 'es' : ''}</div>
+          <div className="flex items-center justify-between gap-2 mt-2">
+            <span className="text-[11px] text-gray-400">{eq.alunos.length} jogador{eq.alunos.length !== 1 ? 'es' : ''}</span>
+            {eq.alunos.some(a => selecionados.has(a.id)) && (
+              <button
+                onClick={() => excluirSelecionados(eq)}
+                disabled={excluindoLote}
+                className="flex items-center gap-1 text-[11px] text-error font-bold hover:underline disabled:opacity-40"
+              >
+                <Trash2 className="w-3 h-3" />
+                {excluindoLote ? 'Excluindo...' : `Excluir ${eq.alunos.filter(a => selecionados.has(a.id)).length} selecionado(s)`}
+              </button>
+            )}
+          </div>
           {!eq.completo && (
             <div className="mt-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-amber-700 text-[11px] font-medium">
               {mensagemMinimoNaoAtingido(eq.alunos[0]?.modalidade)}
