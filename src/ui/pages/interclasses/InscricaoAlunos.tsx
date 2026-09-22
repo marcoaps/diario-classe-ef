@@ -1,7 +1,10 @@
 import { useState, useEffect, useMemo, useRef, type FormEvent } from 'react';
-import { CheckCircle2, Loader2, Pencil, Trash2, X, Link2, Check, Calendar } from 'lucide-react';
+import { CheckCircle2, Loader2, Pencil, Trash2, X, Link2, Check, Calendar, ChevronDown, ChevronUp, Settings } from 'lucide-react';
 import { cn } from '../../AppLayout';
-import { buscarAlunos, criarInscricaoInterclasses, atualizarInscricaoInterclasses, excluirInscricaoInterclasses, limparInscricoesInterclasses } from '../../../data/supabase';
+import {
+  buscarAlunos, criarInscricaoInterclasses, atualizarInscricaoInterclasses, excluirInscricaoInterclasses, limparInscricoesInterclasses,
+  buscarConfigInterclasses, salvarConfigInterclasses, type ConfigInterclasses,
+} from '../../../data/supabase';
 import { agruparPorTime, categoriaFromTurma, MAXIMO_JOGADORES_TIME, minimoJogadoresPara, modalidadeConfig } from '../../../domain/interclasses';
 import { corDaEquipe } from './Confrontos';
 import type { InscricaoInterclasses, Modalidade } from '../../../domain/interclasses';
@@ -31,13 +34,24 @@ interface Props {
 const FORM_VAZIO = { nomeCompleto: '', turmaId: '', numeroChamada: '', numeroCamisa: '', nomeTime: '' };
 
 // Datas do regulamento (Mini Projeto-Regulamento — Jogos Interclasses 2026):
-// inscrições abertas de 11/09 até o Congresso Técnico, dia 02/10.
-const INSCRICOES_INICIO = new Date('2026-09-11T00:00:00');
-const INSCRICOES_FIM = new Date('2026-10-02T23:59:59');
-const DATA_CONGRESSO_TECNICO = '02/10/2026';
+// inscrições abertas de 11/09 até o Congresso Técnico, dia 02/10. Usadas só
+// como fallback antes da configuração carregar do banco (ou se a migração
+// sql/interclasses_configuracoes.sql ainda não tiver rodado) — o professor
+// edita o prazo de verdade pelo painel "Configurar prazo de inscrição".
+const INSCRICOES_INICIO_PADRAO = new Date('2026-09-11T00:00:00');
+const INSCRICOES_FIM_PADRAO = new Date('2026-10-02T23:59:59');
+const CONGRESSO_TECNICO_PADRAO = '02/10/2026';
 
 function formatarDataBR(d: Date) {
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+// Só a parte da data (AAAA-MM-DD) no fuso local — pra popular <input type="date">
+// a partir de um timestamp ISO guardado no banco, sem risco de virar o dia
+// errado por causa de fuso (evita usar toISOString, que é sempre UTC).
+function isoParaDataInput(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function LinhaAlunoSelecao({ aluno, marcado, valorCamisa, onToggle, onCamisaChange, grande, mostrarTurma }: {
@@ -86,6 +100,50 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
   // com `selecionados`, que é a lista de seleção do formulário de inscrição.
   const [selecionadosLote, setSelecionadosLote] = useState<Set<string>>(new Set());
   const [excluindoLote, setExcluindoLote] = useState(false);
+
+  // Prazo de inscrição (início/fim/desativação manual) — editável pelo
+  // professor, em vez de fixo no código (ver INSCRICOES_INICIO_PADRAO acima).
+  const [config, setConfig] = useState<ConfigInterclasses | null>(null);
+  const [configAberta, setConfigAberta] = useState(false);
+  const [editInicio, setEditInicio] = useState('');
+  const [editFim, setEditFim] = useState('');
+  const [editCongresso, setEditCongresso] = useState('');
+  const [editDesativadas, setEditDesativadas] = useState(false);
+  const [salvandoConfig, setSalvandoConfig] = useState(false);
+  const [erroConfig, setErroConfig] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    buscarConfigInterclasses(edicao).then(c => {
+      if (!mounted || !c) return;
+      setConfig(c);
+      setEditInicio(isoParaDataInput(c.inscricoes_inicio));
+      setEditFim(isoParaDataInput(c.inscricoes_fim));
+      setEditCongresso(c.congresso_tecnico ?? '');
+      setEditDesativadas(c.inscricoes_desativadas);
+    }).catch(() => { /* tabela pode não existir ainda — fica no prazo padrão */ });
+    return () => { mounted = false; };
+  }, [edicao]);
+
+  async function salvarConfig() {
+    if (!editInicio || !editFim) { setErroConfig('Informe as duas datas.'); return; }
+    setErroConfig(null);
+    setSalvandoConfig(true);
+    try {
+      const salvo = await salvarConfigInterclasses(edicao, {
+        inscricoes_inicio: `${editInicio}T00:00:00`,
+        inscricoes_fim: `${editFim}T23:59:59`,
+        inscricoes_desativadas: editDesativadas,
+        congresso_tecnico: editCongresso || null,
+      });
+      setConfig(salvo);
+      setConfigAberta(false);
+    } catch (e: any) {
+      setErroConfig('Erro ao salvar: ' + (e?.message || 'tente novamente.'));
+    } finally {
+      setSalvandoConfig(false);
+    }
+  }
 
   const [busca, setBusca] = useState('');
   const [filtroTurma, setFiltroTurma] = useState('TODAS');
@@ -473,7 +531,12 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
   const equipesFiltradas = useMemo(() => agruparPorTime(listaFiltrada), [listaFiltrada]);
 
   const agora = new Date();
-  const inscricoesEncerradas = agora > INSCRICOES_FIM;
+  const inicioEfetivo = config ? new Date(config.inscricoes_inicio) : INSCRICOES_INICIO_PADRAO;
+  const fimEfetivo = config ? new Date(config.inscricoes_fim) : INSCRICOES_FIM_PADRAO;
+  const congressoEfetivo = config?.congresso_tecnico ? formatarDataBR(new Date(`${config.congresso_tecnico}T00:00:00`)) : CONGRESSO_TECNICO_PADRAO;
+  const desativadasManualmente = config?.inscricoes_desativadas ?? false;
+  const prazoVencido = agora > fimEfetivo;
+  const inscricoesEncerradas = desativadasManualmente || prazoVencido;
 
   return (
     <div className="flex flex-col gap-4">
@@ -486,13 +549,58 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
         <Calendar className={cn('w-5 h-5 shrink-0', inscricoesEncerradas ? 'text-gray-500' : 'text-blue-600')} />
         <div>
           <p className={cn('text-sm font-semibold', inscricoesEncerradas ? 'text-gray-700' : 'text-blue-900')}>
-            {inscricoesEncerradas ? 'Inscrições encerradas' : `Inscrições abertas até ${formatarDataBR(INSCRICOES_FIM)}`}
+            {desativadasManualmente ? 'Inscrições desativadas' : inscricoesEncerradas ? 'Inscrições encerradas' : `Inscrições abertas até ${formatarDataBR(fimEfetivo)}`}
           </p>
           <p className={cn('text-xs', inscricoesEncerradas ? 'text-gray-500' : 'text-blue-700')}>
-            Período: {formatarDataBR(INSCRICOES_INICIO)} a {formatarDataBR(INSCRICOES_FIM)} · Congresso Técnico no dia {DATA_CONGRESSO_TECNICO}
+            Período: {formatarDataBR(inicioEfetivo)} a {formatarDataBR(fimEfetivo)} · Congresso Técnico no dia {congressoEfetivo}
           </p>
         </div>
       </div>
+
+      {!modoPublico && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <button type="button" onClick={() => setConfigAberta(a => !a)} className="w-full flex items-center justify-between">
+            <h3 className="font-bold text-on-surface text-sm flex items-center gap-1.5">
+              <Settings className="w-4 h-4 text-primary" /> Configurar prazo de inscrição
+            </h3>
+            {configAberta ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+          </button>
+          {configAberta && (
+            <div className="flex flex-col gap-3 mt-3">
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-xs font-semibold text-gray-500 mb-1 block">Início</label>
+                  <input type="date" value={editInicio} onChange={e => setEditInicio(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm text-on-surface outline-none focus:border-primary" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs font-semibold text-gray-500 mb-1 block">Fim</label>
+                  <input type="date" value={editFim} onChange={e => setEditFim(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm text-on-surface outline-none focus:border-primary" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-500 mb-1 block">Congresso Técnico</label>
+                <input type="date" value={editCongresso} onChange={e => setEditCongresso(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm text-on-surface outline-none focus:border-primary" />
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={editDesativadas} onChange={e => setEditDesativadas(e.target.checked)} className="accent-error w-4 h-4" />
+                <span className="text-sm text-on-surface">Desativar inscrições manualmente (ignora as datas acima)</span>
+              </label>
+              {erroConfig && <p className="text-xs text-error font-medium">⚠️ {erroConfig}</p>}
+              <button
+                type="button"
+                onClick={salvarConfig}
+                disabled={salvandoConfig}
+                className="w-full py-2.5 rounded-xl bg-primary hover:bg-primary-dark disabled:opacity-50 text-white text-sm font-bold transition-colors"
+              >
+                {salvandoConfig ? 'Salvando...' : 'Salvar prazo'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {!modoPublico && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
@@ -524,6 +632,17 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
       )}
 
       {/* Formulário */}
+      {inscricoesEncerradas && !editingId ? (
+        <div ref={formRef} className={cn('bg-white rounded-2xl border border-gray-100 shadow-sm text-center', modoPublico ? 'p-8' : 'p-6')}>
+          <Calendar className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+          <p className="font-bold text-on-surface text-sm">{desativadasManualmente ? 'Inscrições desativadas' : 'Inscrições encerradas'}</p>
+          <p className="text-xs text-gray-500 mt-1">
+            {modoPublico
+              ? 'Fale com o professor de Educação Física.'
+              : 'Reative em "Configurar prazo de inscrição", ali em cima, pra adicionar novos alunos.'}
+          </p>
+        </div>
+      ) : (
       <div ref={formRef} className={cn('bg-white rounded-2xl border border-gray-100 shadow-sm', modoPublico ? 'p-5' : 'p-4')}>
         <div className="flex items-center justify-between mb-3">
           <h3 className={cn('font-bold', modoPublico ? 'text-xl' : 'text-sm text-on-surface')} style={modoPublico ? { color: corModalidade } : undefined}>
@@ -745,6 +864,7 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
           </button>
         </form>
       </div>
+      )}
 
       {/* Lista + filtros */}
       <div className={cn('bg-white rounded-2xl border border-gray-100 shadow-sm', modoPublico ? 'p-5' : 'p-4')}>

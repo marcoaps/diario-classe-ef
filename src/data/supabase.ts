@@ -594,6 +594,40 @@ export async function limparInscricoesInterclasses(edicao: string) {
   if (error) throw error;
 }
 
+// Prazo de inscrição (início/fim/desativação manual) por edição — editável
+// pelo professor na aba "Inscrição de Alunos", em vez de fixo no código.
+export interface ConfigInterclasses {
+  edicao: string;
+  inscricoes_inicio: string;
+  inscricoes_fim: string;
+  inscricoes_desativadas: boolean;
+  congresso_tecnico: string | null;
+  atualizado_em: string;
+}
+
+export async function buscarConfigInterclasses(edicao: string): Promise<ConfigInterclasses | null> {
+  const { data, error } = await supabase
+    .from('interclasses_configuracoes')
+    .select('*')
+    .eq('edicao', edicao)
+    .maybeSingle();
+  if (error) throw error;
+  return data as ConfigInterclasses | null;
+}
+
+export async function salvarConfigInterclasses(
+  edicao: string,
+  patch: Partial<Pick<ConfigInterclasses, 'inscricoes_inicio' | 'inscricoes_fim' | 'inscricoes_desativadas' | 'congresso_tecnico'>>
+): Promise<ConfigInterclasses> {
+  const { data, error } = await supabase
+    .from('interclasses_configuracoes')
+    .upsert({ edicao, ...patch, atualizado_em: new Date().toISOString() }, { onConflict: 'edicao' })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as ConfigInterclasses;
+}
+
 // Interclasses IOP — campeonatos/jogos (motor de competição, isolado por
 // modalidade + categoria)
 // ------------------------------------------------------------
