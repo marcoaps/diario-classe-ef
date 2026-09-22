@@ -3,6 +3,7 @@ import { CheckCircle2, Loader2, Pencil, Trash2, X, Link2, Check, Calendar } from
 import { cn } from '../../AppLayout';
 import { buscarAlunos, criarInscricaoInterclasses, atualizarInscricaoInterclasses, excluirInscricaoInterclasses, limparInscricoesInterclasses } from '../../../data/supabase';
 import { agruparPorTime, categoriaFromTurma, MAXIMO_JOGADORES_TIME, minimoJogadoresPara, modalidadeConfig } from '../../../domain/interclasses';
+import { corDaEquipe } from './Confrontos';
 import type { InscricaoInterclasses, Modalidade } from '../../../domain/interclasses';
 
 interface AlunoOficial {
@@ -836,39 +837,42 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
           </div>
         ) : modoPublico ? (
           <div className="flex flex-col gap-4">
-            {equipesFiltradas.map(eq => (
-              <div key={eq.nomeTime} className="rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-                <div
-                  className="flex items-center justify-between gap-2 px-4 py-3.5"
-                  style={{ background: `linear-gradient(135deg, ${corModalidade}, ${corModalidade}CC)` }}
-                >
-                  <span className="font-extrabold text-lg text-white truncate flex items-center gap-2">
-                    <span className="text-xl">{modalidadeConfig(modalidade).icone}</span>
-                    {eq.nomeTime}
-                  </span>
-                  <span className={cn(
-                    'text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0 bg-white/90',
-                    eq.completo ? 'text-secondary' : 'text-amber-700'
-                  )}>
-                    {eq.completo ? `✅ ${eq.alunos.length}/${MAXIMO_JOGADORES_TIME}` : `⏳ ${eq.alunos.length}/${eq.minimoJogadores}`}
-                  </span>
+            {equipesFiltradas.map(eq => {
+              const corTime = corDaEquipe(eq.nomeTime);
+              return (
+                <div key={eq.nomeTime} className="rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+                  <div
+                    className="flex items-center justify-between gap-2 px-4 py-3.5"
+                    style={{ background: `linear-gradient(135deg, ${corTime}, ${corTime}CC)` }}
+                  >
+                    <span className="font-extrabold text-lg text-white truncate flex items-center gap-2">
+                      <span className="text-xl">{modalidadeConfig(modalidade).icone}</span>
+                      {eq.nomeTime}
+                    </span>
+                    <span className={cn(
+                      'text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0 bg-white/90',
+                      eq.completo ? 'text-secondary' : 'text-amber-700'
+                    )}>
+                      {eq.completo ? `✅ ${eq.alunos.length}/${MAXIMO_JOGADORES_TIME}` : `⏳ ${eq.alunos.length}/${eq.minimoJogadores}`}
+                    </span>
+                  </div>
+                  <div className="divide-y divide-gray-50">
+                    {eq.alunos.map(a => (
+                      <div key={a.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
+                        <span
+                          className="w-9 h-9 rounded-full flex items-center justify-center text-white font-extrabold text-sm flex-shrink-0 shadow-sm"
+                          style={{ background: corTime }}
+                        >
+                          {a.numero_camisa}
+                        </span>
+                        <span className="flex-1 text-base font-medium text-on-surface truncate">{a.nome_completo}</span>
+                        <span className="text-gray-400 text-xs font-semibold bg-gray-100 px-2 py-1 rounded-full flex-shrink-0">{a.turma_id}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="divide-y divide-gray-50">
-                  {eq.alunos.map(a => (
-                    <div key={a.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
-                      <span
-                        className="w-9 h-9 rounded-full flex items-center justify-center text-white font-extrabold text-sm flex-shrink-0 shadow-sm"
-                        style={{ background: corModalidade }}
-                      >
-                        {a.numero_camisa}
-                      </span>
-                      <span className="flex-1 text-base font-medium text-on-surface truncate">{a.nome_completo}</span>
-                      <span className="text-gray-400 text-xs font-semibold bg-gray-100 px-2 py-1 rounded-full flex-shrink-0">{a.turma_id}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="overflow-x-auto -mx-1">
