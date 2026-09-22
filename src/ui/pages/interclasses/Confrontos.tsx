@@ -458,10 +458,12 @@ export function CardJogo({ jogo, adapter, onLancar, compacto, mostrarGrupo = tru
   const vencedorA = jogo.jogado && !!jogo.vencedor && jogo.vencedor === jogo.equipeA;
   const vencedorB = jogo.jogado && !!jogo.vencedor && jogo.vencedor === jogo.equipeB;
   // Fora de liga/grupo/suíço é jogo eliminatório (mata-mata simples ou duplo)
-  // — precisa sempre de um vencedor pra avançar a chave, então não aceita
-  // empate como resultado final (o professor decide no desempate/pênaltis
-  // e lança o placar já refletindo quem passou).
+  // — precisa sempre de um vencedor pra avançar a chave. Além disso, algumas
+  // modalidades (vôlei) nunca têm empate de verdade nem na liga — "1 set pra
+  // cada" sempre vira um set decisivo em quadra antes de existir um placar
+  // final — então pra essas o empate é bloqueado em QUALQUER fase.
   const eliminatorio = !FASES_LIGA.has(jogo.fase);
+  const podeEmpatar = !eliminatorio && adapter.permiteEmpateNaLiga;
 
   function confirmar(vencedorForcado?: 'A' | 'B') {
     if (!onLancar) return;
@@ -471,8 +473,9 @@ export function CardJogo({ jogo, adapter, onLancar, compacto, mostrarGrupo = tru
     } else {
       const na = parseInt(a, 10), nb = parseInt(b, 10);
       if (isNaN(na) || isNaN(nb) || na < 0 || nb < 0) return;
-      if (eliminatorio && na === nb) {
-        setErro(`Esse jogo é eliminatório — não pode terminar empatado. ${adapter.mensagemDesempate}`);
+      if (!podeEmpatar && na === nb) {
+        const motivo = eliminatorio ? 'esse jogo é eliminatório' : 'essa modalidade sempre decide o empate em quadra';
+        setErro(`Não pode terminar empatado (${motivo}). ${adapter.mensagemDesempate}`);
         return;
       }
       resultado = adapter.criarResultado(na, nb);

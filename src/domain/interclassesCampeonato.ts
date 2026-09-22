@@ -64,10 +64,17 @@ export interface ResultadoAdapter {
   criarResultado(valorA: number, valorB: number): Resultado;
   labelA: string;
   labelB: string;
-  // Mostrado quando o professor tenta salvar um empate num jogo eliminatório
-  // (não pode — precisa de vencedor pra avançar a chave). Cada modalidade
-  // resolve o empate à sua própria maneira em quadra antes de lançar o placar.
+  // Mostrado quando o professor tenta salvar um empate que não pode existir
+  // (jogo eliminatório, ou modalidade que nunca empata de verdade). Cada
+  // modalidade resolve o empate à sua própria maneira em quadra antes de
+  // lançar o placar.
   mensagemDesempate: string;
+  // Um empate é um resultado final válido pra essa modalidade na fase de
+  // liga (Pontos Corridos/grupos/suíço)? Futsal/handebol sim (empate de
+  // verdade, like futebol). Vôlei não — "1 set pra cada" nunca é o placar
+  // final de um jogo de verdade, sempre tem um set decisivo em quadra; então
+  // pro vôlei o empate é bloqueado em QUALQUER fase, não só na eliminatória.
+  permiteEmpateNaLiga: boolean;
 }
 
 export const ADAPTER_GOLS: ResultadoAdapter = {
@@ -78,6 +85,7 @@ export const ADAPTER_GOLS: ResultadoAdapter = {
   criarResultado: (a, b) => ({ tipo: 'gols', golsA: a, golsB: b }),
   labelA: 'Gols', labelB: 'Gols',
   mensagemDesempate: 'Jogue a prorrogação/pênaltis em quadra e lance o placar já com um vencedor.',
+  permiteEmpateNaLiga: true,
 };
 
 export const ADAPTER_SETS: ResultadoAdapter = {
@@ -88,6 +96,7 @@ export const ADAPTER_SETS: ResultadoAdapter = {
   criarResultado: (a, b) => ({ tipo: 'sets', setsA: a, setsB: b }),
   labelA: 'Sets', labelB: 'Sets',
   mensagemDesempate: 'Jogue um set decisivo em quadra e lance o total de sets já com um vencedor (ex.: 2 × 1).',
+  permiteEmpateNaLiga: false,
 };
 
 export const ADAPTER_VENCEDOR: ResultadoAdapter = {
@@ -98,6 +107,7 @@ export const ADAPTER_VENCEDOR: ResultadoAdapter = {
   criarResultado: (a) => ({ tipo: 'vencedor', vencedor: a >= 1 ? 'A' : 'B' }),
   labelA: '', labelB: '',
   mensagemDesempate: '', // nunca empata -- o placar já é só "quem venceu"
+  permiteEmpateNaLiga: true, // irrelevante -- essa modalidade nunca gera um empate na UI
 };
 
 export const ADAPTERS: Record<Modalidade, ResultadoAdapter> = {
