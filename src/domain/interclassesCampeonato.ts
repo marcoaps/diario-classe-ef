@@ -376,6 +376,17 @@ export function calcSt(equipes: string[], jogos: Jogo[], adapter: ResultadoAdapt
   return Object.values(st).sort((x, y) => y.P - x.P || y.SG - x.SG || y.GP - x.GP);
 }
 
+// Times empatados na 1ª posição pelos 3 critérios usados no sort de calcSt
+// (pontos, saldo, gols/sets pró) — sem isso, "quem é o campeão" de uma liga
+// (pontos corridos ou suíço) vira arbitrário: Object.values(st).sort é
+// estável, então com tudo empatado (ex.: toda partida termina empatada) o
+// 1º colocado seria só quem entrou primeiro no objeto, sem mérito nenhum.
+export function empatadosNoTopo(standings: Standing[]): Standing[] {
+  if (standings.length === 0) return [];
+  const lider = standings[0];
+  return standings.filter(s => s.P === lider.P && s.SG === lider.SG && s.GP === lider.GP);
+}
+
 export function genSwiss(equipes: string[], jogosAnteriores: Jogo[], rodada: number, adapter: ResultadoAdapter, regras: RegrasPontuacao): Jogo[] {
   const st = calcSt(equipes, jogosAnteriores, adapter, regras);
   const pareado = new Set<string>(); const novos: Jogo[] = [];

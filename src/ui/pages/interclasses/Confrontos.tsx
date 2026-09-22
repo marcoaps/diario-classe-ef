@@ -11,7 +11,7 @@ import {
   type Modalidade, type InscricaoInterclasses, type EquipeInterclasses,
 } from '../../../domain/interclasses';
 import {
-  ADAPTERS, REGRAS_PADRAO, FORMATOS, gerarJogosIniciais, aplicarResultado, aplicarResultadoDuplo, calcSt, genElim, genSwiss, contarDerrotas,
+  ADAPTERS, REGRAS_PADRAO, FORMATOS, gerarJogosIniciais, aplicarResultado, aplicarResultadoDuplo, calcSt, genElim, genSwiss, contarDerrotas, empatadosNoTopo,
   type Jogo, type Resultado, type Standing, type ResultadoAdapter,
 } from '../../../domain/interclassesCampeonato';
 
@@ -198,7 +198,13 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
       const todosJogados = r.jogos.every(j => j.jogado);
       if (todosJogados) {
         const st = calcSt(equipesDoCampeonato, r.jogos, adapter, regras);
-        if (st.length > 0) await atualizarCampeonato(campeonato!.id, { fase: 'finalizado', campeao: st[0].equipe });
+        // Só declara campeão se a 1ª posição for de um time só — com tudo
+        // empatado no topo (ex.: todo jogo terminou empatado), não tem
+        // critério de desempate automático aqui, então fica sem campeão até
+        // o professor decidir manualmente (aviso aparece na Classificação).
+        if (st.length > 0 && empatadosNoTopo(st).length === 1) {
+          await atualizarCampeonato(campeonato!.id, { fase: 'finalizado', campeao: st[0].equipe });
+        }
       }
     }
 
@@ -209,7 +215,9 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
         const maxRodadas = Math.ceil(Math.log2(Math.max(2, equipesDoCampeonato.length)));
         if (rodadaAtual >= maxRodadas) {
           const st = calcSt(equipesDoCampeonato, r.jogos, adapter, regras);
-          if (st.length > 0) await atualizarCampeonato(campeonato!.id, { fase: 'finalizado', campeao: st[0].equipe });
+          if (st.length > 0 && empatadosNoTopo(st).length === 1) {
+            await atualizarCampeonato(campeonato!.id, { fase: 'finalizado', campeao: st[0].equipe });
+          }
         } else {
           const novos = genSwiss(equipesDoCampeonato, r.jogos, rodadaAtual + 1, adapter, regras);
           await criarJogos(campeonato!.id, novos.map(jogoParaLinha));
@@ -279,7 +287,7 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
         <SetupCampeonato equipesProntas={equipesProntas} equipesIncompletas={equipes.filter(e => !e.completo)} onIniciar={iniciarCampeonato} criando={criandoCampeonato} />
       ) : (
         <div className="flex flex-col gap-4">
-          {campeonato.campeao ? (
+          {campeonato.campeao && (
             <div className="bg-gradient-to-br from-yellow-50 to-white rounded-2xl border border-yellow-200 shadow-sm p-6 text-center">
               <Trophy className="w-12 h-12 text-yellow-500 mx-auto mb-2" />
               <div className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Campeão — {categoriaAtiva}</div>
@@ -287,57 +295,56 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
                 <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: corDaEquipe(campeonato.campeao) }} />
                 {campeonato.campeao}
               </div>
-              <button onClick={excluirTudo} className="mt-4 text-xs text-error/70 hover:text-error font-medium">
-                Excluir e recomeçar
-              </button>
             </div>
-          ) : (
-            <>
-              <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
-                {tabs.map(t => (
-                  <button
-                    key={t.id}
-                    onClick={() => setAba(t.id)}
-                    className={cn('flex-1 py-2 rounded-lg text-xs font-bold transition-all', aba === t.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500')}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-              <button onClick={excluirTudo} className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-error/30 text-error text-xs font-bold hover:bg-error/5 transition-colors">
-                <RefreshCw className="w-3.5 h-3.5" /> Excluir este campeonato e recomeçar
-              </button>
-
-              {aba === 'jogos' && (
-                <div className="flex flex-col gap-4">
-                  {campeonato.formato === 'double_elim' && <SituacaoEquipesDuplo equipes={equipesDoCampeonato} jogos={jogos} />}
-                  {gruposCompletos && (
-                    <button onClick={iniciarMataMataDosGrupos} className="w-full py-3 rounded-xl bg-primary text-white text-sm font-bold hover:bg-primary-dark transition-colors">
-                      🏆 Iniciar mata-mata (classificados dos grupos)
-                    </button>
-                  )}
-                  <ListaJogos titulo={`Pendentes (${jogosPendentes.length})`} jogos={jogosPendentes} adapter={adapter} onLancar={lancarPlacar} mostrarGrupo={temMaisDeUmGrupo} />
-                  <ListaJogos titulo={`Realizados (${jogosJogados.length})`} jogos={jogosJogados} adapter={adapter} onLancar={lancarPlacar} mostrarGrupo={temMaisDeUmGrupo} />
-                  {jogos.length === 0 && <div className="text-center text-gray-400 text-sm py-8">Nenhum jogo gerado.</div>}
-                </div>
-              )}
-
-              {aba === 'classificacao' && <Classificacao standings={standings} adapter={adapter} jogos={jogos} />}
-
-              {aba === 'grupos' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {grupos.map(g => (
-                    <div key={g} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100 text-sm font-bold text-gray-700">Grupo {g}</div>
-                      <Classificacao standings={calcSt(equipesDoCampeonato, jogos, adapter, regras, g)} adapter={adapter} jogos={jogos} compacto destacarTopN={1} />
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {aba === 'chave' && <Chave jogos={jogos} adapter={adapter} onLancar={lancarPlacar} />}
-            </>
           )}
+          {!campeonato.campeao && campeonato.formato === 'round_robin' && jogos.length > 0 && jogos.every(j => j.jogado) && empatadosNoTopo(standings).length > 1 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-amber-700 text-xs font-medium">
+              ⚠️ Empate na liderança entre {empatadosNoTopo(standings).map(s => s.equipe).join(', ')} — Pontos Corridos não tem desempate automático. Decidam manualmente (jogo extra, sorteio, critério combinado); o app não elege um campeão sozinho nesse caso.
+            </div>
+          )}
+          <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
+            {tabs.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setAba(t.id)}
+                className={cn('flex-1 py-2 rounded-lg text-xs font-bold transition-all', aba === t.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500')}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <button onClick={excluirTudo} className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-error/30 text-error text-xs font-bold hover:bg-error/5 transition-colors">
+            <RefreshCw className="w-3.5 h-3.5" /> Excluir este campeonato e recomeçar
+          </button>
+
+          {aba === 'jogos' && (
+            <div className="flex flex-col gap-4">
+              {campeonato.formato === 'double_elim' && <SituacaoEquipesDuplo equipes={equipesDoCampeonato} jogos={jogos} />}
+              {gruposCompletos && (
+                <button onClick={iniciarMataMataDosGrupos} className="w-full py-3 rounded-xl bg-primary text-white text-sm font-bold hover:bg-primary-dark transition-colors">
+                  🏆 Iniciar mata-mata (classificados dos grupos)
+                </button>
+              )}
+              <ListaJogos titulo={`Pendentes (${jogosPendentes.length})`} jogos={jogosPendentes} adapter={adapter} onLancar={lancarPlacar} mostrarGrupo={temMaisDeUmGrupo} />
+              <ListaJogos titulo={`Realizados (${jogosJogados.length})`} jogos={jogosJogados} adapter={adapter} onLancar={lancarPlacar} mostrarGrupo={temMaisDeUmGrupo} />
+              {jogos.length === 0 && <div className="text-center text-gray-400 text-sm py-8">Nenhum jogo gerado.</div>}
+            </div>
+          )}
+
+          {aba === 'classificacao' && <Classificacao standings={standings} adapter={adapter} jogos={jogos} />}
+
+          {aba === 'grupos' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {grupos.map(g => (
+                <div key={g} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                  <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100 text-sm font-bold text-gray-700">Grupo {g}</div>
+                  <Classificacao standings={calcSt(equipesDoCampeonato, jogos, adapter, regras, g)} adapter={adapter} jogos={jogos} compacto destacarTopN={1} />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {aba === 'chave' && <Chave jogos={jogos} adapter={adapter} onLancar={lancarPlacar} />}
         </div>
       )}
     </div>
