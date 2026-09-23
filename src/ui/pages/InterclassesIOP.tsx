@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
-import { LayoutGrid, ClipboardPlus, Users2, Trophy } from 'lucide-react';
+import { LayoutGrid, ClipboardPlus, Users2, Trophy, ShieldAlert } from 'lucide-react';
 import { cn } from '../AppLayout';
 import { buscarInscricoesInterclasses, buscarTurmasDisponiveis } from '../../data/supabase';
 import { EDICAO_PADRAO, unirTurmas, MODALIDADES } from '../../domain/interclasses';
@@ -8,17 +8,19 @@ import { VisaoGeral } from './interclasses/VisaoGeral';
 import { InscricaoAlunos } from './interclasses/InscricaoAlunos';
 import { Equipes } from './interclasses/Equipes';
 import { Confrontos } from './interclasses/Confrontos';
+import { AlunosSugeridosCorte } from './interclasses/AlunosSugeridosCorte';
 
 const EDICAO_ATUAL = EDICAO_PADRAO;
 const MODALIDADE_STORAGE_KEY = 'interclasses_modalidade_ativa';
 
-type SubTab = 'visao' | 'inscricao' | 'equipes' | 'confrontos';
+type SubTab = 'visao' | 'inscricao' | 'equipes' | 'confrontos' | 'corte';
 
 const SUB_TABS: { id: SubTab; label: string; icon: ReactNode }[] = [
   { id: 'visao', label: 'Visão Geral', icon: <LayoutGrid className="w-4 h-4" /> },
   { id: 'inscricao', label: 'Inscrição de Alunos', icon: <ClipboardPlus className="w-4 h-4" /> },
   { id: 'equipes', label: 'Equipes', icon: <Users2 className="w-4 h-4" /> },
   { id: 'confrontos', label: 'Torneios/Confrontos', icon: <Trophy className="w-4 h-4" /> },
+  { id: 'corte', label: 'Sugeridos p/ Corte', icon: <ShieldAlert className="w-4 h-4" /> },
 ];
 
 export default function InterclassesIOP() {
@@ -86,6 +88,7 @@ export default function InterclassesIOP() {
       )}
       {tab === 'equipes' && <Equipes inscricoes={inscricoesModalidade} loading={loading} onRefetch={carregar} />}
       {tab === 'confrontos' && <Confrontos modalidade={modalidade} inscricoes={inscricoesModalidade} />}
+      {tab === 'corte' && <AlunosSugeridosCorte edicao={EDICAO_ATUAL} />}
     </div>
   );
 }

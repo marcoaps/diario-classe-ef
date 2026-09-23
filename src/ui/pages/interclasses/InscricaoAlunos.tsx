@@ -4,8 +4,12 @@ import { cn } from '../../AppLayout';
 import {
   buscarAlunos, criarInscricaoInterclasses, atualizarInscricaoInterclasses, excluirInscricaoInterclasses, limparInscricoesInterclasses,
   buscarConfigInterclasses, salvarConfigInterclasses, type ConfigInterclasses,
+  buscarElegibilidadeInterclasses, type ElegibilidadeInterclasses,
 } from '../../../data/supabase';
-import { agruparPorTime, categoriaFromTurma, MAXIMO_JOGADORES_TIME, minimoJogadoresPara, modalidadeConfig } from '../../../domain/interclasses';
+import {
+  agruparPorTime, categoriaFromTurma, MAXIMO_JOGADORES_TIME, minimoJogadoresPara, modalidadeConfig,
+  chaveElegibilidade, ELEGIBILIDADE_LABEL,
+} from '../../../domain/interclasses';
 import { corDaEquipe } from './Confrontos';
 import type { InscricaoInterclasses, Modalidade } from '../../../domain/interclasses';
 
@@ -54,14 +58,38 @@ function isoParaDataInput(iso: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function LinhaAlunoSelecao({ aluno, marcado, valorCamisa, onToggle, onCamisaChange, grande, mostrarTurma }: {
+// Badge curto de risco — só aparece pra atencao/inapto (apto/transferido não
+// precisam poluir a lista, o professor já espera que a maioria esteja ok).
+function BadgeElegibilidade({ elegibilidade }: { elegibilidade?: ElegibilidadeInterclasses }) {
+  if (!elegibilidade || elegibilidade.status === 'apto') return null;
+  if (elegibilidade.status === 'transferido' || elegibilidade.status === 'remanejado') {
+    return (
+      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 bg-gray-100 text-gray-500" title={ELEGIBILIDADE_LABEL[elegibilidade.status]}>
+        {elegibilidade.status === 'transferido' ? '🚫 Transferido' : '↪️ Remanejado'}
+      </span>
+    );
+  }
+  const inapto = elegibilidade.status === 'inapto';
+  return (
+    <span
+      className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0', inapto ? 'bg-error-container text-error' : 'bg-amber-100 text-amber-700')}
+      title={`${elegibilidade.notas_vermelhas_final} nota(s) vermelha(s) após a recuperação`}
+    >
+      {inapto ? `🚫 Inapto (${elegibilidade.notas_vermelhas_final} vermelhas)` : '⚠️ Atenção (1 nota)'}
+    </span>
+  );
+}
+
+function LinhaAlunoSelecao({ aluno, marcado, valorCamisa, onToggle, onCamisaChange, grande, mostrarTurma, elegibilidade }: {
   aluno: AlunoOficial; marcado: boolean; valorCamisa?: string;
   onToggle: () => void; onCamisaChange: (v: string) => void; grande?: boolean; mostrarTurma?: boolean;
+  elegibilidade?: ElegibilidadeInterclasses;
 }) {
   return (
     <label className={cn('flex items-center gap-2 cursor-pointer hover:bg-gray-50', marcado && 'bg-primary/5', grande ? 'px-4 py-3.5' : 'px-3 py-2')}>
       <input type="checkbox" checked={marcado} onChange={onToggle} className={cn('accent-primary flex-shrink-0', grande ? 'w-6 h-6' : 'w-4 h-4')} />
       <span className={cn('flex-1 text-on-surface truncate', grande ? 'text-lg' : 'text-sm')}>{aluno.nome}</span>
+      <BadgeElegibilidade elegibilidade={elegibilidade} />
       {mostrarTurma && <span className={cn('text-primary/70 font-mono font-semibold flex-shrink-0', grande ? 'text-sm' : 'text-[11px]')}>{aluno.turma_id}</span>}
       {aluno.numero_chamada != null && <span className={cn('text-gray-400 flex-shrink-0', grande ? 'text-sm' : 'text-xs')}>chamada #{aluno.numero_chamada}</span>}
       {marcado && (
@@ -167,6 +195,34 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
     });
     return () => { mounted = false; };
   }, [turmasSelecionadas, editingId]);
+
+  // Elegibilidade (regra de notas vermelhas) das turmas marcadas — só no
+  // painel do professor. Na tela pública (aluno se inscrevendo sozinho) não
+  // faz sentido expor pra ele mesmo se está "sugerido para corte".
+  const [elegibilidadePorAluno, setElegibilidadePorAluno] = useState<Record<string, ElegibilidadeInterclasses>>({});
+  useEffect(() => {
+    if (modoPublico || turmasSelecionadas.length === 0) { setElegibilidadePorAluno({}); return; }
+    let mounted = true;
+    buscarElegibilidadeInterclasses(edicao, turmasSelecionadas).then(lista => {
+      if (!mounted) return;
+      const mapa: Record<string, ElegibilidadeInterclasses> = {};
+      lista.forEach(e => {
+        if (e.aluno_id) mapa[e.aluno_id] = e;
+        mapa[chaveElegibilidade(e.turma_id, e.nome)] = e;
+      });
+      setElegibilidadePorAluno(mapa);
+    });
+    return () => { mounted = false; };
+  }, [turmasSelecionadas, modoPublico, edicao]);
+
+  function elegibilidadeDoAluno(aluno: { id: string; nome: string; turma_id: string }): ElegibilidadeInterclasses | undefined {
+    return elegibilidadePorAluno[aluno.id] ?? elegibilidadePorAluno[chaveElegibilidade(aluno.turma_id, aluno.nome)];
+  }
+
+  function elegibilidadePorNomeDigitado(nome: string, turmaId: string): ElegibilidadeInterclasses | undefined {
+    if (!nome.trim() || !turmaId) return undefined;
+    return elegibilidadePorAluno[chaveElegibilidade(turmaId, nome)];
+  }
 
   // A cada troca nas turmas marcadas, a seleção múltipla anterior não faz mais sentido.
   useEffect(() => { setSelecionados({}); }, [turmasSelecionadas]);
@@ -322,6 +378,20 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
     e.preventDefault();
     const msgErro = validar();
     if (msgErro) { setErro(msgErro); setSucesso(null); return; }
+
+    // Aviso (não bloqueia) quando o aluno está "Inapto" pela regra de notas
+    // vermelhas — o professor decide se inscreve mesmo assim (ex.: exceção
+    // liberada pela Gestão) ou cancela pra cortar a inscrição.
+    const elegibilidadeAtual = alunoIdVinculado
+      ? elegibilidadePorAluno[alunoIdVinculado]
+      : elegibilidadePorNomeDigitado(form.nomeCompleto, form.turmaId);
+    if (elegibilidadeAtual?.status === 'inapto') {
+      const confirmar = window.confirm(
+        `⚠️ ${form.nomeCompleto.trim()} está marcado como INAPTO (${elegibilidadeAtual.notas_vermelhas_final} notas vermelhas após a recuperação) e sugerido para corte.\n\nConfirma a inscrição mesmo assim?`
+      );
+      if (!confirmar) return;
+    }
+
     setErro(null);
     setSalvando(true);
     try {
@@ -403,6 +473,17 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
     validos.length = 0; validos.push(...cabem);
 
     if (validos.length === 0) { setErro(erros.join(' | ') || 'Nenhum aluno válido para inscrever.'); return; }
+
+    // Mesmo aviso (não bloqueia) da inscrição individual, mas juntando todos
+    // os "Inapto" marcados nesse lote num confirm só.
+    const inaptosNoLote = validos.filter(({ aluno }) => elegibilidadeDoAluno(aluno)?.status === 'inapto');
+    if (inaptosNoLote.length > 0) {
+      const nomes = inaptosNoLote.map(({ aluno }) => aluno.nome).join(', ');
+      const confirmar = window.confirm(
+        `⚠️ ${nomes} ${inaptosNoLote.length === 1 ? 'está marcado' : 'estão marcados'} como INAPTO (2+ notas vermelhas após a recuperação) e sugerido(s) para corte.\n\nConfirma a inscrição mesmo assim?`
+      );
+      if (!confirmar) return;
+    }
 
     setSalvando(true);
     try {
@@ -759,6 +840,7 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
                       <div className="divide-y divide-gray-50">
                         {alunosDoGrupo.map(a => (
                           <LinhaAlunoSelecao key={a.id} aluno={a} marcado={a.id in selecionados} valorCamisa={selecionados[a.id]} grande={modoPublico} mostrarTurma={turmasSelecionadas.length > 1}
+                            elegibilidade={elegibilidadeDoAluno(a)}
                             onToggle={() => toggleSelecionado(a)} onCamisaChange={v => setSelecionados(prev => ({ ...prev, [a.id]: v }))} />
                         ))}
                       </div>
@@ -776,6 +858,7 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
                     <div className="divide-y divide-gray-200">
                       {alunosPorGenero.semGenero.map(a => (
                         <LinhaAlunoSelecao key={a.id} aluno={a} marcado={a.id in selecionados} valorCamisa={selecionados[a.id]} grande={modoPublico} mostrarTurma={turmasSelecionadas.length > 1}
+                          elegibilidade={elegibilidadeDoAluno(a)}
                           onToggle={() => toggleSelecionado(a)} onCamisaChange={v => setSelecionados(prev => ({ ...prev, [a.id]: v }))} />
                       ))}
                     </div>
@@ -804,6 +887,18 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
                   required
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-on-surface outline-none focus:border-primary"
                 />
+                {!modoPublico && (() => {
+                  const eleg = elegibilidadePorNomeDigitado(form.nomeCompleto, form.turmaId);
+                  if (!eleg || eleg.status === 'apto') return null;
+                  const inapto = eleg.status === 'inapto';
+                  return (
+                    <p className={cn('text-[11px] font-semibold mt-1', inapto ? 'text-error' : 'text-amber-600')}>
+                      {inapto
+                        ? `🚫 Sugerido para corte: ${eleg.notas_vermelhas_final} notas vermelhas após a recuperação.`
+                        : '⚠️ Atenção: 1 nota vermelha após a recuperação (ainda apto pela regra).'}
+                    </p>
+                  );
+                })()}
               </div>
 
               <div className="flex gap-3">

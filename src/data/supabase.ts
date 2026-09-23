@@ -628,6 +628,37 @@ export async function salvarConfigInterclasses(
   return data as ConfigInterclasses;
 }
 
+// Elegibilidade pela regra de notas vermelhas (máx. 1 nota < 7,0 após a
+// Recuperação 1º Semestre substituir a nota do 2º bimestre na disciplina
+// reprovada — ver sql/interclasses_elegibilidade.sql). É um instantâneo
+// importado manualmente dos PDFs do SIMAED, não uma consulta ao vivo em
+// notas por disciplina (o app ainda não lança nota por disciplina).
+export interface ElegibilidadeInterclasses {
+  id: string;
+  edicao: string;
+  aluno_id: string | null;
+  nome: string;
+  turma_id: string;
+  numero_chamada: number | null;
+  status: 'apto' | 'atencao' | 'inapto' | 'transferido' | 'remanejado';
+  notas_vermelhas_bimestre: number;
+  notas_vermelhas_final: number;
+  situacao: string | null;
+  data_situacao: string | null;
+  atualizado_em: string;
+}
+
+export async function buscarElegibilidadeInterclasses(edicao: string, turmaIds?: string[]): Promise<ElegibilidadeInterclasses[]> {
+  let query = supabase.from('interclasses_elegibilidade').select('*').eq('edicao', edicao);
+  if (turmaIds && turmaIds.length > 0) query = query.in('turma_id', turmaIds);
+  const { data, error } = await query.order('turma_id', { ascending: true }).order('numero_chamada', { ascending: true, nullsFirst: false });
+  if (error) {
+    console.error('Erro ao buscar elegibilidade Interclasses (tabela pode não existir ainda):', error);
+    return [];
+  }
+  return (data || []) as ElegibilidadeInterclasses[];
+}
+
 // Interclasses IOP — campeonatos/jogos (motor de competição, isolado por
 // modalidade + categoria)
 // ------------------------------------------------------------

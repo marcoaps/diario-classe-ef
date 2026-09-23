@@ -77,6 +77,38 @@ export function mensagemMinimoNaoAtingido(modalidade: string | null | undefined)
   return `⚠️ Inscrição não permitida. A equipe de ${nomeModalidade} deve possuir no mínimo ${minimo} jogadores.`;
 }
 
+// Regra de elegibilidade (Mini Projeto-Regulamento — Jogos Interclasses 2026):
+// no máximo 1 nota vermelha (< 7,0) por aluno, já considerando a nota da
+// Recuperação 1º Semestre no lugar da nota do 2º bimestre onde houver.
+export type StatusElegibilidade = 'apto' | 'atencao' | 'inapto' | 'transferido' | 'remanejado';
+
+export const ELEGIBILIDADE_LABEL: Record<StatusElegibilidade, string> = {
+  apto: 'Apto',
+  atencao: 'Atenção (1 nota)',
+  inapto: 'Inapto (sugerido para corte)',
+  transferido: 'Foi Transferido',
+  remanejado: 'Remanejado',
+};
+
+export const ELEGIBILIDADE_COR: Record<StatusElegibilidade, string> = {
+  apto: '#2e7d32',
+  atencao: '#b45309',
+  inapto: '#b3261e',
+  transferido: '#6b7280',
+  remanejado: '#6b7280',
+};
+
+// Chave usada para casar um aluno (turma + nome, sem acento/maiúsculas) do
+// cadastro oficial com a linha correspondente em interclasses_elegibilidade,
+// para os casos (raros) em que o aluno_id não bateu na importação dos PDFs.
+export function chaveElegibilidade(turmaId: string, nome: string): string {
+  const turma = turmaId.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+  const nomeNorm = nome
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toUpperCase().replace(/[^A-Z ]/g, '').replace(/\s+/g, ' ').trim();
+  return `${turma}|${nomeNorm}`;
+}
+
 export interface InscricaoInterclasses {
   id: string;
   edicao: string;
