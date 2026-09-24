@@ -14,6 +14,7 @@ interface Resposta {
   nota: number;
   nota_final: number;
   escaneado_em: string;
+  online?: boolean;
 }
 
 interface ResultadoAluno {
@@ -48,7 +49,29 @@ export function AvaliacaoResultados() {
         .select('aluno_id, respostas, acertos, nota, nota_final, escaneado_em')
         .eq('avaliacao_id', id);
 
-      const respostasMap = new Map((respostas || []).map(r => [r.aluno_id, r]));
+      const respostasMap = new Map<string, Resposta>((respostas || []).map(r => [r.aluno_id, r]));
+
+      // Respostas da Prova Online ficam em `respostas` (aluno digita nome, nº e
+      // turma) -- casa com o aluno por turma + nº de chamada. A nota online é
+      // de 0 a 10; converte pra escala da avaliação. Papel tem prioridade.
+      if (av.prova_online_id) {
+        const [{ data: online }, { data: qs }] = await Promise.all([
+          supabase.from('respostas').select('aluno_numero, turma_id, respostas, nota, enviado_em')
+            .eq('prova_id', av.prova_online_id).order('enviado_em', { ascending: false }),
+          supabase.from('questoes').select('id, tipo, resposta_correta').eq('prova_id', av.prova_online_id),
+        ]);
+        const valorTotal = (av.valor_total_objetivas || 0) + (av.valor_total_discursivas || 0);
+        for (const o of online || []) {
+          const aluno = (alunos || []).find(a => a.turma_id === o.turma_id && a.numero_chamada === o.aluno_numero);
+          if (!aluno || respostasMap.has(aluno.id)) continue;
+          const acertos = (qs || []).filter(q => q.tipo === 'multipla_escolha' && o.respostas?.[q.id] === q.resposta_correta).length;
+          const nota = ((o.nota ?? 0) / 10) * valorTotal;
+          respostasMap.set(aluno.id, {
+            aluno_id: aluno.id, respostas: o.respostas || {}, acertos, nota, nota_final: nota,
+            escaneado_em: o.enviado_em, online: true,
+          });
+        }
+      }
 
       const lista = (alunos || []).map(al => ({
         aluno: al,
@@ -186,7 +209,7 @@ export function AvaliacaoResultados() {
                   <p className="text-sm text-on-surface font-medium">{aluno.nome}</p>
                   {resposta && (
                     <p className="text-xs text-on-surface-variant">
-                      {resposta.acertos}/{avaliacao.quantidade_objetivas} acertos objetivas
+                      {resposta.acertos}/{avaliacao.quantidade_objetivas} acertos objetivas{resposta.online ? ' · online' : ''}
                     </p>
                   )}
                 </div>
