@@ -56,8 +56,8 @@ export function AppLayout() {
       </header>
 
       {/* Main */}
-      <main className="flex-1 overflow-y-auto w-full pb-28">
-        <div className="max-w-2xl mx-auto h-full w-full px-margin-mobile">
+      <main className="flex-1 overflow-y-auto w-full pb-24">
+        <div className={cn("max-w-2xl mx-auto w-full px-margin-mobile", location.pathname.startsWith('/report') ? "min-h-full" : "h-full")}>
           <Outlet />
         </div>
       </main>
