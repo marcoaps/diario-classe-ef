@@ -56,7 +56,7 @@ export function AppLayout() {
       </header>
 
       {/* Main */}
-      <main className="flex-1 overflow-y-auto w-full pb-24">
+      <main className="flex-1 overflow-y-auto w-full pb-28">
         <div className="max-w-2xl mx-auto h-full w-full px-margin-mobile">
           <Outlet />
         </div>
