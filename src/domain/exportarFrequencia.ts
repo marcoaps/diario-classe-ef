@@ -1,4 +1,5 @@
-﻿import * as XLSX from 'xlsx';
+﻿import { arredondarEFormatar } from '../utils/arredondarNota';
+import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { AlunoFrequencia, Bimestre, ResumoFrequencia } from './useRelatorioFrequencia';
@@ -47,12 +48,13 @@ function calcularNotaEf(pontos: number, nome?: string, nomesAEE?: Set<string>, n
     if (nomesAEE?.has(nomeLower)) return 'AEE';
   }
   const nota = pontos + somaTrabalhos;
-  return (ajustar3Bim ? ajustarNota3Bim(nota) : nota).toFixed(1).replace('.', ',');
+  return ajustar3Bim ? arredondarEFormatar(ajustarNota3Bim(nota)) : nota.toFixed(1).replace('.', ',');
 }
 
 // Ajuste pedido para a planilha do 3º Bimestre: nota 1,0 (ou menos) vira 7,0 e as
 // demais sobem em escala linear até 10,0 na maior nota de todas as turmas
-// (NOTA_MAX_REF), ficando as melhores entre 9,0 e 10,0. Só afeta o arquivo
+// (NOTA_MAX_REF), ficando as melhores entre 9,0 e 10,0. O resultado é arredondado
+// para cima, no próximo 0,5 (regra do professor, sempre a favor do aluno). Só afeta o arquivo
 // exportado; o valor mostrado na tela e o salvo no banco continuam os originais.
 // Se surgir nota maior que NOTA_MAX_REF, atualizar a constante.
 const NOTA_MIN_REF = 1.0;
