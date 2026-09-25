@@ -33,12 +33,12 @@ export function AlunosProva() {
   // Provas online enviadas: [prova_id, turma, nº de chamada]. Só contam as provas
   // cujo título cita o bimestre selecionado (ex.: "3º BIMESTRE").
   const [provasOnline, setProvasOnline] = useState<{ id: string; titulo: string }[]>([]);
-  const [envios, setEnvios] = useState<{ prova_id: string; turma_id: string; aluno_numero: number | null }[]>([]);
+  const [envios, setEnvios] = useState<{ prova_id: string; turma_id: string; aluno_numero: number | null; aluno_nome: string | null }[]>([]);
 
   React.useEffect(() => {
     async function carregarProvasOnline() {
       const { data: provas } = await supabase.from('provas').select('id, titulo');
-      const { data: resp } = await supabase.from('respostas').select('prova_id, turma_id, aluno_numero');
+      const { data: resp } = await supabase.from('respostas').select('prova_id, turma_id, aluno_numero, aluno_nome');
       setProvasOnline(provas || []);
       setEnvios(resp || []);
     }
@@ -64,18 +64,41 @@ export function AlunosProva() {
   const alunos = alunosBrutos.filter(a => !nomesExcluidos.has(normNome(a.nome)));
   const excluidosCount = alunosBrutos.length - alunos.length;
 
-  const numerosOnline = useMemo(() => {
+  // Quem já enviou a prova online do bimestre (ids dos alunos). O nome digitado
+  // tem prioridade: se bater (mesmo parcialmente) com um aluno da turma, o nº de
+  // chamada é ignorado. Sem nome reconhecível, vale o nº de chamada.
+  const idsOnline = useMemo(() => {
     const re = new RegExp(String.raw`(^|\D)${bimestre}\s*[º°o]?\s*bim`, 'i');
-    const ids = new Set(provasOnline.filter(p => re.test(p.titulo)).map(p => p.id));
+    const provaIds = new Set(provasOnline.filter(p => re.test(p.titulo)).map(p => p.id));
     const turma = (turmaId || '').trim().toUpperCase();
-    return new Set(
-      envios
-        .filter(e => ids.has(e.prova_id) && e.aluno_numero != null && (e.turma_id || '').trim().toUpperCase() === turma)
-        .map(e => e.aluno_numero as number),
-    );
-  }, [provasOnline, envios, bimestre, turmaId]);
+    const tokens = (n: string) => normNome(n).split(/\s+/).filter(t => t.length > 1);
+    const feitos = new Set<string>();
+    for (const e of envios) {
+      if (!provaIds.has(e.prova_id) || (e.turma_id || '').trim().toUpperCase() !== turma) continue;
+      const digitado = tokens(e.aluno_nome || '');
+      const porNome = digitado.length === 0 ? [] : alunosBrutos.filter(a => {
+        const t = new Set(tokens(a.nome));
+        return digitado.every(d => t.has(d));
+      });
+      const porNumero = alunosBrutos.filter(a => e.aluno_numero != null && a.numero_chamada != null && Number(a.numero_chamada) === e.aluno_numero);
+      if (porNome.length === 1) feitos.add(porNome[0].id);
+      else if (porNome.length > 1) {
+        const desempate = porNome.find(a => porNumero.some(n => n.id === a.id));
+        if (desempate) feitos.add(desempate.id);
+      } else {
+        // Sem nome reconhecível: usa o nº de chamada, mas só se o nome digitado
+        // tiver alguma palavra em comum com o dono do número (evita excluir outro aluno).
+        const sig = (t: string) => t.length > 2 && !['dos', 'das'].includes(t);
+        porNumero.forEach(a => {
+          const t = new Set(tokens(a.nome));
+          if (digitado.length === 0 || digitado.some(d => sig(d) && t.has(d))) feitos.add(a.id);
+        });
+      }
+    }
+    return feitos;
+  }, [provasOnline, envios, bimestre, turmaId, alunosBrutos]);
 
-  const fizeramOnline = alunos.filter(a => a.presentes <= LIMITE_PRESENCAS && a.numero_chamada != null && numerosOnline.has(Number(a.numero_chamada)));
+  const fizeramOnline = alunos.filter(a => a.presentes <= LIMITE_PRESENCAS && idsOnline.has(a.id));
   const farao = alunos.filter(a => a.presentes <= LIMITE_PRESENCAS && !fizeramOnline.includes(a));
   const naoFarao = alunos.filter(a => a.presentes > LIMITE_PRESENCAS);
 
@@ -175,7 +198,7 @@ export function AlunosProva() {
             <div className="bg-surface rounded-3xl border border-outline-variant shadow-sm overflow-hidden">
               <div className="px-4 py-3 border-b border-outline-variant">
                 <h3 className="text-sm font-bold text-on-surface">Já fizeram a prova online ({fizeramOnline.length})</h3>
-                <p className="text-[11px] text-on-surface-variant">Reconhecidos pelo nº de chamada e turma; não entram na lista acima nem no Word.</p>
+                <p className="text-[11px] text-on-surface-variant">Reconhecidos pelo nome digitado (mesmo parcial) e, na falta dele, pelo nº de chamada; não entram na lista acima nem no Word.</p>
               </div>
               <ul className="divide-y divide-outline-variant">
                 {fizeramOnline.map(a => (
