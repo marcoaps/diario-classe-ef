@@ -41,11 +41,13 @@ function getLabelPeriodo(ctx: ExportContext): string {
 
 // Nota EF = pontos de frequ\u00eancia (0,5 por presen\u00e7a) + soma das notas de
 // trabalhos do bimestre, sem teto (reflete o mesmo valor mostrado na tela).
-function calcularNotaEf(pontos: number, nome?: string, nomesAEE?: Set<string>, nomesTransferidos?: Set<string>, somaTrabalhos = 0, ajustar3Bim = false): string {
+function calcularNotaEf(pontos: number, nome?: string, nomesAEE?: Set<string>, nomesTransferidos?: Set<string>, somaTrabalhos = 0, ajustar3Bim = false, presentes = 0): string {
   if (nome) {
     const nomeLower = nome.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
     if (nomesTransferidos?.has(nomeLower)) return 'Transf.';
-    if (nomesAEE?.has(nomeLower)) return 'AEE';
+    // AEE só aparece no lugar da nota se o aluno não tem nenhuma presença;
+    // com presença, é contabilizado normalmente como os demais.
+    if (nomesAEE?.has(nomeLower) && presentes === 0) return 'AEE';
   }
   const nota = pontos + somaTrabalhos;
   return ajustar3Bim ? arredondarEFormatar(ajustarNota3Bim(nota)) : nota.toFixed(1).replace('.', ',');
@@ -101,7 +103,7 @@ export function exportarExcel(ctx: ExportContext) {
     ctx.transferidos?.has(a.id) ? '-' : a.percentual,
     situacao(a, ctx.transferidos),
     ctx.transferidos?.has(a.id) ? '-' : (ctx.notasTrabalhosPorAluno?.[a.id] ?? 0),
-    ctx.transferidos?.has(a.id) ? '-' : calcularNotaEf(a.pontos, a.nome, ctx.nomesAEE, ctx.nomesTransferidos, ctx.notasTrabalhosPorAluno?.[a.id] ?? 0, ctx.bimestre === 3 && !ctx.dataFiltro),
+    ctx.transferidos?.has(a.id) ? '-' : calcularNotaEf(a.pontos, a.nome, ctx.nomesAEE, ctx.nomesTransferidos, ctx.notasTrabalhosPorAluno?.[a.id] ?? 0, ctx.bimestre === 3 && !ctx.dataFiltro, a.presentes),
   ]);
 
   const ws = XLSX.utils.aoa_to_sheet([...cabecalho, ...linhas]);
