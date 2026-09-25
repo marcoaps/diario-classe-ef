@@ -4,7 +4,7 @@ import { supabase } from '../../data/supabase';
 import { ClipboardCheck, Loader2, Users, UserCheck, UserX, FileText } from 'lucide-react';
 import { exportarAlunosProvaWord } from './exportarAlunosProva';
 import { cn } from '../AppLayout';
-import { useRelatorioFrequencia, type Bimestre, bimestreAtual } from '../../domain/useRelatorioFrequencia';
+import { useRelatorioFrequencia, type Bimestre, type AlunoFrequencia, bimestreAtual } from '../../domain/useRelatorioFrequencia';
 
 const BIMESTRES: Bimestre[] = [1, 2, 3, 4];
 
@@ -14,55 +14,17 @@ const LIMITE_PRESENCAS = 2;
 
 function normNome(s: string) { return s.toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
 
-export function AlunosProva() {
-  const { classRooms } = useStore();
+type ProvaOnline = { id: string; titulo: string };
+type Envio = { prova_id: string; turma_id: string; aluno_numero: number | null; aluno_nome: string | null };
+type ResultadoTurma = { loading: boolean; farao: AlunoFrequencia[]; naoFarao: number };
 
-  const [nomesExcluidos, setNomesExcluidos] = useState<Set<string>>(new Set());
-
-  React.useEffect(() => {
-    async function carregarExcluidos() {
-      const { data: aee } = await supabase.from('alunos_especiais').select('nome');
-      const { data: transf } = await supabase.from('notas').select('nome').or('situacao.ilike.%transferi%,situacao.ilike.%remanej%');
-      const aeeSet = new Set<string>((aee || []).map((e: any) => normNome(e.nome)));
-      const transfSet = new Set<string>((transf || []).map((e: any) => normNome(e.nome)));
-      setNomesExcluidos(new Set<string>([...aeeSet, ...transfSet]));
-    }
-    carregarExcluidos();
-  }, []);
-
-  // Provas online enviadas: [prova_id, turma, nº de chamada]. Só contam as provas
-  // cujo título cita o bimestre selecionado (ex.: "3º BIMESTRE").
-  const [provasOnline, setProvasOnline] = useState<{ id: string; titulo: string }[]>([]);
-  const [envios, setEnvios] = useState<{ prova_id: string; turma_id: string; aluno_numero: number | null; aluno_nome: string | null }[]>([]);
-
-  React.useEffect(() => {
-    async function carregarProvasOnline() {
-      const { data: provas } = await supabase.from('provas').select('id, titulo');
-      const { data: resp } = await supabase.from('respostas').select('prova_id, turma_id, aluno_numero, aluno_nome');
-      setProvasOnline(provas || []);
-      setEnvios(resp || []);
-    }
-    carregarProvasOnline();
-  }, []);
-
-  const uniqueClassRooms = useMemo(
-    () => Array.from(new Map(classRooms.map((cr) => [cr.name, cr])).values()).sort(
-      (a: any, b: any) => a.name.localeCompare(b.name, 'pt-BR', { numeric: true }),
-    ),
-    [classRooms],
-  );
-
-  const [turmaId, setTurmaId] = useState<string>(uniqueClassRooms[0]?.name ?? '');
-  const [bimestre, setBimestre] = useState<Bimestre>(() => bimestreAtual());
-
-  React.useEffect(() => {
-    if (!turmaId && uniqueClassRooms.length > 0) setTurmaId(uniqueClassRooms[0].name);
-  }, [uniqueClassRooms, turmaId]);
-
-  const { alunos: alunosBrutos, loading, erro } = useRelatorioFrequencia(turmaId || null, bimestre);
-
+function TurmaBloco({ turmaId, bimestre, nomesExcluidos, provasOnline, envios, onResultado }: {
+  turmaId: string; bimestre: Bimestre; nomesExcluidos: Set<string>;
+  provasOnline: ProvaOnline[]; envios: Envio[];
+  onResultado: (turma: string, r: ResultadoTurma) => void;
+}) {
+  const { alunos: alunosBrutos, loading, erro } = useRelatorioFrequencia(turmaId, bimestre);
   const alunos = alunosBrutos.filter(a => !nomesExcluidos.has(normNome(a.nome)));
-  const excluidosCount = alunosBrutos.length - alunos.length;
 
   // Quem já enviou a prova online do bimestre (ids dos alunos). O nome digitado
   // tem prioridade: se bater (mesmo parcialmente) com um aluno da turma, o nº de
@@ -100,7 +62,111 @@ export function AlunosProva() {
 
   const fizeramOnline = alunos.filter(a => a.presentes <= LIMITE_PRESENCAS && idsOnline.has(a.id));
   const farao = alunos.filter(a => a.presentes <= LIMITE_PRESENCAS && !fizeramOnline.includes(a));
-  const naoFarao = alunos.filter(a => a.presentes > LIMITE_PRESENCAS);
+  const naoFarao = alunos.filter(a => a.presentes > LIMITE_PRESENCAS).length;
+
+  const chave = `${loading}|${naoFarao}|${farao.map(a => a.id).join(',')}`;
+  React.useEffect(() => {
+    onResultado(turmaId, { loading, farao, naoFarao });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chave, turmaId]);
+
+  return (
+    <div className="bg-surface rounded-3xl border border-outline-variant shadow-sm overflow-hidden">
+      <div className="px-4 py-3 border-b border-outline-variant flex items-center gap-2">
+        <Users className="w-4 h-4 text-on-surface-variant" />
+        <h3 className="text-sm font-bold text-on-surface">{turmaId}</h3>
+        <span className="text-xs text-on-surface-variant">
+          {loading ? 'calculando...' : `${farao.length} vão fazer • ${naoFarao} dispensados`}
+        </span>
+      </div>
+      {erro ? <p className="px-4 py-3 text-sm text-on-error-container bg-error-container">{erro}</p> : null}
+      {loading ? (
+        <div className="flex items-center justify-center py-6 text-on-surface-variant"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
+      ) : alunos.length === 0 ? (
+        <p className="px-4 py-4 text-sm text-on-surface-variant text-center">Nenhum aluno encontrado para essa turma.</p>
+      ) : farao.length === 0 ? (
+        <p className="px-4 py-4 text-sm text-on-surface-variant text-center">Nenhum aluno com {LIMITE_PRESENCAS} presenças ou menos.</p>
+      ) : (
+        <ul className="divide-y divide-outline-variant">
+          {farao.map(a => (
+            <li key={a.id} className="px-4 py-2.5 flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2 text-sm font-medium text-on-surface">
+                {a.numero_chamada ? <span className="font-mono text-on-surface-variant text-xs w-6 text-right">{a.numero_chamada}</span> : <span className="w-6" />}
+                {a.nome}
+              </span>
+              <span className="text-xs font-semibold text-on-surface-variant shrink-0">{a.presentes} presença{a.presentes === 1 ? '' : 's'}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {fizeramOnline.length > 0 ? (
+        <div className="border-t border-outline-variant bg-surface-container/40 px-4 py-2.5">
+          <p className="text-[11px] font-bold text-on-surface-variant">Já fizeram a prova online ({fizeramOnline.length}) — não entram na lista nem no Word</p>
+          <p className="text-[11px] text-on-surface-variant">{fizeramOnline.map(a => `${a.numero_chamada ?? ''} ${a.nome}`.trim()).join(' • ')}</p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function AlunosProva() {
+  const { classRooms } = useStore();
+
+  const [nomesExcluidos, setNomesExcluidos] = useState<Set<string>>(new Set());
+
+  React.useEffect(() => {
+    async function carregarExcluidos() {
+      const { data: aee } = await supabase.from('alunos_especiais').select('nome');
+      const { data: transf } = await supabase.from('notas').select('nome').or('situacao.ilike.%transferi%,situacao.ilike.%remanej%');
+      const aeeSet = new Set<string>((aee || []).map((e: any) => normNome(e.nome)));
+      const transfSet = new Set<string>((transf || []).map((e: any) => normNome(e.nome)));
+      setNomesExcluidos(new Set<string>([...aeeSet, ...transfSet]));
+    }
+    carregarExcluidos();
+  }, []);
+
+  // Provas online enviadas. Só contam as provas cujo título cita o bimestre
+  // selecionado (ex.: "3º BIMESTRE").
+  const [provasOnline, setProvasOnline] = useState<ProvaOnline[]>([]);
+  const [envios, setEnvios] = useState<Envio[]>([]);
+
+  React.useEffect(() => {
+    async function carregarProvasOnline() {
+      const { data: provas } = await supabase.from('provas').select('id, titulo');
+      const { data: resp } = await supabase.from('respostas').select('prova_id, turma_id, aluno_numero, aluno_nome');
+      setProvasOnline(provas || []);
+      setEnvios(resp || []);
+    }
+    carregarProvasOnline();
+  }, []);
+
+  const turmas = useMemo(
+    () => Array.from(new Set<string>(classRooms.map((cr: any) => cr.name as string))).sort(
+      (a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }),
+    ),
+    [classRooms],
+  );
+
+  const [bimestre, setBimestre] = useState<Bimestre>(() => bimestreAtual());
+  const [resultados, setResultados] = useState<Record<string, ResultadoTurma>>({});
+
+  const onResultado = React.useCallback((turma: string, r: ResultadoTurma) => {
+    setResultados(prev => ({ ...prev, [turma]: r }));
+  }, []);
+
+  const trocarBimestre = (b: Bimestre) => { setResultados({}); setBimestre(b); };
+
+  const lista = turmas.map(t => resultados[t]).filter(Boolean) as ResultadoTurma[];
+  const totalFarao = lista.reduce((n, r) => n + r.farao.length, 0);
+  const totalNao = lista.reduce((n, r) => n + r.naoFarao, 0);
+  const carregando = turmas.length === 0 || turmas.some(t => !resultados[t] || resultados[t].loading);
+
+  const exportar = () => {
+    const dados = turmas
+      .map(t => ({ turma: t, alunos: resultados[t]?.farao ?? [] }))
+      .filter(t => t.alunos.length > 0);
+    exportarAlunosProvaWord(bimestre, dados);
+  };
 
   return (
     <div className="flex flex-col gap-6 font-sans animate-in fade-in pb-32 pt-4">
@@ -110,107 +176,46 @@ export function AlunosProva() {
       </h2>
 
       <div className="bg-surface rounded-3xl shadow-sm border border-outline-variant p-5">
-        <div className="grid gap-4">
-          <div>
-            <label className="text-xs font-semibold text-on-surface-variant mb-1 block">Turma</label>
-            <select
-              value={turmaId}
-              onChange={(e) => setTurmaId(e.target.value)}
-              className="w-full bg-surface-container border border-outline-variant rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none"
-            >
-              {uniqueClassRooms.length === 0 ? <option value="">Nenhuma turma</option> : null}
-              {uniqueClassRooms.map((cr: any) => <option key={cr.id} value={cr.name}>{cr.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-on-surface-variant mb-1 block">Bimestre</label>
-            <div className="grid grid-cols-4 gap-2">
-              {BIMESTRES.map((b) => (
-                <button key={b} type="button" onClick={() => setBimestre(b)}
-                  className={cn('py-2 rounded-xl text-sm font-bold border transition-all active:scale-95',
-                    bimestre === b ? 'bg-primary text-on-primary border-primary shadow-sm' : 'bg-surface-container text-on-surface border-outline-variant hover:bg-surface-container-highest')}>
-                  {b}º Bim
-                </button>
-              ))}
-            </div>
-          </div>
+        <label className="text-xs font-semibold text-on-surface-variant mb-1 block">Bimestre</label>
+        <div className="grid grid-cols-4 gap-2">
+          {BIMESTRES.map((b) => (
+            <button key={b} type="button" onClick={() => trocarBimestre(b)}
+              className={cn('py-2 rounded-xl text-sm font-bold border transition-all active:scale-95',
+                bimestre === b ? 'bg-primary text-on-primary border-primary shadow-sm' : 'bg-surface-container text-on-surface border-outline-variant hover:bg-surface-container-highest')}>
+              {b}º Bim
+            </button>
+          ))}
         </div>
         <p className="text-[11px] text-on-surface-variant mt-3">
-          Regra: alunos com mais de {LIMITE_PRESENCAS} presenças no bimestre não fazem a prova.
-          {excluidosCount > 0 ? ` Alunos AEE/transferidos não entram na contagem (${excluidosCount} excluído${excluidosCount === 1 ? '' : 's'}).` : ''}
+          Regra: alunos com mais de {LIMITE_PRESENCAS} presenças no bimestre não fazem a prova. Alunos AEE/transferidos não entram na contagem.
         </p>
       </div>
 
-      {erro ? <div className="bg-error-container text-on-error-container px-4 py-3 rounded-2xl text-sm">{erro}</div> : null}
-
-      {loading ? (
-        <div className="flex flex-col gap-2 items-center justify-center py-20 text-on-surface-variant">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <span className="text-sm font-medium">Calculando...</span>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-primary-container rounded-3xl p-5 flex flex-col items-center justify-center gap-1 border border-primary/20">
+          <UserCheck className="w-6 h-6 text-on-primary-container" />
+          <p className="text-3xl font-black text-on-primary-container">{totalFarao}</p>
+          <p className="text-xs font-bold text-on-primary-container text-center">Vão fazer a prova</p>
         </div>
-      ) : !turmaId ? (
-        <div className="text-center text-on-surface-variant py-10 font-medium bg-surface rounded-2xl border border-outline-variant shadow-sm">Selecione uma turma.</div>
-      ) : alunos.length === 0 ? (
-        <div className="text-center text-on-surface-variant py-10 font-medium bg-surface rounded-2xl border border-outline-variant shadow-sm">Nenhum aluno encontrado para essa turma.</div>
-      ) : (
-        <>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-primary-container rounded-3xl p-5 flex flex-col items-center justify-center gap-1 border border-primary/20">
-              <UserCheck className="w-6 h-6 text-on-primary-container" />
-              <p className="text-3xl font-black text-on-primary-container">{farao.length}</p>
-              <p className="text-xs font-bold text-on-primary-container text-center">Vão fazer a prova</p>
-            </div>
-            <div className="bg-surface-container rounded-3xl p-5 flex flex-col items-center justify-center gap-1 border border-outline-variant">
-              <UserX className="w-6 h-6 text-on-surface-variant" />
-              <p className="text-3xl font-black text-on-surface-variant">{naoFarao.length}</p>
-              <p className="text-xs font-bold text-on-surface-variant text-center">Dispensados</p>
-            </div>
-          </div>
+        <div className="bg-surface-container rounded-3xl p-5 flex flex-col items-center justify-center gap-1 border border-outline-variant">
+          <UserX className="w-6 h-6 text-on-surface-variant" />
+          <p className="text-3xl font-black text-on-surface-variant">{totalNao}</p>
+          <p className="text-xs font-bold text-on-surface-variant text-center">Dispensados</p>
+        </div>
+      </div>
 
-          <div className="bg-surface rounded-3xl border border-outline-variant shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-outline-variant flex items-center gap-2">
-              <Users className="w-4 h-4 text-on-surface-variant" />
-              <h3 className="text-sm font-bold text-on-surface">Vão fazer a prova ({farao.length})</h3>
-              <button type="button" disabled={farao.length === 0}
-                onClick={() => exportarAlunosProvaWord(turmaId, bimestre, LIMITE_PRESENCAS, farao)}
-                className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-primary text-on-primary active:scale-95 transition-all disabled:opacity-40">
-                <FileText className="w-4 h-4" /> Exportar Word
-              </button>
-            </div>
-            {farao.length === 0 ? (
-              <p className="px-4 py-6 text-sm text-on-surface-variant text-center">Nenhum aluno com {LIMITE_PRESENCAS} presenças ou menos.</p>
-            ) : (
-              <ul className="divide-y divide-outline-variant">
-                {farao.map(a => (
-                  <li key={a.id} className="px-4 py-2.5 flex items-center justify-between gap-2">
-                    <span className="flex items-center gap-2 text-sm font-medium text-on-surface">
-                      {a.numero_chamada ? <span className="font-mono text-on-surface-variant text-xs w-6 text-right">{a.numero_chamada}</span> : <span className="w-6" />}
-                      {a.nome}
-                    </span>
-                    <span className="text-xs font-semibold text-on-surface-variant shrink-0">{a.presentes} presença{a.presentes === 1 ? '' : 's'}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+      <button type="button" disabled={carregando || totalFarao === 0} onClick={exportar}
+        className="flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold bg-primary text-on-primary active:scale-95 transition-all disabled:opacity-40">
+        {carregando ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+        Exportar Word (todas as turmas)
+      </button>
 
-          {fizeramOnline.length > 0 ? (
-            <div className="bg-surface rounded-3xl border border-outline-variant shadow-sm overflow-hidden">
-              <div className="px-4 py-3 border-b border-outline-variant">
-                <h3 className="text-sm font-bold text-on-surface">Já fizeram a prova online ({fizeramOnline.length})</h3>
-                <p className="text-[11px] text-on-surface-variant">Reconhecidos pelo nome digitado (mesmo parcial) e, na falta dele, pelo nº de chamada; não entram na lista acima nem no Word.</p>
-              </div>
-              <ul className="divide-y divide-outline-variant">
-                {fizeramOnline.map(a => (
-                  <li key={a.id} className="px-4 py-2.5 flex items-center gap-2 text-sm font-medium text-on-surface-variant">
-                    <span className="font-mono text-xs w-6 text-right">{a.numero_chamada}</span>{a.nome}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </>
-      )}
+      {turmas.length === 0 ? (
+        <div className="text-center text-on-surface-variant py-10 font-medium bg-surface rounded-2xl border border-outline-variant shadow-sm">Nenhuma turma.</div>
+      ) : turmas.map(t => (
+        <TurmaBloco key={`${t}-${bimestre}`} turmaId={t} bimestre={bimestre} nomesExcluidos={nomesExcluidos}
+          provasOnline={provasOnline} envios={envios} onResultado={onResultado} />
+      ))}
     </div>
   );
 }
