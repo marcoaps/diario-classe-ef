@@ -30,6 +30,21 @@ export function AlunosProva() {
     carregarExcluidos();
   }, []);
 
+  // Provas online enviadas: [prova_id, turma, nº de chamada]. Só contam as provas
+  // cujo título cita o bimestre selecionado (ex.: "3º BIMESTRE").
+  const [provasOnline, setProvasOnline] = useState<{ id: string; titulo: string }[]>([]);
+  const [envios, setEnvios] = useState<{ prova_id: string; turma_id: string; aluno_numero: number | null }[]>([]);
+
+  React.useEffect(() => {
+    async function carregarProvasOnline() {
+      const { data: provas } = await supabase.from('provas').select('id, titulo');
+      const { data: resp } = await supabase.from('respostas').select('prova_id, turma_id, aluno_numero');
+      setProvasOnline(provas || []);
+      setEnvios(resp || []);
+    }
+    carregarProvasOnline();
+  }, []);
+
   const uniqueClassRooms = useMemo(
     () => Array.from(new Map(classRooms.map((cr) => [cr.name, cr])).values()).sort(
       (a: any, b: any) => a.name.localeCompare(b.name, 'pt-BR', { numeric: true }),
@@ -49,7 +64,19 @@ export function AlunosProva() {
   const alunos = alunosBrutos.filter(a => !nomesExcluidos.has(normNome(a.nome)));
   const excluidosCount = alunosBrutos.length - alunos.length;
 
-  const farao = alunos.filter(a => a.presentes <= LIMITE_PRESENCAS);
+  const numerosOnline = useMemo(() => {
+    const re = new RegExp(String.raw`(^|\D)${bimestre}\s*[º°o]?\s*bim`, 'i');
+    const ids = new Set(provasOnline.filter(p => re.test(p.titulo)).map(p => p.id));
+    const turma = (turmaId || '').trim().toUpperCase();
+    return new Set(
+      envios
+        .filter(e => ids.has(e.prova_id) && e.aluno_numero != null && (e.turma_id || '').trim().toUpperCase() === turma)
+        .map(e => e.aluno_numero as number),
+    );
+  }, [provasOnline, envios, bimestre, turmaId]);
+
+  const fizeramOnline = alunos.filter(a => a.presentes <= LIMITE_PRESENCAS && a.numero_chamada != null && numerosOnline.has(Number(a.numero_chamada)));
+  const farao = alunos.filter(a => a.presentes <= LIMITE_PRESENCAS && !fizeramOnline.includes(a));
   const naoFarao = alunos.filter(a => a.presentes > LIMITE_PRESENCAS);
 
   return (
@@ -143,6 +170,22 @@ export function AlunosProva() {
               </ul>
             )}
           </div>
+
+          {fizeramOnline.length > 0 ? (
+            <div className="bg-surface rounded-3xl border border-outline-variant shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-outline-variant">
+                <h3 className="text-sm font-bold text-on-surface">Já fizeram a prova online ({fizeramOnline.length})</h3>
+                <p className="text-[11px] text-on-surface-variant">Reconhecidos pelo nº de chamada e turma; não entram na lista acima nem no Word.</p>
+              </div>
+              <ul className="divide-y divide-outline-variant">
+                {fizeramOnline.map(a => (
+                  <li key={a.id} className="px-4 py-2.5 flex items-center gap-2 text-sm font-medium text-on-surface-variant">
+                    <span className="font-mono text-xs w-6 text-right">{a.numero_chamada}</span>{a.nome}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </>
       )}
     </div>
