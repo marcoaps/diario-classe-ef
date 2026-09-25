@@ -40,13 +40,27 @@ function getLabelPeriodo(ctx: ExportContext): string {
 
 // Nota EF = pontos de frequ\u00eancia (0,5 por presen\u00e7a) + soma das notas de
 // trabalhos do bimestre, sem teto (reflete o mesmo valor mostrado na tela).
-function calcularNotaEf(pontos: number, nome?: string, nomesAEE?: Set<string>, nomesTransferidos?: Set<string>, somaTrabalhos = 0): string {
+function calcularNotaEf(pontos: number, nome?: string, nomesAEE?: Set<string>, nomesTransferidos?: Set<string>, somaTrabalhos = 0, ajustar3Bim = false): string {
   if (nome) {
     const nomeLower = nome.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
     if (nomesTransferidos?.has(nomeLower)) return 'Transf.';
     if (nomesAEE?.has(nomeLower)) return 'AEE';
   }
-  return (pontos + somaTrabalhos).toFixed(1).replace('.', ',');
+  const nota = pontos + somaTrabalhos;
+  return (ajustar3Bim ? ajustarNota3Bim(nota) : nota).toFixed(1).replace('.', ',');
+}
+
+// Ajuste pedido para a planilha do 3º Bimestre: nota 1,0 (ou menos) vira 7,0 e as
+// demais sobem em escala linear até 10,0 na maior nota de todas as turmas
+// (NOTA_MAX_REF), ficando as melhores entre 9,0 e 10,0. Só afeta o arquivo
+// exportado; o valor mostrado na tela e o salvo no banco continuam os originais.
+// Se surgir nota maior que NOTA_MAX_REF, atualizar a constante.
+const NOTA_MIN_REF = 1.0;
+const NOTA_MAX_REF = 7.3;
+function ajustarNota3Bim(nota: number): number {
+  if (nota <= NOTA_MIN_REF) return 7.0;
+  if (nota >= NOTA_MAX_REF) return 10.0;
+  return 7.0 + ((nota - NOTA_MIN_REF) / (NOTA_MAX_REF - NOTA_MIN_REF)) * 3.0;
 }
 
 
@@ -85,7 +99,7 @@ export function exportarExcel(ctx: ExportContext) {
     ctx.transferidos?.has(a.id) ? '-' : a.percentual,
     situacao(a, ctx.transferidos),
     ctx.transferidos?.has(a.id) ? '-' : (ctx.notasTrabalhosPorAluno?.[a.id] ?? 0),
-    ctx.transferidos?.has(a.id) ? '-' : calcularNotaEf(a.pontos, a.nome, ctx.nomesAEE, ctx.nomesTransferidos, ctx.notasTrabalhosPorAluno?.[a.id] ?? 0),
+    ctx.transferidos?.has(a.id) ? '-' : calcularNotaEf(a.pontos, a.nome, ctx.nomesAEE, ctx.nomesTransferidos, ctx.notasTrabalhosPorAluno?.[a.id] ?? 0, ctx.bimestre === 3 && !ctx.dataFiltro),
   ]);
 
   const ws = XLSX.utils.aoa_to_sheet([...cabecalho, ...linhas]);
