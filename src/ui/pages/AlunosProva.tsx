@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { useStore } from '../../store';
 import { supabase } from '../../data/supabase';
-import { ClipboardCheck, Loader2, Users, UserCheck, UserX } from 'lucide-react';
+import { ClipboardCheck, Loader2, Users, UserCheck, UserX, FileText } from 'lucide-react';
+import { exportarAlunosProvaWord } from './exportarAlunosProva';
 import { cn } from '../AppLayout';
 import { useRelatorioFrequencia, type Bimestre, bimestreAtual } from '../../domain/useRelatorioFrequencia';
 
@@ -120,6 +121,11 @@ export function AlunosProva() {
             <div className="px-4 py-3 border-b border-outline-variant flex items-center gap-2">
               <Users className="w-4 h-4 text-on-surface-variant" />
               <h3 className="text-sm font-bold text-on-surface">Vão fazer a prova ({farao.length})</h3>
+              <button type="button" disabled={farao.length === 0}
+                onClick={() => exportarAlunosProvaWord(turmaId, bimestre, LIMITE_PRESENCAS, farao)}
+                className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-primary text-on-primary active:scale-95 transition-all disabled:opacity-40">
+                <FileText className="w-4 h-4" /> Exportar Word
+              </button>
             </div>
             {farao.length === 0 ? (
               <p className="px-4 py-6 text-sm text-on-surface-variant text-center">Nenhum aluno com {LIMITE_PRESENCAS} presenças ou menos.</p>
