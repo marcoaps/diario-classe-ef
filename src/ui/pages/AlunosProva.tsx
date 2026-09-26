@@ -24,7 +24,13 @@ function TurmaBloco({ turmaId, bimestre, nomesExcluidos, provasOnline, envios, o
   onResultado: (turma: string, r: ResultadoTurma) => void;
 }) {
   const { alunos: alunosBrutos, loading, erro } = useRelatorioFrequencia(turmaId, bimestre);
-  const alunos = alunosBrutos.filter(a => !nomesExcluidos.has(normNome(a.nome)));
+  // AEE: exclui pelo nome. Transferido/remanejado: só vale na turma em que a situação foi
+  // registrada (quem mudou de turma continua fazendo a prova na turma atual).
+  const turmaChave = (turmaId || '').trim().toUpperCase();
+  const alunos = alunosBrutos.filter(a => {
+    const n = normNome(a.nome);
+    return !nomesExcluidos.has(n) && !nomesExcluidos.has(`${turmaChave}|${n}`);
+  });
 
   // Quem já enviou a prova online do bimestre (ids dos alunos). O nome digitado
   // tem prioridade: se bater (mesmo parcialmente) com um aluno da turma, o nº de
@@ -117,9 +123,9 @@ export function AlunosProva() {
   React.useEffect(() => {
     async function carregarExcluidos() {
       const { data: aee } = await supabase.from('alunos_especiais').select('nome');
-      const { data: transf } = await supabase.from('notas').select('nome').or('situacao.ilike.%transferi%,situacao.ilike.%remanej%');
+      const { data: transf } = await supabase.from('notas').select('nome, turma').or('situacao.ilike.%transferi%,situacao.ilike.%remanej%');
       const aeeSet = new Set<string>((aee || []).map((e: any) => normNome(e.nome)));
-      const transfSet = new Set<string>((transf || []).map((e: any) => normNome(e.nome)));
+      const transfSet = new Set<string>((transf || []).map((e: any) => `${String(e.turma || '').trim().toUpperCase()}|${normNome(e.nome)}`));
       setNomesExcluidos(new Set<string>([...aeeSet, ...transfSet]));
     }
     carregarExcluidos();
