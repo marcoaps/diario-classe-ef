@@ -1,4 +1,4 @@
-﻿import { arredondarEFormatar } from '../utils/arredondarNota';
+﻿import { arredondarNota, formatarNota } from '../utils/arredondarNota';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -41,7 +41,7 @@ function getLabelPeriodo(ctx: ExportContext): string {
 
 // Nota EF = pontos de frequ\u00eancia (0,5 por presen\u00e7a) + soma das notas de
 // trabalhos do bimestre, sem teto (reflete o mesmo valor mostrado na tela).
-function calcularNotaEf(pontos: number, nome?: string, nomesAEE?: Set<string>, nomesTransferidos?: Set<string>, somaTrabalhos = 0, ajustar3Bim = false, presentes = 0): string {
+function calcularNotaEf(pontos: number, nome?: string, nomesAEE?: Set<string>, nomesTransferidos?: Set<string>, somaTrabalhos = 0, ajustar3Bim = false, presentes = 0, faltas = 99): string {
   if (nome) {
     const nomeLower = nome.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
     if (nomesTransferidos?.has(nomeLower)) return 'Transf.';
@@ -50,7 +50,13 @@ function calcularNotaEf(pontos: number, nome?: string, nomesAEE?: Set<string>, n
     if (nomesAEE?.has(nomeLower) && presentes === 0) return 'AEE';
   }
   const nota = pontos + somaTrabalhos;
-  return ajustar3Bim ? arredondarEFormatar(ajustarNota3Bim(nota)) : nota.toFixed(1).replace('.', ',');
+  if (ajustar3Bim) {
+    const ajustada = arredondarNota(ajustarNota3Bim(nota));
+    // Pedido do professor: quem ficou com 9,5 e teve até 2 faltas sobe para 10,0.
+    if (ajustada === 9.5 && faltas <= 2) return formatarNota(10);
+    return formatarNota(ajustada);
+  }
+  return nota.toFixed(1).replace('.', ',');
 }
 
 // Ajuste pedido para a planilha do 3º Bimestre: nota 1,0 (ou menos) vira 7,0 e as
@@ -103,7 +109,7 @@ export function exportarExcel(ctx: ExportContext) {
     ctx.transferidos?.has(a.id) ? '-' : a.percentual,
     situacao(a, ctx.transferidos),
     ctx.transferidos?.has(a.id) ? '-' : (ctx.notasTrabalhosPorAluno?.[a.id] ?? 0),
-    ctx.transferidos?.has(a.id) ? '-' : calcularNotaEf(a.pontos, a.nome, ctx.nomesAEE, ctx.nomesTransferidos, ctx.notasTrabalhosPorAluno?.[a.id] ?? 0, ctx.bimestre === 3 && !ctx.dataFiltro, a.presentes),
+    ctx.transferidos?.has(a.id) ? '-' : calcularNotaEf(a.pontos, a.nome, ctx.nomesAEE, ctx.nomesTransferidos, ctx.notasTrabalhosPorAluno?.[a.id] ?? 0, ctx.bimestre === 3 && !ctx.dataFiltro, a.presentes, a.ausentes),
   ]);
 
   const ws = XLSX.utils.aoa_to_sheet([...cabecalho, ...linhas]);
