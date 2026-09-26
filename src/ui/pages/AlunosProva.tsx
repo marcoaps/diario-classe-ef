@@ -13,6 +13,9 @@ const BIMESTRES: Bimestre[] = [1, 2, 3, 4];
 // não precisa fazer a prova; com 2 ou menos, faz a prova.
 const LIMITE_PRESENCAS = 2;
 
+// "8ºD" (nome no app) e "8D" (banco/prova online) viram a mesma chave: "8D".
+function chaveTurma(t: string | null | undefined) { return String(t ?? '').replace(/[^0-9A-Za-z]/g, '').toUpperCase(); }
+
 function normNome(s: string) { return s.toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
 
 type ProvaOnline = { id: string; titulo: string; turma_id?: string | null };
@@ -27,7 +30,7 @@ function TurmaBloco({ turmaId, bimestre, nomesExcluidos, provasOnline, envios, o
   const { alunos: alunosBrutos, loading, erro } = useRelatorioFrequencia(turmaId, bimestre);
   // AEE: exclui pelo nome. Transferido/remanejado: só vale na turma em que a situação foi
   // registrada (quem mudou de turma continua fazendo a prova na turma atual).
-  const turmaChave = (turmaId || '').trim().toUpperCase();
+  const turmaChave = chaveTurma(turmaId);
   const alunos = alunosBrutos.filter(a => {
     const n = normNome(a.nome);
     return !nomesExcluidos.has(n) && !nomesExcluidos.has(`${turmaChave}|${n}`);
@@ -39,11 +42,11 @@ function TurmaBloco({ turmaId, bimestre, nomesExcluidos, provasOnline, envios, o
   const idsOnline = useMemo(() => {
     const re = new RegExp(String.raw`(^|\D)${bimestre}\s*[º°o]?\s*bim`, 'i');
     const provaIds = new Set(provasOnline.filter(p => re.test(p.titulo)).map(p => p.id));
-    const turma = (turmaId || '').trim().toUpperCase();
+    const turma = chaveTurma(turmaId);
     const tokens = (n: string) => normNome(n).split(/\s+/).filter(t => t.length > 1);
     const feitos = new Set<string>();
     for (const e of envios) {
-      if (!provaIds.has(e.prova_id) || (e.turma_id || '').trim().toUpperCase() !== turma) continue;
+      if (!provaIds.has(e.prova_id) || chaveTurma(e.turma_id) !== turma) continue;
       const digitado = tokens(e.aluno_nome || '');
       const porNome = digitado.length === 0 ? [] : alunosBrutos.filter(a => {
         const t = new Set(tokens(a.nome));
@@ -126,7 +129,7 @@ export function AlunosProva() {
       const { data: aee } = await supabase.from('alunos_especiais').select('nome');
       const { data: transf } = await supabase.from('notas').select('nome, turma').or('situacao.ilike.%transferi%,situacao.ilike.%remanej%');
       const aeeSet = new Set<string>((aee || []).map((e: any) => normNome(e.nome)));
-      const transfSet = new Set<string>((transf || []).map((e: any) => `${String(e.turma || '').trim().toUpperCase()}|${normNome(e.nome)}`));
+      const transfSet = new Set<string>((transf || []).map((e: any) => `${chaveTurma(e.turma)}|${normNome(e.nome)}`));
       setNomesExcluidos(new Set<string>([...aeeSet, ...transfSet]));
     }
     carregarExcluidos();
@@ -193,10 +196,10 @@ export function AlunosProva() {
 
   const liberar = async () => {
     if (!provaAtual) return;
-    const gruposTurmas = provaAtual.turma_id ? getTurmasDoGrupo(provaAtual.turma_id) : turmas;
-    const linhas = gruposTurmas.flatMap(t => (resultados[t]?.farao ?? [])
+    const chavesDoGrupo = new Set((provaAtual.turma_id ? getTurmasDoGrupo(provaAtual.turma_id) : turmas).map(chaveTurma));
+    const linhas = turmas.filter(t => chavesDoGrupo.has(chaveTurma(t))).flatMap(t => (resultados[t]?.farao ?? [])
       .filter(a => a.numero_chamada != null)
-      .map(a => ({ prova_id: provaAtual.id, turma_id: t, aluno_id: a.id, numero_chamada: Number(a.numero_chamada), nome: a.nome })));
+      .map(a => ({ prova_id: provaAtual.id, turma_id: chaveTurma(t), aluno_id: a.id, numero_chamada: Number(a.numero_chamada), nome: a.nome })));
     if (linhas.length === 0) { setMsgLiberar('Nenhum aluno da(s) turma(s) desta prova na lista para liberar.'); return; }
     if (!window.confirm(`Liberar ${linhas.length} aluno(s) na prova "${provaAtual.titulo}"? Depois disso, só eles conseguem respondê-la.`)) return;
     setLiberando(true); setMsgLiberar(null);
