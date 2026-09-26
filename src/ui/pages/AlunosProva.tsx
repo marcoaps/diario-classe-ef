@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { useStore } from '../../store';
 import { supabase } from '../../data/supabase';
-import { ClipboardCheck, Loader2, Users, UserCheck, UserX, FileText } from 'lucide-react';
+import { ClipboardCheck, Loader2, Users, UserCheck, UserX, FileText, Lock } from 'lucide-react';
+import { getTurmasDoGrupo } from './ProvasOnline';
 import { exportarAlunosProvaWord } from './exportarAlunosProva';
 import { cn } from '../AppLayout';
 import { useRelatorioFrequencia, type Bimestre, type AlunoFrequencia, bimestreAtual } from '../../domain/useRelatorioFrequencia';
@@ -14,7 +15,7 @@ const LIMITE_PRESENCAS = 2;
 
 function normNome(s: string) { return s.toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
 
-type ProvaOnline = { id: string; titulo: string };
+type ProvaOnline = { id: string; titulo: string; turma_id?: string | null };
 type Envio = { prova_id: string; turma_id: string; aluno_numero: number | null; aluno_nome: string | null };
 type ResultadoTurma = { loading: boolean; farao: AlunoFrequencia[]; naoFarao: number };
 
@@ -138,7 +139,7 @@ export function AlunosProva() {
 
   React.useEffect(() => {
     async function carregarProvasOnline() {
-      const { data: provas } = await supabase.from('provas').select('id, titulo');
+      const { data: provas } = await supabase.from('provas').select('id, titulo, turma_id');
       const { data: resp } = await supabase.from('respostas').select('prova_id, turma_id, aluno_numero, aluno_nome');
       setProvasOnline(provas || []);
       setEnvios(resp || []);
@@ -166,6 +167,55 @@ export function AlunosProva() {
   const totalFarao = lista.reduce((n, r) => n + r.farao.length, 0);
   const totalNao = lista.reduce((n, r) => n + r.naoFarao, 0);
   const carregando = turmas.length === 0 || turmas.some(t => !resultados[t] || resultados[t].loading);
+
+  // ── Liberar a lista na prova online (só esses alunos conseguem responder) ──
+  const provasDoBimestre = useMemo(() => {
+    const re = new RegExp(String.raw`(^|\D)${bimestre}\s*[º°o]?\s*bim`, 'i');
+    const doBim = provasOnline.filter(p => re.test(p.titulo));
+    return doBim.length > 0 ? doBim : provasOnline;
+  }, [provasOnline, bimestre]);
+  const [provaLiberar, setProvaLiberar] = useState('');
+  const [liberando, setLiberando] = useState(false);
+  const [msgLiberar, setMsgLiberar] = useState<string | null>(null);
+  const [jaLiberados, setJaLiberados] = useState<number | null>(null);
+  const provaAtual = provasDoBimestre.find(p => p.id === provaLiberar) ?? null;
+
+  React.useEffect(() => {
+    if (!provasDoBimestre.some(p => p.id === provaLiberar)) setProvaLiberar(provasDoBimestre[0]?.id ?? '');
+  }, [provasDoBimestre, provaLiberar]);
+
+  React.useEffect(() => {
+    setJaLiberados(null);
+    if (!provaLiberar) return;
+    supabase.from('prova_alunos_autorizados').select('id', { count: 'exact', head: true }).eq('prova_id', provaLiberar)
+      .then(({ count, error }) => setJaLiberados(error ? null : (count ?? 0)));
+  }, [provaLiberar, msgLiberar]);
+
+  const liberar = async () => {
+    if (!provaAtual) return;
+    const gruposTurmas = provaAtual.turma_id ? getTurmasDoGrupo(provaAtual.turma_id) : turmas;
+    const linhas = gruposTurmas.flatMap(t => (resultados[t]?.farao ?? [])
+      .filter(a => a.numero_chamada != null)
+      .map(a => ({ prova_id: provaAtual.id, turma_id: t, aluno_id: a.id, numero_chamada: Number(a.numero_chamada), nome: a.nome })));
+    if (linhas.length === 0) { setMsgLiberar('Nenhum aluno da(s) turma(s) desta prova na lista para liberar.'); return; }
+    if (!window.confirm(`Liberar ${linhas.length} aluno(s) na prova "${provaAtual.titulo}"? Depois disso, só eles conseguem respondê-la.`)) return;
+    setLiberando(true); setMsgLiberar(null);
+    try {
+      const { data, error } = await supabase.from('prova_alunos_autorizados')
+        .upsert(linhas, { onConflict: 'prova_id,turma_id,numero_chamada' }).select('id');
+      if (error) throw error;
+      if (!data || data.length !== linhas.length) throw new Error('Nada foi salvo. Faça login novamente e tente de novo.');
+      const { data: up, error: e2 } = await supabase.from('provas').update({ restringir_alunos: true }).eq('id', provaAtual.id).select('id');
+      if (e2) throw e2;
+      if (!up || up.length === 0) throw new Error('Alunos liberados, mas não consegui ativar a restrição da prova. Faça login novamente.');
+      setMsgLiberar(`Pronto: ${linhas.length} aluno(s) liberado(s). A prova agora só aceita quem está na lista.`);
+    } catch (e: any) {
+      const m = String(e?.message || e);
+      setMsgLiberar(/prova_alunos_autorizados|restringir_alunos|does not exist|schema cache/i.test(m)
+        ? 'Falta rodar o SQL "prova_online_alunos_autorizados.sql" no Supabase (uma vez).'
+        : 'Erro: ' + m);
+    } finally { setLiberando(false); }
+  };
 
   const exportar = () => {
     const dados = turmas
@@ -215,6 +265,32 @@ export function AlunosProva() {
         {carregando ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
         Exportar Word (todas as turmas)
       </button>
+
+      <div className="bg-surface rounded-3xl border border-outline-variant shadow-sm p-4 flex flex-col gap-3">
+        <h3 className="text-sm font-bold text-on-surface flex items-center gap-2"><Lock className="w-4 h-4 text-primary" /> Liberar na prova online</h3>
+        <p className="text-[11px] text-on-surface-variant">
+          Só os alunos da lista acima poderão responder a prova: o aluno escolhe o próprio nome e confirma o nº de chamada. Nomes ou números fora da lista são recusados.
+        </p>
+        {provasDoBimestre.length === 0 ? (
+          <p className="text-xs text-on-surface-variant">Nenhuma prova online cadastrada.</p>
+        ) : (
+          <>
+            <select value={provaLiberar} onChange={e => { setProvaLiberar(e.target.value); setMsgLiberar(null); }}
+              className="w-full bg-surface-container border border-outline-variant rounded-xl px-3 py-2 text-sm font-medium">
+              {provasDoBimestre.map(p => <option key={p.id} value={p.id}>{p.titulo}</option>)}
+            </select>
+            {jaLiberados !== null && jaLiberados > 0 ? (
+              <p className="text-[11px] font-bold text-primary">Esta prova já tem {jaLiberados} aluno(s) liberado(s). Liberar de novo só acrescenta quem faltar.</p>
+            ) : null}
+            <button type="button" disabled={carregando || liberando || totalFarao === 0 || !provaAtual} onClick={liberar}
+              className="flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold bg-primary text-on-primary active:scale-95 transition-all disabled:opacity-40">
+              {liberando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+              Liberar {totalFarao} aluno(s) na prova online
+            </button>
+          </>
+        )}
+        {msgLiberar ? <p className="text-xs font-semibold text-on-surface">{msgLiberar}</p> : null}
+      </div>
 
       {turmas.length === 0 ? (
         <div className="text-center text-on-surface-variant py-10 font-medium bg-surface rounded-2xl border border-outline-variant shadow-sm">Nenhuma turma.</div>

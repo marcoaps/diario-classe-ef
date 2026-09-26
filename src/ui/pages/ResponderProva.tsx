@@ -28,7 +28,10 @@ interface Prova {
   codigo: string;
   data_limite: string;
   texto_apoio: string | null;
+  restringir_alunos?: boolean | null;
 }
+
+interface AlunoAutorizado { turma_id: string; numero_chamada: number; nome: string; }
 
 interface CorrecaoDissertativa {
   questao_id: string;
@@ -114,7 +117,17 @@ export function ResponderProva() {
   const [tentativaAtual, setTentativaAtual] = useState<number | null>(null);
   const [verificandoTentativas, setVerificandoTentativas] = useState(false);
 
-  const turmasDisponiveis = prova ? getTurmasDoGrupo(prova.turma_id) : [];
+  // Prova restrita: só alunos da lista "Alunos para a Prova" (liberada pelo professor).
+  const [autorizados, setAutorizados] = useState<AlunoAutorizado[]>([]);
+  const [alunoEscolhido, setAlunoEscolhido] = useState('');
+  const restrita = !!prova?.restringir_alunos;
+
+  const turmasDisponiveis = !prova ? [] : restrita
+    ? Array.from(new Set<string>(autorizados.map(a => a.turma_id))).sort((x, y) => x.localeCompare(y, 'pt-BR', { numeric: true }))
+    : getTurmasDoGrupo(prova.turma_id);
+  const alunosDaTurma = autorizados
+    .filter(a => a.turma_id === turmaAluno)
+    .sort((x, y) => x.nome.localeCompare(y.nome, 'pt-BR'));
 
   // Verifica se uma questão está completamente respondida
   const questaoRespondida = (q: Questao): boolean => {
@@ -138,9 +151,20 @@ export function ResponderProva() {
       const { data: questoesData } = await supabase
         .from('questoes').select('*')
         .eq('prova_id', provaData.id).order('ordem');
+      let lista: AlunoAutorizado[] = [];
+      if (provaData.restringir_alunos) {
+        const { data: aut, error: eAut } = await supabase
+          .from('prova_alunos_autorizados').select('turma_id, numero_chamada, nome').eq('prova_id', provaData.id);
+        if (eAut) { setErro('Erro ao carregar a lista de alunos desta prova. Tente novamente.'); setLoading(false); return; }
+        lista = aut || [];
+      }
+      setAutorizados(lista);
+      setAlunoEscolhido('');
       setProva(provaData);
       setQuestoes(questoesData || []);
-      const turmas = getTurmasDoGrupo(provaData.turma_id);
+      const turmas = provaData.restringir_alunos
+        ? Array.from(new Set<string>(lista.map(a => a.turma_id))).sort((x, y) => x.localeCompare(y, 'pt-BR', { numeric: true }))
+        : getTurmasDoGrupo(provaData.turma_id);
       setTurmaAluno(turmas[0] || provaData.turma_id);
       setStep('identificacao');
     } catch (e) { setErro('Erro ao buscar prova. Tente novamente.'); }
@@ -148,10 +172,21 @@ export function ResponderProva() {
   };
 
   const iniciarProva = async () => {
-    if (!nome.trim()) { setErro('Digite seu nome completo.'); return; }
-    if (!numero.trim()) { setErro('Digite seu número de chamada.'); return; }
-    if (!turmaAluno) { setErro('Selecione sua turma.'); return; }
     if (!prova) return;
+    if (restrita) {
+      const escolhido = alunosDaTurma.find(a => String(a.numero_chamada) === alunoEscolhido);
+      if (!turmaAluno) { setErro('Selecione sua turma.'); return; }
+      if (!escolhido) { setErro('Escolha o seu nome na lista.'); return; }
+      if (!numero.trim()) { setErro('Digite seu número de chamada.'); return; }
+      if (parseInt(numero, 10) !== escolhido.numero_chamada || String(escolhido.numero_chamada) !== numero.trim()) {
+        setErro('O número de chamada não confere com o nome escolhido. Verifique com seu professor.'); return;
+      }
+      setNome(escolhido.nome);
+    } else {
+      if (!nome.trim()) { setErro('Digite seu nome completo.'); return; }
+      if (!numero.trim()) { setErro('Digite seu número de chamada.'); return; }
+      if (!turmaAluno) { setErro('Selecione sua turma.'); return; }
+    }
     setErro(null);
     setVerificandoTentativas(true);
     try {
@@ -336,11 +371,23 @@ export function ResponderProva() {
 
       <div className="bg-white rounded-2xl p-5 shadow-xl flex flex-col gap-4">
         <h3 className="text-gray-800 font-black text-lg">Sua identificação</h3>
-        <div>
-          <label className="text-gray-500 text-xs font-black uppercase tracking-wider mb-1.5 block">Nome completo</label>
-          <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Seu nome completo"
-            className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-800 text-base outline-none focus:border-[#0B7A3D] transition-all" />
-        </div>
+        {restrita ? (
+          <div>
+            <label className="text-gray-500 text-xs font-black uppercase tracking-wider mb-1.5 block">Seu nome (escolha na lista)</label>
+            <select value={alunoEscolhido} onChange={e => setAlunoEscolhido(e.target.value)}
+              className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-800 text-base outline-none focus:border-[#0B7A3D] transition-all bg-white">
+              <option value="">Selecione…</option>
+              {alunosDaTurma.map(a => <option key={a.numero_chamada} value={String(a.numero_chamada)}>{a.nome}</option>)}
+            </select>
+            <p className="text-gray-400 text-xs mt-1.5">Só aparecem os alunos liberados pelo professor para esta prova.</p>
+          </div>
+        ) : (
+          <div>
+            <label className="text-gray-500 text-xs font-black uppercase tracking-wider mb-1.5 block">Nome completo</label>
+            <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Seu nome completo"
+              className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-800 text-base outline-none focus:border-[#0B7A3D] transition-all" />
+          </div>
+        )}
         <div>
           <label className="text-gray-500 text-xs font-black uppercase tracking-wider mb-1.5 block">Número de chamada</label>
           <input value={numero} onChange={e => setNumero(e.target.value)} placeholder="Ex: 15" type="number"
@@ -350,7 +397,7 @@ export function ResponderProva() {
           <label className="text-gray-500 text-xs font-black uppercase tracking-wider mb-1.5 block">Sua turma</label>
           <div className="grid grid-cols-4 gap-2">
             {turmasDisponiveis.map(t => (
-              <button key={t} onClick={() => setTurmaAluno(t)}
+              <button key={t} onClick={() => { setTurmaAluno(t); setAlunoEscolhido(''); }}
                 className={`py-2.5 rounded-xl text-sm font-black border-2 transition-all ${
                   turmaAluno === t ? 'bg-[#0B7A3D] border-[#0B7A3D] text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-[#8DE8B0]'
                 }`}>
