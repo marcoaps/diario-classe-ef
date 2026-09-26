@@ -374,7 +374,7 @@ export function ResponderProva() {
         {restrita ? (
           <div>
             <label className="text-gray-500 text-xs font-black uppercase tracking-wider mb-1.5 block">Seu nome (escolha na lista)</label>
-            <select value={alunoEscolhido} onChange={e => setAlunoEscolhido(e.target.value)}
+            <select value={alunoEscolhido} onChange={e => { setAlunoEscolhido(e.target.value); setNumero(e.target.value); }}
               className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-800 text-base outline-none focus:border-[#0B7A3D] transition-all bg-white">
               <option value="">Selecione…</option>
               {alunosDaTurma.map(a => <option key={a.numero_chamada} value={String(a.numero_chamada)}>{a.nome}</option>)}
@@ -390,14 +390,14 @@ export function ResponderProva() {
         )}
         <div>
           <label className="text-gray-500 text-xs font-black uppercase tracking-wider mb-1.5 block">Número de chamada</label>
-          <input value={numero} onChange={e => setNumero(e.target.value)} placeholder="Ex: 15" type="number"
-            className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-800 text-base outline-none focus:border-[#0B7A3D] transition-all" />
+          <input value={numero} onChange={e => setNumero(e.target.value)} placeholder={restrita ? 'Aparece ao escolher seu nome' : 'Ex: 15'} type="number" readOnly={restrita}
+            className={`w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-800 text-base outline-none focus:border-[#0B7A3D] transition-all ${restrita ? 'bg-gray-50 font-bold' : ''}`} />
         </div>
         <div>
           <label className="text-gray-500 text-xs font-black uppercase tracking-wider mb-1.5 block">Sua turma</label>
           <div className="grid grid-cols-4 gap-2">
             {turmasDisponiveis.map(t => (
-              <button key={t} onClick={() => { setTurmaAluno(t); setAlunoEscolhido(''); }}
+              <button key={t} onClick={() => { setTurmaAluno(t); setAlunoEscolhido(''); if (restrita) setNumero(''); }}
                 className={`py-2.5 rounded-xl text-sm font-black border-2 transition-all ${
                   turmaAluno === t ? 'bg-[#0B7A3D] border-[#0B7A3D] text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-[#8DE8B0]'
                 }`}>
