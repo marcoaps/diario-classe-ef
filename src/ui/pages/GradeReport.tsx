@@ -4,6 +4,7 @@ import { X, FileDown, Save, Upload, Loader2 } from "lucide-react";
 import { salvarNotas, buscarNotas, sincronizarNomesAlunos, supabase } from "../../data/supabase";
 import { bimestreAtual } from "../../domain/useRelatorioFrequencia";
 import { formatarNome } from "../../utils/formatarNome";
+import { lerArquivoNotas, escolherMaisRecentes, salvarNotasImportadas, type NotasTurmaImportada } from "../../domain/importarNotasExcel";
 
 const TURMAS = ["6F", "7B", "7C", "7D", "7E", "7F", "8A", "8B", "8C", "8D", "8E", "8F", "9A", "9B", "9C", "9D", "9E", "9F"];
 
@@ -98,6 +99,38 @@ export function GradeReport() {
   const [saved, setSaved] = useState(false);
   const [gerandoPdf, setGerandoPdf] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [showExcel, setShowExcel] = useState(false);
+  const [excelTurmas, setExcelTurmas] = useState<NotasTurmaImportada[]>([]);
+  const [excelMsg, setExcelMsg] = useState<string | null>(null);
+  const [excelBusy, setExcelBusy] = useState(false);
+
+  const handleExcelFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files: File[] = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    setExcelBusy(true); setExcelMsg(null);
+    const lidos: NotasTurmaImportada[] = [];
+    const erros: string[] = [];
+    for (const f of files) {
+      try { lidos.push(await lerArquivoNotas(f)); } catch (err: any) { erros.push(err.message); }
+    }
+    setExcelTurmas(escolherMaisRecentes(lidos));
+    setExcelMsg(erros.length ? erros.join("\n") : null);
+    setExcelBusy(false);
+    e.target.value = "";
+  };
+
+  const salvarExcel = async () => {
+    setExcelBusy(true);
+    const ok: string[] = [];
+    const falhas: string[] = [];
+    for (const t of excelTurmas) {
+      try { await salvarNotasImportadas(t); ok.push(t.turma); } catch (err: any) { falhas.push(t.turma + ": " + err.message); }
+    }
+    setExcelBusy(false);
+    setExcelMsg("Salvas: " + (ok.join(", ") || "nenhuma") + "." + (falhas.length ? "\nFalharam: " + falhas.join(" | ") : ""));
+    if (!falhas.length) setExcelTurmas([]);
+    carregarNotas();
+  };
 
   useEffect(() => {
     if (view === "notas") carregarNotas();
@@ -547,6 +580,10 @@ export function GradeReport() {
               className="flex-1 py-3 bg-primary text-white rounded-xl font-bold shadow-md hover:bg-primary-dark transition-all flex items-center justify-center gap-2">
               <Upload className="w-4 h-4" /> Carregar PDF
             </button>
+            <button onClick={() => { setShowExcel(true); setExcelTurmas([]); setExcelMsg(null); }}
+              className="py-3 px-4 bg-white text-primary border border-primary rounded-xl font-bold hover:bg-gray-50 transition-all flex items-center justify-center gap-2">
+              <FileDown className="w-4 h-4" /> Excel
+            </button>
             {alunos.length > 0 && !saved && (
               <button onClick={handleSalvar} disabled={isSaving}
                 className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold shadow-md hover:bg-green-700 transition-all flex items-center justify-center gap-2">
@@ -693,6 +730,45 @@ export function GradeReport() {
           )
         )}
       </div>
+
+      {showExcel && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white p-6 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-lg font-bold">Importar notas do Diário (Excel)</h3>
+              <button onClick={() => setShowExcel(false)}><X /></button>
+            </div>
+            <p className="text-xs text-gray-500 mb-3">
+              Selecione de uma vez os arquivos <b>Notas-3BM-….xlsx</b> de todas as turmas (os mesmos lançados no Simaed).
+              Se houver várias versões da mesma turma, vale a mais recente. Situação e faltas já cadastradas são mantidas.
+            </p>
+            <input type="file" multiple accept=".xlsx" onChange={handleExcelFiles} disabled={excelBusy}
+              className="w-full p-3 border border-gray-300 rounded-xl mb-3" />
+            {excelBusy ? <Loader2 className="w-6 h-6 animate-spin mx-auto text-blue-600" /> : null}
+            {excelTurmas.length > 0 && (
+              <>
+                <table className="w-full text-sm mb-3">
+                  <thead><tr className="text-left text-xs text-gray-500"><th>Turma</th><th>Bim</th><th>Alunos</th><th>Com nota</th><th>Arquivo</th></tr></thead>
+                  <tbody>
+                    {excelTurmas.map(t => (
+                      <tr key={t.turma + t.bimestre} className="border-t">
+                        <td className="font-bold">{t.turma}</td><td>{t.bimestre}º</td><td>{t.alunos.length}</td>
+                        <td>{t.alunos.filter(a => a.nota !== null).length}</td>
+                        <td className="text-[10px] text-gray-500 truncate max-w-[140px]">{t.arquivo}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <button onClick={salvarExcel} disabled={excelBusy}
+                  className="w-full py-3 bg-green-600 text-white rounded-xl font-bold disabled:opacity-50">
+                  Salvar {excelTurmas.length} turma(s)
+                </button>
+              </>
+            )}
+            {excelMsg && <p className="text-sm mt-3 whitespace-pre-line text-gray-700">{excelMsg}</p>}
+          </div>
+        </div>
+      )}
 
       {showImport && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
