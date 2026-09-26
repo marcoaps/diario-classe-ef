@@ -123,19 +123,25 @@ interface PropsPainelConfrontos {
   campeao: { timeId: string; vitorias: number } | null;
 }
 
-const CampoGols: React.FC<{ valor: string; onChange: (v: string) => void; rotulo: string }> = ({ valor, onChange, rotulo }) => (
-  <input
-    type="number"
-    inputMode="numeric"
-    min={0}
-    max={99}
-    value={valor}
-    onChange={e => onChange(e.target.value)}
-    placeholder="–"
-    aria-label={rotulo}
-    className="w-16 h-12 text-center text-xl font-bold rounded-xl border border-gray-200 bg-white outline-none focus:border-primary tabular-nums"
-  />
-);
+// Placar com botões − e +. Vazio ("–") = sem placar; o primeiro "+" começa em 1 e o "−" volta até 0
+// (0 é um placar válido, para registrar 0 × 0).
+const CampoGols: React.FC<{ valor: string; onChange: (v: string) => void; rotulo: string }> = ({ valor, onChange, rotulo }) => {
+  const n = valor === '' ? null : Number(valor);
+  const classeBotao = 'w-10 h-12 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 active:scale-95 disabled:opacity-30 disabled:active:scale-100';
+  return (
+    <div role="group" aria-label={rotulo} className="flex items-center gap-1.5">
+      <button type="button" aria-label={`Menos um gol: ${rotulo}`} disabled={n === null || n <= 0}
+        onClick={() => onChange(String(Math.max(0, (n ?? 0) - 1)))} className={classeBotao}>
+        <Minus className="w-4 h-4" />
+      </button>
+      <span aria-live="polite" className="w-8 text-center text-xl font-bold tabular-nums text-on-surface">{n === null ? '–' : n}</span>
+      <button type="button" aria-label={`Mais um gol: ${rotulo}`} disabled={n !== null && n >= 99}
+        onClick={() => onChange(String(Math.min(99, (n ?? 0) + 1)))} className={classeBotao}>
+        <Plus className="w-4 h-4" />
+      </button>
+    </div>
+  );
+};
 
 // Escolha de quem ganhou nos pênaltis (dois botões, um por time).
 const EscolhaPenaltis: React.FC<{
