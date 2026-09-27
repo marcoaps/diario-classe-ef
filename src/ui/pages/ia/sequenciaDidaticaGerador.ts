@@ -5,8 +5,9 @@
 
 import { chamarClaudeProxy } from "../../../utils/claudeProxy";
 import { buscarReferenciaVideo } from "../../../data/referenciaVideosHandebol";
-import { gerarIlustracaoTema } from "./sequenciaDidaticaIlustracao";
-import type { Sequencia } from "./sequenciaDidaticaTypes";
+import type { Estacao, Sequencia } from "./sequenciaDidaticaTypes";
+import { buscarImagemPexels, baixarImagemBase64 } from "./sequenciaDidaticaImagens";
+import { termoObrigatorioImagem } from "./sequenciaDidaticaHelpers";
 
 // Referência BNCC por grupo de série.
 const BNCC_POR_SERIE: Record<string, string> = {
@@ -100,18 +101,28 @@ Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
   if (start === -1) throw new Error("Resposta inesperada da API");
   const seq: Sequencia = JSON.parse(texto.slice(start, end + 1));
 
-  // Busca de imagens por situação/estação (Pexels) continua desabilitada
-  // por decisão do usuário, pra reduzir custo/complexidade — situações e
-  // estações seguem sem foto individual. Em vez disso, uma única
-  // ilustração do tema (gerada pela própria Claude, modelo Haiku) ilustra
-  // a sequência inteira, com custo mínimo e prevísivel.
-  const ilustracao = await gerarIlustracaoTema(tema);
+  const termoObrigatorio = termoObrigatorioImagem(tema);
 
-  return {
-    ...seq,
-    situacoes: seq.situacoes,
-    estacoes: seq.estacoes ?? [],
-    imagemTemaBase64: ilustracao?.base64,
-    imagemTemaType: ilustracao?.type,
-  };
+  const situacoesComImg = await Promise.all(
+    seq.situacoes.map(async (s, idx) => {
+      const img = await buscarImagemPexels(s.imageQuery, idx, termoObrigatorio);
+      if (!img) return s;
+      const b64 = await baixarImagemBase64(img.url);
+      return { ...s, imageUrl: img.url, imageAuthor: img.author, imageBase64: b64?.base64 ?? "", imageType: b64?.contentType ?? "image/jpeg" };
+    })
+  );
+
+  let estacoesComImg: Estacao[] = [];
+  if (seq.estacoes && seq.estacoes.length > 0) {
+    estacoesComImg = await Promise.all(
+      seq.estacoes.map(async (es, idx) => {
+        const img = await buscarImagemPexels(es.imageQuery, situacoesComImg.length + idx, termoObrigatorio);
+        if (!img) return es;
+        const b64 = await baixarImagemBase64(img.url);
+        return { ...es, imageUrl: img.url, imageAuthor: img.author, imageBase64: b64?.base64 ?? "", imageType: b64?.contentType ?? "image/jpeg" };
+      })
+    );
+  }
+
+  return { ...seq, situacoes: situacoesComImg, estacoes: estacoesComImg };
 }

@@ -262,23 +262,6 @@ export async function baixarWord({
 
     new Paragraph({ spacing: { before: 200, after: 0 }, children: [] }),
 
-    ...(seq.imagemTemaBase64 && seq.imagemTemaType ? [
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: { before: 0, after: 40 },
-        children: [new ImageRun({
-          data: base64ToUint8Array(seq.imagemTemaBase64),
-          transformation: { width: 420, height: 262 },
-          type: seq.imagemTemaType.includes("png") ? "png" : "jpg",
-        })],
-      }),
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: { before: 0, after: 200 },
-        children: [new TextRun({ text: "Ilustração gerada por IA (Claude)", size: 14, italics: true, color: "888888", font: "Arial" })],
-      }),
-    ] : []),
-
     new Table({ ...layoutFixo, width: { size: W, type: WidthType.DXA }, columnWidths: [W], rows: [
       new TableRow({ children: [headerCell("OBJETIVOS / CAPACIDADES", W)] }),
       new TableRow({ children: [new TableCell({ borders: bordasFinas, width: { size: W, type: WidthType.DXA }, margins: margCell, children: [paragrafo(seq.objetivos)] })] }),

@@ -63,17 +63,6 @@ export function SequenciaDidaticaPreview({
           </tbody>
         </table>
       </div>
-      {sequencia.imagemTemaBase64 && (
-        <div className="px-4 pb-3 text-center">
-          <img
-            src={`data:image/${sequencia.imagemTemaType || "png"};base64,${sequencia.imagemTemaBase64}`}
-            alt={`Ilustração: ${tema}`}
-            className="inline-block rounded border border-gray-200"
-            style={{ width: 320, height: 200, objectFit: "cover" }}
-          />
-          <p className="text-[10px] italic text-gray-400 mt-1">Ilustração gerada por IA (Claude)</p>
-        </div>
-      )}
       <div className="px-4 pb-2">
         <table className="w-full border-collapse text-xs">
           <tbody>
