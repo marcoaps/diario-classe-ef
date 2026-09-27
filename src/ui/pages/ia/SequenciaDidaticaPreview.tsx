@@ -2,6 +2,7 @@
 // layout do .docx exportado. Compartilhado entre o Gerador de Sequência
 // genérico e a aba dedicada de Esportes de Invasão.
 
+import { Fragment } from "react";
 import type { Sequencia } from "./sequenciaDidaticaTypes";
 import { ordinal } from "./sequenciaDidaticaHelpers";
 
@@ -96,8 +97,21 @@ export function SequenciaDidaticaPreview({
               <p className="font-bold text-amber-900 mb-1">Atividade de Acolhida e Aquecimento</p>
               <p className="text-gray-800 leading-relaxed whitespace-pre-line">{sequencia.aquecimento}</p>
             </td></tr>
-            {sequencia.situacoes.map((sit) => (
-              <tr key={sit.numero}><td colSpan={2} className="border border-gray-400 p-0">
+            {(() => {
+              // Quando a IA organizou as situações em semanas (recomendação
+              // da coordenação pedagógica), exibe uma linha "SEMANA N" antes
+              // das situações daquela semana. Sem semana definida, comporta-
+              // mento idêntico ao anterior.
+              let semanaAtual: number | undefined;
+              return sequencia.situacoes.map((sit) => {
+                const novaSemana = sit.semana !== undefined && sit.semana !== semanaAtual;
+                if (novaSemana) semanaAtual = sit.semana;
+                return (
+                  <Fragment key={`${sit.semana ?? "x"}-${sit.numero}`}>
+                    {novaSemana && (
+                      <tr><td colSpan={2} className="border border-gray-400 bg-blue-900 text-white font-bold px-2 py-1 text-xs">SEMANA {semanaAtual}</td></tr>
+                    )}
+                    <tr><td colSpan={2} className="border border-gray-400 p-0">
                 <div className="bg-blue-700 text-white font-bold px-2 py-1 text-xs">Situação de Aprendizagem {sit.numero} — {sit.titulo}</div>
                 <div className="flex">
                   <div className="flex-1 px-3 py-2">
@@ -115,7 +129,10 @@ export function SequenciaDidaticaPreview({
                   )}
                 </div>
               </td></tr>
-            ))}
+                  </Fragment>
+                );
+              });
+            })()}
           </tbody>
         </table>
       </div>

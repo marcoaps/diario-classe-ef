@@ -32,10 +32,16 @@ export interface GerarSequenciaParams {
   numSituacoes: string;
   incluirEstacoes: boolean;
   fundamentos: string;
+  // Opcional: quando informado, organiza as situações de aprendizagem em
+  // semanas (recomendação da coordenação pedagógica) — cada semana com sua
+  // própria numeração de situações reiniciando em 1. Quando omitido (ex: aba
+  // de Esportes de Invasão), mantém o comportamento antigo, sem semanas.
+  quantidadeSemanas?: string;
 }
 
 export async function gerarSequenciaComIA(params: GerarSequenciaParams): Promise<Sequencia> {
-  const { tema, serie, turmas, aulasPrevistas, recursos, numSituacoes, incluirEstacoes, fundamentos } = params;
+  const { tema, serie, turmas, aulasPrevistas, recursos, numSituacoes, incluirEstacoes, fundamentos, quantidadeSemanas } = params;
+  const semanas = quantidadeSemanas ? parseInt(quantidadeSemanas, 10) : undefined;
   const habilidadesBncc = BNCC_POR_SERIE[serie] || BNCC_POR_SERIE["6º e 7º"];
   const fundamentosList = fundamentos.split(",").map((f) => f.trim()).filter(Boolean);
 
@@ -60,7 +66,7 @@ Série: ${serie}
 Turmas: ${turmas || "a definir"}
 Aulas previstas: ${aulasPrevistas}
 Recursos: ${recursos || "materiais básicos"}
-Número de situações de aprendizagem: ${numSituacoes}
+${semanas ? `Número de situações de aprendizagem POR SEMANA: ${numSituacoes}` : `Número de situações de aprendizagem: ${numSituacoes}`}
 
 IMPORTANTE — Use SOMENTE habilidades BNCC para ${serie}: ${habilidadesBncc}
 Selecione as que se relacionam com o tema "${tema}". Use os códigos exatos.
@@ -80,7 +86,9 @@ Para imageQuery de cada situação, siga ESTAS REGRAS:
    - 8º/9º atividade adaptada (aluno narrador) → "teenagers cheering martial arts match sideline"
    - 8º/9º fundamentos → "teen athletes martial arts training"
 4. NUNCA repita a mesma query em situações diferentes
-${incluirEstacoes && fundamentosList.length > 0 ? `
+${semanas ? `
+ORGANIZAÇÃO EM SEMANAS (recomendação da coordenação pedagógica): distribua as situações de aprendizagem em ${semanas} semana${semanas > 1 ? "s" : ""}, com ${numSituacoes} situações em CADA semana (total de ${semanas * parseInt(numSituacoes, 10)} situações). Em cada situação, preencha o campo "semana" (1 a ${semanas}) indicando a qual semana ela pertence, e o campo "numero" REINICIA em 1 a cada nova semana (ex: semana 1 tem situações numero 1,2,3...; semana 2 volta a numero 1,2,3...). Distribua o conteúdo de forma progressiva ao longo das semanas (ex: 1ª semana pode trazer problematização/leitura/introdução, semanas seguintes aprofundam com prática e avaliação), coerente com o tema e a quantidade de aulas previstas.
+` : ""}${incluirEstacoes && fundamentosList.length > 0 ? `
 ORGANIZAÇÃO POR ESTAÇÕES (ESPORTE DE INVASÃO): esta sequência também deve trazer um circuito de estações de treino, com UMA ESTAÇÃO PARA CADA FUNDAMENTO listado a seguir, na mesma ordem: ${fundamentosList.join(", ")}.
 Para cada estação, gere no campo "estacoes":
 - "numero": posição da estação (1, 2, 3...)
@@ -94,7 +102,7 @@ ${referenciasVideo.map((r) => `• (fonte: ${r.fonteVideo})\n  ${r.descricaoTecn
 Para os demais fundamentos da lista que não têm material real listado acima, use conhecimento pedagógico padrão normalmente.
 ` : ""}` : ""}
 Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
-{"objetivos":"...","habilidades":[{"codigo":"EF__EF__","descricao":"descrição completa"},{"codigo":"EF__EF__","descricao":"..."},{"codigo":"EF__EF__","descricao":"..."}],"objetos_conhecimento":["...","...","..."],"aquecimento":"descrição detalhada em 2 parágrafos separados por \\n","situacoes":[{"numero":1,"titulo":"...","objetivo":"...","desenvolvimento":"etapas detalhadas separadas por \\n","adaptacao":"...","imageQuery":"query única e específica desta situação em inglês"}]${incluirEstacoes && fundamentosList.length > 0 ? `,"estacoes":[{"numero":1,"fundamento":"...","objetivo":"...","passoAPasso":"Passo 1: ...\\nPasso 2: ...","imageQuery":"query única e específica desta estação em inglês"}]` : ""},"valores_atitudinais":"...","instrumentos_avaliacao":"...","recursos":"...","referencias":["ACRE. Ref 1.","Ref 2.","Ref 3."]}`;
+{"objetivos":"...","habilidades":[{"codigo":"EF__EF__","descricao":"descrição completa"},{"codigo":"EF__EF__","descricao":"..."},{"codigo":"EF__EF__","descricao":"..."}],"objetos_conhecimento":["...","...","..."],"aquecimento":"descrição detalhada em 2 parágrafos separados por \\n","situacoes":[{${semanas ? `"semana":1,` : ""}"numero":1,"titulo":"...","objetivo":"...","desenvolvimento":"etapas detalhadas separadas por \\n","adaptacao":"...","imageQuery":"query única e específica desta situação em inglês"}]${incluirEstacoes && fundamentosList.length > 0 ? `,"estacoes":[{"numero":1,"fundamento":"...","objetivo":"...","passoAPasso":"Passo 1: ...\\nPasso 2: ...","imageQuery":"query única e específica desta estação em inglês"}]` : ""},"valores_atitudinais":"...","instrumentos_avaliacao":"...","recursos":"...","referencias":["ACRE. Ref 1.","Ref 2.","Ref 3."]}`;
 
   const texto = await chamarClaudeProxy(prompt);
   const start = texto.indexOf("{"); const end = texto.lastIndexOf("}");

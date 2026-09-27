@@ -315,11 +315,28 @@ export async function baixarWord({
           ...textoParagrafos(seq.aquecimento),
         ],
       })] }),
-      ...seq.situacoes.flatMap(sit => [
-        new TableRow({ children: [new TableCell({ borders: bordasFinas, width: { size: W, type: WidthType.DXA }, shading: { fill: "E8F0FE", type: ShadingType.CLEAR }, margins: margCell,
-          children: [new Paragraph({ children: [new TextRun({ text: `Situação de Aprendizagem ${sit.numero} — `, bold: true, size: 20, color: "1A3C8F", font: "Arial" }), new TextRun({ text: sit.titulo, bold: true, size: 20, color: "1A3C8F", font: "Arial" })] })] })] }),
-        new TableRow({ children: [celulaSituacao(sit)] }),
-      ]),
+      ...(() => {
+        // Quando a IA organizou as situações em semanas (recomendação da
+        // coordenação pedagógica), insere uma linha "SEMANA N" antes das
+        // situações daquela semana. Sem semana definida, comportamento
+        // idêntico ao anterior (sem essa linha).
+        const linhas: TableRow[] = [];
+        let semanaAtual: number | undefined;
+        for (const sit of seq.situacoes) {
+          if (sit.semana !== undefined && sit.semana !== semanaAtual) {
+            semanaAtual = sit.semana;
+            linhas.push(new TableRow({ children: [new TableCell({
+              borders: bordas, width: { size: W, type: WidthType.DXA },
+              shading: { fill: "1F4E79", type: ShadingType.CLEAR }, margins: margCell,
+              children: [new Paragraph({ children: [new TextRun({ text: `SEMANA ${semanaAtual}`, bold: true, size: 20, color: "FFFFFF", font: "Arial" })] })],
+            })] }));
+          }
+          linhas.push(new TableRow({ children: [new TableCell({ borders: bordasFinas, width: { size: W, type: WidthType.DXA }, shading: { fill: "E8F0FE", type: ShadingType.CLEAR }, margins: margCell,
+            children: [new Paragraph({ children: [new TextRun({ text: `Situação de Aprendizagem ${sit.numero} — `, bold: true, size: 20, color: "1A3C8F", font: "Arial" }), new TextRun({ text: sit.titulo, bold: true, size: 20, color: "1A3C8F", font: "Arial" })] })] })] }));
+          linhas.push(new TableRow({ children: [celulaSituacao(sit)] }));
+        }
+        return linhas;
+      })(),
     ]}),
 
     ...(seq.estacoes && seq.estacoes.length > 0 ? [

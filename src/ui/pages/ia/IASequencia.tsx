@@ -42,6 +42,7 @@ export function IASequencia() {
   const [tema, setTema] = useState("");
   const [recursos, setRecursos] = useState("");
   const [numSituacoes, setNumSituacoes] = useState("3");
+  const [quantidadeSemanas, setQuantidadeSemanas] = useState("3");
   const [incluirEstacoes, setIncluirEstacoes] = useState(false);
   const [fundamentos, setFundamentos] = useState("");
 
@@ -99,7 +100,7 @@ export function IASequencia() {
 
     let seq: Sequencia;
     try {
-      seq = await gerarSequenciaComIA({ tema, serie, turmas, aulasPrevistas, recursos, numSituacoes, incluirEstacoes, fundamentos });
+      seq = await gerarSequenciaComIA({ tema, serie, turmas, aulasPrevistas, recursos, numSituacoes, incluirEstacoes, fundamentos, quantidadeSemanas });
     } catch (err: unknown) {
       setErroMsg(err instanceof Error ? err.message : "Erro desconhecido");
       setStatus("erro"); return;
@@ -195,7 +196,13 @@ export function IASequencia() {
             <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" placeholder="Ex: Março/Abril 2026" value={periodo} onChange={(e) => setPeriodo(e.target.value)} />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-500">Nº de Situações de Aprendizagem</label>
+            <label className="text-xs font-medium text-gray-500">Quantidade de Semanas</label>
+            <select className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" value={quantidadeSemanas} onChange={(e) => setQuantidadeSemanas(e.target.value)}>
+              {["1","2","3","4","5","6"].map((n) => <option key={n}>{n}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-gray-500">Nº de Situações por Semana</label>
             <select className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" value={numSituacoes} onChange={(e) => setNumSituacoes(e.target.value)}>
               {["2","3","4","5"].map((n) => <option key={n}>{n}</option>)}
             </select>

@@ -3,6 +3,7 @@
 
 export interface SituacaoAprendizagem {
   numero: number;
+  semana?: number;
   titulo: string;
   objetivo: string;
   desenvolvimento: string;
