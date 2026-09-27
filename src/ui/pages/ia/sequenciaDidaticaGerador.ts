@@ -5,6 +5,7 @@
 
 import { chamarClaudeProxy } from "../../../utils/claudeProxy";
 import { buscarReferenciaVideo } from "../../../data/referenciaVideosHandebol";
+import { gerarIlustracaoTema } from "./sequenciaDidaticaIlustracao";
 import type { Sequencia } from "./sequenciaDidaticaTypes";
 
 // Referência BNCC por grupo de série.
@@ -99,8 +100,18 @@ Responda SOMENTE com JSON puro, sem markdown, sem texto antes ou depois.
   if (start === -1) throw new Error("Resposta inesperada da API");
   const seq: Sequencia = JSON.parse(texto.slice(start, end + 1));
 
-  // Busca de imagens (Pexels) desabilitada por decisão do usuário, pra
-  // reduzir custo/complexidade — só a correção de prova com IA continua
-  // ativa. Situações/estações saem sem foto.
-  return { ...seq, situacoes: seq.situacoes, estacoes: seq.estacoes ?? [] };
+  // Busca de imagens por situação/estação (Pexels) continua desabilitada
+  // por decisão do usuário, pra reduzir custo/complexidade — situações e
+  // estações seguem sem foto individual. Em vez disso, uma única
+  // ilustração do tema (gerada pela própria Claude, modelo Haiku) ilustra
+  // a sequência inteira, com custo mínimo e prevísivel.
+  const ilustracao = await gerarIlustracaoTema(tema);
+
+  return {
+    ...seq,
+    situacoes: seq.situacoes,
+    estacoes: seq.estacoes ?? [],
+    imagemTemaBase64: ilustracao?.base64,
+    imagemTemaType: ilustracao?.type,
+  };
 }

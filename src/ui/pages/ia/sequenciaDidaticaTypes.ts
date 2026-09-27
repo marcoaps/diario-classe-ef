@@ -42,4 +42,6 @@ export interface Sequencia {
   instrumentos_avaliacao: string;
   recursos: string;
   referencias: string[];
+  imagemTemaBase64?: string;
+  imagemTemaType?: string;
 }

@@ -2,16 +2,21 @@
 // Extraída do IASequencia.tsx para ser reutilizada por outras telas
 // (ex: geração de conteúdo de aulas no DiarioAulas.tsx), evitando duplicação.
 
-export async function chamarClaudeProxy(prompt: string): Promise<string> {
+export interface OpcoesClaudeProxy {
+  model?: string;
+  maxTokens?: number;
+}
+
+export async function chamarClaudeProxy(prompt: string, opcoes?: OpcoesClaudeProxy): Promise<string> {
   const res = await fetch("/api/claude", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "claude-sonnet-4-6",
+      model: opcoes?.model ?? "claude-sonnet-4-6",
       // 8000 cortava respostas grandes no meio (ex: sequência didática com
       // 5 estações), quebrando o JSON. max_tokens é só um teto — a IA gera
       // só o que precisa, então subir esse valor não aumenta custo à toa.
-      max_tokens: 16000,
+      max_tokens: opcoes?.maxTokens ?? 16000,
       messages: [{ role: "user", content: prompt }],
     }),
   });
