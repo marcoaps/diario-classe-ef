@@ -1,0 +1,37 @@
+# Mantém o projeto Supabase acordado.
+# O plano grátis do Supabase pausa o projeto após 7 dias sem atividade,
+# e aí o diarioiop.com.br para de funcionar. Este workflow faz uma
+# consulta leve (somente leitura) a cada 3 dias para evitar a pausa.
+#
+# Usa a tabela interclasses_campeonatos, que já tem leitura pública (anon).
+# Para trocar de projeto, crie os secrets SUPABASE_URL e SUPABASE_ANON_KEY
+# em Settings > Secrets and variables > Actions. Sem eles, usa os valores
+# públicos que já estão em src/data/supabase.ts.
+
+name: Supabase keep-alive
+
+on:
+  schedule:
+    - cron: "17 12 */3 * *" # a cada 3 dias, 09:17 no horário de Brasília
+  workflow_dispatch: {}      # botão "Run workflow" para testar na hora
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Consultar o banco
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://rsifjxeqitgiecqwvien.supabase.co' }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || 'sb_publishable_Vw7h5WZ5BF-GzaAM0hOECg_TMjwdiby' }}
+        run: |
+          status=$(curl -sS -o resposta.json -w "%{http_code}" \
+            "$SUPABASE_URL/rest/v1/interclasses_campeonatos?select=id&limit=1" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY")
+          echo "HTTP $status"
+          cat resposta.json; echo
+          if [ "$status" -ge 400 ]; then
+            echo "::error::Supabase respondeu $status. O projeto pode estar pausado: restaure em supabase.com/dashboard."
+            exit 1
+          fi
