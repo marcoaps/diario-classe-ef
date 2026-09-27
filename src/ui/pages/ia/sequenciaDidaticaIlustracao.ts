@@ -59,10 +59,14 @@ Regras:
   try {
     const resposta = await chamarClaudeProxy(prompt, { model: "claude-haiku-4-5-20251001", maxTokens: 1500 });
     const svg = extrairSvg(resposta);
-    if (!svg) return null;
+    if (!svg) {
+      console.warn("Ilustração da Sequência Didática: resposta da IA não continha um SVG válido.", resposta);
+      return null;
+    }
     const base64 = await svgParaPngBase64(svg);
     return { base64, type: "png" };
-  } catch (_) {
+  } catch (erro) {
+    console.warn("Ilustração da Sequência Didática: falhou, sequência segue sem imagem.", erro);
     return null;
   }
 }

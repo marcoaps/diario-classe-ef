@@ -24,7 +24,13 @@ export async function baixarWord({
   const {
     Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
     ImageRun, AlignmentType, BorderStyle, WidthType, ShadingType, VerticalAlign, LevelFormat,
+    TableLayoutType,
   } = await import("docx");
+
+  // Sem isso, o Word usa "AutoAjuste ao conteúdo" e encolhe as tabelas pro
+  // tamanho do texto (ignorando width/columnWidths abaixo) — é o que causava
+  // as tabelas aparecerem espremidas na metade esquerda da página.
+  const layoutFixo = { layout: TableLayoutType.FIXED };
 
   const W = 9360;
   const borda = { style: BorderStyle.SINGLE, size: 4, color: "2E74B5" };
@@ -161,6 +167,7 @@ export async function baixarWord({
   cabecalhoRows.push(new TableRow({ children: [cellBrasao, cellGoverno, cellSecretaria] }));
 
   const tabelaCabecalho = new Table({
+    ...layoutFixo,
     width: { size: W, type: WidthType.DXA },
     columnWidths: [colW1, colW2, colW3],
     rows: cabecalhoRows,
@@ -195,6 +202,7 @@ export async function baixarWord({
 
     // Tabela identificação — linha 1
     new Table({
+      ...layoutFixo,
       width: { size: W, type: WidthType.DXA },
       columnWidths: [Q1, Q1, Q1, W - Q1*3],
       rows: [
@@ -271,7 +279,7 @@ export async function baixarWord({
       }),
     ] : []),
 
-    new Table({ width: { size: W, type: WidthType.DXA }, columnWidths: [W], rows: [
+    new Table({ ...layoutFixo, width: { size: W, type: WidthType.DXA }, columnWidths: [W], rows: [
       new TableRow({ children: [headerCell("OBJETIVOS / CAPACIDADES", W)] }),
       new TableRow({ children: [new TableCell({ borders: bordasFinas, width: { size: W, type: WidthType.DXA }, margins: margCell, children: [paragrafo(seq.objetivos)] })] }),
     ]}),
@@ -279,6 +287,7 @@ export async function baixarWord({
     new Paragraph({ spacing: { before: 160, after: 0 }, children: [] }),
 
     new Table({
+      ...layoutFixo,
       width: { size: W, type: WidthType.DXA },
       columnWidths: [Math.round(W*0.55), W - Math.round(W*0.55)],
       rows: [
@@ -294,7 +303,7 @@ export async function baixarWord({
 
     new Paragraph({ spacing: { before: 160, after: 0 }, children: [] }),
 
-    new Table({ width: { size: W, type: WidthType.DXA }, columnWidths: [W], rows: [
+    new Table({ ...layoutFixo, width: { size: W, type: WidthType.DXA }, columnWidths: [W], rows: [
       new TableRow({ children: [headerCell("DESENVOLVIMENTO DAS ATIVIDADES", W)] }),
       new TableRow({ children: [new TableCell({ borders: bordasFinas, width: { size: W, type: WidthType.DXA }, shading: { fill: "FFF8E1", type: ShadingType.CLEAR }, margins: margCell,
         children: [
@@ -311,7 +320,7 @@ export async function baixarWord({
 
     ...(seq.estacoes && seq.estacoes.length > 0 ? [
       new Paragraph({ spacing: { before: 160, after: 0 }, children: [] }),
-      new Table({ width: { size: W, type: WidthType.DXA }, columnWidths: [W], rows: [
+      new Table({ ...layoutFixo, width: { size: W, type: WidthType.DXA }, columnWidths: [W], rows: [
         new TableRow({ children: [headerCell("ORGANIZAÇÃO POR ESTAÇÕES (CIRCUITO POR FUNDAMENTO)", W, "C0621B")] }),
         ...seq.estacoes.flatMap(es => [
           new TableRow({ children: [new TableCell({ borders: bordasFinas, width: { size: W, type: WidthType.DXA }, shading: { fill: "FFF0E6", type: ShadingType.CLEAR }, margins: margCell,
@@ -324,6 +333,7 @@ export async function baixarWord({
     new Paragraph({ spacing: { before: 160, after: 0 }, children: [] }),
 
     new Table({
+      ...layoutFixo,
       width: { size: W, type: WidthType.DXA },
       columnWidths: [Math.round(W/3), Math.round(W/3), W - Math.round(W/3)*2],
       rows: [
@@ -334,7 +344,7 @@ export async function baixarWord({
 
     new Paragraph({ spacing: { before: 160, after: 0 }, children: [] }),
 
-    new Table({ width: { size: W, type: WidthType.DXA }, columnWidths: [W], rows: [
+    new Table({ ...layoutFixo, width: { size: W, type: WidthType.DXA }, columnWidths: [W], rows: [
       new TableRow({ children: [headerCell("REFERÊNCIAS", W)] }),
       new TableRow({ children: [new TableCell({ borders: bordasFinas, width: { size: W, type: WidthType.DXA }, margins: margCell,
         children: seq.referencias.map(r => new Paragraph({ spacing: { before: 40, after: 40 }, numbering: { reference: "bullets", level: 0 }, children: [new TextRun({ text: r, size: 18, font: "Arial" })] })) })] }),
@@ -343,6 +353,7 @@ export async function baixarWord({
     new Paragraph({ spacing: { before: 240, after: 0 }, children: [] }),
 
     new Table({
+      ...layoutFixo,
       width: { size: W, type: WidthType.DXA },
       columnWidths: [Math.round(W/2), W - Math.round(W/2)],
       rows: [
