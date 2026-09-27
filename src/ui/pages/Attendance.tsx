@@ -2,13 +2,18 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useStore } from '../../store';
 import { cn } from '../AppLayout';
-import { Save, Loader2, X, Trash2 } from 'lucide-react';
+import { Save, Loader2, X, Trash2, WifiOff, CloudUpload } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '../../data/supabase';
 import { ConteudoAulas } from './ConteudoAulas';
 import { PARTICIPACAO_OPCOES, MOTIVOS_JUSTIFICATIVA, type Participacao } from '../../domain/frequenciaPontos';
 import { buscarTrabalhos, type Trabalho } from '../../data/supabase';
 import { bimestreAtual } from '../../domain/useRelatorioFrequencia';
+import {
+  salvarTurmaNoCache, lerTurmaDoCache, enfileirarChamada, lerChamadaPendente,
+  enviarChamada, descartarPendente, ehErroDeRede, contarPendentes, aoMudarFila,
+  sincronizarPendentes, type RegistroFrequencia, type ChamadaPendente,
+} from '../../data/offlineChamada';
 
 interface AlunoSupabase {
   id: string;
@@ -30,6 +35,13 @@ function normalizarTurma(turmaId: string) {
   const match = turmaId.match(/(\d+).*?([A-Z])$/i);
   if (match) return `${match[1]}${match[2].toUpperCase()}`;
   return turmaId.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+}
+
+function comTempoLimite<T>(p: PromiseLike<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('Failed to fetch (tempo esgotado)')), ms);
+    Promise.resolve(p).then(v => { clearTimeout(t); resolve(v); }, e => { clearTimeout(t); reject(e); });
+  });
 }
 
 function registroVazio(presente: boolean, semQuadra: boolean): RegistroChamada {
@@ -62,6 +74,26 @@ export function Attendance() {
   const [trabalhosDaTurma, setTrabalhosDaTurma] = useState<Trabalho[]>([]);
   const [modalCompensatorioAlunoId, setModalCompensatorioAlunoId] = useState<string | null>(null);
   const [trabalhoSelecionadoModal, setTrabalhoSelecionadoModal] = useState('');
+  // Modo offline: sem internet, a lista vem do aparelho e a chamada fica
+  // guardada até a conexão voltar (src/data/offlineChamada.ts).
+  const [online, setOnline] = useState(() => typeof navigator === 'undefined' ? true : navigator.onLine);
+  const [usandoCache, setUsandoCache] = useState(false);
+  const [pendentes, setPendentes] = useState(0);
+  const [chamadaPendenteAqui, setChamadaPendenteAqui] = useState(false);
+
+  useEffect(() => {
+    const atualizarOnline = () => setOnline(navigator.onLine);
+    const atualizarPendentes = () => { contarPendentes().then(setPendentes); };
+    window.addEventListener('online', atualizarOnline);
+    window.addEventListener('offline', atualizarOnline);
+    const pararDeOuvir = aoMudarFila(atualizarPendentes);
+    atualizarPendentes();
+    return () => {
+      window.removeEventListener('online', atualizarOnline);
+      window.removeEventListener('offline', atualizarOnline);
+      pararDeOuvir();
+    };
+  }, []);
 
   const turmaAtual = classRooms.find(cr => cr.id === selectedClassId);
   const turmaNorm = turmaAtual ? normalizarTurma(turmaAtual.name) : null;
@@ -90,14 +122,45 @@ export function Attendance() {
     let mounted = true;
     setLoading(true);
 
+    // Se há uma chamada desta turma/dia guardada no aparelho esperando
+    // internet, ela é a versão mais recente: mostra ela na tela.
+    const aplicarPendente = async () => {
+      const pend = await lerChamadaPendente(turmaNorm, date);
+      if (!mounted) return;
+      setChamadaPendenteAqui(!!pend);
+      if (!pend) return;
+      setRecords(atuais => {
+        const novos = { ...atuais };
+        pend.registros.forEach(r => {
+          novos[r.aluno_id] = {
+            presente: r.presente,
+            participacao: (r.participacao ?? null) as Participacao,
+            justificativaMotivo: r.justificativa_motivo,
+            justificativaObservacao: r.justificativa_observacao,
+            trabalhoCompensatorioId: r.trabalho_compensatorio_id,
+          };
+        });
+        return novos;
+      });
+      const presentes = pend.registros.filter(r => r.presente);
+      setSemQuadra(presentes.length > 0 && presentes.every(r => !r.participacao));
+    };
+
     const carregar = async () => {
+      let transferidosParaCache = new Map<string, string>();
       try {
-        // Busca alunos
-        const { data, error } = await supabase
-          .from('alunos')
-          .select('id, nome, turma_id, numero_chamada')
-          .eq('turma_id', turmaNorm)
-          .order('numero_chamada', { ascending: true, nullsFirst: false });
+        // Sem internet: nem tenta a rede, vai direto para a cópia do aparelho.
+        if (!navigator.onLine) throw new Error('offline');
+        // Busca alunos (com limite de tempo: sinal fraco na quadra não pode
+        // deixar a tela carregando para sempre)
+        const { data, error } = await comTempoLimite(
+          supabase
+            .from('alunos')
+            .select('id, nome, turma_id, numero_chamada')
+            .eq('turma_id', turmaNorm)
+            .order('numero_chamada', { ascending: true, nullsFirst: false }),
+          10000,
+        );
 
         if (error) throw error;
         if (!mounted) return;
@@ -123,6 +186,7 @@ export function Attendance() {
             const situacao = situacaoPorNome.get(a.nome.toUpperCase());
             if (situacao) idsTransf.set(a.id, situacao);
           });
+          transferidosParaCache = idsTransf;
           if (mounted) setTransferidos(idsTransf);
         }
 
@@ -172,10 +236,34 @@ export function Attendance() {
           novoSemQuadra = presentes.length > 0 && presentes.every((r: any) => !r.participacao);
         }
 
-        if (mounted) { setRecords(novosRecords); setSemQuadra(novoSemQuadra); }
+        if (mounted) { setRecords(novosRecords); setSemQuadra(novoSemQuadra); setUsandoCache(false); }
 
+        // Guarda a turma no aparelho para a próxima chamada sem internet.
+        salvarTurmaNoCache(turmaNorm, {
+          alunos: lista,
+          transferidos: Array.from(transferidosParaCache.entries()),
+          especiais: Array.from(idsAEE.entries()),
+        });
+
+        await aplicarPendente();
       } catch (err) {
         console.error('Erro ao carregar alunos:', err);
+        // Sem internet (ou Supabase fora do ar): usa a última cópia da turma.
+        const cache = await lerTurmaDoCache(turmaNorm);
+        if (cache && mounted) {
+          setAlunos(cache.alunos);
+          setTransferidos(new Map(cache.transferidos));
+          setEspeciais(new Map(cache.especiais));
+          const vazios: Record<string, RegistroChamada> = {};
+          cache.alunos.forEach(a => { vazios[a.id] = registroVazio(false, false); });
+          setRecords(vazios);
+          setSemQuadra(false);
+          setUsandoCache(true);
+          await aplicarPendente();
+        } else if (mounted) {
+          setAlunos([]);
+          setUsandoCache(false);
+        }
       } finally {
         if (mounted) setLoading(false);
       }
@@ -314,18 +402,9 @@ export function Attendance() {
   const handleSave = async () => {
     if (!turmaNorm || alunos.length === 0) return;
     setSaving(true);
-    try {
-      const ids = alunos.map(a => a.id);
-
-      const { error: errDel } = await supabase
-        .from('frequencia')
-        .delete()
-        .in('aluno_id', ids)
-        .eq('data', date);
-      if (errDel) throw errDel;
-
-      // Nao salva frequencia de transferidos
-      const recordsToSave = alunos
+    const ids = alunos.map(a => a.id);
+    // Nao salva frequencia de transferidos
+    const recordsToSave: RegistroFrequencia[] = alunos
         .filter(a => !transferidos.has(a.id))
         .map(a => {
           const r = records[a.id];
@@ -340,14 +419,29 @@ export function Attendance() {
             trabalho_compensatorio_id: presente && r?.participacao === 'nao_fez' ? (r?.trabalhoCompensatorioId ?? null) : null,
           };
         });
+    const pendente: Omit<ChamadaPendente, 'salvaEm'> = { turma: turmaNorm, data: date, idsAlunos: ids, registros: recordsToSave };
 
-      const { error: insError } = await supabase.from('frequencia').insert(recordsToSave);
-      if (insError) throw insError;
-
+    try {
+      if (!navigator.onLine) throw new Error('offline');
+      await comTempoLimite(enviarChamada(ids, date, recordsToSave), 15000);
+      // Se existia uma versão offline desta mesma chamada, a online substitui.
+      if (chamadaPendenteAqui) { await descartarPendente(turmaNorm, date); setChamadaPendenteAqui(false); }
       alert('Chamada registrada com sucesso!');
+      sincronizarPendentes();
     } catch (err) {
-      alert('Erro ao salvar chamada. Tente novamente.');
-      console.error(err);
+      if (ehErroDeRede(err) || (err as Error)?.message === 'offline') {
+        try {
+          await enfileirarChamada(pendente);
+          setChamadaPendenteAqui(true);
+          alert('Sem internet: a chamada foi guardada neste aparelho e será enviada sozinha quando a conexão voltar.');
+        } catch (errFila) {
+          alert('Sem internet e não foi possível guardar a chamada no aparelho. Anote no papel por segurança.');
+          console.error(errFila);
+        }
+      } else {
+        alert('Erro ao salvar chamada. Tente novamente.');
+        console.error(err);
+      }
     } finally {
       setSaving(false);
     }
@@ -358,12 +452,14 @@ export function Attendance() {
   // turma nesta data, nenhuma outra turma/dia é afetada.
   const handleLimparChamadaDoDia = async () => {
     if (!turmaNorm || alunos.length === 0) return;
+    if (!navigator.onLine) { alert('Para apagar uma chamada é preciso estar com internet.'); return; }
     if (!window.confirm(`Apagar a chamada de ${turmaAtual?.name || turmaNorm} do dia ${date}? Essa ação não pode ser desfeita.`)) return;
     setSaving(true);
     try {
       const ids = alunos.map(a => a.id);
       const { error } = await supabase.from('frequencia').delete().in('aluno_id', ids).eq('data', date);
       if (error) throw error;
+      if (chamadaPendenteAqui) { await descartarPendente(turmaNorm, date); setChamadaPendenteAqui(false); }
 
       const vazios: Record<string, RegistroChamada> = {};
       alunos.forEach(a => { vazios[a.id] = registroVazio(false, false); });
@@ -405,6 +501,22 @@ export function Attendance() {
           Conteudo
         </button>
       </div>
+
+      {/* Aviso de modo offline / chamadas aguardando internet */}
+      {(!online || usandoCache || pendentes > 0) && (
+        <div className={cn(
+          'mx-4 mt-3 px-3 py-2 rounded-xl text-xs font-semibold flex items-start gap-2 border',
+          !online || usandoCache ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-sky-50 text-sky-800 border-sky-200'
+        )}>
+          {!online || usandoCache ? <WifiOff className="w-4 h-4 shrink-0 mt-0.5" /> : <CloudUpload className="w-4 h-4 shrink-0 mt-0.5" />}
+          <span>
+            {!online && 'Sem internet. '}
+            {usandoCache && 'Lista de alunos carregada do aparelho. '}
+            {(!online || usandoCache) && 'Pode fazer a chamada normalmente: ela fica guardada e é enviada quando a conexão voltar. '}
+            {pendentes > 0 && `${pendentes} chamada(s) aguardando envio${online ? ' — enviando...' : '.'}`}
+          </span>
+        </div>
+      )}
 
       {/* Seletor de turma — troca rápida sem depender do dia da semana nem
           precisar voltar ao Dashboard */}

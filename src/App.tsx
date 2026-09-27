@@ -55,11 +55,29 @@ import { AlunosProva } from './ui/pages/AlunosProva';
 import { AlunosEspeciais } from './ui/pages/AlunosEspeciais';
 import { supabase } from './data/supabase';
 
+// Sem internet, o Supabase não consegue renovar um login vencido e diria
+// "deslogado". Se o professor já entrou antes neste aparelho, deixa usar o
+// app offline; quando a internet volta, o login é renovado sozinho.
+function temSessaoGuardadaOffline(): boolean {
+  if (typeof navigator === 'undefined' || navigator.onLine) return false;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && /^sb-.*-auth-token$/.test(k) && localStorage.getItem(k)?.includes('refresh_token')) return true;
+    }
+  } catch { /* localStorage indisponível */ }
+  return false;
+}
+
 export function useAuth() {
-  const [session, setSession] = useState<boolean | null>(null);
+  // Offline com login guardado: libera na hora, sem esperar o Supabase
+  // tentar (e falhar) renovar o login pela rede.
+  const [session, setSession] = useState<boolean | null>(() => temSessaoGuardadaOffline() ? true : null);
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(!!data.session));
-    const { data: listener } = supabase.auth.onAuthStateChange((_e, s) => setSession(!!s));
+    supabase.auth.getSession()
+      .then(({ data }) => setSession(!!data.session || temSessaoGuardadaOffline()))
+      .catch(() => setSession(temSessaoGuardadaOffline()));
+    const { data: listener } = supabase.auth.onAuthStateChange((_e, s) => setSession(!!s || temSessaoGuardadaOffline()));
     return () => listener.subscription.unsubscribe();
   }, []);
   return session;
