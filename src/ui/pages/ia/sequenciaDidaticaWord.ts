@@ -6,6 +6,27 @@ import type { Estacao, Sequencia, SituacaoAprendizagem } from "./sequenciaDidati
 import { base64ToUint8Array, fetchBrasaoBase64 } from "./sequenciaDidaticaImagens";
 import { ordinal, serieParaArquivo } from "./sequenciaDidaticaHelpers";
 
+// A biblioteca docx não expõe uma opção para definir o modo de exibição
+// padrão do arquivo, e sem essa marcação o Word abre o .docx gerado em
+// "Layout da Web" em vez de "Layout de Impressão" — o documento em si fica
+// correto (largura cheia), mas a tela mostra só a largura fixa das tabelas,
+// parecendo "espremido". Corrige isso pós-processando o .docx (que é um
+// .zip) pra forçar <w:view w:val="print"/> em word/settings.xml.
+async function forcarLayoutImpressao(docxBlob: Blob): Promise<Blob> {
+  const JSZip = (await import("jszip")).default;
+  const zip = await JSZip.loadAsync(docxBlob);
+  const caminho = "word/settings.xml";
+  const settingsXml = await zip.file(caminho)?.async("string");
+  if (settingsXml && !settingsXml.includes("<w:view")) {
+    const comView = settingsXml.replace(/(<w:settings[^>]*>)/, `$1<w:view w:val="print"/>`);
+    zip.file(caminho, comView);
+  }
+  return zip.generateAsync({
+    type: "blob",
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  });
+}
+
 export interface BaixarWordParams {
   seq: Sequencia;
   professor: string;
@@ -364,7 +385,7 @@ export async function baixarWord({
     sections: [{ properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 1134, right: 1134, bottom: 1134, left: 1134 } } }, children }],
   });
 
-  const buffer = await Packer.toBlob(doc);
+  const buffer = await forcarLayoutImpressao(await Packer.toBlob(doc));
   const url = URL.createObjectURL(buffer);
   const a = document.createElement("a");
   a.href = url;
