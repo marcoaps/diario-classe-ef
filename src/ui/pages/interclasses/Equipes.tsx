@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Loader2, Pencil, Check, X, Trash2 } from 'lucide-react';
 import { agruparPorTime, chaveElegibilidade, ELEGIBILIDADE_COR, ELEGIBILIDADE_LABEL, MAXIMO_JOGADORES_TIME, mensagemMinimoNaoAtingido } from '../../../domain/interclasses';
-import type { InscricaoInterclasses, StatusElegibilidade } from '../../../domain/interclasses';
+import type { InscricaoInterclasses } from '../../../domain/interclasses';
 import { renomearTimeInterclasses, excluirInscricaoInterclasses } from '../../../data/supabase';
 import type { ElegibilidadeInterclasses } from '../../../data/supabase';
 
@@ -14,23 +14,33 @@ interface Props {
 
 // Selo curto de "apto pra jogar" ao lado de cada jogador — mesma regra e
 // mesmos dados usados na aba "Sugeridos p/ Corte" (ver AlunosSugeridosCorte.tsx),
-// só que aqui já dentro do time montado, pra decidir sem trocar de aba.
-const ELEGIBILIDADE_ICONE: Record<StatusElegibilidade, string> = {
+// só que aqui já dentro do time montado, pra decidir sem trocar de aba. O
+// Inapto mostra a contagem real de notas vermelhas (varia por aluno, ex.: 2,
+// 3...) em vez de um texto fixo — mesmo padrão usado em InscricaoAlunos.tsx.
+const ELEGIBILIDADE_ICONE: Record<ElegibilidadeInterclasses['status'], string> = {
   apto: '✅',
   atencao: '⚠️',
-  inapto: '⛔',
+  inapto: '✂️',
   transferido: '↪️',
   remanejado: '↪️',
 };
 
-function SeloElegibilidade({ status }: { status: StatusElegibilidade }) {
+function textoElegibilidade(eleg: ElegibilidadeInterclasses): string {
+  if (eleg.status === 'inapto') {
+    const n = eleg.notas_vermelhas_final;
+    return `Inapto (${n} nota${n !== 1 ? 's' : ''} vermelha${n !== 1 ? 's' : ''})`;
+  }
+  return ELEGIBILIDADE_LABEL[eleg.status];
+}
+
+function SeloElegibilidade({ eleg }: { eleg: ElegibilidadeInterclasses }) {
   return (
     <span
       className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap"
-      style={{ color: ELEGIBILIDADE_COR[status], backgroundColor: `${ELEGIBILIDADE_COR[status]}1A` }}
-      title={ELEGIBILIDADE_LABEL[status]}
+      style={{ color: ELEGIBILIDADE_COR[eleg.status], backgroundColor: `${ELEGIBILIDADE_COR[eleg.status]}1A` }}
+      title={textoElegibilidade(eleg)}
     >
-      {ELEGIBILIDADE_ICONE[status]} {ELEGIBILIDADE_LABEL[status]}
+      {ELEGIBILIDADE_ICONE[eleg.status]} {textoElegibilidade(eleg)}
     </span>
   );
 }
@@ -181,7 +191,7 @@ export function Equipes({ inscricoes, elegibilidade, loading, onRefetch }: Props
                   <span className="text-primary font-mono text-xs w-8 flex-shrink-0">#{a.numero_camisa}</span>
                   <span className="flex-1 text-on-surface truncate">{a.nome_completo}</span>
                   <span className="text-gray-400 text-xs flex-shrink-0">{a.turma_id}</span>
-                  {eleg ? <SeloElegibilidade status={eleg.status} /> : (
+                  {eleg ? <SeloElegibilidade eleg={eleg} /> : (
                     <span className="text-[10px] text-gray-300 flex-shrink-0" title="Sem dado de elegibilidade importado do SIMAED">—</span>
                   )}
                 </label>
