@@ -132,13 +132,13 @@ export function LideresProva() {
           </div>
         ) : (
           <>
-            <div className="flex items-center gap-2">
+            <div className="bg-primary rounded-3xl px-5 py-6 flex items-center gap-3 shadow-sm relative">
               {podeTrocarTurma && (
-                <button onClick={() => setTurmaEscolhida('')} className="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container">
-                  <ArrowLeft className="w-4 h-4" />
+                <button onClick={() => setTurmaEscolhida('')} className="p-1.5 rounded-lg text-on-primary/80 hover:bg-white/10 shrink-0 absolute left-4 top-1/2 -translate-y-1/2">
+                  <ArrowLeft className="w-5 h-5" />
                 </button>
               )}
-              <h2 className="text-lg font-bold text-on-surface">Turma {formatarTurma(turma)}</h2>
+              <h2 className="text-4xl font-black text-on-primary text-center w-full">Turma {formatarTurma(turma)}</h2>
             </div>
 
             <div className="bg-surface rounded-3xl shadow-sm border border-outline-variant p-4">
