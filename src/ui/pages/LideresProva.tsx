@@ -65,34 +65,21 @@ function PainelTurma({ turmaId, bimestre, contexto }: { turmaId: string; bimestr
           {alunos.map(a => {
             const status = statusPorAluno.get(a.id);
             const aee = isAEE(a);
-            const dias = Math.round(a.presentes / 2);
-            const corteDias = (aee ? LIMITE_PRESENCAS_AEE : LIMITE_PRESENCAS) / 2;
-            // Motivo do selo — mostrado sempre que não é "fez" (nota já fala
-            // por si), pra ficar claro pro líder por que consta como
-            // Pendente ou Dispensado (ex.: aluno AEE com corte diferente).
-            const motivo = status?.tipo === 'dispensado'
-              ? `${dias} dia${dias === 1 ? '' : 's'} de aula — dispensado${aee ? ' (regra AEE: mais de ' + corteDias + ' dias)' : ' (mais de ' + corteDias + ' dias)'}`
-              : status?.tipo === 'pendente'
-                ? `${dias} dia${dias === 1 ? '' : 's'} de aula — precisa de mais de ${corteDias}${aee ? ' (regra AEE)' : ''} pra ser dispensado`
-                : undefined;
             return (
               <li key={a.id} className="px-4 py-2.5 flex items-center justify-between gap-2">
-                <span className="min-w-0">
-                  <span className="flex items-center gap-2 text-sm font-medium text-on-surface min-w-0">
-                    {a.numero_chamada ? <span className="font-mono text-on-surface-variant text-xs w-6 text-right shrink-0">{a.numero_chamada}</span> : <span className="w-6 shrink-0" />}
-                    <span className="truncate">{a.nome}</span>
-                    {aee && (
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 shrink-0">AEE</span>
-                    )}
-                  </span>
-                  {motivo && <p className="text-[10px] text-on-surface-variant pl-8 mt-0.5">{motivo}</p>}
+                <span className="flex items-center gap-2 text-sm font-medium text-on-surface min-w-0">
+                  {a.numero_chamada ? <span className="font-mono text-on-surface-variant text-xs w-6 text-right shrink-0">{a.numero_chamada}</span> : <span className="w-6 shrink-0" />}
+                  <span className="truncate">{a.nome}</span>
+                  {aee && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 shrink-0">AEE</span>
+                  )}
                 </span>
                 {status?.tipo === 'fez' ? (
                   <span className="text-sm font-black text-green-700 shrink-0">{status.nota != null ? status.nota.toFixed(1).replace('.', ',') : '—'}</span>
                 ) : status?.tipo === 'dispensado' ? (
-                  <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-surface-container text-on-surface-variant border border-outline-variant shrink-0" title={motivo}>Dispensado</span>
+                  <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-surface-container text-on-surface-variant border border-outline-variant shrink-0">Dispensado</span>
                 ) : (
-                  <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-red-50 text-red-700 border border-red-200 shrink-0" title={motivo}>Pendente</span>
+                  <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-red-50 text-red-700 border border-red-200 shrink-0">Pendente</span>
                 )}
               </li>
             );
