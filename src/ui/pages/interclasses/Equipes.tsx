@@ -1,18 +1,59 @@
 import { useMemo, useState } from 'react';
 import { Loader2, Pencil, Check, X, Trash2 } from 'lucide-react';
-import { agruparPorTime, MAXIMO_JOGADORES_TIME, mensagemMinimoNaoAtingido } from '../../../domain/interclasses';
-import type { InscricaoInterclasses } from '../../../domain/interclasses';
+import { agruparPorTime, chaveElegibilidade, ELEGIBILIDADE_COR, ELEGIBILIDADE_LABEL, MAXIMO_JOGADORES_TIME, mensagemMinimoNaoAtingido } from '../../../domain/interclasses';
+import type { InscricaoInterclasses, StatusElegibilidade } from '../../../domain/interclasses';
 import { renomearTimeInterclasses, excluirInscricaoInterclasses } from '../../../data/supabase';
+import type { ElegibilidadeInterclasses } from '../../../data/supabase';
 
 interface Props {
   inscricoes: InscricaoInterclasses[];
+  elegibilidade: ElegibilidadeInterclasses[];
   loading: boolean;
   onRefetch: () => Promise<void>;
 }
 
-export function Equipes({ inscricoes, loading, onRefetch }: Props) {
+// Selo curto de "apto pra jogar" ao lado de cada jogador — mesma regra e
+// mesmos dados usados na aba "Sugeridos p/ Corte" (ver AlunosSugeridosCorte.tsx),
+// só que aqui já dentro do time montado, pra decidir sem trocar de aba.
+const ELEGIBILIDADE_ICONE: Record<StatusElegibilidade, string> = {
+  apto: '✅',
+  atencao: '⚠️',
+  inapto: '⛔',
+  transferido: '↪️',
+  remanejado: '↪️',
+};
+
+function SeloElegibilidade({ status }: { status: StatusElegibilidade }) {
+  return (
+    <span
+      className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap"
+      style={{ color: ELEGIBILIDADE_COR[status], backgroundColor: `${ELEGIBILIDADE_COR[status]}1A` }}
+      title={ELEGIBILIDADE_LABEL[status]}
+    >
+      {ELEGIBILIDADE_ICONE[status]} {ELEGIBILIDADE_LABEL[status]}
+    </span>
+  );
+}
+
+export function Equipes({ inscricoes, elegibilidade, loading, onRefetch }: Props) {
   const equipes = useMemo(() => agruparPorTime(inscricoes), [inscricoes]);
   const nomesExistentes = useMemo(() => equipes.map(e => e.nomeTime), [equipes]);
+
+  const elegibilidadePorAlunoId = useMemo(() => {
+    const mapa = new Map<string, ElegibilidadeInterclasses>();
+    elegibilidade.forEach(e => { if (e.aluno_id) mapa.set(e.aluno_id, e); });
+    return mapa;
+  }, [elegibilidade]);
+  const elegibilidadePorChave = useMemo(() => {
+    const mapa = new Map<string, ElegibilidadeInterclasses>();
+    elegibilidade.forEach(e => mapa.set(chaveElegibilidade(e.turma_id, e.nome), e));
+    return mapa;
+  }, [elegibilidade]);
+
+  function elegibilidadeDoAluno(a: InscricaoInterclasses): ElegibilidadeInterclasses | undefined {
+    if (a.aluno_id && elegibilidadePorAlunoId.has(a.aluno_id)) return elegibilidadePorAlunoId.get(a.aluno_id);
+    return elegibilidadePorChave.get(chaveElegibilidade(a.turma_id, a.nome_completo));
+  }
 
   const [renomeando, setRenomeando] = useState<string | null>(null);
   const [novoNome, setNovoNome] = useState('');
@@ -126,20 +167,26 @@ export function Equipes({ inscricoes, loading, onRefetch }: Props) {
             </div>
           </div>
           <div className="flex flex-col gap-1">
-            {eq.alunos.map((a, i) => (
-              <label key={a.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 -mx-1 px-1 rounded-lg">
-                <input
-                  type="checkbox"
-                  checked={selecionados.has(a.id)}
-                  onChange={() => toggleSelecionado(a.id)}
-                  className="accent-error w-4 h-4 flex-shrink-0"
-                />
-                <span className="text-gray-400 text-xs w-5 flex-shrink-0">{i + 1}.</span>
-                <span className="text-primary font-mono text-xs w-8 flex-shrink-0">#{a.numero_camisa}</span>
-                <span className="flex-1 text-on-surface truncate">{a.nome_completo}</span>
-                <span className="text-gray-400 text-xs flex-shrink-0">{a.turma_id}</span>
-              </label>
-            ))}
+            {eq.alunos.map((a, i) => {
+              const eleg = elegibilidadeDoAluno(a);
+              return (
+                <label key={a.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 -mx-1 px-1 rounded-lg">
+                  <input
+                    type="checkbox"
+                    checked={selecionados.has(a.id)}
+                    onChange={() => toggleSelecionado(a.id)}
+                    className="accent-error w-4 h-4 flex-shrink-0"
+                  />
+                  <span className="text-gray-400 text-xs w-5 flex-shrink-0">{i + 1}.</span>
+                  <span className="text-primary font-mono text-xs w-8 flex-shrink-0">#{a.numero_camisa}</span>
+                  <span className="flex-1 text-on-surface truncate">{a.nome_completo}</span>
+                  <span className="text-gray-400 text-xs flex-shrink-0">{a.turma_id}</span>
+                  {eleg ? <SeloElegibilidade status={eleg.status} /> : (
+                    <span className="text-[10px] text-gray-300 flex-shrink-0" title="Sem dado de elegibilidade importado do SIMAED">—</span>
+                  )}
+                </label>
+              );
+            })}
           </div>
           <div className="flex items-center justify-between gap-2 mt-2">
             <span className="text-[11px] text-gray-400">{eq.alunos.length} jogador{eq.alunos.length !== 1 ? 'es' : ''}</span>

@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { LayoutGrid, ClipboardPlus, Users2, Trophy, ShieldAlert } from 'lucide-react';
 import { cn } from '../AppLayout';
-import { buscarInscricoesInterclasses, buscarTurmasDisponiveis } from '../../data/supabase';
+import { buscarInscricoesInterclasses, buscarTurmasDisponiveis, buscarElegibilidadeInterclasses } from '../../data/supabase';
+import type { ElegibilidadeInterclasses } from '../../data/supabase';
 import { EDICAO_PADRAO, unirTurmas, MODALIDADES } from '../../domain/interclasses';
 import type { InscricaoInterclasses, Modalidade } from '../../domain/interclasses';
 import { VisaoGeral } from './interclasses/VisaoGeral';
@@ -30,6 +31,7 @@ export default function InterclassesIOP() {
   });
   const [inscricoes, setInscricoes] = useState<InscricaoInterclasses[]>([]);
   const [turmas, setTurmas] = useState<string[]>([]);
+  const [elegibilidade, setElegibilidade] = useState<ElegibilidadeInterclasses[]>([]);
   const [loading, setLoading] = useState(true);
 
   function selecionarModalidade(m: Modalidade) {
@@ -40,12 +42,14 @@ export default function InterclassesIOP() {
   const carregar = useCallback(async () => {
     setLoading(true);
     try {
-      const [insc, tms] = await Promise.all([
+      const [insc, tms, eleg] = await Promise.all([
         buscarInscricoesInterclasses(EDICAO_ATUAL),
         buscarTurmasDisponiveis(),
+        buscarElegibilidadeInterclasses(EDICAO_ATUAL),
       ]);
       setInscricoes(insc);
       setTurmas(unirTurmas(tms));
+      setElegibilidade(eleg);
     } catch (e) {
       console.error('Erro ao carregar dados do Interclasses:', e);
     } finally {
@@ -86,7 +90,7 @@ export default function InterclassesIOP() {
           onRefetch={carregar}
         />
       )}
-      {tab === 'equipes' && <Equipes inscricoes={inscricoesModalidade} loading={loading} onRefetch={carregar} />}
+      {tab === 'equipes' && <Equipes inscricoes={inscricoesModalidade} elegibilidade={elegibilidade} loading={loading} onRefetch={carregar} />}
       {tab === 'confrontos' && <Confrontos modalidade={modalidade} inscricoes={inscricoesModalidade} />}
       {tab === 'corte' && <AlunosSugeridosCorte edicao={EDICAO_ATUAL} />}
     </div>
