@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useStore } from '../../store';
 import { supabase } from '../../data/supabase';
-import { ClipboardCheck, Loader2, Users, UserCheck, UserX, FileText, Lock } from 'lucide-react';
+import { ClipboardCheck, Loader2, Users, UserCheck, UserX, FileText, Lock, CheckCircle2 } from 'lucide-react';
 import { getTurmasDoGrupo } from './ProvasOnline';
 import { exportarAlunosProvaWord } from './exportarAlunosProva';
 import { cn } from '../AppLayout';
@@ -28,7 +28,7 @@ function normNome(s: string) { return s.toLowerCase().trim().normalize('NFD').re
 
 type ProvaOnline = { id: string; titulo: string; turma_id?: string | null };
 type Envio = { prova_id: string; turma_id: string; aluno_numero: number | null; aluno_nome: string | null };
-type ResultadoTurma = { loading: boolean; farao: AlunoFrequencia[]; naoFarao: number };
+type ResultadoTurma = { loading: boolean; farao: AlunoFrequencia[]; naoFarao: number; fizeramOnline: AlunoFrequencia[] };
 
 function TurmaBloco({ turmaId, bimestre, nomesExcluidos, aeeNomes, provasOnline, envios, onResultado }: {
   turmaId: string; bimestre: Bimestre; nomesExcluidos: Set<string>; aeeNomes: Set<string>;
@@ -88,7 +88,7 @@ function TurmaBloco({ turmaId, bimestre, nomesExcluidos, aeeNomes, provasOnline,
 
   const chave = `${loading}|${naoFarao}|${farao.map(a => a.id).join(',')}`;
   React.useEffect(() => {
-    onResultado(turmaId, { loading, farao, naoFarao });
+    onResultado(turmaId, { loading, farao, naoFarao, fizeramOnline });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chave, turmaId]);
 
@@ -98,7 +98,7 @@ function TurmaBloco({ turmaId, bimestre, nomesExcluidos, aeeNomes, provasOnline,
         <Users className="w-4 h-4 text-on-surface-variant" />
         <h3 className="text-sm font-bold text-on-surface">{turmaId}</h3>
         <span className="text-xs text-on-surface-variant">
-          {loading ? 'calculando...' : `${farao.length} vão fazer • ${naoFarao} dispensados`}
+          {loading ? 'calculando...' : `${farao.length} vão fazer • ${naoFarao} dispensados • ${fizeramOnline.length} já fizeram`}
         </span>
       </div>
       {erro ? <p className="px-4 py-3 text-sm text-on-error-container bg-error-container">{erro}</p> : null}
@@ -127,9 +127,19 @@ function TurmaBloco({ turmaId, bimestre, nomesExcluidos, aeeNomes, provasOnline,
         </ul>
       )}
       {fizeramOnline.length > 0 ? (
-        <div className="border-t border-outline-variant bg-surface-container/40 px-4 py-2.5">
-          <p className="text-[11px] font-bold text-on-surface-variant">Já fizeram a prova online ({fizeramOnline.length}) — não entram na lista nem no Word</p>
-          <p className="text-[11px] text-on-surface-variant">{fizeramOnline.map(a => `${a.numero_chamada ?? ''} ${a.nome}`.trim()).join(' • ')}</p>
+        <div className="border-t border-outline-variant bg-green-50/60 px-4 py-2.5">
+          <p className="text-[11px] font-bold text-green-800 flex items-center gap-1 mb-1.5">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            Já fizeram a prova online ({fizeramOnline.length}) — não entram na lista nem no Word
+          </p>
+          <ul className="flex flex-col gap-1">
+            {fizeramOnline.map(a => (
+              <li key={a.id} className="flex items-center gap-2 text-xs text-green-900">
+                {a.numero_chamada ? <span className="font-mono text-green-700 w-6 text-right shrink-0">{a.numero_chamada}</span> : <span className="w-6 shrink-0" />}
+                <span className="truncate">{a.nome}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
     </div>
@@ -190,6 +200,7 @@ export function AlunosProva() {
   const lista = turmas.map(t => resultados[t]).filter(Boolean) as ResultadoTurma[];
   const totalFarao = lista.reduce((n, r) => n + r.farao.length, 0);
   const totalNao = lista.reduce((n, r) => n + r.naoFarao, 0);
+  const totalOnline = lista.reduce((n, r) => n + r.fizeramOnline.length, 0);
   const carregando = turmas.length === 0 || turmas.some(t => !resultados[t] || resultados[t].loading);
 
   // ── Liberar a lista na prova online (só esses alunos conseguem responder) ──
@@ -272,16 +283,21 @@ export function AlunosProva() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-primary-container rounded-3xl p-5 flex flex-col items-center justify-center gap-1 border border-primary/20">
-          <UserCheck className="w-6 h-6 text-on-primary-container" />
-          <p className="text-3xl font-black text-on-primary-container">{totalFarao}</p>
-          <p className="text-xs font-bold text-on-primary-container text-center">Vão fazer a prova</p>
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-primary-container rounded-3xl p-4 flex flex-col items-center justify-center gap-1 border border-primary/20">
+          <UserCheck className="w-5 h-5 text-on-primary-container" />
+          <p className="text-2xl font-black text-on-primary-container">{totalFarao}</p>
+          <p className="text-[11px] font-bold text-on-primary-container text-center leading-tight">Vão fazer a prova</p>
         </div>
-        <div className="bg-surface-container rounded-3xl p-5 flex flex-col items-center justify-center gap-1 border border-outline-variant">
-          <UserX className="w-6 h-6 text-on-surface-variant" />
-          <p className="text-3xl font-black text-on-surface-variant">{totalNao}</p>
-          <p className="text-xs font-bold text-on-surface-variant text-center">Dispensados</p>
+        <div className="bg-surface-container rounded-3xl p-4 flex flex-col items-center justify-center gap-1 border border-outline-variant">
+          <UserX className="w-5 h-5 text-on-surface-variant" />
+          <p className="text-2xl font-black text-on-surface-variant">{totalNao}</p>
+          <p className="text-[11px] font-bold text-on-surface-variant text-center leading-tight">Dispensados</p>
+        </div>
+        <div className="bg-green-50 rounded-3xl p-4 flex flex-col items-center justify-center gap-1 border border-green-200">
+          <CheckCircle2 className="w-5 h-5 text-green-700" />
+          <p className="text-2xl font-black text-green-700">{totalOnline}</p>
+          <p className="text-[11px] font-bold text-green-700 text-center leading-tight">Já fizeram online</p>
         </div>
       </div>
 
