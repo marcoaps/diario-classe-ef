@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { ClipboardCheck, Users, CheckCircle2, Loader2, ArrowLeft } from 'lucide-react';
+import { ClipboardCheck, Users, Loader2, ArrowLeft } from 'lucide-react';
 import { cn } from '../AppLayout';
-import { bimestreAtual, type Bimestre, type AlunoFrequencia } from '../../domain/useRelatorioFrequencia';
+import { bimestreAtual, type Bimestre } from '../../domain/useRelatorioFrequencia';
 import {
   useContextoPendentesProva, usePendentesProva,
   LIMITE_PRESENCAS, LIMITE_PRESENCAS_AEE, TURMAS_PADRAO,
@@ -10,37 +10,22 @@ import {
 } from '../../domain/usePendentesProva';
 
 const BIMESTRES: Bimestre[] = [1, 2, 3, 4];
-type Aba = 'pendentes' | 'fizeram' | 'dispensados';
 
 // "8D" -> "8ºD", só formatação visual.
 function formatarTurma(t: string) { return t.replace(/(\d+)/, '$1º'); }
+
+type StatusAluno =
+  | { tipo: 'fez'; nota: number | null }
+  | { tipo: 'pendente' }
+  | { tipo: 'dispensado' };
 
 // Página pública (sem login), pros líderes de turma acompanharem a prova
 // online dos colegas — mesma regra/dados de AlunosProva.tsx (tela do
 // professor), só que somente leitura, sem "Liberar"/Excel/Word.
 // Acesso: /lideres-prova/:turma (link individual, travado numa turma só —
 // pra distribuir um link por líder) ou /lideres-prova (escolhe a turma).
-function ListaAlunos({ lista, vazio }: { lista: AlunoFrequencia[]; vazio: string }) {
-  if (lista.length === 0) return <p className="px-4 py-6 text-sm text-on-surface-variant text-center">{vazio}</p>;
-  return (
-    <ul className="divide-y divide-outline-variant">
-      {lista.map(a => (
-        <li key={a.id} className="px-4 py-2.5 flex items-center justify-between gap-2">
-          <span className="flex items-center gap-2 text-sm font-medium text-on-surface min-w-0">
-            {a.numero_chamada ? <span className="font-mono text-on-surface-variant text-xs w-6 text-right shrink-0">{a.numero_chamada}</span> : <span className="w-6 shrink-0" />}
-            <span className="truncate">{a.nome}</span>
-          </span>
-          <span className="text-xs font-semibold text-on-surface-variant shrink-0">{Math.round(a.presentes / 2)} dias de aula</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 function PainelTurma({ turmaId, bimestre, contexto }: { turmaId: string; bimestre: Bimestre; contexto: ContextoPendentesProva }) {
   const { loading, erro, alunos, isAEE, farao, dispensados, fizeramOnline } = usePendentesProva(turmaId, bimestre, contexto);
-  const [aba, setAba] = useState<Aba>('pendentes');
-  useEffect(() => { setAba('pendentes'); }, [turmaId, bimestre]);
 
   if (loading) return (
     <div className="flex items-center justify-center py-10 text-on-surface-variant"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
@@ -48,63 +33,57 @@ function PainelTurma({ turmaId, bimestre, contexto }: { turmaId: string; bimestr
   if (erro) return <p className="px-4 py-3 text-sm text-on-error-container bg-error-container rounded-2xl">{erro}</p>;
   if (alunos.length === 0) return <p className="px-4 py-6 text-sm text-on-surface-variant text-center">Nenhum aluno encontrado para essa turma.</p>;
 
-  const abas: { id: Aba; label: string; n: number }[] = [
-    { id: 'pendentes', label: 'Pendentes', n: farao.length },
-    { id: 'fizeram', label: 'Já fizeram', n: fizeramOnline.length },
-    { id: 'dispensados', label: 'Dispensados', n: dispensados.length },
+  // Lista completa da turma (não só pendentes): cada aluno mostra a nota, se
+  // já fez a prova online, ou um selo de status (Pendente/Dispensado).
+  const statusPorAluno = new Map<string, StatusAluno>();
+  farao.forEach(a => statusPorAluno.set(a.id, { tipo: 'pendente' }));
+  dispensados.forEach(a => statusPorAluno.set(a.id, { tipo: 'dispensado' }));
+  fizeramOnline.forEach(a => statusPorAluno.set(a.id, { tipo: 'fez', nota: a.nota }));
+
+  const cards = [
+    { label: 'Pendentes', n: farao.length, bg: 'bg-red-50', border: 'border-red-200', texto: 'text-red-700' },
+    { label: 'Já fizeram', n: fizeramOnline.length, bg: 'bg-green-50', border: 'border-green-200', texto: 'text-green-700' },
+    { label: 'Dispensados', n: dispensados.length, bg: 'bg-surface-container', border: 'border-outline-variant', texto: 'text-on-surface-variant' },
   ];
 
   return (
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-3 gap-2">
-        {abas.map(a => (
-          <button key={a.id} onClick={() => setAba(a.id)}
-            className={cn('rounded-2xl p-3 text-center border transition-all active:scale-95',
-              aba === a.id
-                ? a.id === 'pendentes' ? 'bg-primary-container border-primary/30'
-                  : a.id === 'fizeram' ? 'bg-green-50 border-green-300'
-                  : 'bg-surface-container border-outline'
-                : 'bg-surface border-outline-variant')}>
-            <p className={cn('text-xl font-black',
-              a.id === 'pendentes' ? 'text-on-primary-container' : a.id === 'fizeram' ? 'text-green-700' : 'text-on-surface-variant')}>
-              {a.n}
-            </p>
-            <p className="text-[10px] font-bold text-on-surface-variant leading-tight">{a.label}</p>
-          </button>
+        {cards.map(c => (
+          <div key={c.label} className={cn('rounded-2xl p-3 text-center border', c.bg, c.border)}>
+            <p className={cn('text-xl font-black', c.texto)}>{c.n}</p>
+            <p className={cn('text-[10px] font-bold leading-tight', c.texto)}>{c.label}</p>
+          </div>
         ))}
       </div>
 
       <div className="bg-surface rounded-3xl border border-outline-variant shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-outline-variant flex items-center gap-1.5">
-          {aba === 'fizeram' && <CheckCircle2 className="w-4 h-4 text-green-600" />}
-          <h3 className="text-sm font-bold text-on-surface">
-            {aba === 'pendentes' ? 'Ainda precisam fazer a prova online'
-              : aba === 'fizeram' ? 'Já fizeram a prova online'
-              : 'Dispensados pela presença'}
-          </h3>
+        <div className="px-4 py-3 border-b border-outline-variant">
+          <h3 className="text-sm font-bold text-on-surface">Todos os alunos da turma</h3>
         </div>
-        {aba === 'pendentes' ? (
-          farao.length === 0 ? <p className="px-4 py-6 text-sm text-on-surface-variant text-center">🎉 Ninguém pendente nessa turma.</p> : (
-            <ul className="divide-y divide-outline-variant">
-              {farao.map(a => (
-                <li key={a.id} className="px-4 py-2.5 flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-2 text-sm font-medium text-on-surface min-w-0">
-                    {a.numero_chamada ? <span className="font-mono text-on-surface-variant text-xs w-6 text-right shrink-0">{a.numero_chamada}</span> : <span className="w-6 shrink-0" />}
-                    <span className="truncate">{a.nome}</span>
-                    {isAEE(a) && (
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 shrink-0">AEE</span>
-                    )}
-                  </span>
-                  <span className="text-xs font-semibold text-on-surface-variant shrink-0">{Math.round(a.presentes / 2)} dias de aula</span>
-                </li>
-              ))}
-            </ul>
-          )
-        ) : aba === 'fizeram' ? (
-          <ListaAlunos lista={fizeramOnline} vazio="Ninguém fez a prova online ainda nessa turma." />
-        ) : (
-          <ListaAlunos lista={dispensados} vazio="Ninguém dispensado pela presença ainda." />
-        )}
+        <ul className="divide-y divide-outline-variant">
+          {alunos.map(a => {
+            const status = statusPorAluno.get(a.id);
+            return (
+              <li key={a.id} className="px-4 py-2.5 flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2 text-sm font-medium text-on-surface min-w-0">
+                  {a.numero_chamada ? <span className="font-mono text-on-surface-variant text-xs w-6 text-right shrink-0">{a.numero_chamada}</span> : <span className="w-6 shrink-0" />}
+                  <span className="truncate">{a.nome}</span>
+                  {isAEE(a) && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 shrink-0">AEE</span>
+                  )}
+                </span>
+                {status?.tipo === 'fez' ? (
+                  <span className="text-sm font-black text-green-700 shrink-0">{status.nota != null ? status.nota.toFixed(1).replace('.', ',') : '—'}</span>
+                ) : status?.tipo === 'dispensado' ? (
+                  <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-surface-container text-on-surface-variant border border-outline-variant shrink-0">Dispensado</span>
+                ) : (
+                  <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-red-50 text-red-700 border border-red-200 shrink-0">Pendente</span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
       </div>
 
       <p className="text-[11px] text-on-surface-variant text-center px-4">

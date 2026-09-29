@@ -30,7 +30,7 @@ export function chaveTurma(t: string | null | undefined) { return String(t ?? ''
 export function normNome(s: string) { return s.toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
 
 export type ProvaOnline = { id: string; titulo: string; turma_id?: string | null };
-export type Envio = { prova_id: string; turma_id: string; aluno_numero: number | null; aluno_nome: string | null };
+export type Envio = { prova_id: string; turma_id: string; aluno_numero: number | null; aluno_nome: string | null; nota: number | null };
 
 export interface ContextoPendentesProva {
   nomesExcluidos: Set<string>; // transferidos/remanejados — turma|nome
@@ -57,7 +57,7 @@ export function useContextoPendentesProva(): ContextoPendentesProva {
     })();
     (async () => {
       const { data: provas } = await supabase.from('provas').select('id, titulo, turma_id');
-      const { data: resp } = await supabase.from('respostas').select('prova_id, turma_id, aluno_numero, aluno_nome');
+      const { data: resp } = await supabase.from('respostas').select('prova_id, turma_id, aluno_numero, aluno_nome, nota');
       setProvasOnline(provas || []);
       setEnvios(resp || []);
     })();
@@ -85,15 +85,21 @@ export function usePendentesProva(turmaId: string, bimestre: Bimestre, ctx: Cont
   const isAEE = (a: AlunoFrequencia) => aeeNomes.has(normNome(a.nome));
   const precisaFazerProva = (a: AlunoFrequencia) => a.presentes < (isAEE(a) ? LIMITE_PRESENCAS_AEE : LIMITE_PRESENCAS + 1);
 
-  // Quem já enviou a prova online do bimestre (ids dos alunos). O nome
-  // digitado tem prioridade: se bater (mesmo parcialmente) com um aluno da
-  // turma, o nº de chamada é ignorado. Sem nome reconhecível, vale o nº.
-  const idsOnline = useMemo(() => {
+  // Quem já enviou a prova online do bimestre, com a MAIOR nota entre as
+  // tentativas (até 3, ver MAX_TENTATIVAS em ResponderProva.tsx) — mesma
+  // regra usada em AvaliacaoResultados.tsx. O nome digitado tem prioridade:
+  // se bater (mesmo parcialmente) com um aluno da turma, o nº de chamada é
+  // ignorado. Sem nome reconhecível, vale o nº de chamada.
+  const notasOnline = useMemo(() => {
     const re = new RegExp(String.raw`(^|\D)${bimestre}\s*[º°o]?\s*bim`, 'i');
     const provaIds = new Set(provasOnline.filter(p => re.test(p.titulo)).map(p => p.id));
     const turma = chaveTurma(turmaId);
     const tokens = (n: string) => normNome(n).split(/\s+/).filter(t => t.length > 1);
-    const feitos = new Set<string>();
+    const mapa = new Map<string, number | null>();
+    const registrar = (id: string, nota: number | null) => {
+      const atual = mapa.get(id);
+      if (!mapa.has(id) || (nota ?? -1) > (atual ?? -1)) mapa.set(id, nota);
+    };
     for (const e of envios) {
       if (!provaIds.has(e.prova_id) || chaveTurma(e.turma_id) !== turma) continue;
       const digitado = tokens(e.aluno_nome || '');
@@ -102,26 +108,28 @@ export function usePendentesProva(turmaId: string, bimestre: Bimestre, ctx: Cont
         return digitado.every(d => t.has(d));
       });
       const porNumero = alunosBrutos.filter(a => e.aluno_numero != null && a.numero_chamada != null && Number(a.numero_chamada) === e.aluno_numero);
-      if (porNome.length === 1) feitos.add(porNome[0].id);
+      if (porNome.length === 1) registrar(porNome[0].id, e.nota);
       else if (porNome.length > 1) {
         const desempate = porNome.find(a => porNumero.some(n => n.id === a.id));
-        if (desempate) feitos.add(desempate.id);
+        if (desempate) registrar(desempate.id, e.nota);
       } else {
         // Sem nome reconhecível: usa o nº de chamada, mas só se o nome digitado
         // tiver alguma palavra em comum com o dono do número (evita excluir outro aluno).
         const sig = (t: string) => t.length > 2 && !['dos', 'das'].includes(t);
         porNumero.forEach(a => {
           const t = new Set(tokens(a.nome));
-          if (digitado.length === 0 || digitado.some(d => sig(d) && t.has(d))) feitos.add(a.id);
+          if (digitado.length === 0 || digitado.some(d => sig(d) && t.has(d))) registrar(a.id, e.nota);
         });
       }
     }
-    return feitos;
+    return mapa;
   }, [provasOnline, envios, bimestre, turmaId, alunosBrutos]);
 
-  const fizeramOnline = alunos.filter(a => precisaFazerProva(a) && idsOnline.has(a.id));
-  const farao = alunos.filter(a => precisaFazerProva(a) && !fizeramOnline.includes(a));
+  const fizeramOnline = alunos
+    .filter(a => precisaFazerProva(a) && notasOnline.has(a.id))
+    .map(a => ({ ...a, nota: notasOnline.get(a.id) ?? null }));
+  const farao = alunos.filter(a => precisaFazerProva(a) && !notasOnline.has(a.id));
   const dispensados = alunos.filter(a => !precisaFazerProva(a));
 
-  return { loading, erro, alunos, isAEE, farao, dispensados, fizeramOnline };
+  return { loading, erro, alunos, isAEE, farao, dispensados, fizeramOnline, notasOnline };
 }
