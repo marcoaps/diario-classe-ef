@@ -14,7 +14,7 @@ export interface AlunoProvaExport {
 const BORDA = { style: BorderStyle.SINGLE, size: 4, color: '999999' };
 const BORDAS = { top: BORDA, bottom: BORDA, left: BORDA, right: BORDA };
 
-function celula(texto: string, largura: number, opts: { bold?: boolean; center?: boolean; fill?: string; keep?: boolean } = {}) {
+function celula(texto: string, largura: number, opts: { bold?: boolean; center?: boolean; fill?: string; corTexto?: string; keep?: boolean } = {}) {
   return new TableCell({
     width: { size: largura, type: WidthType.DXA },
     borders: BORDAS,
@@ -22,7 +22,7 @@ function celula(texto: string, largura: number, opts: { bold?: boolean; center?:
     shading: opts.fill ? { type: ShadingType.CLEAR, fill: opts.fill, color: 'auto' } : undefined,
     children: [new Paragraph({
       alignment: opts.center ? AlignmentType.CENTER : AlignmentType.LEFT,
-      children: [new TextRun({ text: texto, bold: opts.bold, size: 22 })],
+      children: [new TextRun({ text: texto, bold: opts.bold, size: 22, color: opts.corTexto })],
     })],
   });
 }
@@ -87,6 +87,7 @@ export interface AlunoSituacaoExport {
   nome: string;
   situacao: string; // "Pendente" | "Dispensado" | nota formatada (ex.: "9,5")
   corFundo: string; // cor de fundo da célula de situação (hex sem #)
+  corTexto?: string; // cor do texto da célula de situação (hex sem #)
 }
 
 export interface TurmaSituacaoExport {
@@ -113,7 +114,7 @@ export async function exportarTurmaCompletaWord(bimestre: number, turmas: TurmaS
       children: [
         celula(a.numero_chamada ? String(a.numero_chamada) : '', W[0], { center: true, keep }),
         celula(a.nome, W[1], { keep }),
-        celula(a.situacao, W[2], { center: true, bold: true, fill: a.corFundo, keep }),
+        celula(a.situacao, W[2], { center: true, bold: true, fill: a.corFundo, corTexto: a.corTexto, keep }),
       ],
     }); });
     if (idx > 0) children.push(new Paragraph({ spacing: { before: 0, after: 0, line: 160, lineRule: 'exact' as any }, children: [new TextRun({ text: '', size: 8 })] }));

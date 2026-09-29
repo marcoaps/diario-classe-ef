@@ -169,14 +169,15 @@ export function AlunosProva() {
   // Lista completa (todos os alunos + situação) pra imprimir e levar na sala
   // — mesmo formato da página dos líderes, ver exportarTurmaCompletaWord.
   const exportarCompleto = () => {
-    const COR_PENDENTE = 'FFE0E0', COR_DISPENSADO = 'ECECEC', COR_FEZ = 'D9EAD3';
+    const COR_PENDENTE = 'C00000', COR_DISPENSADO = '2E5AAC', COR_FEZ = 'D9EAD3';
+    const BRANCO = 'FFFFFF';
     const dados = turmas
       .map(t => {
         const r = resultados[t];
         if (!r) return { turma: t, alunos: [] as AlunoSituacaoExport[] };
         const linhas: AlunoSituacaoExport[] = [
-          ...r.farao.map(a => ({ numero_chamada: a.numero_chamada, nome: a.nome, situacao: 'Pendente', corFundo: COR_PENDENTE })),
-          ...r.dispensados.map(a => ({ numero_chamada: a.numero_chamada, nome: a.nome, situacao: 'Dispensado', corFundo: COR_DISPENSADO })),
+          ...r.farao.map(a => ({ numero_chamada: a.numero_chamada, nome: a.nome, situacao: 'Pendente', corFundo: COR_PENDENTE, corTexto: BRANCO })),
+          ...r.dispensados.map(a => ({ numero_chamada: a.numero_chamada, nome: a.nome, situacao: 'Dispensado', corFundo: COR_DISPENSADO, corTexto: BRANCO })),
           ...r.fizeramOnline.map(a => ({ numero_chamada: a.numero_chamada, nome: a.nome, situacao: a.nota != null ? a.nota.toFixed(1).replace('.', ',') : '—', corFundo: COR_FEZ })),
         ].sort((a, b) => (a.numero_chamada ?? 999) - (b.numero_chamada ?? 999));
         return { turma: t, alunos: linhas };
