@@ -284,6 +284,17 @@ export function ResponderProva() {
         turma_id: turmaAluno, respostas, nota: notaFinal,
         correcoes_dissertativas: correcoes,
       });
+      // Leva a nota pra tela Notas do professor automaticamente. Roda no
+      // servidor (nunca no navegador do aluno) pra ninguém conseguir forjar
+      // a própria nota — se falhar ou não estiver configurado ainda, não
+      // afeta o aluno: a resposta dele já está salva acima de qualquer jeito.
+      if (numero) {
+        fetch('/api/sincronizar-nota-online', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prova_id: prova.id, turma_id: turmaAluno, aluno_numero: parseInt(numero) }),
+        }).catch(() => { /* melhor esforço, não bloqueia o aluno */ });
+      }
     } catch (e: any) { alert('Erro ao salvar: ' + e.message); }
 
     setCorrecoesDissertativas(correcoes);
