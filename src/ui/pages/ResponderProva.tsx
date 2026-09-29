@@ -366,6 +366,7 @@ export function ResponderProva() {
         <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
         <p className="text-amber-800 text-sm font-bold leading-snug">
           Atenção: você tem direito a no máximo {MAX_TENTATIVAS} tentativas para realizar esta prova.
+          Vale a sua nota mais alta entre elas — refazer nunca piora sua nota.
         </p>
       </div>
 
@@ -445,10 +446,16 @@ export function ResponderProva() {
             <img src="/Logo_IOP.png" alt="IOP" className="w-8 h-8 rounded-full border border-gray-200 object-cover shrink-0" />
             <div className="min-w-0">
               <p className="text-gray-800 font-black text-sm leading-tight truncate">{prova?.titulo}</p>
-              <p className="text-gray-400 text-xs truncate">{nome} · Turma {turmaAluno}{tentativaAtual ? ` · Tentativa ${tentativaAtual}/${MAX_TENTATIVAS}` : ''}</p>
+              <p className="text-gray-400 text-xs truncate">{nome} · Turma {turmaAluno}</p>
             </div>
           </div>
-          <div className="flex items-center gap-3 shrink-0 ml-2">
+          <div className="flex items-center gap-2 shrink-0 ml-2">
+            {tentativaAtual && (
+              <span className="bg-amber-100 text-amber-700 border border-amber-300 text-[11px] font-black px-2 py-1 rounded-full whitespace-nowrap"
+                title={`Vale a sua nota mais alta entre as ${MAX_TENTATIVAS} tentativas`}>
+                Tentativa {tentativaAtual}/{MAX_TENTATIVAS}
+              </span>
+            )}
             <span className="text-xs text-gray-400 font-semibold hidden sm:block">
               <span className="text-[#0B7A3D] font-black">{respondidas}</span>/{questoes.length}
             </span>
@@ -665,6 +672,14 @@ export function ResponderProva() {
                   : '⚠ Abaixo da média'}
               </p>
             </div>
+          )}
+
+          {tentativaAtual && (
+            <p className="text-xs text-gray-400 mb-4">
+              {tentativaAtual < MAX_TENTATIVAS
+                ? `Tentativa ${tentativaAtual}/${MAX_TENTATIVAS} — vale a maior nota entre elas. Você ainda pode refazer com o mesmo código pra tentar melhorar, sem risco de perder essa nota.`
+                : `Tentativa ${tentativaAtual}/${MAX_TENTATIVAS} — essa foi sua última tentativa. Vale a maior nota entre as ${MAX_TENTATIVAS}.`}
+            </p>
           )}
 
           <div className="flex items-center justify-center gap-4 text-gray-400 text-sm">

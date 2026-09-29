@@ -54,6 +54,8 @@ export function AvaliacaoResultados() {
       // Respostas da Prova Online ficam em `respostas` (aluno digita nome, nº e
       // turma) -- casa com o aluno por turma + nº de chamada. A nota online é
       // de 0 a 10; converte pra escala da avaliação. Papel tem prioridade.
+      // Aluno tem até 3 tentativas (ver MAX_TENTATIVAS em ResponderProva.tsx)
+      // -- entre elas, vale a de MAIOR nota, não a mais recente.
       if (av.prova_online_id) {
         const [{ data: online }, { data: qs }] = await Promise.all([
           supabase.from('respostas').select('aluno_numero, turma_id, respostas, nota, enviado_em')
@@ -61,9 +63,14 @@ export function AvaliacaoResultados() {
           supabase.from('questoes').select('id, tipo, resposta_correta').eq('prova_id', av.prova_online_id),
         ]);
         const valorTotal = (av.valor_total_objetivas || 0) + (av.valor_total_discursivas || 0);
+        const melhorPorAluno = new Map<string, { o: NonNullable<typeof online>[number]; aluno: Aluno }>();
         for (const o of online || []) {
           const aluno = (alunos || []).find(a => a.turma_id === o.turma_id && a.numero_chamada === o.aluno_numero);
-          if (!aluno || respostasMap.has(aluno.id)) continue;
+          if (!aluno || respostasMap.has(aluno.id)) continue; // papel já registrado tem prioridade
+          const atual = melhorPorAluno.get(aluno.id);
+          if (!atual || (o.nota ?? 0) > (atual.o.nota ?? 0)) melhorPorAluno.set(aluno.id, { o, aluno });
+        }
+        for (const { o, aluno } of melhorPorAluno.values()) {
           const acertos = (qs || []).filter(q => q.tipo === 'multipla_escolha' && o.respostas?.[q.id] === q.resposta_correta).length;
           const nota = ((o.nota ?? 0) / 10) * valorTotal;
           respostasMap.set(aluno.id, {

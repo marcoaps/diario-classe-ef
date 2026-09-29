@@ -493,6 +493,32 @@ export function ProvasOnline() {
     finally { setSalvandoCorrecao(false); }
   };
 
+  // Agrupa as respostas de "Ver Resultados" por aluno (até 3 tentativas,
+  // ver MAX_TENTATIVAS/lógica de bloqueio em ResponderProva.tsx) — cada
+  // grupo vira um card com o histórico de tentativas (data+hora) e destaca
+  // a de maior nota, que é a considerada oficial (ver getMelhorTentativa,
+  // usada também em AvaliacaoResultados.tsx pra casar com a nota impressa).
+  const gruposResultados = React.useMemo(() => {
+    const chaveDe = (r: Resposta) => r.aluno_numero != null
+      ? `${r.turma_id}|${r.aluno_numero}`
+      : `nome|${r.aluno_nome.toLowerCase().trim()}`;
+    const mapa = new Map<string, Resposta[]>();
+    resultados.forEach(r => {
+      const k = chaveDe(r);
+      if (!mapa.has(k)) mapa.set(k, []);
+      mapa.get(k)!.push(r);
+    });
+    return Array.from(mapa.values())
+      .map(tentativas => {
+        const ordenadas = [...tentativas].sort((a, b) => new Date(a.enviado_em).getTime() - new Date(b.enviado_em).getTime());
+        const melhor = ordenadas.reduce((m, r) => (r.nota ?? -1) > (m.nota ?? -1) ? r : m, ordenadas[0]);
+        return { aluno_nome: ordenadas[0].aluno_nome, aluno_numero: ordenadas[0].aluno_numero, turma_id: ordenadas[0].turma_id, tentativas: ordenadas, melhorId: melhor.id };
+      })
+      .sort((a, b) => (a.turma_id || '').localeCompare(b.turma_id || '', 'pt-BR')
+        || (a.aluno_numero ?? 999) - (b.aluno_numero ?? 999)
+        || a.aluno_nome.localeCompare(b.aluno_nome, 'pt-BR'));
+  }, [resultados]);
+
   return (
     <div className="p-4 flex flex-col gap-4 pb-36">
       <div className="bg-primary rounded-[2rem] p-5 text-white shadow-lg shadow-primary/30 relative overflow-hidden">
@@ -713,7 +739,9 @@ export function ProvasOnline() {
         <div className="flex flex-col gap-3">
           <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
             <p className="font-bold text-gray-800">{provaResultados.titulo}</p>
-            <p className="text-xs text-gray-400 mt-0.5">{getLabelGrupo(provaResultados.turma_id)} · {resultados.length} respostas</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {getLabelGrupo(provaResultados.turma_id)} · {gruposResultados.length} aluno{gruposResultados.length !== 1 ? 's' : ''} · {resultados.length} tentativa{resultados.length !== 1 ? 's' : ''}
+            </p>
           </div>
           {resultados.length === 0 && (
             <div className="text-center py-8 text-gray-400">
@@ -721,35 +749,49 @@ export function ProvasOnline() {
               <p className="text-sm">Nenhuma resposta ainda.</p>
             </div>
           )}
-          {resultados.map(r => {
-            const temErroIA = r.correcoes_dissertativas?.some(c => c.justificativa?.includes('Erro'));
+          {gruposResultados.map(g => {
             const temCorrigiveis = questoesProva.some(q => q.tipo === 'dissertativa' || q.tipo === 'composta');
             return (
-              <div key={r.id} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+              <div key={`${g.turma_id}|${g.aluno_numero ?? g.aluno_nome}`} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex flex-col gap-2">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-bold text-gray-800 text-sm">{r.aluno_nome}</p>
-                    <p className="text-xs text-gray-400">
-                      {r.aluno_numero ? `Nº ${r.aluno_numero} · ` : ''}
-                      {r.turma_id ? `Turma ${r.turma_id} · ` : ''}
-                      {new Date(r.enviado_em).toLocaleDateString('pt-BR')}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xl font-black ${r.nota !== null && r.nota >= 6 ? 'text-green-500' : 'text-red-500'}`}>
-                      {r.nota?.toFixed(1) ?? '—'}
-                    </span>
-                    {temCorrigiveis && (
-                      <button onClick={() => abrirCorrecaoManual(r)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${temErroIA ? 'bg-amber-100 text-amber-700 border border-amber-300' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                        <Edit2 className="w-3.5 h-3.5" />
-                        {temErroIA ? 'Corrigir' : 'Editar'}
-                      </button>
-                    )}
-                  </div>
+                  <p className="font-bold text-gray-800 text-sm">{g.aluno_nome}</p>
+                  <span className="text-xs text-gray-400">
+                    {g.aluno_numero ? `Nº ${g.aluno_numero} · ` : ''}{g.turma_id ? `Turma ${g.turma_id}` : ''}
+                  </span>
                 </div>
-                {temErroIA && (
-                  <div className="mt-2 flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5">
+                <div className="flex flex-col gap-1.5">
+                  {g.tentativas.map((r, i) => {
+                    const temErroIA = r.correcoes_dissertativas?.some(c => c.justificativa?.includes('Erro'));
+                    const ehMelhor = r.id === g.melhorId;
+                    return (
+                      <div key={r.id} className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2 border ${ehMelhor ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-100'}`}>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-gray-600">
+                            Tentativa {i + 1}/{g.tentativas.length}
+                            {ehMelhor && g.tentativas.length > 1 && <span className="text-green-600"> · ✓ nota considerada</span>}
+                          </p>
+                          <p className="text-[11px] text-gray-400">
+                            {new Date(r.enviado_em).toLocaleDateString('pt-BR')} às {new Date(r.enviado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={`text-lg font-black ${r.nota !== null && r.nota >= 6 ? 'text-green-500' : 'text-red-500'}`}>
+                            {r.nota?.toFixed(1) ?? '—'}
+                          </span>
+                          {temCorrigiveis && (
+                            <button onClick={() => abrirCorrecaoManual(r)}
+                              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${temErroIA ? 'bg-amber-100 text-amber-700 border border-amber-300' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                              <Edit2 className="w-3 h-3" />
+                              {temErroIA ? 'Corrigir' : 'Editar'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {g.tentativas.some(r => r.correcoes_dissertativas?.some(c => c.justificativa?.includes('Erro'))) && (
+                  <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5">
                     <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                     <p className="text-xs text-amber-700 font-medium">IA não corrigiu — correção manual necessária</p>
                   </div>
