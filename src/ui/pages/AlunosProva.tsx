@@ -5,86 +5,23 @@ import { ClipboardCheck, Loader2, Users, UserCheck, UserX, FileText, Lock, Check
 import { getTurmasDoGrupo } from './ProvasOnline';
 import { exportarAlunosProvaWord } from './exportarAlunosProva';
 import { cn } from '../AppLayout';
-import { useRelatorioFrequencia, type Bimestre, type AlunoFrequencia, bimestreAtual } from '../../domain/useRelatorioFrequencia';
+import { type Bimestre, type AlunoFrequencia, bimestreAtual } from '../../domain/useRelatorioFrequencia';
+import {
+  useContextoPendentesProva, usePendentesProva, chaveTurma,
+  LIMITE_PRESENCAS, LIMITE_PRESENCAS_AEE,
+  type ContextoPendentesProva,
+} from '../../domain/usePendentesProva';
 
 const BIMESTRES: Bimestre[] = [1, 2, 3, 4];
 
-// Regra: aluno com MAIS de 2 dias de aula (4 presenças, já que cada dia
-// conta em dobro — ver useRelatorioFrequencia.ts) no bimestre já cumpriu a
-// prática e não precisa fazer a prova; com 2 dias ou menos, faz a prova.
-const LIMITE_PRESENCAS = 4;
-
-// Alunos AEE têm um corte próprio, maior: com mais de 4 dias de aula (8
-// presenças) no bimestre já cumpriram o suficiente e ficam dispensados; com
-// menos, fazem a prova — não depende de PI/PP/PA (na prática, muitos AEE
-// nunca têm participação marcada mesmo comparecendo, então esse sinal não
-// era confiável).
-const LIMITE_PRESENCAS_AEE = 8;
-
-// "8ºD" (nome no app) e "8D" (banco/prova online) viram a mesma chave: "8D".
-function chaveTurma(t: string | null | undefined) { return String(t ?? '').replace(/[^0-9A-Za-z]/g, '').toUpperCase(); }
-
-function normNome(s: string) { return s.toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
-
-type ProvaOnline = { id: string; titulo: string; turma_id?: string | null };
-type Envio = { prova_id: string; turma_id: string; aluno_numero: number | null; aluno_nome: string | null };
 type ResultadoTurma = { loading: boolean; farao: AlunoFrequencia[]; naoFarao: number; fizeramOnline: AlunoFrequencia[] };
 
-function TurmaBloco({ turmaId, bimestre, nomesExcluidos, aeeNomes, provasOnline, envios, onResultado }: {
-  turmaId: string; bimestre: Bimestre; nomesExcluidos: Set<string>; aeeNomes: Set<string>;
-  provasOnline: ProvaOnline[]; envios: Envio[];
+function TurmaBloco({ turmaId, bimestre, contexto, onResultado }: {
+  turmaId: string; bimestre: Bimestre; contexto: ContextoPendentesProva;
   onResultado: (turma: string, r: ResultadoTurma) => void;
 }) {
-  const { alunos: alunosBrutos, loading, erro } = useRelatorioFrequencia(turmaId, bimestre);
-  // Transferido/remanejado: exclui de vez, só vale na turma em que a situação foi
-  // registrada (quem mudou de turma continua fazendo a prova na turma atual).
-  // AEE não é mais excluído aqui — tem corte de presença próprio, ver isAEE/precisaFazerProva abaixo.
-  const turmaChave = chaveTurma(turmaId);
-  const alunos = alunosBrutos.filter(a => {
-    const n = normNome(a.nome);
-    return !nomesExcluidos.has(n) && !nomesExcluidos.has(`${turmaChave}|${n}`);
-  });
-
-  const isAEE = (a: AlunoFrequencia) => aeeNomes.has(normNome(a.nome));
-  const precisaFazerProva = (a: AlunoFrequencia) => a.presentes < (isAEE(a) ? LIMITE_PRESENCAS_AEE : LIMITE_PRESENCAS + 1);
-
-  // Quem já enviou a prova online do bimestre (ids dos alunos). O nome digitado
-  // tem prioridade: se bater (mesmo parcialmente) com um aluno da turma, o nº de
-  // chamada é ignorado. Sem nome reconhecível, vale o nº de chamada.
-  const idsOnline = useMemo(() => {
-    const re = new RegExp(String.raw`(^|\D)${bimestre}\s*[º°o]?\s*bim`, 'i');
-    const provaIds = new Set(provasOnline.filter(p => re.test(p.titulo)).map(p => p.id));
-    const turma = chaveTurma(turmaId);
-    const tokens = (n: string) => normNome(n).split(/\s+/).filter(t => t.length > 1);
-    const feitos = new Set<string>();
-    for (const e of envios) {
-      if (!provaIds.has(e.prova_id) || chaveTurma(e.turma_id) !== turma) continue;
-      const digitado = tokens(e.aluno_nome || '');
-      const porNome = digitado.length === 0 ? [] : alunosBrutos.filter(a => {
-        const t = new Set(tokens(a.nome));
-        return digitado.every(d => t.has(d));
-      });
-      const porNumero = alunosBrutos.filter(a => e.aluno_numero != null && a.numero_chamada != null && Number(a.numero_chamada) === e.aluno_numero);
-      if (porNome.length === 1) feitos.add(porNome[0].id);
-      else if (porNome.length > 1) {
-        const desempate = porNome.find(a => porNumero.some(n => n.id === a.id));
-        if (desempate) feitos.add(desempate.id);
-      } else {
-        // Sem nome reconhecível: usa o nº de chamada, mas só se o nome digitado
-        // tiver alguma palavra em comum com o dono do número (evita excluir outro aluno).
-        const sig = (t: string) => t.length > 2 && !['dos', 'das'].includes(t);
-        porNumero.forEach(a => {
-          const t = new Set(tokens(a.nome));
-          if (digitado.length === 0 || digitado.some(d => sig(d) && t.has(d))) feitos.add(a.id);
-        });
-      }
-    }
-    return feitos;
-  }, [provasOnline, envios, bimestre, turmaId, alunosBrutos]);
-
-  const fizeramOnline = alunos.filter(a => precisaFazerProva(a) && idsOnline.has(a.id));
-  const farao = alunos.filter(a => precisaFazerProva(a) && !fizeramOnline.includes(a));
-  const naoFarao = alunos.filter(a => !precisaFazerProva(a)).length;
+  const { loading, erro, alunos, isAEE, farao, dispensados, fizeramOnline } = usePendentesProva(turmaId, bimestre, contexto);
+  const naoFarao = dispensados.length;
 
   const chave = `${loading}|${naoFarao}|${farao.map(a => a.id).join(',')}`;
   React.useEffect(() => {
@@ -148,38 +85,8 @@ function TurmaBloco({ turmaId, bimestre, nomesExcluidos, aeeNomes, provasOnline,
 
 export function AlunosProva() {
   const { classRooms } = useStore();
-
-  const [nomesExcluidos, setNomesExcluidos] = useState<Set<string>>(new Set());
-  // AEE não é mais excluído da lista — ver isAEE/aeeParticipaQuadra em
-  // TurmaBloco: só quem participa das aulas na quadra segue a regra normal
-  // de presença, quem não participa entra direto na lista da prova.
-  const [aeeNomes, setAeeNomes] = useState<Set<string>>(new Set());
-
-  React.useEffect(() => {
-    async function carregarExcluidos() {
-      const { data: aee } = await supabase.from('alunos_especiais').select('nome');
-      const { data: transf } = await supabase.from('notas').select('nome, turma').or('situacao.ilike.%transferi%,situacao.ilike.%remanej%');
-      const transfSet = new Set<string>((transf || []).map((e: any) => `${chaveTurma(e.turma)}|${normNome(e.nome)}`));
-      setAeeNomes(new Set<string>((aee || []).map((e: any) => normNome(e.nome))));
-      setNomesExcluidos(transfSet);
-    }
-    carregarExcluidos();
-  }, []);
-
-  // Provas online enviadas. Só contam as provas cujo título cita o bimestre
-  // selecionado (ex.: "3º BIMESTRE").
-  const [provasOnline, setProvasOnline] = useState<ProvaOnline[]>([]);
-  const [envios, setEnvios] = useState<Envio[]>([]);
-
-  React.useEffect(() => {
-    async function carregarProvasOnline() {
-      const { data: provas } = await supabase.from('provas').select('id, titulo, turma_id');
-      const { data: resp } = await supabase.from('respostas').select('prova_id, turma_id, aluno_numero, aluno_nome');
-      setProvasOnline(provas || []);
-      setEnvios(resp || []);
-    }
-    carregarProvasOnline();
-  }, []);
+  const contexto = useContextoPendentesProva();
+  const { provasOnline } = contexto;
 
   const turmas = useMemo(
     () => Array.from(new Set<string>(classRooms.map((cr: any) => cr.name as string))).sort(
@@ -336,8 +243,7 @@ export function AlunosProva() {
       {turmas.length === 0 ? (
         <div className="text-center text-on-surface-variant py-10 font-medium bg-surface rounded-2xl border border-outline-variant shadow-sm">Nenhuma turma.</div>
       ) : turmas.map(t => (
-        <TurmaBloco key={`${t}-${bimestre}`} turmaId={t} bimestre={bimestre} nomesExcluidos={nomesExcluidos} aeeNomes={aeeNomes}
-          provasOnline={provasOnline} envios={envios} onResultado={onResultado} />
+        <TurmaBloco key={`${t}-${bimestre}`} turmaId={t} bimestre={bimestre} contexto={contexto} onResultado={onResultado} />
       ))}
     </div>
   );

@@ -52,6 +52,7 @@ import { TimesFutsal } from './ui/pages/TimesFutsal';
 import { RodizioFutsal } from './ui/pages/rodizio/RodizioFutsal';
 import { AgendaHoje } from './ui/pages/AgendaHoje';
 import { AlunosProva } from './ui/pages/AlunosProva';
+import { LideresProva } from './ui/pages/LideresProva';
 import { AlunosEspeciais } from './ui/pages/AlunosEspeciais';
 import { supabase } from './data/supabase';
 
@@ -99,6 +100,8 @@ export default function App() {
         <Route path="/interclasses/inscricao" element={<InscricaoAlunosPublico />} />
         <Route path="/interclasses/resultados" element={<ConfrontosPublico />} />
         <Route path="/agenda" element={<AgendaHoje />} />
+        <Route path="/lideres-prova" element={<LideresProva />} />
+        <Route path="/lideres-prova/:turma" element={<LideresProva />} />
 
         <Route element={<LayoutProtegido />}>
           <Route path="/" element={<Dashboard />} />
