@@ -5,13 +5,19 @@ import { ClipboardCheck, Loader2, Users, UserCheck, UserX, FileText, Lock } from
 import { getTurmasDoGrupo } from './ProvasOnline';
 import { exportarAlunosProvaWord } from './exportarAlunosProva';
 import { cn } from '../AppLayout';
-import { useRelatorioFrequencia, getPeriodoBimestre, type Bimestre, type AlunoFrequencia, bimestreAtual } from '../../domain/useRelatorioFrequencia';
+import { useRelatorioFrequencia, type Bimestre, type AlunoFrequencia, bimestreAtual } from '../../domain/useRelatorioFrequencia';
 
 const BIMESTRES: Bimestre[] = [1, 2, 3, 4];
 
 // Regra: aluno com MAIS de 2 presenças no bimestre já cumpriu a prática e
 // não precisa fazer a prova; com 2 ou menos, faz a prova.
 const LIMITE_PRESENCAS = 2;
+
+// Alunos AEE têm um corte próprio, maior: com 4 ou mais presenças no
+// bimestre já cumpriram o suficiente e ficam dispensados; com menos de 4,
+// fazem a prova — não depende de PI/PP/PA (na prática, muitos AEE nunca têm
+// participação marcada mesmo comparecendo, então esse sinal não era confiável).
+const LIMITE_PRESENCAS_AEE = 4;
 
 // "8ºD" (nome no app) e "8D" (banco/prova online) viram a mesma chave: "8D".
 function chaveTurma(t: string | null | undefined) { return String(t ?? '').replace(/[^0-9A-Za-z]/g, '').toUpperCase(); }
@@ -30,7 +36,7 @@ function TurmaBloco({ turmaId, bimestre, nomesExcluidos, aeeNomes, provasOnline,
   const { alunos: alunosBrutos, loading, erro } = useRelatorioFrequencia(turmaId, bimestre);
   // Transferido/remanejado: exclui de vez, só vale na turma em que a situação foi
   // registrada (quem mudou de turma continua fazendo a prova na turma atual).
-  // AEE não é mais excluído aqui — ver isAEE/aeeParticipaQuadra abaixo.
+  // AEE não é mais excluído aqui — tem corte de presença próprio, ver isAEE/precisaFazerProva abaixo.
   const turmaChave = chaveTurma(turmaId);
   const alunos = alunosBrutos.filter(a => {
     const n = normNome(a.nome);
@@ -38,30 +44,7 @@ function TurmaBloco({ turmaId, bimestre, nomesExcluidos, aeeNomes, provasOnline,
   });
 
   const isAEE = (a: AlunoFrequencia) => aeeNomes.has(normNome(a.nome));
-
-  // Entre os alunos AEE desta turma, quem tem ao menos 1 registro de
-  // participação real na quadra (PI/PP/PA) no bimestre — os que nunca têm
-  // isso são tratados como "não participa da parte prática" e por isso a
-  // baixa presença deles não pode dispensá-los da prova.
-  const [aeeParticipamIds, setAeeParticipamIds] = useState<Set<string>>(new Set());
-  React.useEffect(() => {
-    const idsAEE = alunos.filter(isAEE).map(a => a.id);
-    if (idsAEE.length === 0) { setAeeParticipamIds(new Set()); return; }
-    let cancelado = false;
-    const periodo = getPeriodoBimestre(bimestre);
-    supabase.from('frequencia').select('aluno_id')
-      .in('aluno_id', idsAEE)
-      .in('participacao', ['fez', 'fez_em_parte', 'adaptada'])
-      .gte('data', periodo.inicio).lte('data', periodo.fim)
-      .then(({ data }) => { if (!cancelado) setAeeParticipamIds(new Set((data || []).map((r: any) => r.aluno_id))); });
-    return () => { cancelado = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [alunos.map(a => a.id).join(','), bimestre]);
-
-  // AEE que participa da quadra segue a regra normal de presença; AEE que
-  // nunca participa não pode ser dispensado por causa dessa mesma ausência.
-  const seguemRegraDePresenca = (a: AlunoFrequencia) => !isAEE(a) || aeeParticipamIds.has(a.id);
-  const precisaFazerProva = (a: AlunoFrequencia) => !seguemRegraDePresenca(a) || a.presentes <= LIMITE_PRESENCAS;
+  const precisaFazerProva = (a: AlunoFrequencia) => a.presentes < (isAEE(a) ? LIMITE_PRESENCAS_AEE : LIMITE_PRESENCAS + 1);
 
   // Quem já enviou a prova online do bimestre (ids dos alunos). O nome digitado
   // tem prioridade: se bater (mesmo parcialmente) com um aluno da turma, o nº de
@@ -130,8 +113,8 @@ function TurmaBloco({ turmaId, bimestre, nomesExcluidos, aeeNomes, provasOnline,
               <span className="flex items-center gap-2 text-sm font-medium text-on-surface min-w-0">
                 {a.numero_chamada ? <span className="font-mono text-on-surface-variant text-xs w-6 text-right shrink-0">{a.numero_chamada}</span> : <span className="w-6 shrink-0" />}
                 <span className="truncate">{a.nome}</span>
-                {isAEE(a) && !aeeParticipamIds.has(a.id) && (
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 shrink-0" title="AEE sem participação na quadra — entra independente da presença">
+                {isAEE(a) && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 shrink-0" title={`AEE — corte de ${LIMITE_PRESENCAS_AEE} presenças em vez de ${LIMITE_PRESENCAS + 1}`}>
                     AEE
                   </span>
                 )}
@@ -282,8 +265,7 @@ export function AlunosProva() {
           ))}
         </div>
         <p className="text-[11px] text-on-surface-variant mt-3">
-          Regra: alunos com mais de {LIMITE_PRESENCAS} presenças no bimestre não fazem a prova. Transferidos não entram na contagem.
-          Alunos AEE que participam das aulas na quadra seguem essa mesma regra; os que não participam entram na lista independente da presença.
+          Regra: alunos com mais de {LIMITE_PRESENCAS} presenças no bimestre não fazem a prova (alunos AEE, com {LIMITE_PRESENCAS_AEE} ou mais). Transferidos não entram na contagem.
         </p>
       </div>
 
