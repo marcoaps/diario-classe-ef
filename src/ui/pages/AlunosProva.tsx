@@ -5,7 +5,7 @@ import { ClipboardCheck, Loader2, Users, UserCheck, UserX, FileText, Lock } from
 import { getTurmasDoGrupo } from './ProvasOnline';
 import { exportarAlunosProvaWord } from './exportarAlunosProva';
 import { cn } from '../AppLayout';
-import { useRelatorioFrequencia, type Bimestre, type AlunoFrequencia, bimestreAtual } from '../../domain/useRelatorioFrequencia';
+import { useRelatorioFrequencia, getPeriodoBimestre, type Bimestre, type AlunoFrequencia, bimestreAtual } from '../../domain/useRelatorioFrequencia';
 
 const BIMESTRES: Bimestre[] = [1, 2, 3, 4];
 
@@ -22,19 +22,46 @@ type ProvaOnline = { id: string; titulo: string; turma_id?: string | null };
 type Envio = { prova_id: string; turma_id: string; aluno_numero: number | null; aluno_nome: string | null };
 type ResultadoTurma = { loading: boolean; farao: AlunoFrequencia[]; naoFarao: number };
 
-function TurmaBloco({ turmaId, bimestre, nomesExcluidos, provasOnline, envios, onResultado }: {
-  turmaId: string; bimestre: Bimestre; nomesExcluidos: Set<string>;
+function TurmaBloco({ turmaId, bimestre, nomesExcluidos, aeeNomes, provasOnline, envios, onResultado }: {
+  turmaId: string; bimestre: Bimestre; nomesExcluidos: Set<string>; aeeNomes: Set<string>;
   provasOnline: ProvaOnline[]; envios: Envio[];
   onResultado: (turma: string, r: ResultadoTurma) => void;
 }) {
   const { alunos: alunosBrutos, loading, erro } = useRelatorioFrequencia(turmaId, bimestre);
-  // AEE: exclui pelo nome. Transferido/remanejado: só vale na turma em que a situação foi
+  // Transferido/remanejado: exclui de vez, só vale na turma em que a situação foi
   // registrada (quem mudou de turma continua fazendo a prova na turma atual).
+  // AEE não é mais excluído aqui — ver isAEE/aeeParticipaQuadra abaixo.
   const turmaChave = chaveTurma(turmaId);
   const alunos = alunosBrutos.filter(a => {
     const n = normNome(a.nome);
     return !nomesExcluidos.has(n) && !nomesExcluidos.has(`${turmaChave}|${n}`);
   });
+
+  const isAEE = (a: AlunoFrequencia) => aeeNomes.has(normNome(a.nome));
+
+  // Entre os alunos AEE desta turma, quem tem ao menos 1 registro de
+  // participação real na quadra (PI/PP/PA) no bimestre — os que nunca têm
+  // isso são tratados como "não participa da parte prática" e por isso a
+  // baixa presença deles não pode dispensá-los da prova.
+  const [aeeParticipamIds, setAeeParticipamIds] = useState<Set<string>>(new Set());
+  React.useEffect(() => {
+    const idsAEE = alunos.filter(isAEE).map(a => a.id);
+    if (idsAEE.length === 0) { setAeeParticipamIds(new Set()); return; }
+    let cancelado = false;
+    const periodo = getPeriodoBimestre(bimestre);
+    supabase.from('frequencia').select('aluno_id')
+      .in('aluno_id', idsAEE)
+      .in('participacao', ['fez', 'fez_em_parte', 'adaptada'])
+      .gte('data', periodo.inicio).lte('data', periodo.fim)
+      .then(({ data }) => { if (!cancelado) setAeeParticipamIds(new Set((data || []).map((r: any) => r.aluno_id))); });
+    return () => { cancelado = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alunos.map(a => a.id).join(','), bimestre]);
+
+  // AEE que participa da quadra segue a regra normal de presença; AEE que
+  // nunca participa não pode ser dispensado por causa dessa mesma ausência.
+  const seguemRegraDePresenca = (a: AlunoFrequencia) => !isAEE(a) || aeeParticipamIds.has(a.id);
+  const precisaFazerProva = (a: AlunoFrequencia) => !seguemRegraDePresenca(a) || a.presentes <= LIMITE_PRESENCAS;
 
   // Quem já enviou a prova online do bimestre (ids dos alunos). O nome digitado
   // tem prioridade: se bater (mesmo parcialmente) com um aluno da turma, o nº de
@@ -70,9 +97,9 @@ function TurmaBloco({ turmaId, bimestre, nomesExcluidos, provasOnline, envios, o
     return feitos;
   }, [provasOnline, envios, bimestre, turmaId, alunosBrutos]);
 
-  const fizeramOnline = alunos.filter(a => a.presentes <= LIMITE_PRESENCAS && idsOnline.has(a.id));
-  const farao = alunos.filter(a => a.presentes <= LIMITE_PRESENCAS && !fizeramOnline.includes(a));
-  const naoFarao = alunos.filter(a => a.presentes > LIMITE_PRESENCAS).length;
+  const fizeramOnline = alunos.filter(a => precisaFazerProva(a) && idsOnline.has(a.id));
+  const farao = alunos.filter(a => precisaFazerProva(a) && !fizeramOnline.includes(a));
+  const naoFarao = alunos.filter(a => !precisaFazerProva(a)).length;
 
   const chave = `${loading}|${naoFarao}|${farao.map(a => a.id).join(',')}`;
   React.useEffect(() => {
@@ -100,9 +127,14 @@ function TurmaBloco({ turmaId, bimestre, nomesExcluidos, provasOnline, envios, o
         <ul className="divide-y divide-outline-variant">
           {farao.map(a => (
             <li key={a.id} className="px-4 py-2.5 flex items-center justify-between gap-2">
-              <span className="flex items-center gap-2 text-sm font-medium text-on-surface">
-                {a.numero_chamada ? <span className="font-mono text-on-surface-variant text-xs w-6 text-right">{a.numero_chamada}</span> : <span className="w-6" />}
-                {a.nome}
+              <span className="flex items-center gap-2 text-sm font-medium text-on-surface min-w-0">
+                {a.numero_chamada ? <span className="font-mono text-on-surface-variant text-xs w-6 text-right shrink-0">{a.numero_chamada}</span> : <span className="w-6 shrink-0" />}
+                <span className="truncate">{a.nome}</span>
+                {isAEE(a) && !aeeParticipamIds.has(a.id) && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 shrink-0" title="AEE sem participação na quadra — entra independente da presença">
+                    AEE
+                  </span>
+                )}
               </span>
               <span className="text-xs font-semibold text-on-surface-variant shrink-0">{a.presentes} presença{a.presentes === 1 ? '' : 's'}</span>
             </li>
@@ -123,14 +155,18 @@ export function AlunosProva() {
   const { classRooms } = useStore();
 
   const [nomesExcluidos, setNomesExcluidos] = useState<Set<string>>(new Set());
+  // AEE não é mais excluído da lista — ver isAEE/aeeParticipaQuadra em
+  // TurmaBloco: só quem participa das aulas na quadra segue a regra normal
+  // de presença, quem não participa entra direto na lista da prova.
+  const [aeeNomes, setAeeNomes] = useState<Set<string>>(new Set());
 
   React.useEffect(() => {
     async function carregarExcluidos() {
       const { data: aee } = await supabase.from('alunos_especiais').select('nome');
       const { data: transf } = await supabase.from('notas').select('nome, turma').or('situacao.ilike.%transferi%,situacao.ilike.%remanej%');
-      const aeeSet = new Set<string>((aee || []).map((e: any) => normNome(e.nome)));
       const transfSet = new Set<string>((transf || []).map((e: any) => `${chaveTurma(e.turma)}|${normNome(e.nome)}`));
-      setNomesExcluidos(new Set<string>([...aeeSet, ...transfSet]));
+      setAeeNomes(new Set<string>((aee || []).map((e: any) => normNome(e.nome))));
+      setNomesExcluidos(transfSet);
     }
     carregarExcluidos();
   }, []);
@@ -246,7 +282,8 @@ export function AlunosProva() {
           ))}
         </div>
         <p className="text-[11px] text-on-surface-variant mt-3">
-          Regra: alunos com mais de {LIMITE_PRESENCAS} presenças no bimestre não fazem a prova. Alunos AEE/transferidos não entram na contagem.
+          Regra: alunos com mais de {LIMITE_PRESENCAS} presenças no bimestre não fazem a prova. Transferidos não entram na contagem.
+          Alunos AEE que participam das aulas na quadra seguem essa mesma regra; os que não participam entram na lista independente da presença.
         </p>
       </div>
 
@@ -298,7 +335,7 @@ export function AlunosProva() {
       {turmas.length === 0 ? (
         <div className="text-center text-on-surface-variant py-10 font-medium bg-surface rounded-2xl border border-outline-variant shadow-sm">Nenhuma turma.</div>
       ) : turmas.map(t => (
-        <TurmaBloco key={`${t}-${bimestre}`} turmaId={t} bimestre={bimestre} nomesExcluidos={nomesExcluidos}
+        <TurmaBloco key={`${t}-${bimestre}`} turmaId={t} bimestre={bimestre} nomesExcluidos={nomesExcluidos} aeeNomes={aeeNomes}
           provasOnline={provasOnline} envios={envios} onResultado={onResultado} />
       ))}
     </div>
