@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useStore } from '../../store';
 import { supabase } from '../../data/supabase';
-import { ClipboardCheck, Loader2, Users, UserCheck, UserX, FileText, Lock, CheckCircle2 } from 'lucide-react';
+import { ClipboardCheck, Loader2, Users, UserCheck, UserX, FileText, Lock, CheckCircle2, Copy, Link2 } from 'lucide-react';
 import { getTurmasDoGrupo } from './ProvasOnline';
 import { exportarAlunosProvaWord } from './exportarAlunosProva';
 import { cn } from '../AppLayout';
@@ -166,6 +166,15 @@ export function AlunosProva() {
     exportarAlunosProvaWord(bimestre, dados);
   };
 
+  // ── Links pros líderes de turma (página pública /lideres-prova/:turma) ──
+  const [turmaCopiada, setTurmaCopiada] = useState<string | null>(null);
+  const linkLider = (turma: string) => `${window.location.origin}/lideres-prova/${chaveTurma(turma)}`;
+  const copiarLink = (turma: string) => {
+    navigator.clipboard.writeText(linkLider(turma));
+    setTurmaCopiada(turma);
+    setTimeout(() => setTurmaCopiada(prev => (prev === turma ? null : prev)), 2000);
+  };
+
   return (
     <div className="flex flex-col gap-6 font-sans animate-in fade-in pb-32 pt-4">
       <h2 className="text-2xl font-bold tracking-tight text-on-surface flex items-center gap-2">
@@ -238,6 +247,28 @@ export function AlunosProva() {
           </>
         )}
         {msgLiberar ? <p className="text-xs font-semibold text-on-surface">{msgLiberar}</p> : null}
+      </div>
+
+      <div className="bg-surface rounded-3xl border border-outline-variant shadow-sm p-4 flex flex-col gap-3">
+        <h3 className="text-sm font-bold text-on-surface flex items-center gap-2"><Link2 className="w-4 h-4 text-primary" /> Links pros líderes de turma</h3>
+        <p className="text-[11px] text-on-surface-variant">
+          Cada link abre travado numa turma só, sem login — mande o certo pro líder de cada sala (ex.: no grupo do WhatsApp).
+        </p>
+        {turmas.length === 0 ? (
+          <p className="text-xs text-on-surface-variant">Nenhuma turma.</p>
+        ) : (
+          <ul className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {turmas.map(t => (
+              <li key={t}>
+                <button type="button" onClick={() => copiarLink(t)}
+                  className="w-full flex items-center justify-between gap-1.5 px-3 py-2 rounded-xl bg-surface-container border border-outline-variant text-xs font-bold text-on-surface hover:border-primary transition-all active:scale-95">
+                  {t}
+                  {turmaCopiada === t ? <CheckCircle2 className="w-3.5 h-3.5 text-primary shrink-0" /> : <Copy className="w-3.5 h-3.5 text-on-surface-variant shrink-0" />}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {turmas.length === 0 ? (
