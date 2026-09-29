@@ -77,3 +77,62 @@ export async function exportarAlunosProvaWord(bimestre: number, turmas: TurmaPro
   const blob = await Packer.toBlob(doc);
   saveAs(blob, `Alunos_Prova_${bimestre}Bim_TODAS.docx`);
 }
+
+// Lista completa da turma (todos os alunos, não só quem vai fazer a prova),
+// com a situação de cada um — mesmo formato usado na página pública dos
+// líderes de turma. Pensada pra imprimir e levar na sala na hora de aplicar
+// a prova em papel pra quem não consegue acessar pelo celular.
+export interface AlunoSituacaoExport {
+  numero_chamada?: number | null;
+  nome: string;
+  situacao: string; // "Pendente" | "Dispensado" | nota formatada (ex.: "9,5")
+  corFundo: string; // cor de fundo da célula de situação (hex sem #)
+}
+
+export interface TurmaSituacaoExport {
+  turma: string;
+  alunos: AlunoSituacaoExport[];
+}
+
+export async function exportarTurmaCompletaWord(bimestre: number, turmas: TurmaSituacaoExport[]) {
+  const W = [1100, 6900, 3330]; // soma 11330 (A4 com margens de 0,5 cm)
+  const children: (Paragraph | Table)[] = [];
+
+  turmas.forEach((t, idx) => {
+    const cab = new TableRow({
+      tableHeader: true,
+      cantSplit: true,
+      children: [
+        celula('Nº', W[0], { bold: true, center: true, fill: 'D9EAD3', keep: true }),
+        celula('Aluno', W[1], { bold: true, fill: 'D9EAD3', keep: true }),
+        celula('Situação', W[2], { bold: true, center: true, fill: 'D9EAD3', keep: true }),
+      ],
+    });
+    const linhas = t.alunos.map((a, i) => { const keep = i < t.alunos.length - 1; return new TableRow({
+      cantSplit: true,
+      children: [
+        celula(a.numero_chamada ? String(a.numero_chamada) : '', W[0], { center: true, keep }),
+        celula(a.nome, W[1], { keep }),
+        celula(a.situacao, W[2], { center: true, bold: true, fill: a.corFundo, keep }),
+      ],
+    }); });
+    if (idx > 0) children.push(new Paragraph({ spacing: { before: 0, after: 0, line: 160, lineRule: 'exact' as any }, children: [new TextRun({ text: '', size: 8 })] }));
+    children.push(
+      new Paragraph({ alignment: AlignmentType.CENTER, keepNext: true, spacing: { before: 0, after: 60 },
+        children: [new TextRun({ text: 'Situação da turma — Prova de Educação Física', bold: true, size: 30 })] }),
+      new Paragraph({ alignment: AlignmentType.CENTER, keepNext: true, spacing: { before: 0, after: 80 },
+        children: [new TextRun({ text: `Turma: ${t.turma}  •  ${bimestre}º Bimestre`, size: 24 })] }),
+      new Table({ width: { size: 11330, type: WidthType.DXA }, columnWidths: W, rows: [cab, ...linhas] }),
+    );
+  });
+
+  const doc = new Document({
+    sections: [{
+      properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 283, bottom: 283, left: 283, right: 283 } } },
+      children,
+    }],
+  });
+
+  const blob = await Packer.toBlob(doc);
+  saveAs(blob, `Situacao_Prova_${bimestre}Bim_TODAS.docx`);
+}

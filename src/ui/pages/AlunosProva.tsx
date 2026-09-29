@@ -3,7 +3,7 @@ import { useStore } from '../../store';
 import { supabase } from '../../data/supabase';
 import { ClipboardCheck, Loader2, Users, UserCheck, UserX, FileText, Lock, CheckCircle2, Copy, Link2 } from 'lucide-react';
 import { getTurmasDoGrupo } from './ProvasOnline';
-import { exportarAlunosProvaWord } from './exportarAlunosProva';
+import { exportarAlunosProvaWord, exportarTurmaCompletaWord, type AlunoSituacaoExport } from './exportarAlunosProva';
 import { cn } from '../AppLayout';
 import { type Bimestre, type AlunoFrequencia, bimestreAtual } from '../../domain/useRelatorioFrequencia';
 import {
@@ -14,7 +14,7 @@ import {
 
 const BIMESTRES: Bimestre[] = [1, 2, 3, 4];
 
-type ResultadoTurma = { loading: boolean; farao: AlunoFrequencia[]; naoFarao: number; fizeramOnline: AlunoFrequencia[] };
+type ResultadoTurma = { loading: boolean; farao: AlunoFrequencia[]; dispensados: AlunoFrequencia[]; fizeramOnline: (AlunoFrequencia & { nota: number | null })[] };
 
 function TurmaBloco({ turmaId, bimestre, contexto, onResultado }: {
   turmaId: string; bimestre: Bimestre; contexto: ContextoPendentesProva;
@@ -25,7 +25,7 @@ function TurmaBloco({ turmaId, bimestre, contexto, onResultado }: {
 
   const chave = `${loading}|${naoFarao}|${farao.map(a => a.id).join(',')}`;
   React.useEffect(() => {
-    onResultado(turmaId, { loading, farao, naoFarao, fizeramOnline });
+    onResultado(turmaId, { loading, farao, dispensados, fizeramOnline });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chave, turmaId]);
 
@@ -106,7 +106,7 @@ export function AlunosProva() {
 
   const lista = turmas.map(t => resultados[t]).filter(Boolean) as ResultadoTurma[];
   const totalFarao = lista.reduce((n, r) => n + r.farao.length, 0);
-  const totalNao = lista.reduce((n, r) => n + r.naoFarao, 0);
+  const totalNao = lista.reduce((n, r) => n + r.dispensados.length, 0);
   const totalOnline = lista.reduce((n, r) => n + r.fizeramOnline.length, 0);
   const carregando = turmas.length === 0 || turmas.some(t => !resultados[t] || resultados[t].loading);
 
@@ -166,6 +166,25 @@ export function AlunosProva() {
     exportarAlunosProvaWord(bimestre, dados);
   };
 
+  // Lista completa (todos os alunos + situação) pra imprimir e levar na sala
+  // — mesmo formato da página dos líderes, ver exportarTurmaCompletaWord.
+  const exportarCompleto = () => {
+    const COR_PENDENTE = 'FFE0E0', COR_DISPENSADO = 'ECECEC', COR_FEZ = 'D9EAD3';
+    const dados = turmas
+      .map(t => {
+        const r = resultados[t];
+        if (!r) return { turma: t, alunos: [] as AlunoSituacaoExport[] };
+        const linhas: AlunoSituacaoExport[] = [
+          ...r.farao.map(a => ({ numero_chamada: a.numero_chamada, nome: a.nome, situacao: 'Pendente', corFundo: COR_PENDENTE })),
+          ...r.dispensados.map(a => ({ numero_chamada: a.numero_chamada, nome: a.nome, situacao: 'Dispensado', corFundo: COR_DISPENSADO })),
+          ...r.fizeramOnline.map(a => ({ numero_chamada: a.numero_chamada, nome: a.nome, situacao: a.nota != null ? a.nota.toFixed(1).replace('.', ',') : '—', corFundo: COR_FEZ })),
+        ].sort((a, b) => (a.numero_chamada ?? 999) - (b.numero_chamada ?? 999));
+        return { turma: t, alunos: linhas };
+      })
+      .filter(t => t.alunos.length > 0);
+    exportarTurmaCompletaWord(bimestre, dados);
+  };
+
   // ── Links pros líderes de turma (página pública /lideres-prova/:turma) ──
   const [turmaCopiada, setTurmaCopiada] = useState<string | null>(null);
   const linkLider = (turma: string) => `${window.location.origin}/lideres-prova/${chaveTurma(turma)}`;
@@ -220,7 +239,13 @@ export function AlunosProva() {
       <button type="button" disabled={carregando || totalFarao === 0} onClick={exportar}
         className="flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold bg-primary text-on-primary active:scale-95 transition-all disabled:opacity-40">
         {carregando ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-        Exportar Word (todas as turmas)
+        Exportar Word (só pendentes)
+      </button>
+
+      <button type="button" disabled={carregando} onClick={exportarCompleto}
+        className="flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold bg-surface-container text-on-surface border border-outline-variant active:scale-95 transition-all disabled:opacity-40">
+        {carregando ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+        Exportar Word (lista completa da turma)
       </button>
 
       <div className="bg-surface rounded-3xl border border-outline-variant shadow-sm p-4 flex flex-col gap-3">
