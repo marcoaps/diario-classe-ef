@@ -4,8 +4,7 @@ import { ClipboardCheck, Users, Loader2, ArrowLeft } from 'lucide-react';
 import { cn } from '../AppLayout';
 import { bimestreAtual, type Bimestre } from '../../domain/useRelatorioFrequencia';
 import {
-  useContextoPendentesProva, usePendentesProva,
-  LIMITE_PRESENCAS, LIMITE_PRESENCAS_AEE, TURMAS_PADRAO,
+  useContextoPendentesProva, usePendentesProva, TURMAS_PADRAO,
   type ContextoPendentesProva,
 } from '../../domain/usePendentesProva';
 
@@ -86,11 +85,6 @@ function PainelTurma({ turmaId, bimestre, contexto }: { turmaId: string; bimestr
           })}
         </ul>
       </div>
-
-      <p className="text-[11px] text-on-surface-variant text-center px-4">
-        Regra: quem tem mais de {LIMITE_PRESENCAS / 2} dias de aula no bimestre já é dispensado
-        (alunos AEE, mais de {LIMITE_PRESENCAS_AEE / 2} dias).
-      </p>
     </div>
   );
 }
@@ -110,7 +104,7 @@ export function LideresProva() {
     <div className="min-h-screen bg-background font-sans">
       <div className="text-center py-7 px-4 border-b border-outline-variant bg-surface">
         <ClipboardCheck className="w-10 h-10 mx-auto mb-2 text-primary" />
-        <h1 className="text-on-surface text-xl font-bold">Prova Online — Acompanhamento</h1>
+        <h1 className="text-on-surface text-xl font-bold">Confira se você precisa fazer a prova!</h1>
         <p className="text-on-surface-variant text-sm mt-1">Instituto Odilon Pratagi · consulta pros líderes de turma</p>
       </div>
 
