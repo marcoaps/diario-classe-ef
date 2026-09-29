@@ -129,7 +129,7 @@ export function AvaliacaoResultados() {
   );
 
   return (
-    <div className="py-4 space-y-4">
+    <div className="py-4 pb-24 space-y-4">
       {/* Cabeçalho */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
