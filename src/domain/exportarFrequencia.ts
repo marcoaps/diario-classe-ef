@@ -52,8 +52,11 @@ function calcularNotaEf(pontos: number, nome?: string, nomesAEE?: Set<string>, n
   const nota = pontos + somaTrabalhos;
   if (ajustar3Bim) {
     const ajustada = arredondarNota(ajustarNota3Bim(nota));
-    // Pedido do professor: quem ficou com 9,5 e teve até 2 faltas sobe para 10,0.
-    if (ajustada === 9.5 && faltas <= 2) return formatarNota(10);
+    // Pedido do professor: quem ficou com 9,5 e teve até 2 faltas (dias reais
+    // de aula) sobe para 10,0. `faltas` vem de AlunoFrequencia.ausentes, que
+    // conta em dobro (cada registro = 2 aulas no mesmo dia) — por isso o
+    // corte aqui também é o dobro, pra continuar significando "2 dias".
+    if (ajustada === 9.5 && faltas <= 4) return formatarNota(10);
     return formatarNota(ajustada);
   }
   return nota.toFixed(1).replace('.', ',');

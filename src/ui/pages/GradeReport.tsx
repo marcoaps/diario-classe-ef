@@ -64,11 +64,14 @@ async function buscarFaltasBimestre(turma: string, bimestre: number): Promise<Re
 
     if (!freqData) return {};
 
-    // Conta faltas por aluno
+    // Conta faltas por aluno. Cada registro = 2 aulas de 2h no mesmo dia
+    // (turma dividida em dois horários) — mesma regra de
+    // useRelatorioFrequencia.ts, pra bater com Relatório de Frequência/
+    // Alunos para a Prova/Portal do Aluno.
     const faltasPorId: Record<string, number> = {};
     freqData.forEach((r: any) => {
       if (!r.presente) {
-        faltasPorId[r.aluno_id] = (faltasPorId[r.aluno_id] || 0) + 1;
+        faltasPorId[r.aluno_id] = (faltasPorId[r.aluno_id] || 0) + 2;
       }
     });
 

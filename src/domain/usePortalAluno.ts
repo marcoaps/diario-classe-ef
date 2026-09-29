@@ -155,8 +155,12 @@ export function usePortalAluno(token: string | undefined) {
         (freqData || []).forEach((r: any) => {
           for (const b of BIMESTRES) {
             if (dataInBimestre(r.data, b, ano)) {
-              if (r.presente) freqAcc[b].presentes += 1;
-              else freqAcc[b].ausentes += 1;
+              // Cada registro = 2 aulas de 2h no mesmo dia (turma dividida em
+              // dois horários) — mesma regra de useRelatorioFrequencia.ts,
+              // pra bater com o que o professor vê no Relatório de Frequência.
+              // Pontos (nota) continua contando 1x por registro, sem dobrar.
+              if (r.presente) freqAcc[b].presentes += 2;
+              else freqAcc[b].ausentes += 2;
               freqAcc[b].pontos += pontosPorRegistro(r.presente, (r.participacao ?? null) as Participacao);
               break;
             }

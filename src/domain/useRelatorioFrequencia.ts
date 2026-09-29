@@ -140,8 +140,14 @@ export function useRelatorioFrequencia(
       const novosContadores = { total_pi: 0, total_pp: 0, total_np: 0, total_pa: 0, total_npj: 0, total_aus: 0, total_np_com_trabalho: 0 };
       (freqData || []).forEach((r: any) => {
         const acc = mapa.get(r.aluno_id) || { presentes: 0, ausentes: 0, pontos: 0 };
-        if (r.presente) acc.presentes += 1;
-        else acc.ausentes += 1;
+        // Cada registro de chamada representa 2 aulas de 2h no mesmo dia (turma
+        // dividida em dois horários, ex.: meninos/meninas) — por isso conta em
+        // dobro aqui, igual à extinta buscarRelatorioFrequencia() em
+        // data/supabase.ts (mesma regra, restaurada). A nota (pontos) NÃO
+        // dobra — fica exatamente como sempre foi, só a contagem de presença/
+        // falta usada em frequência % e nos cortes de dispensa da prova.
+        if (r.presente) acc.presentes += 2;
+        else acc.ausentes += 2;
         acc.pontos += pontosPorRegistro(r.presente, (r.participacao ?? null) as Participacao);
         mapa.set(r.aluno_id, acc);
 

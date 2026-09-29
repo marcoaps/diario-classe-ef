@@ -9,15 +9,17 @@ import { useRelatorioFrequencia, type Bimestre, type AlunoFrequencia, bimestreAt
 
 const BIMESTRES: Bimestre[] = [1, 2, 3, 4];
 
-// Regra: aluno com MAIS de 2 presenças no bimestre já cumpriu a prática e
-// não precisa fazer a prova; com 2 ou menos, faz a prova.
-const LIMITE_PRESENCAS = 2;
+// Regra: aluno com MAIS de 2 dias de aula (4 presenças, já que cada dia
+// conta em dobro — ver useRelatorioFrequencia.ts) no bimestre já cumpriu a
+// prática e não precisa fazer a prova; com 2 dias ou menos, faz a prova.
+const LIMITE_PRESENCAS = 4;
 
-// Alunos AEE têm um corte próprio, maior: com 4 ou mais presenças no
-// bimestre já cumpriram o suficiente e ficam dispensados; com menos de 4,
-// fazem a prova — não depende de PI/PP/PA (na prática, muitos AEE nunca têm
-// participação marcada mesmo comparecendo, então esse sinal não era confiável).
-const LIMITE_PRESENCAS_AEE = 4;
+// Alunos AEE têm um corte próprio, maior: com mais de 4 dias de aula (8
+// presenças) no bimestre já cumpriram o suficiente e ficam dispensados; com
+// menos, fazem a prova — não depende de PI/PP/PA (na prática, muitos AEE
+// nunca têm participação marcada mesmo comparecendo, então esse sinal não
+// era confiável).
+const LIMITE_PRESENCAS_AEE = 8;
 
 // "8ºD" (nome no app) e "8D" (banco/prova online) viram a mesma chave: "8D".
 function chaveTurma(t: string | null | undefined) { return String(t ?? '').replace(/[^0-9A-Za-z]/g, '').toUpperCase(); }
@@ -105,7 +107,7 @@ function TurmaBloco({ turmaId, bimestre, nomesExcluidos, aeeNomes, provasOnline,
       ) : alunos.length === 0 ? (
         <p className="px-4 py-4 text-sm text-on-surface-variant text-center">Nenhum aluno encontrado para essa turma.</p>
       ) : farao.length === 0 ? (
-        <p className="px-4 py-4 text-sm text-on-surface-variant text-center">Nenhum aluno com {LIMITE_PRESENCAS} presenças ou menos.</p>
+        <p className="px-4 py-4 text-sm text-on-surface-variant text-center">Nenhum aluno com {LIMITE_PRESENCAS} presenças ({LIMITE_PRESENCAS / 2} dias de aula) ou menos.</p>
       ) : (
         <ul className="divide-y divide-outline-variant">
           {farao.map(a => (
@@ -114,12 +116,12 @@ function TurmaBloco({ turmaId, bimestre, nomesExcluidos, aeeNomes, provasOnline,
                 {a.numero_chamada ? <span className="font-mono text-on-surface-variant text-xs w-6 text-right shrink-0">{a.numero_chamada}</span> : <span className="w-6 shrink-0" />}
                 <span className="truncate">{a.nome}</span>
                 {isAEE(a) && (
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 shrink-0" title={`AEE — corte de ${LIMITE_PRESENCAS_AEE} presenças em vez de ${LIMITE_PRESENCAS + 1}`}>
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 shrink-0" title={`AEE — corte de ${LIMITE_PRESENCAS_AEE / 2} dias de aula em vez de ${LIMITE_PRESENCAS / 2}`}>
                     AEE
                   </span>
                 )}
               </span>
-              <span className="text-xs font-semibold text-on-surface-variant shrink-0">{a.presentes} presença{a.presentes === 1 ? '' : 's'}</span>
+              <span className="text-xs font-semibold text-on-surface-variant shrink-0">{a.presentes} presença{a.presentes === 1 ? '' : 's'} ({Math.round(a.presentes / 2)} dias)</span>
             </li>
           ))}
         </ul>
@@ -265,7 +267,8 @@ export function AlunosProva() {
           ))}
         </div>
         <p className="text-[11px] text-on-surface-variant mt-3">
-          Regra: alunos com mais de {LIMITE_PRESENCAS} presenças no bimestre não fazem a prova (alunos AEE, com {LIMITE_PRESENCAS_AEE} ou mais). Transferidos não entram na contagem.
+          Regra: alunos com mais de {LIMITE_PRESENCAS / 2} dias de aula no bimestre ({LIMITE_PRESENCAS} presenças, cada dia conta em dobro) não fazem a prova
+          (alunos AEE, com mais de {LIMITE_PRESENCAS_AEE / 2} dias / {LIMITE_PRESENCAS_AEE} presenças). Transferidos não entram na contagem.
         </p>
       </div>
 
