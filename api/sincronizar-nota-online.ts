@@ -15,6 +15,18 @@ import { createClient } from '@supabase/supabase-js';
 // mesma prova, vale a de maior nota (mesma regra de AvaliacaoResultados.tsx
 // e usePendentesProva.ts).
 
+// Normalização da nota antes de gravar em Notas (regra de 2026-09-30):
+// arredonda pra cima (inteiro) e nunca passa de 9,5 -- então 9,5 fica 9,5,
+// qualquer coisa acima de 9,5 vira 9,5, e o resto sobe pro inteiro seguinte
+// (ex.: 7,2 -> 8; 9,1 -> 9,5 pelo teto). O round(2) antes do ceil evita que
+// ruído de ponto flutuante (8,0000000001) suba um ponto à toa.
+const NOTA_MAXIMA_ONLINE = 9.5;
+export function normalizarNotaOnline(nota: number): number {
+  if (!(nota > 0)) return 0;
+  if (nota >= NOTA_MAXIMA_ONLINE) return NOTA_MAXIMA_ONLINE;
+  return Math.min(Math.ceil(Math.round(nota * 100) / 100), NOTA_MAXIMA_ONLINE);
+}
+
 function bimestreDoTitulo(titulo: string): number | null {
   const m = titulo.match(/([1-4])\s*[º°o]?\s*bim/i);
   return m ? parseInt(m[1], 10) : null;
@@ -58,7 +70,7 @@ export default async function handler(req: any, res: any) {
     const { data: tentativas, error: eTentativas } = await supabase
       .from('respostas').select('nota').eq('prova_id', prova_id).eq('turma_id', turma_id).eq('aluno_numero', aluno_numero);
     if (eTentativas) throw eTentativas;
-    const melhorNota = (tentativas || []).reduce((max: number, r: any) => Math.max(max, r.nota ?? 0), 0);
+    const melhorNota = normalizarNotaOnline((tentativas || []).reduce((max: number, r: any) => Math.max(max, r.nota ?? 0), 0));
 
     const nomeChave = aluno.nome.toUpperCase();
     const { data: atual } = await supabase
