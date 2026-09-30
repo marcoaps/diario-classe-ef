@@ -122,7 +122,6 @@ export function Equipes({ inscricoes, elegibilidade, loading, onRefetch }: Props
         jogadores: eq.alunos.map(a => {
           const eleg = elegibilidadeDoAluno(a);
           return {
-            camisa: String(a.numero_camisa ?? ''),
             nome: a.nome_completo,
             turma: a.turma_id,
             situacao: eleg ? textoElegibilidade(eleg) : '—',

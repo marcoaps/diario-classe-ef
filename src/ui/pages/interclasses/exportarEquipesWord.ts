@@ -2,7 +2,6 @@
 // já em fonte legível (11 pt) e editável — o professor formata depois no Word.
 
 export interface JogadorEquipeWord {
-  camisa: string;
   nome: string;
   turma: string;
   situacao: string;
@@ -32,7 +31,7 @@ export async function baixarEquipesWord(params: { titulo: string; subtitulo: str
   const borda = { style: BorderStyle.SINGLE, size: 1, color: 'BBBBBB' };
   const bordas = { top: borda, bottom: borda, left: borda, right: borda };
   const marg = { top: 50, bottom: 50, left: 100, right: 100 };
-  const cols = [500, 800, 4660, 900, 2500];
+  const cols = [500, 5460, 900, 2500];
 
   const celula = (texto: string, largura: number, opts: { bold?: boolean; color?: string; fill?: string; center?: boolean } = {}) =>
     new TableCell({
@@ -67,10 +66,9 @@ export async function baixarEquipesWord(params: { titulo: string; subtitulo: str
         cantSplit: true,
         children: [
           celula(String(i + 1), cols[0], { center: true, color: '888888' }),
-          celula(`#${j.camisa}`, cols[1], { center: true, bold: true, color: '0052A3' }),
-          celula(j.nome, cols[2]),
-          celula(j.turma, cols[3], { center: true }),
-          celula(j.situacao, cols[4], { bold: true, color: COR_STATUS[j.status] ?? '666666' }),
+          celula(j.nome, cols[1]),
+          celula(j.turma, cols[2], { center: true }),
+          celula(j.situacao, cols[3], { bold: true, color: COR_STATUS[j.status] ?? '666666' }),
         ],
       })),
     }));
