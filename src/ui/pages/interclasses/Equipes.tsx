@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Loader2, Pencil, Check, X, Trash2 } from 'lucide-react';
-import { agruparPorTime, chaveElegibilidade, ELEGIBILIDADE_COR, ELEGIBILIDADE_LABEL, MAXIMO_JOGADORES_TIME, mensagemMinimoNaoAtingido } from '../../../domain/interclasses';
+import { Loader2, Pencil, Check, X, Trash2, Printer } from 'lucide-react';
+import { agruparPorTime, EDICAO_PADRAO, modalidadeConfig,chaveElegibilidade, ELEGIBILIDADE_COR, ELEGIBILIDADE_LABEL, MAXIMO_JOGADORES_TIME, mensagemMinimoNaoAtingido } from '../../../domain/interclasses';
 import type { InscricaoInterclasses } from '../../../domain/interclasses';
 import { renomearTimeInterclasses, excluirInscricaoInterclasses } from '../../../data/supabase';
 import type { ElegibilidadeInterclasses } from '../../../data/supabase';
@@ -107,6 +107,48 @@ export function Equipes({ inscricoes, elegibilidade, loading, onRefetch }: Props
     }
   }
 
+  // Abre uma folha limpa (sem checkboxes/botões) numa janela própria e chama
+  // o diálogo de impressão — imprimir a tela do app traria a barra de abas,
+  // o cabeçalho azul e os controles de edição junto.
+  function imprimirEquipes() {
+    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const mod = modalidadeConfig(equipes[0]?.alunos[0]?.modalidade ?? 'futsal');
+    const blocos = equipes.map(eq => {
+      const linhas = eq.alunos.map((a, i) => {
+        const eleg = elegibilidadeDoAluno(a);
+        return `<tr><td class="n">${i + 1}</td><td class="c">#${esc(String(a.numero_camisa ?? ''))}</td><td>${esc(a.nome_completo)}</td><td class="t">${esc(a.turma_id)}</td><td class="e ${eleg?.status ?? ''}">${eleg ? esc(textoElegibilidade(eleg)) : '—'}</td></tr>`;
+      }).join('');
+      return `<section><h2>${esc(eq.nomeTime)} <small>${esc(eq.turmas.join(', '))} · ${eq.alunos.length} jogador${eq.alunos.length !== 1 ? 'es' : ''}</small></h2><table>${linhas}</table></section>`;
+    }).join('');
+    const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Equipes inscritas — Interclasses IOP ${EDICAO_PADRAO}</title><style>
+      @page { size: A4; margin: 12mm; }
+      * { box-sizing: border-box; }
+      body { font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 11px; margin: 0; }
+      h1 { font-size: 16px; margin: 0 0 2px; }
+      .sub { color: #555; margin: 0 0 10px; }
+      .grid { columns: 2; column-gap: 14px; }
+      section { break-inside: avoid; border: 1px solid #bbb; border-radius: 6px; padding: 6px 8px; margin: 0 0 10px; }
+      h2 { font-size: 12px; margin: 0 0 4px; }
+      h2 small { font-weight: normal; color: #666; margin-left: 4px; }
+      table { width: 100%; border-collapse: collapse; }
+      td { padding: 2px 3px; border-top: 1px solid #e5e5e5; }
+      .n { width: 16px; color: #888; } .c { width: 26px; font-family: monospace; color: #0052a3; } .t { width: 26px; color: #666; }
+      .e { width: 1%; white-space: nowrap; font-size: 9px; font-weight: bold; color: #1a7f37; }
+      .atencao { color: #b45309; } .inapto { color: #b91c1c; } .transferido, .remanejado { color: #666; }
+      @media print { .grid { columns: 2; } }
+    </style></head><body>
+      <h1>${mod.icone} Equipes inscritas — ${esc(mod.label)} · Interclasses IOP ${EDICAO_PADRAO}</h1>
+      <p class="sub">Instituto Odilon Pratagi · ${equipes.length} equipe${equipes.length !== 1 ? 's' : ''} · impresso em ${new Date().toLocaleDateString('pt-BR')}</p>
+      <div class="grid">${blocos}</div>
+    </body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) { alert('O navegador bloqueou a janela de impressão. Permita pop-ups para este site e tente de novo.'); return; }
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 300);
+  }
+
   async function confirmarRenomear(eq: { nomeTime: string; alunos: InscricaoInterclasses[] }) {
     const nome = novoNome.trim();
     if (!nome || nome === eq.nomeTime) { setRenomeando(null); return; }
@@ -140,6 +182,12 @@ export function Equipes({ inscricoes, elegibilidade, loading, onRefetch }: Props
 
   return (
     <div className="flex flex-col gap-3">
+      <button
+        onClick={imprimirEquipes}
+        className="self-end flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-primary text-white hover:opacity-90"
+      >
+        <Printer className="w-4 h-4" /> Imprimir equipes
+      </button>
       {equipes.map(eq => (
         <div key={eq.nomeTime} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
