@@ -5,12 +5,12 @@
 
 WITH melhor AS (
   SELECT r.turma_id, r.aluno_numero, p.id AS prova_id,
-         (substring(p.titulo from '([1-4])\s*[º°o]?\s*bim'))::int AS bimestre,
+         (substring(p.titulo from '(?i)([1-4])\s*[º°o]?\s*bim'))::int AS bimestre,
          max(coalesce(r.nota, 0)) AS nota_bruta
   FROM respostas r JOIN provas p ON p.id = r.prova_id
   GROUP BY r.turma_id, r.aluno_numero, p.id, p.titulo
 ), alvo AS (
-  SELECT n.turma, n.bimestre, n.nome, n.nota AS nota_atual,
+  SELECT n.turma, n.bimestre, n.nome, n.nota AS nota_atual, m.nota_bruta,
          CASE WHEN m.nota_bruta <= 0 THEN 0
               WHEN m.nota_bruta >= 9.5 THEN 9.5
               ELSE least(ceil(round(m.nota_bruta::numeric, 2)), 9.5) END AS nota_nova
