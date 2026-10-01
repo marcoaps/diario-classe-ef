@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { cn } from "../AppLayout";
 import { X, FileDown, Save, Upload, Loader2 } from "lucide-react";
 import { salvarNotas, buscarNotas, sincronizarNomesAlunos, supabase } from "../../data/supabase";
-import { buscarRemanejados, ehTransferenciaErroneaDeImportacao, chaveNomeSituacao } from "../../domain/situacaoAluno";
+import { buscarRemanejados, ehTransferenciaErroneaDeImportacao, chaveNomeSituacao, chavesCanonicasDeNomesCompativeis } from "../../domain/situacaoAluno";
 import { bimestreAtual } from "../../domain/useRelatorioFrequencia";
 import { formatarNome } from "../../utils/formatarNome";
 import { lerArquivoNotas, escolherMaisRecentes, salvarNotasImportadas, type NotasTurmaImportada } from "../../domain/importarNotasExcel";
@@ -191,11 +191,16 @@ export function GradeReport() {
       // mesmo bimestre (nota e nota_ef separadas), fica com a que tem nota.
       const chavesProprias = new Set((cadastro || []).filter((a: any) => a.turma_id === turma).map((a: any) => chaveNomeSituacao(a.nome)));
       const chavesOutras = new Set((cadastro || []).filter((a: any) => a.turma_id !== turma).map((a: any) => chaveNomeSituacao(a.nome)));
+      // Nome completo num bimestre e abreviado em outro (mesmo nº de chamada).
+      const canonicas = chavesCanonicasDeNomesCompativeis(
+        [b1, b2, b3, b4].flat().map((a: any) => ({ chave: chaveNomeSituacao(a.nome), numero: a.numero }))
+      );
       const porBim = [b1, b2, b3, b4].map((lista: any[]) => {
         const m = new Map<string, any>();
         lista.forEach(a => {
-          const k = chaveNomeSituacao(a.nome);
-          if (!chavesProprias.has(k) && chavesOutras.has(k)) return;
+          const chaveOriginal = chaveNomeSituacao(a.nome);
+          const k = canonicas.get(chaveOriginal) ?? chaveOriginal;
+          if (!chavesProprias.has(k) && !chavesProprias.has(chaveOriginal) && (chavesOutras.has(k) || chavesOutras.has(chaveOriginal))) return;
           const atual = m.get(k);
           if (!atual || (atual.nota == null && a.nota != null)) m.set(k, a);
         });

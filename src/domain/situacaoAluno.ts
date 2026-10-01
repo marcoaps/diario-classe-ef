@@ -88,3 +88,27 @@ export async function buscarChavesTransferidos(turmas: string[]): Promise<Set<st
       .map(l => chaveTurmaNomeSemAcento(l.turma, l.nome!))
   );
 }
+
+// Mesmo aluno com o nome completo num bimestre e abreviado em outro (ex.:
+// "Luís Guilherme Oliveira de Araújo" x "Luis Guilherme Oliveira de Araujo da
+// Silva"). Regra conservadora: a chave curta tem de ser o começo (3+ palavras)
+// da longa E as duas precisam compartilhar o mesmo número de chamada. Devolve
+// chave → chave canônica (a mais longa); chaves sem par não aparecem.
+export function chavesCanonicasDeNomesCompativeis(entradas: { chave: string; numero?: number | null }[]): Map<string, string> {
+  const numerosPorChave = new Map<string, Set<number>>();
+  entradas.forEach(e => {
+    if (e.numero == null) return;
+    if (!numerosPorChave.has(e.chave)) numerosPorChave.set(e.chave, new Set());
+    numerosPorChave.get(e.chave)!.add(e.numero);
+  });
+  const chaves = Array.from(numerosPorChave.keys());
+  const canonica = new Map<string, string>();
+  chaves.forEach(curta => {
+    if (curta.split(' ').length < 3) return;
+    const candidatas = chaves.filter(longa =>
+      longa !== curta && longa.startsWith(curta + ' ') &&
+      Array.from(numerosPorChave.get(curta)!).some(n => numerosPorChave.get(longa)!.has(n)));
+    if (candidatas.length === 1) canonica.set(curta, candidatas[0]);
+  });
+  return canonica;
+}
