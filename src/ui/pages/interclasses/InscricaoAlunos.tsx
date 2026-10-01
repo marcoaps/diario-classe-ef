@@ -12,6 +12,7 @@ import {
   chaveElegibilidade, ELEGIBILIDADE_LABEL,
 } from '../../../domain/interclasses';
 import { corDaEquipe } from './Confrontos';
+import { buscarChavesTransferidos, chaveTurmaNomeSemAcento } from '../../../domain/situacaoAluno';
 import type { InscricaoInterclasses, Modalidade } from '../../../domain/interclasses';
 
 interface AlunoOficial {
@@ -274,8 +275,12 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
   useEffect(() => {
     if (editingId || turmasSelecionadas.length === 0) { setAlunosDaTurma([]); return; }
     let mounted = true;
-    Promise.all(turmasSelecionadas.map(t => buscarAlunos(t))).then(resultados => {
-      if (mounted) setAlunosDaTurma(resultados.flat() as AlunoOficial[]);
+    // Transferidos/remanejados (situação na tabela notas) não entram na lista.
+    Promise.all([
+      Promise.all(turmasSelecionadas.map(t => buscarAlunos(t))),
+      buscarChavesTransferidos(turmasSelecionadas).catch(() => new Set<string>()),
+    ]).then(([resultados, transferidos]) => {
+      if (mounted) setAlunosDaTurma((resultados.flat() as AlunoOficial[]).filter(a => !transferidos.has(chaveTurmaNomeSemAcento(a.turma_id, a.nome))));
     });
     return () => { mounted = false; };
   }, [turmasSelecionadas, editingId]);

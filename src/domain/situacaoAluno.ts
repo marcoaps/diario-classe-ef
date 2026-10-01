@@ -61,3 +61,26 @@ export function ehTransferenciaErroneaDeImportacao(linha: NotaSituacao, remaneja
 export function filtrarTransferenciasEfetivas<T extends NotaSituacao>(linhas: T[], remanejados: NotaSituacao[] = linhas): T[] {
   return linhas.filter(l => !ehTransferenciaErroneaDeImportacao(l, remanejados));
 }
+
+// Chave turma|nome sem acento e em maiúsculas — o Simaed e o cadastro de alunos
+// nem sempre acentuam igual (ex.: "ICARO" x "Ícaro").
+export const chaveTurmaNomeSemAcento = (turma: string | null | undefined, nome: string) =>
+  `${(turma ?? '').trim().toUpperCase()}|${nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim().replace(/\s+/g, ' ')}`;
+
+// Quem está transferido/remanejado em cada uma das turmas (chaves de
+// chaveTurmaNomeSemAcento), já descontando o erro de importação do Simaed.
+// Usado pra não oferecer esses alunos na inscrição do Interclasses.
+export async function buscarChavesTransferidos(turmas: string[]): Promise<Set<string>> {
+  if (turmas.length === 0) return new Set();
+  const { data } = await supabase
+    .from('notas')
+    .select('nome, turma, situacao, data_situacao')
+    .in('turma', turmas)
+    .or('situacao.ilike.%transferi%,situacao.ilike.%remanej%');
+  const remanejados = await buscarRemanejados();
+  return new Set(
+    filtrarTransferenciasEfetivas(data || [], remanejados)
+      .filter(l => l.nome)
+      .map(l => chaveTurmaNomeSemAcento(l.turma, l.nome!))
+  );
+}
