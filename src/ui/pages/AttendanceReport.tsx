@@ -6,6 +6,7 @@ import { Loader2, BarChart3, AlertTriangle, FileSpreadsheet, FileText, ShieldChe
 import { cn } from '../AppLayout';
 import { useRelatorioFrequencia, type Bimestre, PONTOS_MAXIMOS, getPeriodoBimestre, bimestreAtual } from '../../domain/useRelatorioFrequencia';
 import { exportarExcel, exportarPDF } from '../../domain/exportarFrequencia';
+import { situacoesEfetivasDaTurma } from '../../domain/situacaoAluno';
 import { exportarDiario } from '../../domain/exportarDiario';
 import { exportarDiarioOficial } from '../../domain/exportarDiarioOficial';
 
@@ -45,18 +46,6 @@ export function AttendanceReport() {
   const [gabaritoInput, setGabaritoInput] = useState<Record<string, string>>({...GABARITO_INICIAL});
   const navigate = useNavigate();
 
-  React.useEffect(() => {
-    async function carregarExcluidos() {
-      const { data: aee } = await supabase.from('alunos_especiais').select('nome');
-      const { data: transf } = await supabase.from('notas').select('nome').or('situacao.ilike.%transferi%,situacao.ilike.%remanej%');
-      const aeeSet = new Set<string>((aee || []).map((e: any) => (e.nome as string).toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'')));
-      const transfSet = new Set<string>((transf || []).map((e: any) => (e.nome as string).toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'')));
-      setNomesAEE(aeeSet);
-      setNomesTransferidos(transfSet);
-      setNomesExcluidos(new Set<string>([...aeeSet, ...transfSet]));
-    }
-    carregarExcluidos();
-  }, []);
 
   const uniqueClassRooms = useMemo(
     () => Array.from(new Map(classRooms.map((cr) => [cr.name, cr])).values()).sort(
@@ -67,6 +56,34 @@ export function AttendanceReport() {
 
   const [turmaId, setTurmaId] = useState<string>(uniqueClassRooms[0]?.name ?? '');
   const [bimestre, setBimestre] = useState<Bimestre>(() => bimestreAtual());
+
+  // Transferidos/remanejados DESTA turma. Antes era só por nome em todas as
+  // turmas — aluno remanejado de outra turma saía como "Transf." também na
+  // turma nova. Agora vale a situação da turma selecionada (ver situacaoAluno.ts).
+  React.useEffect(() => {
+    let mounted = true;
+    async function carregarExcluidos() {
+      const norm = (s: string) => s.toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '');
+      const turmaNorm = turmaId ? normalizarTurma(turmaId) : '';
+      const [{ data: aee }, { data: transf }] = await Promise.all([
+        supabase.from('alunos_especiais').select('nome'),
+        supabase.from('notas').select('nome, turma, situacao, data_situacao').or('situacao.ilike.%transferi%,situacao.ilike.%remanej%'),
+      ]);
+      const linhas = transf || [];
+      const situacoes = situacoesEfetivasDaTurma(
+        linhas.filter((l: any) => l.turma === turmaNorm),
+        linhas.filter((l: any) => l.turma !== turmaNorm && l.situacao?.toLowerCase().includes('remanej')),
+      );
+      const aeeSet = new Set<string>((aee || []).map((e: any) => norm(e.nome as string)));
+      const transfSet = new Set<string>(Array.from(situacoes.keys()).map(norm));
+      if (!mounted) return;
+      setNomesAEE(aeeSet);
+      setNomesTransferidos(transfSet);
+      setNomesExcluidos(new Set<string>([...aeeSet, ...transfSet]));
+    }
+    carregarExcluidos();
+    return () => { mounted = false; };
+  }, [turmaId]);
 
   React.useEffect(() => {
     if (!turmaId && uniqueClassRooms.length > 0) setTurmaId(uniqueClassRooms[0].name);
