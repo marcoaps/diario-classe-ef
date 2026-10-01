@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { cn } from "../AppLayout";
 import { X, FileDown, Save, Upload, Loader2 } from "lucide-react";
 import { salvarNotas, buscarNotas, sincronizarNomesAlunos, supabase } from "../../data/supabase";
-import { buscarRemanejados, ehTransferenciaErroneaDeImportacao } from "../../domain/situacaoAluno";
+import { buscarRemanejados, ehTransferenciaErroneaDeImportacao, chaveNomeSituacao } from "../../domain/situacaoAluno";
 import { bimestreAtual } from "../../domain/useRelatorioFrequencia";
 import { formatarNome } from "../../utils/formatarNome";
 import { lerArquivoNotas, escolherMaisRecentes, salvarNotasImportadas, type NotasTurmaImportada } from "../../domain/importarNotasExcel";
@@ -177,18 +177,37 @@ export function GradeReport() {
   const carregarDesempenho = async () => {
     setIsLoading(true);
     try {
-      const [b1, b2, b3, b4] = await Promise.all([
+      const [b1, b2, b3, b4, { data: cadastro }] = await Promise.all([
         buscarNotas(turma, 1),
         buscarNotas(turma, 2),
         buscarNotas(turma, 3),
         buscarNotas(turma, 4),
+        supabase.from("alunos").select("nome, turma_id"),
       ]);
-      const nomes = new Set([...b1, ...b2, ...b3, ...b4].map((a: any) => a.nome));
-      const resultado = Array.from(nomes).map(nome => {
-        const a1 = b1.find((a: any) => a.nome === nome);
-        const a2 = b2.find((a: any) => a.nome === nome);
-        const a3 = b3.find((a: any) => a.nome === nome);
-        const a4 = b4.find((a: any) => a.nome === nome);
+      // O nome muda entre bimestres (MAIÚSCULAS x Normal, acentos), então junta pela
+      // chave sem acento/caixa — antes juntava pelo nome exato e o aluno saía em
+      // duas linhas. Ignora quem só consta no cadastro de OUTRA turma (lista de
+      // outra sala gravada por engano) e, havendo mais de uma linha do aluno no
+      // mesmo bimestre (nota e nota_ef separadas), fica com a que tem nota.
+      const chavesProprias = new Set((cadastro || []).filter((a: any) => a.turma_id === turma).map((a: any) => chaveNomeSituacao(a.nome)));
+      const chavesOutras = new Set((cadastro || []).filter((a: any) => a.turma_id !== turma).map((a: any) => chaveNomeSituacao(a.nome)));
+      const porBim = [b1, b2, b3, b4].map((lista: any[]) => {
+        const m = new Map<string, any>();
+        lista.forEach(a => {
+          const k = chaveNomeSituacao(a.nome);
+          if (!chavesProprias.has(k) && chavesOutras.has(k)) return;
+          const atual = m.get(k);
+          if (!atual || (atual.nota == null && a.nota != null)) m.set(k, a);
+        });
+        return m;
+      });
+      const chaves = new Set(porBim.flatMap(m => Array.from(m.keys())));
+      const resultado = Array.from(chaves).map(chave => {
+        const a1 = porBim[0].get(chave);
+        const a2 = porBim[1].get(chave);
+        const a3 = porBim[2].get(chave);
+        const a4 = porBim[3].get(chave);
+        const nome = (a1 ?? a2 ?? a3 ?? a4).nome;
         const notas = [a1?.nota, a2?.nota, a3?.nota, a4?.nota];
         const validas = notas.filter(n => n !== null && n !== undefined) as number[];
         const total = validas.reduce((s, n) => s + n, 0);
