@@ -191,9 +191,10 @@ export function GradeReport() {
       // mesmo bimestre (nota e nota_ef separadas), fica com a que tem nota.
       const chavesProprias = new Set((cadastro || []).filter((a: any) => a.turma_id === turma).map((a: any) => chaveNomeSituacao(a.nome)));
       const chavesOutras = new Set((cadastro || []).filter((a: any) => a.turma_id !== turma).map((a: any) => chaveNomeSituacao(a.nome)));
-      // Nome completo num bimestre e abreviado em outro (mesmo nº de chamada).
+      // Nome completo/abreviado ou com erro de digitação em outro bimestre (mesmo nº de chamada).
       const canonicas = chavesCanonicasDeNomesCompativeis(
-        [b1, b2, b3, b4].flat().map((a: any) => ({ chave: chaveNomeSituacao(a.nome), numero: a.numero }))
+        [b1, b2, b3, b4].flat().map((a: any) => ({ chave: chaveNomeSituacao(a.nome), numero: a.numero })),
+        chavesProprias,
       );
       const porBim = [b1, b2, b3, b4].map((lista: any[]) => {
         const m = new Map<string, any>();

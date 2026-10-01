@@ -89,26 +89,68 @@ export async function buscarChavesTransferidos(turmas: string[]): Promise<Set<st
   );
 }
 
-// Mesmo aluno com o nome completo num bimestre e abreviado em outro (ex.:
-// "Luís Guilherme Oliveira de Araújo" x "Luis Guilherme Oliveira de Araujo da
-// Silva"). Regra conservadora: a chave curta tem de ser o começo (3+ palavras)
-// da longa E as duas precisam compartilhar o mesmo número de chamada. Devolve
-// chave → chave canônica (a mais longa); chaves sem par não aparecem.
-export function chavesCanonicasDeNomesCompativeis(entradas: { chave: string; numero?: number | null }[]): Map<string, string> {
+// Distância de Levenshtein normalizada (1 = idêntico).
+function similaridade(a: string, b: string): number {
+  if (a === b) return 1;
+  const anterior = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    let diagonal = anterior[0];
+    anterior[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const guardado = anterior[j];
+      anterior[j] = Math.min(anterior[j] + 1, anterior[j - 1] + 1, diagonal + (a[i - 1] === b[j - 1] ? 0 : 1));
+      diagonal = guardado;
+    }
+  }
+  return 1 - anterior[b.length] / Math.max(a.length, b.length);
+}
+
+// Mesmo aluno gravado com nomes diferentes em bimestres diferentes. Duas chaves
+// (de chaveNomeSituacao) são o mesmo aluno quando compartilham o nº de chamada E:
+//  - a curta é o começo (3+ palavras) da longa — "Luís Guilherme Oliveira de
+//    Araújo" x "... da Silva"; ou
+//  - são quase iguais (similaridade >= 0,85) — erro de digitação, ex. "Moraes" x
+//    "Morais", "Demisson" x "Deivisson".
+// Irmãos/gêmeos têm nº de chamada diferente, então não são juntados.
+// Devolve chave → chave canônica do grupo (a de `preferidas`, ex. a do cadastro;
+// senão a mais frequente; senão a mais longa). Chaves sem par não aparecem.
+export function chavesCanonicasDeNomesCompativeis(
+  entradas: { chave: string; numero?: number | null }[],
+  preferidas: Set<string> = new Set(),
+): Map<string, string> {
   const numerosPorChave = new Map<string, Set<number>>();
+  const frequencia = new Map<string, number>();
   entradas.forEach(e => {
+    frequencia.set(e.chave, (frequencia.get(e.chave) ?? 0) + 1);
     if (e.numero == null) return;
     if (!numerosPorChave.has(e.chave)) numerosPorChave.set(e.chave, new Set());
     numerosPorChave.get(e.chave)!.add(e.numero);
   });
   const chaves = Array.from(numerosPorChave.keys());
+  const pai = new Map<string, string>(chaves.map(c => [c, c]));
+  const raiz = (c: string): string => (pai.get(c) === c ? c : raiz(pai.get(c)!));
+  const compartilhaNumero = (a: string, b: string) => Array.from(numerosPorChave.get(a)!).some(n => numerosPorChave.get(b)!.has(n));
+
+  for (let i = 0; i < chaves.length; i++) {
+    for (let j = i + 1; j < chaves.length; j++) {
+      const [a, b] = [chaves[i], chaves[j]];
+      if (!compartilhaNumero(a, b)) continue;
+      const [curta, longa] = a.length <= b.length ? [a, b] : [b, a];
+      const prefixo = curta.split(' ').length >= 3 && longa.startsWith(curta + ' ');
+      if (prefixo || similaridade(a, b) >= 0.85) pai.set(raiz(a), raiz(b));
+    }
+  }
+
+  const grupos = new Map<string, string[]>();
+  chaves.forEach(c => grupos.set(raiz(c), [...(grupos.get(raiz(c)) ?? []), c]));
   const canonica = new Map<string, string>();
-  chaves.forEach(curta => {
-    if (curta.split(' ').length < 3) return;
-    const candidatas = chaves.filter(longa =>
-      longa !== curta && longa.startsWith(curta + ' ') &&
-      Array.from(numerosPorChave.get(curta)!).some(n => numerosPorChave.get(longa)!.has(n)));
-    if (candidatas.length === 1) canonica.set(curta, candidatas[0]);
+  grupos.forEach(membros => {
+    if (membros.length < 2) return;
+    const escolhida = [...membros].sort((x, y) =>
+      Number(preferidas.has(y)) - Number(preferidas.has(x)) ||
+      (frequencia.get(y) ?? 0) - (frequencia.get(x) ?? 0) ||
+      y.length - x.length)[0];
+    membros.forEach(m => { if (m !== escolhida) canonica.set(m, escolhida); });
   });
   return canonica;
 }
