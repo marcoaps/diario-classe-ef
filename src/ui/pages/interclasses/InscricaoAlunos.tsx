@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, type FormEvent } from 'react';
-import { CheckCircle2, Loader2, Pencil, Trash2, X, Link2, Check, Calendar, ChevronDown, ChevronUp, Settings } from 'lucide-react';
+import { CheckCircle2, Loader2, Plus, Pencil, Trash2, X, Link2, Check, Calendar, ChevronDown, ChevronUp, Settings } from 'lucide-react';
 import { cn } from '../../AppLayout';
 import {
   buscarAlunos, criarInscricaoInterclasses, atualizarInscricaoInterclasses, excluirInscricaoInterclasses, limparInscricoesInterclasses,
@@ -892,7 +892,7 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
       <div ref={formRef} className={cn('bg-white rounded-2xl border border-gray-100 shadow-sm', modoPublico ? 'p-5' : 'p-4')}>
         <div className="flex items-center justify-between mb-3">
           <h3 className={cn('font-bold', modoPublico ? 'text-xl' : 'text-sm text-on-surface')} style={modoPublico ? { color: corModalidade } : undefined}>
-            {editingId ? '✎ Editar inscrição' : modoPublico ? '📝 Inscreva-se!' : `📝 Inscrição de Alunos — Interclasses ${edicao}`}
+            {editingId ? '✎ Editar inscrição' : modoPublico && timeEditando ? `➕ Adicionar jogador ao time ${timeEditando.nome}` : modoPublico ? '📝 Inscreva-se!' : `📝 Inscrição de Alunos — Interclasses ${edicao}`}
           </h3>
           {editingId && (
             <button onClick={limparFormulario} className="text-xs text-gray-500 hover:text-error flex items-center gap-1">
@@ -1267,6 +1267,20 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
                       </div>
                     ))}
                   </div>
+                  {timeEditando && timeEditando.nome.trim().toLowerCase() === eq.nomeTime.trim().toLowerCase() && (
+                    <button
+                      type="button"
+                      disabled={eq.alunos.length >= MAXIMO_JOGADORES_TIME}
+                      onClick={() => {
+                        setForm(f => ({ ...f, nomeTime: eq.nomeTime }));
+                        formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-3.5 text-base font-bold text-primary bg-primary/5 hover:bg-primary/10 disabled:opacity-50 disabled:cursor-not-allowed border-t border-gray-100"
+                    >
+                      <Plus className="w-5 h-5" />
+                      {eq.alunos.length >= MAXIMO_JOGADORES_TIME ? `Time completo (${MAXIMO_JOGADORES_TIME}/${MAXIMO_JOGADORES_TIME})` : 'Adicionar jogador'}
+                    </button>
+                  )}
                 </div>
               );
             })}
