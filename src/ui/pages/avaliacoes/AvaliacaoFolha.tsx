@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
-import { filtrarTransferenciasEfetivas } from '../../../domain/situacaoAluno';
+import { filtrarTransferenciasEfetivas, chaveTurmaNomeSemAcento } from '../../../domain/situacaoAluno';
 import { ArrowLeft, Printer, FileText, Download, Sparkles, QrCode, HeartHandshake } from 'lucide-react';
 import QRCode from 'qrcode';
 import type { Avaliacao, Aluno, QuestaoObjetiva } from './tiposCorretorProvas';
@@ -463,12 +463,11 @@ export function AvaliacaoFolha() {
           .or('situacao.ilike.%transferi%,situacao.ilike.%remanej%');
         // Situação vale só na turma onde foi registrada (aluno remanejado continua
         // na turma nova) — ver situacaoAluno.ts.
-        const chaveTurmaNome = (turma: string | null, nome: string) => `${(turma ?? '').trim().toUpperCase()}|${nome.toLowerCase().trim()}`;
         const turmasReaisUp = new Set(turmasReais.map((t: string) => t.trim().toUpperCase()));
         const transferidosKeys = new Set(
           filtrarTransferenciasEfetivas(transferidos || [])
             .filter((e: { turma: string | null }) => turmasReaisUp.has((e.turma ?? '').trim().toUpperCase()))
-            .map((e: { nome: string; turma: string | null }) => chaveTurmaNome(e.turma, e.nome))
+            .map((e: { nome: string; turma: string | null }) => chaveTurmaNomeSemAcento(e.turma, e.nome))
         );
 
         let query = supabase
@@ -481,7 +480,7 @@ export function AvaliacaoFolha() {
           query = query.in('id', alunosCriticosIds);
         }
         const { data: al } = await query;
-        const filtrados = (al || []).filter((a: Aluno) => !nomesEspeciais.includes(a.nome.toLowerCase().trim()) && !transferidosKeys.has(chaveTurmaNome(a.turma_id, a.nome)));
+        const filtrados = (al || []).filter((a: Aluno) => !nomesEspeciais.includes(a.nome.toLowerCase().trim()) && !transferidosKeys.has(chaveTurmaNomeSemAcento(a.turma_id, a.nome)));
         setAlunos(filtrados);
       }
       setLoading(false);

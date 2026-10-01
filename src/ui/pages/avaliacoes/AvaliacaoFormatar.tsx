@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight, Printer, Users } from 'lucide-react';
 import { supabase } from '../../../data/supabase';
-import { filtrarTransferenciasEfetivas } from '../../../domain/situacaoAluno';
+import { filtrarTransferenciasEfetivas, chaveTurmaNomeSemAcento } from '../../../domain/situacaoAluno';
 import { gerarHtmlProva, gerarHtmlTextoApoio, CSS_PROVA } from './AvaliacaoFolha';
 import type { Avaliacao, Aluno } from './AvaliacaoFolha';
 import { turmasDoValor, ehGrupoDeTurmas, labelTurmaOuGrupo } from './tiposCorretorProvas';
@@ -57,12 +57,11 @@ export function AvaliacaoFormatar() {
           .or('situacao.ilike.%transferi%,situacao.ilike.%remanej%');
         // Situação vale só na turma onde foi registrada (aluno remanejado continua
         // na turma nova) — ver situacaoAluno.ts.
-        const chaveTurmaNome = (turma: string | null, nome: string) => `${(turma ?? '').trim().toUpperCase()}|${nome.toLowerCase().trim()}`;
         const turmasReaisUp = new Set(turmasReais.map((t: string) => t.trim().toUpperCase()));
         const transferidosKeys = new Set(
           filtrarTransferenciasEfetivas(transferidos || [])
             .filter((e: { turma: string | null }) => turmasReaisUp.has((e.turma ?? '').trim().toUpperCase()))
-            .map((e: { nome: string; turma: string | null }) => chaveTurmaNome(e.turma, e.nome))
+            .map((e: { nome: string; turma: string | null }) => chaveTurmaNomeSemAcento(e.turma, e.nome))
         );
 
         const { data: al } = await supabase
@@ -72,7 +71,7 @@ export function AvaliacaoFormatar() {
           .order('turma_id')
           .order('numero_chamada');
 
-        const filtrados = (al || []).filter((a: Aluno) => !nomesEspeciais.includes(a.nome.toLowerCase().trim()) && !transferidosKeys.has(chaveTurmaNome(a.turma_id, a.nome)));
+        const filtrados = (al || []).filter((a: Aluno) => !nomesEspeciais.includes(a.nome.toLowerCase().trim()) && !transferidosKeys.has(chaveTurmaNomeSemAcento(a.turma_id, a.nome)));
         setAlunos(filtrados);
       } catch (e) {
         setErroCarregamento((e as Error).message || 'Não foi possível carregar a avaliação.');

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { BookOpen, Download, Loader2, Calendar } from 'lucide-react';
 import { supabase } from '../../data/supabase';
-import { situacoesEfetivasDaTurma, buscarRemanejados } from '../../domain/situacaoAluno';
+import { situacoesEfetivasDaTurma, buscarRemanejados, chaveNomeSituacao } from '../../domain/situacaoAluno';
 import ExcelJS from 'exceljs';
 import { chamarClaudeProxy } from '../../utils/claudeProxy';
 import { getCurriculumData, formatCurriculumForPrompt, getAnoFromTurma } from '../../data/curriculumData';
@@ -184,7 +184,7 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
       const remanejadosOutras = (await buscarRemanejados()).filter(r => r.turma !== turma);
       const situacaoPorNome = situacoesEfetivasDaTurma(notasData || [], remanejadosOutras);
       (alunosData || []).forEach((a: any) => {
-        const situacao = situacaoPorNome.get(String(a.nome).toUpperCase());
+        const situacao = situacaoPorNome.get(chaveNomeSituacao(String(a.nome)));
         if (situacao) transfMap.set(a.id, situacao);
       });
     }

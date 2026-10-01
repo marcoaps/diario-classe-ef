@@ -118,7 +118,7 @@ export function AttendanceReport() {
 
   const emRisco = alunos.filter((a) => a.em_risco || a.critico);
   const alunosCriticos = alunos.filter((a) =>
-    a.registros_total > 0 && a.percentual === 0 && !nomesExcluidos.has(a.nome.toLowerCase().trim())
+    a.registros_total > 0 && a.percentual === 0 && !nomesExcluidos.has(a.nome.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, ''))
   );
 
   const handleExcel = () => exportarExcel({ turma: turmaId, bimestre, periodo, periodoEfetivo, dataFiltro: dataFiltro || null, alunos, resumo, nomesAEE, nomesTransferidos, notasTrabalhosPorAluno });

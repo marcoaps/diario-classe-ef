@@ -7,7 +7,11 @@ export interface NotaSituacao {
   data_situacao?: string | null;
 }
 
-const normalizarNome = (n: string) => n.toUpperCase().trim();
+// Sem acento e em maiúsculas: o Simaed e o cadastro de alunos nem sempre acentuam
+// igual (ex.: "ICARO" x "Ícaro"). Use também nas buscas no mapa de situacoesEfetivasDaTurma.
+export const chaveNomeSituacao = (n: string) =>
+  n.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim().replace(/\s+/g, ' ');
+const normalizarNome = chaveNomeSituacao;
 
 // Situação (transferido/remanejado) de cada aluno NESTA turma, a partir das
 // linhas da tabela notas. Aluno remanejado de outra turma costuma vir do

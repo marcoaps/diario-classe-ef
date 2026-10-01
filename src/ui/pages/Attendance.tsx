@@ -9,7 +9,7 @@ import { ConteudoAulas } from './ConteudoAulas';
 import { PARTICIPACAO_OPCOES, MOTIVOS_JUSTIFICATIVA, type Participacao } from '../../domain/frequenciaPontos';
 import { buscarTrabalhos, type Trabalho } from '../../data/supabase';
 import { bimestreAtual } from '../../domain/useRelatorioFrequencia';
-import { situacoesEfetivasDaTurma } from '../../domain/situacaoAluno';
+import { situacoesEfetivasDaTurma, chaveNomeSituacao } from '../../domain/situacaoAluno';
 
 interface AlunoSupabase {
   id: string;
@@ -126,7 +126,7 @@ export function Attendance() {
 
           const idsTransf = new Map<string, string>();
           lista.forEach(a => {
-            const situacao = situacaoPorNome.get(a.nome.toUpperCase());
+            const situacao = situacaoPorNome.get(chaveNomeSituacao(a.nome));
             if (situacao) idsTransf.set(a.id, situacao);
           });
           if (mounted) setTransferidos(idsTransf);
