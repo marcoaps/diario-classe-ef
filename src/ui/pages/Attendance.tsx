@@ -9,6 +9,7 @@ import { ConteudoAulas } from './ConteudoAulas';
 import { PARTICIPACAO_OPCOES, MOTIVOS_JUSTIFICATIVA, type Participacao } from '../../domain/frequenciaPontos';
 import { buscarTrabalhos, type Trabalho } from '../../data/supabase';
 import { bimestreAtual } from '../../domain/useRelatorioFrequencia';
+import { situacoesEfetivasDaTurma } from '../../domain/situacaoAluno';
 
 interface AlunoSupabase {
   id: string;
@@ -108,15 +109,20 @@ export function Attendance() {
         // Busca transferidos/remanejados da tabela notas (qualquer bimestre)
         const nomes = lista.map(a => a.nome.toUpperCase());
         if (nomes.length > 0) {
-          const { data: notasData } = await supabase
-            .from('notas')
-            .select('nome, situacao')
-            .eq('turma', turmaNorm)
-            .or('situacao.ilike.%transferi%,situacao.ilike.%remanej%');
+          const [{ data: notasData }, { data: remanejadosOutras }] = await Promise.all([
+            supabase
+              .from('notas')
+              .select('nome, situacao, data_situacao')
+              .eq('turma', turmaNorm)
+              .or('situacao.ilike.%transferi%,situacao.ilike.%remanej%'),
+            supabase
+              .from('notas')
+              .select('nome, situacao')
+              .neq('turma', turmaNorm)
+              .ilike('situacao', '%remanej%'),
+          ]);
 
-          const situacaoPorNome = new Map<string, string>(
-            (notasData || []).map((n: any) => [n.nome?.toUpperCase(), n.situacao as string])
-          );
+          const situacaoPorNome = situacoesEfetivasDaTurma(notasData || [], remanejadosOutras || []);
 
           const idsTransf = new Map<string, string>();
           lista.forEach(a => {
