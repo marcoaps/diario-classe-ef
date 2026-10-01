@@ -5,6 +5,7 @@ import {
   buscarAlunos, criarInscricaoInterclasses, atualizarInscricaoInterclasses, excluirInscricaoInterclasses, limparInscricoesInterclasses,
   buscarConfigInterclasses, salvarConfigInterclasses, type ConfigInterclasses,
   buscarElegibilidadeInterclasses, type ElegibilidadeInterclasses,
+  gerarCodigoTime, validarCodigoTime, removerAlunoComCodigo, atualizarCamisaComCodigo, buscarCodigosTimes,
 } from '../../../data/supabase';
 import {
   agruparPorTime, categoriaFromTurma, MAXIMO_JOGADORES_TIME, minimoJogadoresPara, modalidadeConfig,
@@ -183,6 +184,89 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
   const [sugestoesTimeAbertas, setSugestoesTimeAbertas] = useState(false);
 
   const formRef = useRef<HTMLDivElement>(null);
+
+  // Edição por código do time (sql/interclasses_edicao_por_codigo.sql): o
+  // responsável, sem login, remove aluno/troca camisa do próprio time com o
+  // código mostrado na criação. Só existe no modoPublico.
+  const [codigoNovo, setCodigoNovo] = useState<{ time: string; codigo: string } | null>(null);
+  const [timeEditando, setTimeEditando] = useState<{ nome: string; codigo: string } | null>(null);
+  const [editTimeNome, setEditTimeNome] = useState('');
+  const [editCodigo, setEditCodigo] = useState('');
+  const [validandoCodigo, setValidandoCodigo] = useState(false);
+  const [erroCodigo, setErroCodigo] = useState<string | null>(null);
+  const [codigosTimes, setCodigosTimes] = useState<Record<string, string>>({});
+  const [codigosAbertos, setCodigosAbertos] = useState(false);
+
+  const chaveCodigoLocal = (nomeTime: string) => `interclasses_codigo_${edicao}_${modalidade}_${nomeTime.trim().toLowerCase()}`;
+
+  // Painel do professor: código de cada time (a tabela só é legível logado).
+  useEffect(() => {
+    if (modoPublico) return;
+    let mounted = true;
+    buscarCodigosTimes(edicao).then(lista => {
+      if (!mounted) return;
+      const mapa: Record<string, string> = {};
+      lista.filter(c => c.modalidade === modalidade).forEach(c => { mapa[c.time_norm] = c.codigo; });
+      setCodigosTimes(mapa);
+    }).catch(() => { /* migração ainda não rodou */ });
+    return () => { mounted = false; };
+  }, [modoPublico, edicao, modalidade, inscricoes]);
+
+  // Após criar inscrições na tela pública: se o time acabou de ser criado, o
+  // banco devolve o código (senão devolve null e nada aparece).
+  async function gerarCodigoSeNovo(nomeTime: string) {
+    if (!modoPublico) return;
+    try {
+      const codigo = await gerarCodigoTime(edicao, modalidade, nomeTime);
+      if (codigo) {
+        setCodigoNovo({ time: nomeTime, codigo });
+        try { localStorage.setItem(chaveCodigoLocal(nomeTime), codigo); } catch { /* ignore */ }
+      }
+    } catch { /* migração ainda não rodou — inscrição segue sem código */ }
+  }
+
+  async function entrarEdicaoTime(nome: string, codigo: string) {
+    setErroCodigo(null);
+    setValidandoCodigo(true);
+    try {
+      const ok = await validarCodigoTime(edicao, modalidade, nome, codigo);
+      if (!ok) { setErroCodigo('Código inválido para esse time.'); return; }
+      const cod = codigo.trim().toUpperCase();
+      setTimeEditando({ nome, codigo: cod });
+      setForm(f => ({ ...f, nomeTime: nome }));
+      try { localStorage.setItem(chaveCodigoLocal(nome), cod); } catch { /* ignore */ }
+    } catch (e: any) {
+      setErroCodigo('Erro ao validar: ' + (e?.message || 'tente novamente.'));
+    } finally {
+      setValidandoCodigo(false);
+    }
+  }
+
+  async function removerAlunoDoTime(a: InscricaoInterclasses) {
+    if (!timeEditando || !window.confirm(`Remover ${a.nome_completo} do time?`)) return;
+    setErro(null);
+    try {
+      await removerAlunoComCodigo(timeEditando.codigo, a.id);
+      await onRefetch();
+    } catch (e: any) {
+      setErro(e?.message || 'Erro ao remover o aluno.');
+    }
+  }
+
+  async function salvarCamisaDoTime(a: InscricaoInterclasses, valor: string) {
+    if (!timeEditando) return;
+    const camisa = parseInt(valor, 10);
+    if (!Number.isInteger(camisa) || camisa <= 0 || camisa === a.numero_camisa) return;
+    setErro(null);
+    try {
+      await atualizarCamisaComCodigo(timeEditando.codigo, a.id, camisa);
+    } catch (e: any) {
+      const msg: string = e?.message || '';
+      setErro(msg.includes('uq_interclasses_time_camisa') || msg.includes('duplicate')
+        ? `A camisa ${camisa} já está em uso nesse time.` : (msg || 'Erro ao trocar a camisa.'));
+    }
+    await onRefetch();
+  }
 
   // Alunos já cadastrados oficialmente nas turmas selecionadas (uma ou mais)
   // — usados para a lista de seleção múltipla (ou, se nenhuma turma marcada
@@ -412,6 +496,7 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
       } else {
         await criarInscricaoInterclasses(payload);
         setSucesso(`Aluno inscrito com sucesso no Interclasses IOP ${edicao}!`);
+        await gerarCodigoSeNovo(payload.nome_time);
       }
       await onRefetch();
       limparFormulario();
@@ -501,6 +586,7 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
           genero: aluno.sexo,
         });
       }
+      await gerarCodigoSeNovo(nomeTime);
       await onRefetch();
       setSelecionados({});
       setSucesso(`${validos.length} aluno(s) inscrito(s) com sucesso!${erros.length ? ` ${erros.length} ignorado(s).` : ''}`);
@@ -709,6 +795,85 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
           <p className="text-[11px] text-gray-400">
             Pra acompanhar jogos e classificação sem login: <span className="text-gray-600 font-medium">{linkResultadosPublico}</span>
           </p>
+        </div>
+      )}
+
+      {!modoPublico && timesUnicos.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <button type="button" onClick={() => setCodigosAbertos(a => !a)} className="w-full flex items-center justify-between">
+            <h3 className="font-bold text-on-surface text-sm">🔑 Códigos de edição dos times</h3>
+            {codigosAbertos ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+          </button>
+          {codigosAbertos && (
+            <div className="mt-3">
+              <p className="text-[11px] text-gray-500 mb-2">Com o código, o responsável remove alunos e troca camisa do time pela página pública. Passe pra quem perdeu o código.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                {timesUnicos.map(t => (
+                  <div key={t} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-1.5 text-xs">
+                    <span className="truncate text-on-surface">{t}</span>
+                    <span className="font-mono font-bold tracking-widest text-primary">{codigosTimes[t.trim().toLowerCase()] ?? '—'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {modoPublico && codigoNovo && (
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-5 text-center">
+          <p className="text-sm font-semibold text-amber-900">Código para editar o time "{codigoNovo.time}"</p>
+          <p className="text-4xl font-extrabold tracking-widest my-2 text-amber-900">{codigoNovo.codigo}</p>
+          <p className="text-xs text-amber-700 mb-3">Anote ou tire print. Com ele você remove alunos e troca camisa depois. Se perder, peça ao professor.</p>
+          <button type="button" onClick={() => setCodigoNovo(null)} className="px-5 py-2 rounded-xl bg-amber-500 text-white text-sm font-bold">Anotei</button>
+        </div>
+      )}
+
+      {modoPublico && !inscricoesEncerradas && timesUnicos.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          {timeEditando ? (
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-on-surface">✏️ Editando o time <span className="text-primary">{timeEditando.nome}</span></p>
+              <button type="button" onClick={() => { setTimeEditando(null); setEditCodigo(''); }} className="text-xs text-gray-500 hover:text-error flex items-center gap-1">
+                <X className="w-3.5 h-3.5" /> Sair
+              </button>
+            </div>
+          ) : (
+            <>
+              <h3 className="font-bold text-lg text-on-surface mb-1">🔑 Já inscrevi meu time</h3>
+              <p className="text-xs text-gray-500 mb-3">Escolha o time e digite o código recebido na inscrição pra remover alunos, trocar camisa ou adicionar mais.</p>
+              <div className="flex flex-col gap-2">
+                <select
+                  value={editTimeNome}
+                  onChange={e => {
+                    setEditTimeNome(e.target.value);
+                    setErroCodigo(null);
+                    try { setEditCodigo(localStorage.getItem(chaveCodigoLocal(e.target.value)) ?? ''); } catch { setEditCodigo(''); }
+                  }}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-base text-on-surface outline-none focus:border-primary"
+                >
+                  <option value="">Selecione o time</option>
+                  {timesUnicos.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <input
+                  type="text" autoComplete="off" maxLength={6}
+                  value={editCodigo}
+                  onChange={e => setEditCodigo(e.target.value.toUpperCase())}
+                  placeholder="Código do time"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-base font-mono tracking-widest text-on-surface outline-none focus:border-primary"
+                />
+                {erroCodigo && <p className="text-xs text-error font-medium">⚠️ {erroCodigo}</p>}
+                <button
+                  type="button"
+                  disabled={!editTimeNome || editCodigo.trim().length < 6 || validandoCodigo}
+                  onClick={() => entrarEdicaoTime(editTimeNome, editCodigo)}
+                  className="w-full py-3 rounded-xl bg-primary disabled:opacity-50 text-white font-bold text-base"
+                >
+                  {validandoCodigo ? 'Verificando...' : 'Entrar e editar'}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -1075,14 +1240,30 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
                   <div className="divide-y divide-gray-50">
                     {eq.alunos.map(a => (
                       <div key={a.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
-                        <span
-                          className="w-9 h-9 rounded-full flex items-center justify-center text-white font-extrabold text-sm flex-shrink-0 shadow-sm"
-                          style={{ background: corTime }}
-                        >
-                          {a.numero_camisa}
-                        </span>
+                        {timeEditando && timeEditando.nome.trim().toLowerCase() === eq.nomeTime.trim().toLowerCase() ? (
+                          <input
+                            key={`${a.id}-${a.numero_camisa}`}
+                            type="number" min="1" defaultValue={a.numero_camisa}
+                            title="Número da camisa"
+                            onBlur={async e => { const el = e.currentTarget; await salvarCamisaDoTime(a, el.value); el.value = String(a.numero_camisa); }}
+                            className="w-14 text-center border-2 rounded-full py-1.5 font-extrabold text-sm outline-none focus:border-primary flex-shrink-0"
+                            style={{ borderColor: corTime }}
+                          />
+                        ) : (
+                          <span
+                            className="w-9 h-9 rounded-full flex items-center justify-center text-white font-extrabold text-sm flex-shrink-0 shadow-sm"
+                            style={{ background: corTime }}
+                          >
+                            {a.numero_camisa}
+                          </span>
+                        )}
                         <span className="flex-1 text-base font-medium text-on-surface truncate">{a.nome_completo}</span>
                         <span className="text-gray-400 text-xs font-semibold bg-gray-100 px-2 py-1 rounded-full flex-shrink-0">{a.turma_id}</span>
+                        {timeEditando && timeEditando.nome.trim().toLowerCase() === eq.nomeTime.trim().toLowerCase() && (
+                          <button type="button" onClick={() => removerAlunoDoTime(a)} title="Remover do time" className="text-gray-400 hover:text-error flex-shrink-0">
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>

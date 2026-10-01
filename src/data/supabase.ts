@@ -575,6 +575,43 @@ export async function excluirInscricaoInterclasses(id: string) {
   if (error) throw error;
 }
 
+// Edição pública por código do time (sql/interclasses_edicao_por_codigo.sql).
+// UPDATE/DELETE seguem fechados pra "anon" — tudo passa por RPC que valida
+// o código e o prazo de inscrição.
+export async function gerarCodigoTime(edicao: string, modalidade: string, nomeTime: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc('interclasses_gerar_codigo',
+    { p_edicao: edicao, p_modalidade: modalidade, p_nome_time: nomeTime });
+  if (error) throw error;
+  return (data as string | null) ?? null;
+}
+
+export async function validarCodigoTime(edicao: string, modalidade: string, nomeTime: string, codigo: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('interclasses_validar_codigo',
+    { p_edicao: edicao, p_modalidade: modalidade, p_nome_time: nomeTime, p_codigo: codigo });
+  if (error) throw error;
+  return !!data;
+}
+
+export async function removerAlunoComCodigo(codigo: string, id: string) {
+  const { error } = await supabase.rpc('interclasses_remover_aluno', { p_codigo: codigo, p_id: id });
+  if (error) throw error;
+}
+
+export async function atualizarCamisaComCodigo(codigo: string, id: string, camisa: number) {
+  const { error } = await supabase.rpc('interclasses_atualizar_camisa', { p_codigo: codigo, p_id: id, p_camisa: camisa });
+  if (error) throw error;
+}
+
+// Códigos de edição de todos os times (só professor logado — sem policy pra anon).
+export async function buscarCodigosTimes(edicao: string): Promise<{ modalidade: string; time_norm: string; codigo: string }[]> {
+  const { data, error } = await supabase
+    .from('interclasses_times_codigos')
+    .select('modalidade, time_norm, codigo')
+    .eq('edicao', edicao);
+  if (error) throw error;
+  return data || [];
+}
+
 // Renomeia o time de várias inscrições de uma vez — usado pra corrigir/mesclar
 // times que ficaram separados por erro de digitação (ex: "O Pernas de Pau" vs
 // "Os Pernas de Pau").
