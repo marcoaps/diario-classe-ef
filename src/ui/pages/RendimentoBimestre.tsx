@@ -1,5 +1,6 @@
 ﻿import React, { useState, useEffect, useCallback } from 'react';
 import * as XLSX from 'xlsx';
+import { buscarDadosRendimentoEf, calcularRendimentoEf } from '../../domain/rendimentoEf';
 
 const DISCIPLINAS = [
   'L. Portuguesa', 'Arte', 'E. Fisica', 'L. Inglesa', 'L. Espanhola',
@@ -127,6 +128,8 @@ export function RendimentoBimestre() {
   const [salvando, setSalvando] = useState(false);
   const [ultimoSalvo, setUltimoSalvo] = useState<string | null>(null);
   const [alterado, setAlterado] = useState(false);
+  const [importando, setImportando] = useState(false);
+  const [msgImport, setMsgImport] = useState<string | null>(null);
 
   useEffect(() => {
     const check = () => {
@@ -200,6 +203,47 @@ export function RendimentoBimestre() {
       return clone;
     });
     setAlterado(true);
+  };
+
+  // Preenche, só do bimestre aberto, o que o banco (tabela notas) sabe: total de
+  // alunos, transferidos, frequentes e reprovados de E. Fisica. Não mexe nas
+  // outras disciplinas nem nos recuperados (a não ser pra respeitar o novo teto).
+  // Transferido/remanejado segue a regra de situacaoAluno.ts. Fica como rascunho
+  // editável até clicar em Salvar.
+  const importarEdFisicaDoBanco = async () => {
+    if (!confirm(`Importar do banco, para o ${BIMESTRES[bimestre]}, total, transferidos, frequentes e reprovados de E. Fisica?
+
+Os valores atuais dessas colunas serão substituídos nas turmas que têm notas no banco. As outras disciplinas não mudam.`)) return;
+    setImportando(true);
+    setMsgImport(null);
+    try {
+      const { notas, alunos } = await buscarDadosRendimentoEf();
+      const vivo = calcularRendimentoEf(notas, alunos, bimestre + 1);
+      const clone: GrupoData[][] = JSON.parse(JSON.stringify(grupos));
+      let atualizadas = 0;
+      const semDados: string[] = [];
+      clone[bimestre].forEach(grupo => grupo.turmas.forEach(turma => {
+        const v = vivo[turma.serie.replace(/\s/g, '')];
+        if (!v) { semDados.push(turma.serie); return; }
+        turma.total = v.total;
+        turma.trans = v.transf > 0 ? String(v.transf) : '-';
+        turma.freq = v.ativos;
+        turma.reprovados['E. Fisica'] = Math.min(v.rep, v.ativos);
+        // reprovados/recuperados das outras disciplinas não podem passar de freq
+        DISCIPLINAS.forEach(d => {
+          turma.reprovados[d] = Math.min(turma.reprovados[d], turma.freq);
+          turma.recuperados[d] = Math.min(turma.recuperados[d], turma.reprovados[d]);
+        });
+        atualizadas++;
+      }));
+      setGrupos(clone);
+      setAlterado(true);
+      setMsgImport(`${atualizadas} turma(s) atualizada(s)` + (semDados.length ? ` · sem notas no banco (não mudaram): ${semDados.join(', ')}` : '') + '. Confira e clique em Salvar.');
+    } catch {
+      setMsgImport('Não foi possível ler o banco. Nada foi alterado.');
+    } finally {
+      setImportando(false);
+    }
   };
 
   const atualTrans = (gi: number, ti: number, valor: string) => {
@@ -313,6 +357,13 @@ export function RendimentoBimestre() {
           {salvando ? '&#10003; Salvo!' : 'Salvar'}
         </button>
 
+        <button onClick={importarEdFisicaDoBanco} disabled={importando} title="Preenche total, transferidos, frequentes e reprovados de E. Fisica deste bimestre com as notas do banco" style={{
+          padding: '5px 14px', borderRadius: 6, border: '1px solid #1565c0', cursor: importando ? 'default' : 'pointer',
+          background: 'transparent', color: '#90caf9', fontWeight: 600, fontSize: 12,
+        }}>
+          {importando ? 'Lendo banco...' : 'Importar E. Fisica do banco'}
+        </button>
+
         <button onClick={exportarExcel} disabled={exportando} style={{
           padding: '5px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
           background: '#1565c0', color: '#fff', fontWeight: 600, fontSize: 12,
@@ -327,6 +378,12 @@ export function RendimentoBimestre() {
           Limpar
         </button>
       </div>
+
+      {msgImport && (
+        <div style={{ background: '#10263d', color: '#90caf9', fontSize: 12, padding: '6px 24px', borderBottom: '1px solid #1e3a5f' }}>
+          {msgImport}
+        </div>
+      )}
 
       {/* Painel resumo */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, padding: '10px 24px', flexShrink: 0 }}>
