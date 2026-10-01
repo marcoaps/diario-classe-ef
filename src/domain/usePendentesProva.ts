@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../data/supabase';
+import { filtrarTransferenciasEfetivas } from './situacaoAluno';
 import { useRelatorioFrequencia, type Bimestre, type AlunoFrequencia } from './useRelatorioFrequencia';
 
 // Regra de quem precisa fazer a prova (papel/online) num bimestre — usada
@@ -51,9 +52,9 @@ export function useContextoPendentesProva(): ContextoPendentesProva {
   useEffect(() => {
     (async () => {
       const { data: aee } = await supabase.from('alunos_especiais').select('nome');
-      const { data: transf } = await supabase.from('notas').select('nome, turma').or('situacao.ilike.%transferi%,situacao.ilike.%remanej%');
+      const { data: transf } = await supabase.from('notas').select('nome, turma, situacao, data_situacao').or('situacao.ilike.%transferi%,situacao.ilike.%remanej%');
       setAeeNomes(new Set<string>((aee || []).map((e: any) => normNome(e.nome))));
-      setNomesExcluidos(new Set<string>((transf || []).map((e: any) => `${chaveTurma(e.turma)}|${normNome(e.nome)}`)));
+      setNomesExcluidos(new Set<string>(filtrarTransferenciasEfetivas(transf || []).map((e: any) => `${chaveTurma(e.turma)}|${normNome(e.nome)}`)));
     })();
     (async () => {
       const { data: provas } = await supabase.from('provas').select('id, titulo, turma_id');

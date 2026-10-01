@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { cn } from "../AppLayout";
 import { X, FileDown, Save, Upload, Loader2 } from "lucide-react";
 import { salvarNotas, buscarNotas, sincronizarNomesAlunos, supabase } from "../../data/supabase";
+import { buscarRemanejados, ehTransferenciaErroneaDeImportacao } from "../../domain/situacaoAluno";
 import { bimestreAtual } from "../../domain/useRelatorioFrequencia";
 import { formatarNome } from "../../utils/formatarNome";
 import { lerArquivoNotas, escolherMaisRecentes, salvarNotasImportadas, type NotasTurmaImportada } from "../../domain/importarNotasExcel";
@@ -150,11 +151,18 @@ export function GradeReport() {
       // Busca faltas do app para o bimestre
       const faltasPorNome = await buscarFaltasBimestre(turma, bimestre);
 
+      // "Foi Transferido" sem data em aluno remanejado de outra turma é erro de
+      // importação do Simaed (ver situacaoAluno.ts) — mostra como Em Curso.
+      const remanejados = await buscarRemanejados();
+      const situacaoReal = (d: any) =>
+        ehTransferenciaErroneaDeImportacao({ nome: d.nome, turma, situacao: d.situacao, data_situacao: d.data_situacao }, remanejados)
+          ? 'Em Curso' : (d.situacao || 'Em Curso');
+
       setAlunos(data.map((d: any) => ({
         num: d.numero,
         nome: d.nome,
         nota: d.nota,
-        situacao: d.situacao || 'Em Curso',
+        situacao: situacaoReal(d),
         data_situacao: d.data_situacao || '',
         faltas: faltasPorNome[d.nome?.toUpperCase()] ?? (d.faltas ?? 0),
       })));

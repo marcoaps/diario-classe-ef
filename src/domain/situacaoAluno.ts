@@ -1,5 +1,8 @@
+import { supabase } from '../data/supabase';
+
 export interface NotaSituacao {
   nome: string | null;
+  turma?: string | null;
   situacao: string | null;
   data_situacao?: string | null;
 }
@@ -29,4 +32,32 @@ export function situacoesEfetivasDaTurma(
     mapa.set(nome, l.situacao);
   });
   return mapa;
+}
+
+const mesmaTurma = (a?: string | null, b?: string | null) =>
+  (a ?? '').trim().toUpperCase() === (b ?? '').trim().toUpperCase();
+
+// Todas as linhas "Remanejado" da tabela notas (poucas — dezenas na escola
+// toda), com a turma de origem. Usado pra detectar o erro descrito acima.
+export async function buscarRemanejados(): Promise<NotaSituacao[]> {
+  const { data } = await supabase.from('notas').select('nome, turma, situacao').ilike('situacao', '%remanej%');
+  return (data || []) as NotaSituacao[];
+}
+
+// Mesma regra de situacoesEfetivasDaTurma, pra uma linha avulsa (quem já tem
+// a lista de várias turmas ou precisa manter a linha e só trocar a situação).
+export function ehTransferenciaErroneaDeImportacao(linha: NotaSituacao, remanejados: NotaSituacao[]): boolean {
+  if (!linha.nome || !linha.situacao) return false;
+  if (!linha.situacao.toLowerCase().includes('transferi')) return false;
+  if ((linha.data_situacao ?? '').trim()) return false;
+  const nome = normalizarNome(linha.nome);
+  return remanejados.some(r =>
+    r.nome && r.situacao?.toLowerCase().includes('remanej') &&
+    normalizarNome(r.nome) === nome && !mesmaTurma(r.turma, linha.turma));
+}
+
+// Tira da lista as linhas que são esse erro de importação. Sem `remanejados`,
+// usa as próprias linhas (basta que a lista cubra todas as turmas).
+export function filtrarTransferenciasEfetivas<T extends NotaSituacao>(linhas: T[], remanejados: NotaSituacao[] = linhas): T[] {
+  return linhas.filter(l => !ehTransferenciaErroneaDeImportacao(l, remanejados));
 }

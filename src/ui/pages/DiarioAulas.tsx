@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { BookOpen, Download, Loader2, Calendar } from 'lucide-react';
 import { supabase } from '../../data/supabase';
+import { situacoesEfetivasDaTurma, buscarRemanejados } from '../../domain/situacaoAluno';
 import ExcelJS from 'exceljs';
 import { chamarClaudeProxy } from '../../utils/claudeProxy';
 import { getCurriculumData, formatCurriculumForPrompt, getAnoFromTurma } from '../../data/curriculumData';
@@ -177,12 +178,11 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
     if ((alunosData || []).length > 0) {
       const { data: notasData } = await supabase
         .from('notas')
-        .select('nome, situacao')
+        .select('nome, situacao, data_situacao')
         .eq('turma', turma)
         .or('situacao.ilike.%transferi%,situacao.ilike.%remanej%');
-      const situacaoPorNome = new Map<string, string>(
-        (notasData || []).map((n: any) => [n.nome?.toUpperCase(), n.situacao as string])
-      );
+      const remanejadosOutras = (await buscarRemanejados()).filter(r => r.turma !== turma);
+      const situacaoPorNome = situacoesEfetivasDaTurma(notasData || [], remanejadosOutras);
       (alunosData || []).forEach((a: any) => {
         const situacao = situacaoPorNome.get(String(a.nome).toUpperCase());
         if (situacao) transfMap.set(a.id, situacao);
