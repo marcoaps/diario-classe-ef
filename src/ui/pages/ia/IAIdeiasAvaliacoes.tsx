@@ -22,6 +22,14 @@ interface Aluno {
 // ou gráfico, que pedem medidas e posições exatas; nenhuma = a imagem não ajuda.
 type TipoImagemSugerido = 'ilustracao' | 'svg' | 'nenhuma';
 
+// Turmas que o professor atende (18): 6ºF, 7ºB–7ºF, 8ºA–8ºF, 9ºA–9ºF.
+const TURMAS_DO_PROFESSOR: Record<string, string[]> = {
+  '6': ['F'],
+  '7': ['B', 'C', 'D', 'E', 'F'],
+  '8': ['A', 'B', 'C', 'D', 'E', 'F'],
+  '9': ['A', 'B', 'C', 'D', 'E', 'F'],
+};
+
 const ROTULO_TIPO_IMAGEM: Record<TipoImagemSugerido, string> = {
   ilustracao: 'ilustração (banco ou Gemini)',
   svg: 'diagrama (SVG)',
@@ -684,13 +692,16 @@ export function IAIdeiasAvaliacoes() {
         <div className="grid grid-cols-3 gap-3">
           <div>
             <label className="text-xs font-semibold text-on-surface-variant block mb-1">Série *</label>
-            <select value={serie} onChange={e => setSerie(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface">
+            <select value={serie} onChange={e => { setSerie(e.target.value); setTurma(''); }} className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface">
               {['6º Ano','7º Ano','8º Ano','9º Ano'].map(s => <option key={s}>{s}</option>)}
             </select>
           </div>
           <div>
             <label className="text-xs font-semibold text-on-surface-variant block mb-1">Turma</label>
-            <input value={turma} onChange={e => setTurma(e.target.value)} placeholder="Ex: A, B, F..." className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface" />
+            <select value={turma} onChange={e => setTurma(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface">
+              <option value="">Selecione...</option>
+              {(TURMAS_DO_PROFESSOR[serie.replace(/[^0-9]/g, '')] || []).map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
           </div>
           <div>
             <label className="text-xs font-semibold text-on-surface-variant block mb-1">NEE *</label>
@@ -743,7 +754,7 @@ export function IAIdeiasAvaliacoes() {
             </select>
           ) : (
             <div className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface-variant text-sm text-on-surface-variant">
-              {turma.trim() ? 'Nenhum aluno AEE cadastrado nesta turma.' : 'Preencha a Turma para carregar os alunos AEE.'}
+              {turma.trim() ? 'Nenhum aluno AEE cadastrado nesta turma.' : 'Selecione a Turma para carregar os alunos AEE.'}
             </div>
           )}
           {aluno && (
