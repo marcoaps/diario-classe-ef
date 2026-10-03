@@ -761,7 +761,7 @@ export function ResponderProva() {
 
         <div className="bg-[#E3F8EC] border-2 border-[#BEEBD1] rounded-2xl p-4">
           <p className="text-[#0B7A3D] text-sm font-medium text-center">
-            O professor poderá revisar a correção e ajustar a nota final no boletim.
+            Seu professor vai revisar a correção e pode ajustar sua nota final.
           </p>
         </div>
       </div>
