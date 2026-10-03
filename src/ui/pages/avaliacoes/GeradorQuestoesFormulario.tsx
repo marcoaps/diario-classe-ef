@@ -13,7 +13,7 @@ import {
 import type { ParametrosGeracao, TipoQuestao } from './tiposGeradorQuestoes';
 import { POLITICA_TIPOS_QUESTAO } from './regrasElaboracaoItens';
 import { getObjetosConhecimentoDoAno } from '../../../data/curriculumData';
-import { formatarHabilidadeBNCC, getHabilidadesBNCC } from '../../../data/bnccEducacaoFisicaData';
+import { formatarHabilidadeTEKS, getHabilidadesTEKS } from '../../../data/teksEducacaoFisicaData';
 
 const CLASSE_INPUT = 'w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface';
 const CLASSE_LABEL = 'text-xs text-on-surface-variant mb-1 block';
@@ -32,14 +32,15 @@ export interface GeradorQuestoesFormularioProps {
  * Conhecimento só se aplica quando o componente curricular é Educação
  * Física; para os demais componentes, mantemos o campo de texto livre, já
  * que não há base de dados para eles. A Habilidade, quando o componente é
- * Educação Física, vem da BNCC oficial (`bnccEducacaoFisicaData.ts`), que é
- * organizada por bloco de anos (6º/7º e 8º/9º) — também independe do Bimestre.
+ * Educação Física, vem do currículo TEKS do Texas (`teksEducacaoFisicaData.ts`),
+ * organizado por ano (6º, 7º, 8º; 9º = cursos do Ensino Médio) — também independe do Bimestre.
  */
 export function GeradorQuestoesFormulario({ valores, onChange, desabilitado }: GeradorQuestoesFormularioProps) {
   const politicaTipo = POLITICA_TIPOS_QUESTAO[valores.tipoQuestao];
   const ehEducacaoFisica = valores.componenteCurricular === 'Educação Física';
   const objetosConhecimento = ehEducacaoFisica ? getObjetosConhecimentoDoAno(valores.anoEscolar) : [];
-  const habilidadesBNCC = ehEducacaoFisica ? getHabilidadesBNCC(valores.anoEscolar) : [];
+  const habilidadesTEKS = ehEducacaoFisica ? getHabilidadesTEKS(valores.anoEscolar) : [];
+  const topicosTEKS = Array.from(new Set(habilidadesTEKS.map(h => h.topico)));
 
   // Sempre que Ano Escolar mudar (ou o componente deixar de ser Educação
   // Física), garante que Objeto de Conhecimento/Conteúdo e Habilidade fiquem
@@ -52,7 +53,7 @@ export function GeradorQuestoesFormulario({ valores, onChange, desabilitado }: G
       onChange('objetoConhecimento', primeiroObjeto);
       onChange('conteudo', primeiroObjeto);
     }
-    const opcoesHabilidade = habilidadesBNCC.map(formatarHabilidadeBNCC);
+    const opcoesHabilidade = habilidadesTEKS.map(formatarHabilidadeTEKS);
     if (!opcoesHabilidade.includes(valores.habilidadeBncc)) {
       onChange('habilidadeBncc', opcoesHabilidade[0] ?? '');
     }
@@ -131,7 +132,7 @@ export function GeradorQuestoesFormulario({ valores, onChange, desabilitado }: G
       </div>
 
       <div>
-        <label className={CLASSE_LABEL}>Habilidade (BNCC oficial)</label>
+        <label className={CLASSE_LABEL}>Habilidade (padrão TEKS — Texas)</label>
         {ehEducacaoFisica ? (
           <>
             <select
@@ -140,13 +141,17 @@ export function GeradorQuestoesFormulario({ valores, onChange, desabilitado }: G
               disabled={desabilitado}
               className={CLASSE_INPUT}
             >
-              {habilidadesBNCC.map(h => {
-                const opcao = formatarHabilidadeBNCC(h);
-                return <option key={h.codigo} value={opcao}>{opcao}</option>;
-              })}
+              {topicosTEKS.map(t => (
+                <optgroup key={t} label={t}>
+                  {habilidadesTEKS.filter(h => h.topico === t).map(h => {
+                    const opcao = formatarHabilidadeTEKS(h);
+                    return <option key={h.codigo} value={opcao}>{opcao}</option>;
+                  })}
+                </optgroup>
+              ))}
             </select>
             <p className="text-[11px] text-on-surface-variant mt-1">
-              Habilidades oficiais da BNCC para {valores.anoEscolar <= 7 ? '6º e 7º anos' : '8º e 9º anos'} — independem do bimestre.
+              Padrões TEKS (Texas) de Educação Física — {valores.anoEscolar === 9 ? 'cursos do Ensino Médio (§116.62–64)' : `Grade ${valores.anoEscolar}`}; independem do bimestre.
             </p>
           </>
         ) : (
@@ -154,7 +159,7 @@ export function GeradorQuestoesFormulario({ valores, onChange, desabilitado }: G
             value={valores.habilidadeBncc}
             onChange={e => onChange('habilidadeBncc', e.target.value)}
             disabled={desabilitado}
-            placeholder="Ex: EF67EF01"
+            placeholder="Ex: TEKS 116.26(b)(3)(C)"
             className={CLASSE_INPUT}
           />
         )}
