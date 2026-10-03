@@ -264,6 +264,15 @@ export function ProvasOnline() {
 
   useEffect(() => { carregarProvas(); }, []);
 
+  // Link vindo de Avaliações > Resultados (?prova=<id>): abre direto os resultados da prova.
+  useEffect(() => {
+    const provaId = new URLSearchParams(window.location.search).get('prova');
+    if (!provaId) return;
+    supabase.from('provas').select('*').eq('id', provaId).single().then(({ data }) => {
+      if (data) verResultados(data as Prova);
+    });
+  }, []);
+
   const carregarProvas = async () => {
     setLoading(true);
     const { data } = await supabase.from('provas').select('*').order('criado_em', { ascending: false });

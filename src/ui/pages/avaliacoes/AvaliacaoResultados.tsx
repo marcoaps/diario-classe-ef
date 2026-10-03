@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
-import { ArrowLeft, Download, Trophy, AlertCircle, Clock } from 'lucide-react';
+import { ArrowLeft, Download, Trophy, AlertCircle, Clock, Eye, X, Brain, ExternalLink } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 import type { Avaliacao, Aluno } from './tiposCorretorProvas';
@@ -15,6 +15,17 @@ interface Resposta {
   nota_final: number;
   escaneado_em: string;
   online?: boolean;
+  correcoes?: { questao_id: string; pontos_obtidos: number; pontos_total: number; justificativa: string }[];
+}
+
+interface QuestaoOnline {
+  id: string;
+  enunciado: string;
+  tipo: 'multipla_escolha' | 'dissertativa' | 'composta';
+  opcoes: string[] | null;
+  resposta_correta: string | null;
+  pontos: number;
+  subitens?: { letra: string; enunciado: string }[] | null;
 }
 
 interface ResultadoAluno {
@@ -29,6 +40,8 @@ export function AvaliacaoResultados() {
   const [resultados, setResultados] = useState<ResultadoAluno[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState<'todos' | 'corrigidos' | 'pendentes'>('todos');
+  const [questoesOnline, setQuestoesOnline] = useState<QuestaoOnline[]>([]);
+  const [verResposta, setVerResposta] = useState<ResultadoAluno | null>(null);
 
   useEffect(() => {
     async function init() {
@@ -58,10 +71,12 @@ export function AvaliacaoResultados() {
       // -- entre elas, vale a de MAIOR nota, não a mais recente.
       if (av.prova_online_id) {
         const [{ data: online }, { data: qs }] = await Promise.all([
-          supabase.from('respostas').select('aluno_numero, turma_id, respostas, nota, enviado_em')
+          supabase.from('respostas').select('aluno_numero, turma_id, respostas, nota, enviado_em, correcoes_dissertativas')
             .eq('prova_id', av.prova_online_id).order('enviado_em', { ascending: false }),
-          supabase.from('questoes').select('id, tipo, resposta_correta').eq('prova_id', av.prova_online_id),
+          supabase.from('questoes').select('id, enunciado, tipo, opcoes, resposta_correta, pontos, subitens, ordem')
+            .eq('prova_id', av.prova_online_id).order('ordem'),
         ]);
+        setQuestoesOnline((qs || []) as QuestaoOnline[]);
         const valorTotal = (av.valor_total_objetivas || 0) + (av.valor_total_discursivas || 0);
         const melhorPorAluno = new Map<string, { o: NonNullable<typeof online>[number]; aluno: Aluno }>();
         for (const o of online || []) {
@@ -75,7 +90,7 @@ export function AvaliacaoResultados() {
           const nota = ((o.nota ?? 0) / 10) * valorTotal;
           respostasMap.set(aluno.id, {
             aluno_id: aluno.id, respostas: o.respostas || {}, acertos, nota, nota_final: nota,
-            escaneado_em: o.enviado_em, online: true,
+            escaneado_em: o.enviado_em, online: true, correcoes: o.correcoes_dissertativas || [],
           });
         }
       }
@@ -222,6 +237,15 @@ export function AvaliacaoResultados() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {resposta?.online && (
+                  <button
+                    onClick={() => setVerResposta({ aluno, resposta })}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-secondary-container text-on-secondary-container text-xs font-semibold"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    Ver prova
+                  </button>
+                )}
                 {nota !== null ? (
                   <div className="text-right">
                     <p className={['text-lg font-bold', aprovado ? 'text-green-600' : 'text-red-500'].join(' ')}>
@@ -242,6 +266,90 @@ export function AvaliacaoResultados() {
           );
         })}
       </div>
+
+      {verResposta?.resposta && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center md:p-4">
+          <div className="bg-white w-full max-w-lg md:rounded-3xl rounded-t-3xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-gray-100">
+              <div>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Prova do aluno</p>
+                <p className="font-bold text-gray-900">{verResposta.aluno.nome}</p>
+                <p className="text-xs text-gray-400">Turma {verResposta.aluno.turma_id} · Nota {notaDe(verResposta.resposta).toFixed(1)}</p>
+              </div>
+              <button onClick={() => setVerResposta(null)} className="w-10 h-10 rounded-full hover:bg-gray-100 flex items-center justify-center">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="overflow-y-auto px-4 py-4 flex flex-col gap-3">
+              {questoesOnline.map((q, idx) => {
+                const resp = verResposta.resposta!.respostas || {};
+                const blocoIA = (chave: string) => {
+                  const c = verResposta.resposta!.correcoes?.find(x => x.questao_id === chave);
+                  if (!c) return null;
+                  return (
+                    <div className="bg-purple-50 rounded-xl p-2.5 border border-purple-100">
+                      <p className="flex items-center gap-1 text-xs font-bold text-purple-600">
+                        <Brain className="w-3 h-3" /> {c.pontos_obtidos}/{c.pontos_total} pts
+                      </p>
+                      <p className="text-xs text-gray-600 italic">{c.justificativa}</p>
+                    </div>
+                  );
+                };
+                const textoResp = (v?: string) => v?.trim()
+                  ? <p className="text-sm text-gray-800 whitespace-pre-wrap">{v}</p>
+                  : <p className="text-sm italic text-gray-400">(em branco)</p>;
+
+                if (q.tipo === 'multipla_escolha') {
+                  const marcada = resp[q.id];
+                  const acertou = marcada !== undefined && marcada === q.resposta_correta;
+                  const nomeOp = (i: string | null | undefined) => i != null && q.opcoes?.[Number(i)] !== undefined
+                    ? `${String.fromCharCode(65 + Number(i))}) ${q.opcoes[Number(i)]}` : null;
+                  return (
+                    <div key={q.id} className={`rounded-2xl p-3 border-2 ${acertou ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                      <p className="text-xs font-bold text-gray-500 mb-1">Questão {idx + 1} · {acertou ? '✓ Acertou' : '✗ Errou'}</p>
+                      <p className="text-sm text-gray-700 mb-2">{q.enunciado}</p>
+                      <p className="text-xs text-gray-500">Marcou: <span className="font-semibold text-gray-800">{nomeOp(marcada) || '(em branco)'}</span></p>
+                      {!acertou && <p className="text-xs text-gray-500">Correta: <span className="font-semibold text-green-700">{nomeOp(q.resposta_correta) || q.resposta_correta}</span></p>}
+                    </div>
+                  );
+                }
+                if (q.tipo === 'composta' && q.subitens) {
+                  return (
+                    <div key={q.id} className="rounded-2xl p-3 bg-orange-50 border border-orange-200 flex flex-col gap-2">
+                      <p className="text-xs font-bold text-orange-700">Questão {idx + 1} (composta)</p>
+                      <p className="text-sm text-gray-700">{q.enunciado}</p>
+                      {q.subitens.map(s => (
+                        <div key={s.letra} className="bg-white rounded-xl p-2.5 border border-orange-100 flex flex-col gap-1.5">
+                          <p className="text-sm font-bold text-orange-700">{s.letra}) {s.enunciado}</p>
+                          {textoResp(resp[`${q.id}_${s.letra}`])}
+                          {blocoIA(`${q.id}_${s.letra}`)}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                }
+                return (
+                  <div key={q.id} className="rounded-2xl p-3 bg-gray-50 border border-gray-200 flex flex-col gap-1.5">
+                    <p className="text-xs font-bold text-gray-500">Questão {idx + 1} (dissertativa) · {q.pontos} pt{q.pontos !== 1 ? 's' : ''}</p>
+                    <p className="text-sm text-gray-700">{q.enunciado}</p>
+                    <div className="bg-white rounded-xl p-2.5 border border-gray-200">{textoResp(resp[q.id])}</div>
+                    {blocoIA(q.id)}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="p-4 border-t border-gray-100">
+              <button
+                onClick={() => navigate(`/provas?prova=${avaliacao.prova_online_id}`)}
+                className="w-full py-3 rounded-2xl font-bold text-sm text-white flex items-center justify-center gap-2"
+                style={{ background: 'linear-gradient(135deg, #0B7A3D, #149951)' }}
+              >
+                <ExternalLink className="w-4 h-4" /> Ajustar nota (correção manual)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
