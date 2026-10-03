@@ -12,6 +12,7 @@ import { revisarEAprovarQuestao, revisarLote } from './revisaoAutomaticaQuestoes
 import { OPCOES_EXPORTACAO_PADRAO, exportarQuestoesPDF, exportarQuestoesWord } from './exportarQuestoesGerador';
 import type { OpcoesExportacao } from './exportarQuestoesGerador';
 import { salvarQuestoesNoBanco } from './bancoQuestoesData';
+import { aplicarImagensDoBanco } from './imagemDoBancoParaQuestao';
 
 type Etapa = 'formulario' | 'gerando' | 'revisando' | 'buscando_imagens' | 'resultado';
 
@@ -137,7 +138,8 @@ export function GeradorQuestoes() {
       // As imagens NÃO são geradas sozinhas: cada uma pode ter custo (Gemini) e
       // leva de 20 a 40 s. O professor dispara pelo botão "Gerar imagens" na
       // tela de resultado (antes vinham de uma busca por palavra-chave no Pexels).
-      setQuestoes(revisadas);
+      // Banco de imagens do app (grátis) entra sozinho; a IA continua só pelo botão.
+      setQuestoes(await aplicarImagensDoBanco(revisadas));
       setEtapa('resultado');
     } catch (e) {
       setErro(`Erro ao gerar questões: ${mensagemErroAmigavel(e)}`);
@@ -188,7 +190,7 @@ export function GeradorQuestoes() {
           respostaCorreta: correta?.letra ?? q.respostaCorreta ?? undefined,
           dica: q.imagemQuery ?? undefined,
         });
-        handleEditarQuestao(q.idTemporario, { imagemUrl: url });
+        handleEditarQuestao(q.idTemporario, { imagemUrl: url, imagemCredito: null });
       } catch (e) {
         erros.push(`${q.tituloInterno || 'Questão'}: ${(e as Error).message}`);
         if ((e as ErroImagem).fatal) break;
@@ -199,6 +201,10 @@ export function GeradorQuestoes() {
     setGerandoImagemId(null);
     setProgressoImagens(null);
     setErroImagens(erros.join(' · '));
+  }
+
+  async function aplicarBancoNasQuestoes() {
+    setQuestoes(await aplicarImagensDoBanco(questoes));
   }
 
   function opcoesExportacaoAtuais(): OpcoesExportacao {
@@ -389,9 +395,16 @@ export function GeradorQuestoes() {
           {(semImagem > 0 || progressoImagens !== null || erroImagens) && (
             <div className="bg-surface border border-outline-variant rounded-2xl p-4 space-y-2">
               <button
-                onClick={() => gerarImagensDasQuestoes()}
+                onClick={aplicarBancoNasQuestoes}
                 disabled={progressoImagens !== null || semImagem === 0}
                 className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-semibold disabled:opacity-60"
+              >
+                <ImagePlus className="w-4 h-4" /> Usar imagens do banco (grátis)
+              </button>
+              <button
+                onClick={() => gerarImagensDasQuestoes()}
+                disabled={progressoImagens !== null || semImagem === 0}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-secondary-container text-on-secondary-container text-sm font-semibold disabled:opacity-60"
               >
                 {progressoImagens ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
                 {progressoImagens
@@ -416,7 +429,7 @@ export function GeradorQuestoes() {
                 onRevisarNovamente={handleRevisarNovamente}
                 revisando={revisandoIdIndividual === questao.idTemporario}
                 onGerarImagem={gerarImagensDasQuestoes}
-                onRemoverImagem={id => handleEditarQuestao(id, { imagemUrl: null })}
+                onRemoverImagem={id => handleEditarQuestao(id, { imagemUrl: null, imagemCredito: null })}
                 gerandoImagem={gerandoImagemId === questao.idTemporario}
                 bloqueioImagens={progressoImagens !== null}
               />

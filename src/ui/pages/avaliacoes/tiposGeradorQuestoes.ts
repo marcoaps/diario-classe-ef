@@ -179,6 +179,8 @@ export interface QuestaoGerada {
   imagemQuery: string | null;
   /** URL da foto encontrada no Pexels para este item — preenchida depois da geração, por `buscarImagensGerador.ts`. */
   imagemUrl: string | null;
+  /** Crédito exigido pela licença quando a imagem veio do banco de imagens do app (pictogramas ARASAAC, fotos Commons). */
+  imagemCredito?: string | null;
   enunciado: string;
   /** null para dissertativa/resposta_curta, preenchido para os demais tipos. */
   alternativas: Alternativa[] | null;

@@ -89,11 +89,16 @@ export function GeradorQuestoesCard({ questao, onEditar, onRevisarNovamente, rev
           {questao.imagemQuery && (
             <div className="space-y-1.5">
               {questao.imagemUrl ? (
-                <img
-                  src={questao.imagemUrl}
-                  alt={questao.imagemQuery}
-                  className="w-full max-w-sm rounded-xl border border-outline-variant"
-                />
+                <>
+                  <img
+                    src={questao.imagemUrl}
+                    alt={questao.imagemQuery}
+                    className="w-full max-w-sm rounded-xl border border-outline-variant"
+                  />
+                  {questao.imagemCredito && (
+                    <p className="text-[10px] text-on-surface-variant">Imagem do banco do app. {questao.imagemCredito}</p>
+                  )}
+                </>
               ) : gerandoImagem ? (
                 <div className="w-full max-w-sm h-24 rounded-xl border border-dashed border-outline-variant flex items-center justify-center gap-2 text-xs text-on-surface-variant">
                   <Loader2 className="w-4 h-4 animate-spin" /> Gerando imagem (20 a 40 s)...

@@ -130,7 +130,15 @@ export async function exportarQuestoesPDF(
       if (y + alturaImagem > 275) { doc.addPage(); y = 20; }
       try {
         doc.addImage(imagemBase64, 'JPEG', margin, y, larguraImagem, alturaImagem);
-        y += alturaImagem + 4;
+        y += alturaImagem + 1;
+        if (questao.imagemCredito) {
+          doc.setFont('helvetica', 'italic');
+          doc.setFontSize(6);
+          const linhasCredito = doc.splitTextToSize(questao.imagemCredito, larguraUtil);
+          doc.text(linhasCredito, margin, y + 2);
+          y += linhasCredito.length * 2.5 + 2;
+        }
+        y += 2;
       } catch {
         // Se a imagem vier num formato que o jsPDF não reconheça, seguimos sem travar a exportação.
       }
@@ -291,6 +299,9 @@ export async function exportarQuestoesWord(
     const bufferImagem = imagensBuffer[questao.idTemporario];
     if (bufferImagem) {
       paragrafos.push(paragrafoImagem(bufferImagem));
+      if (questao.imagemCredito) {
+        paragrafos.push(par([run(questao.imagemCredito, { it: true, sz: 12 })], AlignmentType.CENTER, 0, 40));
+      }
     }
 
     paragrafos.push(par([run(questao.enunciado, { sz: 24 })], AlignmentType.LEFT, 20, 60));
