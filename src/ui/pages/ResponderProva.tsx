@@ -211,6 +211,17 @@ export function ResponderProva() {
     setVerificandoTentativas(false);
   };
 
+  // Botão da tela de resultado: limpa a tentativa anterior e reinicia a prova
+  // com a mesma identificação (iniciarProva reconta as tentativas no banco).
+  const novaTentativa = () => {
+    setRespostas({});
+    setNota(null);
+    setCorrecoesDissertativas([]);
+    setQuestaoAtual(0);
+    setEtapaCorrecao('');
+    iniciarProva();
+  };
+
   const responder = (chave: string, resposta: string) =>
     setRespostas(prev => ({ ...prev, [chave]: resposta }));
 
@@ -691,6 +702,16 @@ export function ResponderProva() {
                 ? `Tentativa ${tentativaAtual}/${MAX_TENTATIVAS} — vale a maior nota entre elas. Você ainda pode refazer com o mesmo código pra tentar melhorar, sem risco de perder essa nota.`
                 : `Tentativa ${tentativaAtual}/${MAX_TENTATIVAS} — essa foi sua última tentativa. Vale a maior nota entre as ${MAX_TENTATIVAS}.`}
             </p>
+          )}
+
+          {tentativaAtual !== null && tentativaAtual < MAX_TENTATIVAS && (
+            <button onClick={novaTentativa} disabled={verificandoTentativas}
+              className="w-full mb-4 py-3.5 rounded-xl font-black text-white text-base disabled:opacity-50 transition-all"
+              style={{ background: 'linear-gradient(135deg, #0B7A3D, #149951)' }}>
+              {verificandoTentativas
+                ? 'Verificando tentativas...'
+                : tentativaAtual === 1 ? 'Segunda tentativa' : 'Terceira, última tentativa'}
+            </button>
           )}
 
           <div className="flex items-center justify-center gap-4 text-gray-400 text-sm">
