@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { saveAs } from 'file-saver';
 import { ArrowLeft, FileDown, FileText, Loader2, RotateCcw, Sparkles, Upload } from 'lucide-react';
 import { importarProva } from './importar';
+import { lerSoltos, separarSoltos } from './arrastar';
 import { paginarProva } from './layout';
 import { gerarDocx } from './exportarDocx';
 import { gerarPdf } from './exportarPdf';
@@ -35,6 +36,7 @@ export function OrganizadorProvas() {
   const [original, setOriginal] = useState<Prova | null>(null);
   const [origem, setOrigem] = useState<File | null>(null);
   const [anexos, setAnexos] = useState<File[]>([]);
+  const [arrastando, setArrastando] = useState(false);
   const [config, setConfig] = useState<Configuracao>(CONFIG_PADRAO);
   const [organizada, setOrganizada] = useState(false);
   const [importando, setImportando] = useState(false);
@@ -55,18 +57,15 @@ export function OrganizadorProvas() {
 
   const alterar = (parcial: Partial<Configuracao>) => setConfig(c => ({ ...c, ...parcial }));
 
-  async function aoEscolher(e: React.ChangeEvent<HTMLInputElement>) {
-    const arquivo = e.target.files?.[0];
-    e.target.value = '';
-    if (!arquivo) return;
+  async function carregar(arquivo: File, imagens: File[] = []) {
     setErro('');
     setOrganizada(false);
     setOriginal(null);
     setOrigem(arquivo);
-    setAnexos([]);
+    setAnexos(imagens);
     setImportando(true);
     try {
-      const prova = await importarProva(arquivo);
+      const prova = await importarProva(arquivo, imagens);
       setOriginal(prova);
       if (totalDeQuestoes(prova) === 0) setErro('Não foi possível identificar as questões automaticamente. Confira se cada questão começa com "Questão 1", "1." ou "01)".');
     } catch (err) {
@@ -74,6 +73,27 @@ export function OrganizadorProvas() {
       if (!(err instanceof ErroAmigavel)) console.error('[Organizador de Provas]', err);
     } finally {
       setImportando(false);
+    }
+  }
+
+  async function aoEscolher(e: React.ChangeEvent<HTMLInputElement>) {
+    const arquivo = e.target.files?.[0];
+    e.target.value = '';
+    if (arquivo) await carregar(arquivo);
+  }
+
+  // Arrastar o arquivo e a pasta de imagens juntos: tudo é lido de uma vez, sem anexar à mão.
+  async function aoSoltar(e: React.DragEvent) {
+    e.preventDefault();
+    setArrastando(false);
+    if (importando) return;
+    try {
+      const { prova, imagens } = separarSoltos(await lerSoltos(e.dataTransfer));
+      if (!prova) { setErro('Solte o arquivo da prova (DOCX, DOC, PDF ou TXT), de preferência junto com a pasta de imagens.'); return; }
+      await carregar(prova, imagens);
+    } catch (err) {
+      console.error('[Organizador de Provas] arrastar e soltar', err);
+      setErro('Não foi possível ler o que foi solto. Use o botão Importar prova.');
     }
   }
 
@@ -139,14 +159,19 @@ export function OrganizadorProvas() {
         </div>
       </div>
 
-      <div className="bg-surface border border-outline-variant rounded-2xl p-3 space-y-2">
+      <div
+        onDragOver={e => { e.preventDefault(); setArrastando(true); }}
+        onDragLeave={() => setArrastando(false)}
+        onDrop={aoSoltar}
+        className={`bg-surface border rounded-2xl p-3 space-y-2 ${arrastando ? 'border-primary border-2 bg-primary/5' : 'border-outline-variant'}`}
+      >
         <input ref={entrada} type="file" accept=".docx,.doc,.html,.htm,.pdf,.txt" className="hidden" onChange={aoEscolher} />
         <button onClick={() => entrada.current?.click()} disabled={importando} className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-on-primary font-semibold text-sm disabled:opacity-60">
           {importando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
           {importando ? 'Lendo a prova...' : original ? 'Importar outra prova' : 'Importar prova'}
         </button>
         <p className="text-[11px] text-on-surface-variant">
-          Formatos aceitos: DOCX, PDF e TXT (também o .doc exportado pelo gerador). O arquivo original não é alterado. Para manter as imagens, prefira DOCX.
+          Formatos aceitos: DOCX, PDF e TXT (também o .doc exportado pelo gerador). O arquivo original não é alterado. Para manter as imagens, prefira DOCX. Você também pode arrastar o arquivo para cá; se for um .doc salvo pelo Word, arraste junto a pasta "..._arquivos" (selecione os dois no Explorer) e as imagens entram sozinhas.
         </p>
       </div>
 
@@ -164,7 +189,7 @@ export function OrganizadorProvas() {
               <div className="rounded-xl border border-amber-300 bg-amber-50 p-2 space-y-1.5">
                 <p className="text-xs font-semibold text-amber-800">Faltam {original.imagensFaltando} imagem(ns) desta prova</p>
                 <p className="text-[11px] text-amber-800">
-                  Abra a pasta que fica ao lado do arquivo (nome parecido com "{origem ? origem.name.replace(/\.[^.]+$/, '') : 'prova'}_arquivos") e escolha a pasta, ou selecione todas as imagens dela.
+                  O navegador não consegue abrir a pasta sozinho. Mais fácil: arraste o .doc e a pasta "{origem ? origem.name.replace(/\.[^.]+$/, '') : 'prova'}_arquivos" juntos para a caixa de importação acima. Ou escolha a pasta aqui:
                 </p>
                 <div className="flex gap-2">
                   <input ref={pastaImagens} type="file" className="hidden" onChange={aoAnexar} {...({ webkitdirectory: '', directory: '' } as Record<string, string>)} />
