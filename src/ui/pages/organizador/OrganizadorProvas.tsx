@@ -128,7 +128,7 @@ export function OrganizadorProvas() {
   const totalImagens = original ? todosOsBlocos(original).filter(b => b.tipo === 'imagem').length : 0;
 
   return (
-    <div className="py-4 space-y-4">
+    <div className="py-4 pb-36 space-y-4">
       <div className="flex items-center gap-2">
         <button onClick={() => navigate('/ia')} className="p-1 rounded-lg text-on-surface-variant">
           <ArrowLeft className="w-5 h-5" />
