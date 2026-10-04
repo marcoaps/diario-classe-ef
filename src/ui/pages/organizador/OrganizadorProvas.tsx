@@ -11,7 +11,7 @@ import { paginarProva } from './layout';
 import { gerarDocx } from './exportarDocx';
 import { gerarPdf } from './exportarPdf';
 import { PreviaOriginal, PreviaProva } from './PreviaProva';
-import { CONFIG_PADRAO, ErroAmigavel, type Configuracao, type Prova } from './tipos';
+import { CONFIG_PADRAO, ErroAmigavel, todosOsBlocos, totalDeQuestoes, type Configuracao, type Prova } from './tipos';
 
 const SELECT = 'w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface';
 const ROTULO = 'text-xs font-semibold text-on-surface-variant block mb-1';
@@ -40,7 +40,7 @@ export function OrganizadorProvas() {
 
   // O layout é recalculado a partir do original sempre que a configuração muda; o original não é tocado.
   const layout = useMemo(() => {
-    if (!original || !organizada || original.questoes.length === 0) return null;
+    if (!original || !organizada || totalDeQuestoes(original) === 0) return null;
     try {
       return paginarProva(original, config);
     } catch (e) {
@@ -62,7 +62,7 @@ export function OrganizadorProvas() {
     try {
       const prova = await importarProva(arquivo);
       setOriginal(prova);
-      if (prova.questoes.length === 0) setErro('Não foi possível identificar as questões automaticamente. Confira se cada questão começa com "Questão 1", "1." ou "01)".');
+      if (totalDeQuestoes(prova) === 0) setErro('Não foi possível identificar as questões automaticamente. Confira se cada questão começa com "Questão 1", "1." ou "01)".');
     } catch (err) {
       setErro(err instanceof ErroAmigavel ? err.amigavel : 'Não foi possível importar este arquivo.');
       if (!(err instanceof ErroAmigavel)) console.error('[Organizador de Provas]', err);
@@ -98,7 +98,7 @@ export function OrganizadorProvas() {
     }
   }
 
-  const totalImagens = original ? [...original.cabecalho, ...original.questoes.flatMap(q => q.blocos), ...original.rodape].filter(b => b.tipo === 'imagem').length : 0;
+  const totalImagens = original ? todosOsBlocos(original).filter(b => b.tipo === 'imagem').length : 0;
 
   return (
     <div className="py-4 space-y-4">
@@ -130,7 +130,7 @@ export function OrganizadorProvas() {
           <div className="bg-surface border border-outline-variant rounded-2xl p-3 space-y-2">
             <p className="text-sm font-bold text-on-surface">{original.nomeArquivo}</p>
             <p className="text-xs text-on-surface-variant">
-              {original.questoes.length} questão(ões) identificada(s) · {totalImagens} imagem(ns) · {original.cabecalho.length > 0 ? 'cabeçalho encontrado' : 'sem cabeçalho'}
+              {totalDeQuestoes(original)} questão(ões) identificada(s) · {totalImagens} imagem(ns) · {original.secoes.length > 1 ? `${original.secoes.length} cabeçalhos (um por aluno)` : original.secoes[0]?.cabecalho.length ? 'cabeçalho encontrado' : 'sem cabeçalho'}
             </p>
             {original.avisos.map((a, i) => <p key={i} className="text-xs text-amber-700 bg-amber-50 rounded-lg px-2 py-1.5">{a}</p>)}
             <button onClick={() => setVerOriginal(v => !v)} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-surface-variant text-on-surface-variant text-xs font-semibold">
@@ -199,7 +199,7 @@ export function OrganizadorProvas() {
             </div>
             <p className="text-[11px] text-on-surface-variant">Cada questão (texto + imagem + alternativas) é mantida junta. A fonte nunca é reduzida para caber: a questão inteira vai para o próximo espaço.</p>
             <div className="flex gap-2">
-              <button onClick={organizar} disabled={original.questoes.length === 0} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-on-primary font-semibold text-sm disabled:opacity-50">
+              <button onClick={organizar} disabled={totalDeQuestoes(original) === 0} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-on-primary font-semibold text-sm disabled:opacity-50">
                 <Sparkles className="w-4 h-4" /> {organizada ? 'Organizar novamente' : 'Organizar automaticamente'}
               </button>
               {organizada && (
@@ -225,9 +225,9 @@ export function OrganizadorProvas() {
               </button>
             </div>
           </div>
-          {layout.elementosGigantes.length > 0 && (
+          {layout.totalGigantes > 0 && (
             <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-2 py-1.5">
-              {layout.elementosGigantes.length} questão(ões) são maiores que uma coluna inteira e precisaram continuar na coluna seguinte.
+              {layout.totalGigantes} questão(ões) são maiores que uma coluna inteira e precisaram continuar na coluna seguinte.
             </p>
           )}
           <PreviaProva layout={layout} />

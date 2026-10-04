@@ -19,16 +19,24 @@ export interface Questao {
   blocos: Bloco[];
 }
 
-export interface Prova {
-  nomeArquivo: string;
-  /** Tudo antes da primeira questão (escola, disciplina, aluno...). Fica fora das colunas. */
+/** Uma prova completa dentro do arquivo. Arquivo com vários alunos tem uma seção por aluno. */
+export interface Secao {
+  /** Escola, disciplina, aluno... Fica fora das colunas, no topo de uma página nova. */
   cabecalho: Bloco[];
   questoes: Questao[];
   /** Gabarito, créditos etc. depois da última questão. */
   rodape: Bloco[];
+}
+
+export interface Prova {
+  nomeArquivo: string;
+  secoes: Secao[];
   /** Avisos amigáveis para mostrar ao usuário (imagem não lida, lista numerada...). */
   avisos: string[];
 }
+
+export const todosOsBlocos = (p: Prova): Bloco[] => p.secoes.flatMap(s => [...s.cabecalho, ...s.questoes.flatMap(q => q.blocos), ...s.rodape]);
+export const totalDeQuestoes = (p: Prova): number => p.secoes.reduce((n, s) => n + s.questoes.length, 0);
 
 export type Fonte = 'Arial' | 'Times New Roman';
 export type Margens = 'estreita' | 'normal' | 'larga';

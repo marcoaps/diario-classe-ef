@@ -5,7 +5,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { A4 } from './medidas';
 import { baseDaLinha, PADDING_CELULA, type Item, type ItemGrade, type ItemTexto, type Layout } from './layout';
-import type { Prova } from './tipos';
+import { todosOsBlocos, type Prova } from './tipos';
 
 const ASCENT = 0.905; // Arial: ascendente em relação ao tamanho da fonte
 const DESCENT = 0.212;
@@ -97,7 +97,7 @@ export function PreviaProva({ layout }: { layout: Layout }) {
 
 /** Conteúdo importado, sem organização nenhuma (para conferir antes de organizar). */
 export function PreviaOriginal({ prova }: { prova: Prova }) {
-  const blocos = [...prova.cabecalho, ...prova.questoes.flatMap(q => q.blocos), ...prova.rodape];
+  const blocos = todosOsBlocos(prova);
   return (
     <div className="max-h-96 overflow-auto rounded-xl border border-outline-variant bg-white p-3 space-y-1.5 text-[13px] text-black" style={{ fontFamily: 'Arial, sans-serif' }}>
       {blocos.map((b, i) => {

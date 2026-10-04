@@ -5,7 +5,7 @@
 
 import {
   AlignmentType, BorderStyle, ColumnBreak, Document, ImageRun, LineRuleType, Packer, PageBreak, Paragraph, SectionType,
-  Table, TableCell, TableRow, TextRun, WidthType, type FileChild,
+  Table, TableCell, TableRow, TextRun, WidthType, type FileChild, type ISectionOptions,
 } from 'docx';
 import { ehRotuloIsolado } from './questoes';
 import { alturaLinha, calcularTamanhoImagem, ESPACO_APOS_ALTERNATIVA, ESPACO_APOS_PARAGRAFO, ESPACO_ENTRE_COLUNAS, ESPACO_ENTRE_QUESTOES, RECUO_ALTERNATIVA } from './medidas';
@@ -146,42 +146,50 @@ function filhosDoCabecalho(blocos: Bloco[], cfg: Configuracao, layout: Layout): 
 const paragrafoDeQuebra = (quebra: PageBreak | ColumnBreak): Paragraph =>
   new Paragraph({ spacing: { before: 0, after: 0, line: TWIP, lineRule: LineRuleType.EXACT }, children: [quebra] });
 
-/** Monta o documento Word. */
+/** Monta o documento Word: por seção (aluno), o cabeçalho numa seção de 1 coluna, começando em página nova, e o corpo numa seção contínua de 2 colunas. */
 export function montarDocx(prova: Prova, layout: Layout): Document {
   const cfg = layout.config;
   const m = Math.round(layout.geo.margem * TWIP);
   const pagina = { size: A4_TWIPS, margin: { top: m, bottom: m, left: m, right: m, header: 300, footer: 300 } };
-
-  const corpo: FileChild[] = [];
-  const elementos: Bloco[][] = [...prova.questoes.map(q => q.blocos), ...(prova.rodape.length > 0 ? [prova.rodape] : [])];
-  const jaEscritos = new Set<number>();
-  let anterior: (typeof layout.colunas)[number] | null = null;
-  for (const col of layout.colunas) {
-    // elemento gigante (maior que uma coluna): vai inteiro na 1ª coluna e o Word o deixa fluir
-    const novos = col.indices.filter(i => !jaEscritos.has(i));
-    if (novos.length === 0) continue;
-    if (anterior) corpo.push(paragrafoDeQuebra(col.pagina !== anterior.pagina ? new PageBreak() : new ColumnBreak()));
-    for (const idx of novos) {
-      jaEscritos.add(idx);
-      corpo.push(...filhosDoElemento(elementos[idx], layout.geo.larguraColuna, cfg, layout, ESPACO_ENTRE_QUESTOES, layout.elementosGigantes.includes(idx)));
-    }
-    anterior = col;
-  }
-
-  const cabecalho = filhosDoCabecalho(prova.cabecalho, cfg, layout);
   const duasColunas = cfg.colunas === 2;
-  const secoes = duasColunas
-    ? [
-        ...(cabecalho.length > 0 ? [{ properties: { page: pagina }, children: cabecalho }] : []),
-        { properties: { type: cabecalho.length > 0 ? SectionType.CONTINUOUS : SectionType.NEXT_PAGE, page: pagina, column: { count: 2, space: ESPACO_ENTRE_COLUNAS * TWIP, equalWidth: true } }, children: corpo },
-      ]
-    : [{ properties: { page: pagina }, children: [...cabecalho, ...corpo] }];
+
+  const secoesDoc: ISectionOptions[] = [];
+  const secoesComConteudo = prova.secoes.filter(x => x.cabecalho.length > 0 || x.questoes.length > 0 || x.rodape.length > 0);
+  secoesComConteudo.forEach((secao, k) => {
+    const plano = layout.secoes[k];
+    const corpo: FileChild[] = [];
+    const elementos: Bloco[][] = [...secao.questoes.map(q => q.blocos), ...(secao.rodape.length > 0 ? [secao.rodape] : [])];
+    const jaEscritos = new Set<number>();
+    let anterior: (typeof plano.colunas)[number] | null = null;
+    for (const col of plano.colunas) {
+      // elemento gigante (maior que uma coluna): vai inteiro na 1ª coluna e o Word o deixa fluir
+      const novos = col.indices.filter(i => !jaEscritos.has(i));
+      if (novos.length === 0) continue;
+      if (anterior) corpo.push(paragrafoDeQuebra(col.pagina !== anterior.pagina ? new PageBreak() : new ColumnBreak()));
+      for (const idx of novos) {
+        jaEscritos.add(idx);
+        corpo.push(...filhosDoElemento(elementos[idx], layout.geo.larguraColuna, cfg, layout, ESPACO_ENTRE_QUESTOES, plano.gigantes.includes(idx)));
+      }
+      anterior = col;
+    }
+    const cabecalho = filhosDoCabecalho(secao.cabecalho, cfg, layout);
+    const comecaEmPaginaNova = k > 0;
+    if (duasColunas) {
+      if (cabecalho.length > 0) {
+        secoesDoc.push({ properties: comecaEmPaginaNova ? { type: SectionType.NEXT_PAGE, page: pagina } : { page: pagina }, children: cabecalho });
+      }
+      const tipo = cabecalho.length > 0 || !comecaEmPaginaNova ? SectionType.CONTINUOUS : SectionType.NEXT_PAGE;
+      secoesDoc.push({ properties: { type: tipo, page: pagina, column: { count: 2, space: ESPACO_ENTRE_COLUNAS * TWIP, equalWidth: true } }, children: corpo });
+    } else {
+      secoesDoc.push({ properties: comecaEmPaginaNova ? { type: SectionType.NEXT_PAGE, page: pagina } : { page: pagina }, children: [...cabecalho, ...corpo] });
+    }
+  });
 
   return new Document({
     creator: 'Organizador de Provas',
     title: prova.nomeArquivo,
     styles: { default: { document: { run: { font: cfg.fonte, size: Math.round(cfg.tamanho * 2) } } } },
-    sections: secoes,
+    sections: secoesDoc,
   });
 }
 

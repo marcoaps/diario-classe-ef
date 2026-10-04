@@ -12,7 +12,7 @@ import {
   quebrarLinhas, type Geometria, type LinhaQuebrada,
 } from './medidas';
 import { ehRotuloIsolado } from './questoes';
-import { textoPlano, type Bloco, type Configuracao, type Fonte, type Prova, type Trecho } from './tipos';
+import { textoPlano, type Bloco, type Configuracao, type Fonte, type Prova, type Secao, type Trecho } from './tipos';
 
 // ── Tipos do resultado ───────────────────────────────────────────────────────
 
@@ -42,15 +42,23 @@ export interface Pagina { numero: number; itens: Item[] }
 /** Que elementos (questões, na ordem; o rodapé é o último) vão em cada coluna. */
 export interface ColunaPlano { pagina: number; coluna: number; indices: number[] }
 
+/** Plano de uma seção (um aluno/prova): começa sempre numa página nova. */
+export interface LayoutSecao {
+  paginaInicial: number;
+  alturaCabecalho: number;
+  /** Colunas na ordem; `pagina` é absoluta no documento e `indices` são os da seção. */
+  colunas: ColunaPlano[];
+  /** Elementos maiores que uma coluna cheia (continuam na coluna seguinte). */
+  gigantes: number[];
+  totalElementos: number;
+}
+
 export interface Layout {
   config: Configuracao;
   geo: Geometria;
   paginas: Pagina[];
-  colunas: ColunaPlano[];
-  alturaCabecalho: number;
-  totalElementos: number;
-  /** Elementos tão grandes que não cabem numa coluna vazia (o Word os deixa fluir sozinho). */
-  elementosGigantes: number[];
+  secoes: LayoutSecao[];
+  totalGigantes: number;
 }
 
 export const ESPACO_APOS_CABECALHO = 10;
@@ -265,12 +273,11 @@ function equilibrarUltimaPagina(colunas: ColunaTrab[], ncol: number, alturaPagin
   c2.usada = usadaPor(c2.blocos);
 }
 
-/** paginateExam + createTwoColumnLayout: distribui os blocos pelas colunas e páginas. */
-export function paginarProva(prova: Prova, cfg: Configuracao): Layout {
-  const geo = geometria(cfg);
-  const cab = formatarCabecalho(prova.cabecalho, cfg, geo);
-  const elementos: BlocoLayout[] = prova.questoes.map(q => formatarQuestao(q.blocos, geo.larguraColuna, cfg, geo));
-  if (prova.rodape.length > 0) elementos.push(formatarQuestao(prova.rodape, geo.larguraColuna, cfg, geo));
+/** createTwoColumnLayout + paginateExam de UMA seção: o cabeçalho no topo e as questões nas colunas. */
+function paginarSecao(secao: Secao, cfg: Configuracao, geo: Geometria, paginaInicial: number): { paginas: Pagina[]; info: LayoutSecao } {
+  const cab = formatarCabecalho(secao.cabecalho, cfg, geo);
+  const elementos: BlocoLayout[] = secao.questoes.map(q => formatarQuestao(q.blocos, geo.larguraColuna, cfg, geo));
+  if (secao.rodape.length > 0) elementos.push(formatarQuestao(secao.rodape, geo.larguraColuna, cfg, geo));
 
   const colunas: ColunaTrab[] = [];
   const gigantes: number[] = [];
@@ -335,8 +342,23 @@ export function paginarProva(prova: Prova, cfg: Configuracao): Layout {
 
   const plano: ColunaPlano[] = colunas
     .filter(c => c.blocos.length > 0)
-    .map(c => ({ pagina: c.pagina, coluna: c.coluna, indices: Array.from(new Set(c.blocos.map(b => b.indice))) }));
-  return { config: cfg, geo, paginas, colunas: plano, alturaCabecalho: cab.altura, totalElementos: elementos.length, elementosGigantes: gigantes };
+    .map(c => ({ pagina: paginaInicial + c.pagina, coluna: c.coluna, indices: Array.from(new Set(c.blocos.map(b => b.indice))) }));
+  return { paginas, info: { paginaInicial, alturaCabecalho: cab.altura, colunas: plano, gigantes, totalElementos: elementos.length } };
+}
+
+/** paginateExam: cada seção (aluno) começa numa página nova, com o cabeçalho no topo. */
+export function paginarProva(prova: Prova, cfg: Configuracao): Layout {
+  const geo = geometria(cfg);
+  const paginas: Pagina[] = [];
+  const secoes: LayoutSecao[] = [];
+  for (const secao of prova.secoes) {
+    if (secao.cabecalho.length === 0 && secao.questoes.length === 0 && secao.rodape.length === 0) continue;
+    const r = paginarSecao(secao, cfg, geo, paginas.length);
+    r.paginas.forEach(p => paginas.push({ numero: paginas.length + 1, itens: p.itens }));
+    secoes.push(r.info);
+  }
+  if (paginas.length === 0) paginas.push({ numero: 1, itens: [] });
+  return { config: cfg, geo, paginas, secoes, totalGigantes: secoes.reduce((n, x) => n + x.gigantes.length, 0) };
 }
 
 export const dimensoesPagina = { largura: A4.w, altura: A4.h };

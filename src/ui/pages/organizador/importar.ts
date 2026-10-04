@@ -155,25 +155,23 @@ async function emitirTabela(tabela: HTMLTableElement, ctx: Contexto): Promise<vo
   for (const l of celulas) for (const c of l) await percorrer(c, ctx);
 }
 
-function envolver(el: Element): Element {
-  const p = document.createElement('p');
-  p.appendChild(el.cloneNode(true));
-  return p;
-}
-
 async function percorrer(no: Element, ctx: Contexto): Promise<void> {
+  // texto solto e elementos inline vizinhos (ex.: "Aluno(a): <strong>Ana</strong> Nº: ...") formam UM parágrafo
+  let pendentes: Node[] = [];
+  const esvaziar = async () => {
+    if (pendentes.length === 0) return;
+    const p = document.createElement('p');
+    pendentes.forEach(n => p.appendChild(n.cloneNode(true)));
+    pendentes = [];
+    await emitirParagrafo(p, ctx);
+  };
   for (const filho of Array.from(no.childNodes)) {
-    if (filho.nodeType === Node.TEXT_NODE) {
-      if ((filho.textContent || '').trim()) {
-        const solto = document.createElement('p');
-        solto.textContent = filho.textContent;
-        await emitirParagrafo(solto, ctx);
-      }
-      continue;
-    }
+    if (filho.nodeType === Node.TEXT_NODE) { pendentes.push(filho); continue; }
     if (filho.nodeType !== Node.ELEMENT_NODE) continue;
     const el = filho as Element;
     if (IGNORADOS.has(el.tagName)) continue;
+    if (!BLOCOS.has(el.tagName)) { pendentes.push(el); continue; }
+    await esvaziar();
     if (el.tagName === 'TABLE') { await emitirTabela(el as HTMLTableElement, ctx); continue; }
     if (el.tagName === 'UL' || el.tagName === 'OL') {
       let n = 0;
@@ -186,10 +184,10 @@ async function percorrer(no: Element, ctx: Contexto): Promise<void> {
       }
       continue;
     }
-    if (BLOCOS.has(el.tagName) && temBloco(el)) { await percorrer(el, ctx); continue; }
-    // parágrafo, cabeçalho, ou inline solto (span, img...)
-    await emitirParagrafo(BLOCOS.has(el.tagName) ? el : envolver(el), ctx);
+    if (temBloco(el)) { await percorrer(el, ctx); continue; }
+    await emitirParagrafo(el, ctx);
   }
+  await esvaziar();
 }
 
 async function htmlParaBlocos(html: string, ctx: Contexto): Promise<void> {
@@ -304,10 +302,11 @@ export async function importarProva(arquivo: File): Promise<Prova> {
   });
   if (limpo.length === 0) throw new ErroAmigavel('O arquivo não tem conteúdo para organizar.');
 
-  const partes = identificarQuestoes(limpo);
-  const avisos = [...ctx.avisos];
+  const { secoes, avisosSecoes } = identificarQuestoes(limpo);
+  const avisos = [...ctx.avisos, ...avisosSecoes];
+  if (secoes.length > 1) avisos.push(`Foram encontrados ${secoes.length} cabeçalhos (um por aluno). Cada um ficará no topo de uma página nova, seguido das questões em duas colunas.`);
   if (ctx.imagensPerdidas > 0) avisos.push(`${ctx.imagensPerdidas} imagem(ns) não puderam ser processadas e ficaram de fora. Se o arquivo veio de um .doc salvo pelo Word, importe a versão .docx.`);
   if (ctx.listaAuto) avisos.push('Havia listas numeradas automáticas; os números foram escritos como "1.", "2." no texto.');
   if (trocados.n > 0) avisos.push(`${trocados.n} símbolo(s) sem suporte na fonte foram trocados por "?".`);
-  return { nomeArquivo: arquivo.name, ...partes, avisos };
+  return { nomeArquivo: arquivo.name, secoes, avisos };
 }

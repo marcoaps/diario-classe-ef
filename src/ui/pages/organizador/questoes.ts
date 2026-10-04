@@ -1,7 +1,7 @@
 // Organizador de Provas — reconhece cabeçalho, questões, alternativas e rodapé a partir da
 // lista de blocos lida do arquivo. Não muda nenhuma palavra: só decide o que pertence a quê.
 
-import { ehTexto, textoPlano, type Bloco, type Prova, type Questao, type Trecho } from './tipos';
+import { ehTexto, textoPlano, type Bloco, type Questao, type Secao, type Trecho } from './tipos';
 
 const RE_QUESTAO = /^\s*QUEST[ÃA]O\s*(?:N[º°.o]*\s*)?0*(\d+)/i; // "Questão 01", "QUESTÃO 1 -"
 const RE_NUMERO = /^\s*0*(\d{1,3})(?:\s*\)\s*|\.\s+|\s+[-–—]\s+)\S/; // "1. ", "01)", "1 - "
@@ -66,34 +66,121 @@ function aparar(trechos: Trecho[]): Trecho[] {
 
 // ── Agrupamento ──────────────────────────────────────────────────────────────
 
+// Linhas típicas de cabeçalho de prova (para achar onde começa o cabeçalho do aluno seguinte).
+const RE_CABECALHO = /\b(alun[oa]|\(a\)|turma|escola|professor[a]?|disciplina|s[ée]rie|nome|data)\b[^\n]{0,40}:|^\s*avalia[çc][ãa]o\b/i;
+
 /**
- * Divide os blocos em cabeçalho, questões e rodapé. Cada questão leva tudo até a próxima
- * (texto + imagens + alternativas = um bloco só). Os padrões "N." só valem se seguirem a
+ * Num arquivo com vários alunos, o cabeçalho do aluno seguinte vem colado no fim da última
+ * questão do anterior. Separa o que ainda é da questão, o rodapé (gabarito) e o cabeçalho novo:
+ * o cabeçalho começa depois da última alternativa (ou na primeira imagem/linha de cabeçalho).
+ */
+function separarCabecalhoSeguinte(fatia: Bloco[]): { questao: Bloco[]; rodape: Bloco[]; cabecalho: Bloco[] } {
+  let iAlt = -1;
+  fatia.forEach((b, i) => { if (ehAlternativa(b)) iAlt = i; });
+  const ehCabecalho = (b: Bloco) => b.tipo === 'imagem' || (b.tipo === 'texto' && RE_CABECALHO.test(textoPlano(b.trechos)));
+  let corte = iAlt >= 0 ? iAlt + 1 : fatia.findIndex((b, i) => i > 0 && ehCabecalho(b));
+  if (corte < 0) corte = fatia.length;
+  const resto = fatia.slice(corte);
+  const iRod = resto.findIndex(b => b.tipo === 'texto' && RE_RODAPE.test(textoPlano(b.trechos)));
+  if (iRod < 0) return { questao: fatia.slice(0, corte), rodape: [], cabecalho: resto };
+  const iCab = resto.findIndex((b, i) => i > iRod && ehCabecalho(b));
+  return {
+    questao: fatia.slice(0, corte),
+    rodape: resto.slice(iRod, iCab < 0 ? resto.length : iCab),
+    cabecalho: iCab < 0 ? [] : resto.slice(iCab),
+  };
+}
+
+/** Une as linhas "Créditos das imagens — A · B" de várias folhas numa só e tira linhas repetidas. */
+function mesclarRodape(blocos: Bloco[]): Bloco[] {
+  const RE_CRED = /^\s*cr[eé]ditos das imagens\s*[—–-]\s*/i;
+  const partes: string[] = [];
+  const vistos = new Set<string>();
+  const saida: Bloco[] = [];
+  let posCred = -1;
+  for (const b of blocos) {
+    const t = b.tipo === 'texto' ? textoPlano(b.trechos) : '';
+    if (RE_CRED.test(t)) {
+      t.replace(RE_CRED, '').split(/\s*·\s*/).map(x => x.trim()).filter(Boolean).forEach(p => { if (!partes.includes(p)) partes.push(p); });
+      if (posCred < 0) { posCred = saida.length; saida.push(b); }
+      continue;
+    }
+    const chave = b.tipo === 'texto' ? t : JSON.stringify(b).slice(0, 80);
+    if (b.tipo === 'texto' && vistos.has(chave)) continue;
+    vistos.add(chave);
+    saida.push(b);
+  }
+  if (posCred >= 0) saida[posCred] = { tipo: 'texto', trechos: [{ t: 'Créditos das imagens — ' + partes.join(' · ') }] };
+  return saida;
+}
+
+const prepararQuestao = (fatia: Bloco[]): Questao => ({
+  blocos: fatia.flatMap(separarAlternativas).map(b => (b.tipo === 'texto' && ehAlternativa(b) ? { ...b, tipo: 'alt' as const } : b)),
+});
+
+/**
+ * Divide os blocos em seções (uma por aluno/prova), cada uma com cabeçalho, questões e rodapé.
+ * Cada questão leva tudo até a próxima (texto + imagens + alternativas = um bloco só). Uma nova
+ * seção começa quando a numeração volta para "Questão 1". Os padrões "N." só valem se seguirem a
  * sequência (1, 2, 3...), para "1.5 m" ou uma data não abrirem questão falsa.
  */
-export function identificarQuestoes(blocos: Bloco[]): Pick<Prova, 'cabecalho' | 'questoes' | 'rodape'> {
-  const inicios: number[] = [];
+export function identificarQuestoes(blocos: Bloco[]): { secoes: Secao[]; avisosSecoes: string[] } {
+  const inicios: { idx: number; novaSecao: boolean }[] = [];
   let ultimo = 0;
   blocos.forEach((b, idx) => {
     const r = numeroDeQuestao(b);
     if (!r) return;
-    const valido = r.porPalavra || (r.n === ultimo + 1 || (inicios.length === 0 && r.n <= 1));
-    if (valido) { inicios.push(idx); ultimo = r.n; }
+    const reinicio = r.porPalavra && r.n === 1 && inicios.length > 0;
+    const valido = r.porPalavra || r.n === ultimo + 1 || (inicios.length === 0 && r.n <= 1);
+    if (valido) { inicios.push({ idx, novaSecao: reinicio }); ultimo = r.n; }
   });
-  if (inicios.length === 0) return { cabecalho: blocos, questoes: [], rodape: [] };
+  if (inicios.length === 0) return { secoes: [{ cabecalho: blocos, questoes: [], rodape: [] }], avisosSecoes: [] };
 
-  const cabecalho = blocos.slice(0, inicios[0]);
-  const questoes: Questao[] = [];
-  let rodape: Bloco[] = [];
-  inicios.forEach((ini, k) => {
-    let fatia = blocos.slice(ini, k + 1 < inicios.length ? inicios[k + 1] : blocos.length);
-    if (k === inicios.length - 1) {
-      // gabarito/créditos depois da última questão não pertencem a ela
-      const iAlt = fatia.findIndex(ehAlternativa);
-      const iRod = fatia.findIndex((b, idx) => idx > Math.max(iAlt, 0) && b.tipo === 'texto' && RE_RODAPE.test(textoPlano(b.trechos)));
-      if (iRod > 0) { rodape = fatia.slice(iRod); fatia = fatia.slice(0, iRod); }
-    }
-    questoes.push({ blocos: fatia.flatMap(separarAlternativas).map(b => (b.tipo === 'texto' && ehAlternativa(b) ? { ...b, tipo: 'alt' as const } : b)) });
+  // grupos de inícios por seção
+  const grupos: number[][] = [];
+  inicios.forEach(i => { if (i.novaSecao || grupos.length === 0) grupos.push([]); grupos[grupos.length - 1].push(i.idx); });
+
+  const secoes: Secao[] = [];
+  let repetidos = 0;
+  let inicioCabecalho = 0;
+  grupos.forEach((idxs, g) => {
+    const ultimaSecao = g === grupos.length - 1;
+    const primeira = idxs[0];
+    const cabecalho = blocos.slice(inicioCabecalho, primeira);
+    const limite = ultimaSecao ? blocos.length : grupos[g + 1][0];
+    const questoes: Questao[] = [];
+    let rodape: Bloco[] = [];
+    const creditosSoltos: Bloco[] = [];
+    idxs.forEach((ini, k) => {
+      const fim = k + 1 < idxs.length ? idxs[k + 1] : limite;
+      let fatia = blocos.slice(ini, fim);
+      if (k === idxs.length - 1) {
+        if (ultimaSecao) {
+          // gabarito/créditos depois da última questão não pertencem a ela
+          const iAlt = fatia.findIndex(ehAlternativa);
+          const iRod = fatia.findIndex((b, idx) => idx > Math.max(iAlt, 0) && b.tipo === 'texto' && RE_RODAPE.test(textoPlano(b.trechos)));
+          if (iRod > 0) { rodape = fatia.slice(iRod); fatia = fatia.slice(0, iRod); }
+        } else {
+          const sep = separarCabecalhoSeguinte(fatia);
+          fatia = sep.questao;
+          rodape = sep.rodape;
+          inicioCabecalho = limite - sep.cabecalho.length;
+        }
+      }
+      // cabeçalho do MESMO aluno repetido no meio (folha de continuação de um arquivo antigo): sai
+      // da questão; os créditos de imagem que vinham junto são preservados no rodapé
+      if (!(k === idxs.length - 1 && !ultimaSecao)) {
+        const sep = separarCabecalhoSeguinte(fatia);
+        if (sep.cabecalho.some(b => b.tipo === 'texto' && /alun[oa]/i.test(textoPlano(b.trechos)))) {
+          fatia = sep.questao;
+          creditosSoltos.push(...sep.rodape);
+          repetidos++;
+        }
+      }
+      questoes.push(prepararQuestao(fatia));
+    });
+    secoes.push({ cabecalho, questoes, rodape: mesclarRodape([...creditosSoltos, ...rodape]) });
   });
-  return { cabecalho, questoes, rodape };
+  const avisosSecoes = repetidos > 0 ? [`${repetidos} cabeçalho(s) repetido(s) de folhas de continuação foram removidos; o cabeçalho de cada aluno aparece uma vez, no topo.`] : [];
+  return { secoes, avisosSecoes };
 }
