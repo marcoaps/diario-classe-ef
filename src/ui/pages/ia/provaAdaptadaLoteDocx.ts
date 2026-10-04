@@ -66,3 +66,24 @@ export async function docxLote(d: DadosLote): Promise<Blob> {
   const prova = await provaDoLote(d);
   return gerarDocx(prova, paginarProva(prova, CONFIG_PADRAO));
 }
+
+/** Pedido de ilustração de uma questão (guia do professor, na folha final). */
+export interface PedidoImagem { numero: number; titulo?: string; prompt: string }
+
+/**
+ * Word (.docx) da prova de UM aluno: página(s) do aluno e, no fim, a folha do professor com o
+ * gabarito, as orientações e o guia de prompts de imagem.
+ */
+export async function docxProvaIndividual(p: ProvaDoAluno, tema: string, guia: PedidoImagem[]): Promise<Blob> {
+  const dados: DadosLote = { provas: [p], tema, logoSrc: '' };
+  const gabarito = secaoDoGabarito(dados);
+  if (guia.length > 0) {
+    gabarito.rodape.push(texto(negrito('PROMPTS DE IMAGEM (guia do professor — não imprimir; cole um por vez no gerador de imagem)')));
+    for (const g of guia) {
+      gabarito.rodape.push(texto(negrito(`Imagem da questão ${g.numero}${g.titulo ? ` (${g.titulo})` : ''}`)));
+      gabarito.rodape.push(texto({ t: g.prompt }));
+    }
+  }
+  const prova: Prova = { nomeArquivo: `Avaliação Adaptada — ${p.nomeAluno}`, secoes: [await secaoDoAluno(p, tema), gabarito], imagensFaltando: 0, avisos: [] };
+  return gerarDocx(prova, paginarProva(prova, CONFIG_PADRAO));
+}
