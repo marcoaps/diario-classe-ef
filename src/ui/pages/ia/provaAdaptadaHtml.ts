@@ -186,10 +186,9 @@ function questaoWordHtml(q: QuestaoProva, dens: Densidade): string {
 }
 
 export function gabaritoHtml(questoes: QuestaoProva[]): string {
-  return `<div style="margin-top:6px;border-top:2px dashed #94a3b8;padding-top:8px;">
-      <div style="font-weight:bold;font-size:10pt;margin-bottom:4px;">GABARITO</div>
-      <div style="font-size:10pt;">${questoes.map(q => q.numero + ') ' + q.resposta).join('   ')}</div>
-    </div>`;
+  // Parágrafos simples, sem borda: no Word a borda tracejada virava uma linha que não dava para selecionar/apagar.
+  return `<p style="margin:6pt 0 4pt 0;font-weight:bold;font-size:10pt;">GABARITO</p>
+      <p style="margin:0;font-size:10pt;">${questoes.map(q => q.numero + ') ' + q.resposta).join('   ')}</p>`;
 }
 
 /**
