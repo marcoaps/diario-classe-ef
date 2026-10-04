@@ -30,7 +30,11 @@ const nomeBase = (nome: string): string => nome.replace(/\.[^.]+$/, '').replace(
 export function OrganizadorProvas() {
   const navigate = useNavigate();
   const entrada = useRef<HTMLInputElement>(null);
+  const pastaImagens = useRef<HTMLInputElement>(null);
+  const arquivosImagens = useRef<HTMLInputElement>(null);
   const [original, setOriginal] = useState<Prova | null>(null);
+  const [origem, setOrigem] = useState<File | null>(null);
+  const [anexos, setAnexos] = useState<File[]>([]);
   const [config, setConfig] = useState<Configuracao>(CONFIG_PADRAO);
   const [organizada, setOrganizada] = useState(false);
   const [importando, setImportando] = useState(false);
@@ -58,6 +62,8 @@ export function OrganizadorProvas() {
     setErro('');
     setOrganizada(false);
     setOriginal(null);
+    setOrigem(arquivo);
+    setAnexos([]);
     setImportando(true);
     try {
       const prova = await importarProva(arquivo);
@@ -65,6 +71,27 @@ export function OrganizadorProvas() {
       if (totalDeQuestoes(prova) === 0) setErro('Não foi possível identificar as questões automaticamente. Confira se cada questão começa com "Questão 1", "1." ou "01)".');
     } catch (err) {
       setErro(err instanceof ErroAmigavel ? err.amigavel : 'Não foi possível importar este arquivo.');
+      if (!(err instanceof ErroAmigavel)) console.error('[Organizador de Provas]', err);
+    } finally {
+      setImportando(false);
+    }
+  }
+
+  // Imagens que o Word guardou numa pasta ao lado do .doc: o usuário anexa os arquivos e a prova é lida de novo.
+  async function aoAnexar(e: React.ChangeEvent<HTMLInputElement>) {
+    const lista: File[] = e.target.files ? Array.from(e.target.files) : [];
+    const escolhidos = lista.filter(f => f.type.startsWith('image/') || /\.(jpe?g|png|gif|bmp|webp)$/i.test(f.name));
+    e.target.value = '';
+    if (!origem || escolhidos.length === 0) { if (origem) setErro('Nenhuma imagem encontrada nos arquivos escolhidos.'); return; }
+    setErro('');
+    setImportando(true);
+    try {
+      const todos = [...anexos, ...escolhidos];
+      const prova = await importarProva(origem, todos);
+      setAnexos(todos);
+      setOriginal(prova);
+    } catch (err) {
+      setErro(err instanceof ErroAmigavel ? err.amigavel : 'Não foi possível ler as imagens anexadas.');
       if (!(err instanceof ErroAmigavel)) console.error('[Organizador de Provas]', err);
     } finally {
       setImportando(false);
@@ -133,6 +160,24 @@ export function OrganizadorProvas() {
               {totalDeQuestoes(original)} questão(ões) identificada(s) · {totalImagens} imagem(ns) · {original.secoes.length > 1 ? `${original.secoes.length} cabeçalhos (um por aluno)` : original.secoes[0]?.cabecalho.length ? 'cabeçalho encontrado' : 'sem cabeçalho'}
             </p>
             {original.avisos.map((a, i) => <p key={i} className="text-xs text-amber-700 bg-amber-50 rounded-lg px-2 py-1.5">{a}</p>)}
+            {original.imagensFaltando > 0 && (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 p-2 space-y-1.5">
+                <p className="text-xs font-semibold text-amber-800">Faltam {original.imagensFaltando} imagem(ns) desta prova</p>
+                <p className="text-[11px] text-amber-800">
+                  Abra a pasta que fica ao lado do arquivo (nome parecido com "{origem ? origem.name.replace(/\.[^.]+$/, '') : 'prova'}_arquivos") e escolha a pasta, ou selecione todas as imagens dela.
+                </p>
+                <div className="flex gap-2">
+                  <input ref={pastaImagens} type="file" className="hidden" onChange={aoAnexar} {...({ webkitdirectory: '', directory: '' } as Record<string, string>)} />
+                  <input ref={arquivosImagens} type="file" accept="image/*" multiple className="hidden" onChange={aoAnexar} />
+                  <button onClick={() => pastaImagens.current?.click()} disabled={importando} className="flex-1 px-3 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-semibold disabled:opacity-60">
+                    Anexar imagens da pasta
+                  </button>
+                  <button onClick={() => arquivosImagens.current?.click()} disabled={importando} className="px-3 py-1.5 rounded-xl bg-surface-variant text-on-surface-variant text-xs font-semibold disabled:opacity-60">
+                    Escolher arquivos
+                  </button>
+                </div>
+              </div>
+            )}
             <button onClick={() => setVerOriginal(v => !v)} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-surface-variant text-on-surface-variant text-xs font-semibold">
               <FileText className="w-3.5 h-3.5" /> {verOriginal ? 'Ocultar prova importada' : 'Visualizar prova importada'}
             </button>

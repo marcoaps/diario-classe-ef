@@ -109,13 +109,38 @@ function coletar(no: Node, est: { b: boolean; i: boolean }, saida: Item[]): void
   el.childNodes.forEach(c => coletar(c, e2, saida));
 }
 
-interface Contexto { blocos: Bloco[]; avisos: string[]; imagensPerdidas: number; listaAuto: boolean }
+interface Contexto { blocos: Bloco[]; avisos: string[]; imagensPerdidas: number; listaAuto: boolean; extras: Map<string, File> }
+
+const MIME: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', bmp: 'image/bmp', webp: 'image/webp' };
+
+function lerComoDataUrl(arquivo: File): Promise<string> {
+  const ext = (arquivo.name.split('.').pop() || '').toLowerCase();
+  const tipo = arquivo.type || MIME[ext] || 'image/png';
+  return new Promise((ok, falha) => {
+    const r = new FileReader();
+    r.onload = () => ok(String(r.result).replace(/^data:[^;,]*/, `data:${tipo}`));
+    r.onerror = () => falha(new Error('não foi possível ler a imagem'));
+    r.readAsDataURL(arquivo);
+  });
+}
+
+/** Nome do arquivo de uma imagem referenciada fora do documento ("pasta_arquivos/image034.jpg"). */
+const nomeDoArquivo = (src: string): string => {
+  const nome = src.split('?')[0].split(/[\\/]/).pop() || '';
+  try { return decodeURIComponent(nome).toLowerCase(); } catch { return nome.toLowerCase(); }
+};
 
 async function emitirImagem(img: HTMLImageElement, ctx: Contexto): Promise<void> {
   const src = img.getAttribute('src') || '';
   try {
-    if (!/^data:image\//i.test(src)) throw new Error('imagem fora do arquivo');
-    ctx.blocos.push(await normalizarImagem(src));
+    if (/^data:image\//i.test(src)) {
+      ctx.blocos.push(await normalizarImagem(src));
+    } else {
+      // imagem guardada fora do arquivo (pasta "_arquivos" do Word): usa a que o usuário anexou
+      const anexo = ctx.extras.get(nomeDoArquivo(src));
+      if (!anexo) throw new Error('imagem fora do arquivo');
+      ctx.blocos.push(await normalizarImagem(await lerComoDataUrl(anexo)));
+    }
   } catch (e) {
     console.error('[Organizador de Provas] imagem não processada', e);
     ctx.imagensPerdidas++;
@@ -279,9 +304,9 @@ async function lerPdf(buf: ArrayBuffer, ctx: Contexto): Promise<void> {
 }
 
 /** parseExam: lê o arquivo e devolve a prova já separada em cabeçalho, questões e rodapé. */
-export async function importarProva(arquivo: File): Promise<Prova> {
+export async function importarProva(arquivo: File, anexos: File[] = []): Promise<Prova> {
   const ext = (arquivo.name.split('.').pop() || '').toLowerCase();
-  const ctx: Contexto = { blocos: [], avisos: [], imagensPerdidas: 0, listaAuto: false };
+  const ctx: Contexto = { blocos: [], avisos: [], imagensPerdidas: 0, listaAuto: false, extras: new Map(anexos.map(f => [f.name.toLowerCase(), f] as [string, File])) };
   try {
     const buf = await arquivo.arrayBuffer();
     if (ext === 'docx') await lerDocx(buf, ctx);
@@ -305,8 +330,8 @@ export async function importarProva(arquivo: File): Promise<Prova> {
   const { secoes, avisosSecoes } = identificarQuestoes(limpo);
   const avisos = [...ctx.avisos, ...avisosSecoes];
   if (secoes.length > 1) avisos.push(`Foram encontrados ${secoes.length} cabeçalhos (um por aluno). Cada um ficará no topo de uma página nova, seguido das questões em duas colunas.`);
-  if (ctx.imagensPerdidas > 0) avisos.push(`${ctx.imagensPerdidas} imagem(ns) não puderam ser processadas e ficaram de fora. Se o arquivo veio de um .doc salvo pelo Word, importe a versão .docx.`);
+  if (ctx.imagensPerdidas > 0) avisos.push(`${ctx.imagensPerdidas} imagem(ns) não foram encontradas no arquivo. Se ele foi salvo pelo Word como .doc, as imagens ficam numa pasta ao lado ("..._arquivos"): use "Anexar imagens da pasta" abaixo, ou salve como .docx e importe de novo.`);
   if (ctx.listaAuto) avisos.push('Havia listas numeradas automáticas; os números foram escritos como "1.", "2." no texto.');
   if (trocados.n > 0) avisos.push(`${trocados.n} símbolo(s) sem suporte na fonte foram trocados por "?".`);
-  return { nomeArquivo: arquivo.name, secoes, avisos };
+  return { nomeArquivo: arquivo.name, secoes, imagensFaltando: ctx.imagensPerdidas, avisos };
 }

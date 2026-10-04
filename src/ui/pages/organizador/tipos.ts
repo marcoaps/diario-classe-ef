@@ -31,6 +31,8 @@ export interface Secao {
 export interface Prova {
   nomeArquivo: string;
   secoes: Secao[];
+  /** Imagens que o arquivo apontava para fora dele (pasta "_arquivos" do Word) e não foram encontradas. */
+  imagensFaltando: number;
   /** Avisos amigáveis para mostrar ao usuário (imagem não lida, lista numerada...). */
   avisos: string[];
 }
