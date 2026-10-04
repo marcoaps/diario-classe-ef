@@ -110,7 +110,7 @@ export function itemGrade(linhasTexto: string[][], x: number, y: number, larg: n
 
 /** Tamanho de cada imagem de um grupo consecutivo e quais ficam lado a lado na mesma linha. */
 export function planejarLinhasImagens(grupo: Extract<Bloco, { tipo: 'imagem' }>[], larg: number, cfg: Configuracao, geo: Geometria): { tamanhos: { w: number; h: number }[]; linhas: number[][] } {
-  const tamanhos = grupo.map(g => calcularTamanhoImagem(g.w, g.h, larg, alturaMaximaImagem(geo), cfg));
+  const tamanhos = grupo.map(g => calcularTamanhoImagem(g.w, g.h, larg, Math.min(alturaMaximaImagem(geo), cfg.imagemAlturaMax ?? Infinity), cfg));
   return { tamanhos, linhas: agruparImagens(tamanhos, larg) };
 }
 

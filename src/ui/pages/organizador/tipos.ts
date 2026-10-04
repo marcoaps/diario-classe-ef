@@ -58,6 +58,8 @@ export interface Configuracao {
   imagemMargemInf: number;
   /** Tira a logo/imagens do cabeçalho (economiza espaço no topo de cada prova). */
   removerLogo: boolean;
+  /** Teto (pt) para a altura de cada imagem; null = o padrão. Usado para a prova caber em uma página. */
+  imagemAlturaMax: number | null;
 }
 
 export const CONFIG_PADRAO: Configuracao = {
@@ -71,6 +73,7 @@ export const CONFIG_PADRAO: Configuracao = {
   imagemMargemSup: 3,
   imagemMargemInf: 4,
   removerLogo: true,
+  imagemAlturaMax: null,
 };
 
 export const textoPlano = (trechos: Trecho[]): string => trechos.map(t => t.t).join('');
