@@ -94,7 +94,7 @@ const FERRAMENTAS = [
   {
     rota: '/ia/ideias-avaliacoes',
     titulo: 'Avaliação Adaptada — Educação Especial',
-    descricao: 'Gera avaliações com 7 questões visuais para alunos com DI, TEA, TDAH, Dislexia e outras NEE.',
+    descricao: 'Gera avaliações com 6 questões visuais para alunos com DI, TEA, TDAH, Dislexia e outras NEE.',
     icon: Lightbulb,
     cor: 'from-purple-600 to-indigo-500',
     tag: 'EDUCAÇÃO ESPECIAL',

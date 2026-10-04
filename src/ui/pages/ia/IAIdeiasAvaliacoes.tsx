@@ -149,21 +149,21 @@ function montarPromptQuestoes(p: { tema: string; serie: string; nee: string; niv
     ? '"opcaoA":"opção A","opcaoB":"opção B","opcaoC":"opção C","resposta":"A, B ou C (varie)"'
     : '"opcaoA":"opção A","opcaoB":"opção B","resposta":"A ou B (varie)"';
 
-  return `Você é especialista em educação inclusiva e em Educação Física adaptada. Crie EXATAMENTE 7 questões de múltipla escolha, com apoio visual, para uma avaliação adaptada.
+  return `Você é especialista em educação inclusiva e em Educação Física adaptada. Crie EXATAMENTE 6 questões de múltipla escolha, com apoio visual, para uma avaliação adaptada.
 
 CONTEXTO: Tema: ${p.tema}. Série: ${p.serie}. NEE do aluno: ${p.nee}. Objetivo: ${p.objetivo}.
 ADAPTAÇÃO PARA ${p.nee}: ${ADAPTACAO_POR_NEE[p.nee] ?? 'linguagem simples e direta.'}
 
 ${regrasNivel}
 
-DIFICULDADE EM DEGRAUS nas 7 questões: 1 a 3 = reconhecer (identificar ou nomear algo); 4 e 5 = relacionar/compreender (para que serve, por que acontece); 6 e 7 = aplicar numa situação concreta.
+DIFICULDADE EM DEGRAUS nas 6 questões: 1 e 2 = reconhecer (identificar ou nomear algo); 3 e 4 = relacionar/compreender (para que serve, por que acontece); 5 e 6 = aplicar numa situação concreta.
 
 REGRAS DE LINGUAGEM (importantes):
 - Um único comando por questão. Sem negativas ("não", "exceto", "incorreta") e sem pegadinhas.
 - Evite palavras com duplo sentido. Exemplo: "gol" pode ser o ponto marcado ou a estrutura onde a bola entra — use "trave" para a estrutura e "gol" só para o ponto marcado. Use "falta", "quadra" e "jogo" só quando o contexto deixar claro o sentido.
 - Prefira "onde", "qual" e "o que" a "quantos" quando a resposta exigir noção abstrata de número; só pergunte quantidade se ela puder ser vista na imagem.
 - Alternativas curtas, de tamanho parecido, sem que a correta seja sempre a mais longa.
-- Alterne a alternativa correta entre TODAS as letras (${letras}) ao longo das 7 questões; não deixe a resposta certa sempre na mesma letra.
+- Alterne a alternativa correta entre TODAS as letras (${letras}) ao longo das 6 questões; não deixe a resposta certa sempre na mesma letra.
 - Cada questão tem 3 campos de texto SEPARADOS: "titulo" (uma palavra-chave em MAIÚSCULAS que nomeia o assunto, ex: BOLA, TRAVE, REGRA), "contexto" (a frase de observação/situação, SEM a pergunta) e "pergunta" (somente a pergunta, em uma frase, terminando em "?"). Não repita o contexto dentro da pergunta e não comece a pergunta com o título ("BOLA: qual...?"): o título já aparece acima.
 - IMAGEM DE CADA QUESTÃO. Decida o "tipoImagem" (exatamente um destes valores): "svg" para mapas, quadras, tabelas, gráficos e qualquer coisa que exija medidas ou posições exatas; "nenhuma" se a imagem não ajuda a resolver a questão; "ilustracao" nos demais casos. Assunto de geografia ou ciências: prefira "svg" ou "nenhuma" a uma cena inventada. Questão de história ou de origem do esporte (ex.: onde o handebol foi criado): o aluno com NEE precisa de apoio visual, então use "ilustracao" com uma cena simples e genérica do esporte sendo jogado (jogadores, bola, trave), sem datas, placas, faixas, bandeiras nem nomes de lugares, para a imagem não entregar a resposta; use "nenhuma" só se qualquer cena possível entregar a resposta.
 - "promptImagem": preencha só quando o tipo for "ilustracao" (nos outros, use ""). Escreva em inglês, com no máximo 40 palavras, descrevendo UMA cena com no máximo 3 elementos. Descreva só o que aparece na cena. Nunca escreva "no ...", "without ..." nem "not": em vez de "no text on it", descreva apenas o objeto. Não inclua texto, números, letras, placas, faixas, bandeiras nem placar na cena. Personagens: estudantes com a idade da turma (${p.serie}: ${Number.isNaN(parseInt(p.serie, 10)) ? '11 a 15' : `${parseInt(p.serie, 10) + 5} a ${parseInt(p.serie, 10) + 6}`} anos), camisas lisas de uma cor.
@@ -824,7 +824,7 @@ export function IAIdeiasAvaliacoes() {
         </button>
         <div>
           <h1 className="text-base font-bold text-on-surface">Avaliacao Adaptada - Educacao Especial</h1>
-          <p className="text-xs text-on-surface-variant">7 questoes visuais — gere as imagens com IA ou insira você mesmo</p>
+          <p className="text-xs text-on-surface-variant">6 questoes visuais — gere as imagens com IA ou insira você mesmo</p>
         </div>
       </div>
 
