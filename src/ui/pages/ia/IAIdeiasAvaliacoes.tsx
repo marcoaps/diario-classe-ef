@@ -2,6 +2,7 @@
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Sparkles, Loader2, RefreshCw, Printer, FileText, Copy, Check, ImagePlus, Upload, Clipboard, Images } from 'lucide-react';
 import { supabase } from '../../../data/supabase';
+import { bimestreAtual, getPeriodoBimestre, type Bimestre } from '../../../domain/useRelatorioFrequencia';
 import { gerarImagemDaQuestao, imagemDeArquivo, type ErroImagem, type ContextoImagem } from '../../../utils/imagemIA';
 import { SeletorBancoImagens } from './SeletorBancoImagens';
 import { BANCO_IMAGENS, pontuarItemComTitulo } from './bancoImagens';
@@ -323,7 +324,12 @@ export function IAIdeiasAvaliacoes() {
   const [aluno, setAluno] = useState('');
   const [alunoNome, setAlunoNome] = useState('');
   const [alunoNumero, setAlunoNumero] = useState<number | null>(null);
-  const [listaAlunos, setListaAlunos] = useState<Aluno[]>([]);
+  const [todosAEE, setTodosAEE] = useState<Aluno[]>([]);
+  // Só entram alunos AEE com pelo menos `minFaltas` faltas no bimestre escolhido (0 = todos).
+  const [minFaltas, setMinFaltas] = useState(6);
+  const [bimFaltas, setBimFaltas] = useState<Bimestre>(() => bimestreAtual());
+  const [faltasPorAluno, setFaltasPorAluno] = useState<Map<string, number>>(new Map());
+  const listaAlunos = todosAEE.filter(a => (faltasPorAluno.get(a.id) ?? 0) >= minFaltas);
   const [buscandoAlunos, setBuscandoAlunos] = useState(false);
   const [cidPorNome, setCidPorNome] = useState<Map<string, string | null>>(new Map());
   const [cidAlunoSelecionado, setCidAlunoSelecionado] = useState<string | null>(null);
@@ -346,7 +352,7 @@ export function IAIdeiasAvaliacoes() {
   // nessa turma (esta tela é justamente pra gerar a versão adaptada deles).
   useEffect(() => {
     async function buscarAlunos() {
-      if (!turma.trim()) { setListaAlunos([]); setCidPorNome(new Map()); return; }
+      if (!turma.trim()) { setTodosAEE([]); setFaltasPorAluno(new Map()); setCidPorNome(new Map()); return; }
       setBuscandoAlunos(true);
       const serieNum = serie.replace(/[^0-9]/g, '');
       const turmaId = serieNum + turma.toUpperCase().trim();
@@ -361,12 +367,25 @@ export function IAIdeiasAvaliacoes() {
         elegiveis.map((e: any) => [e.nome?.toLowerCase().trim(), e.cid_diagnostico ?? null])
       );
       const soAEE = (todosAlunos || []).filter((a: any) => mapaCid.has(a.nome.toLowerCase().trim()));
-      setListaAlunos(soAEE);
+      // Faltas do bimestre, contadas como no resto do app: cada registro de chamada = 2 aulas.
+      const faltas = new Map<string, number>();
+      if (soAEE.length > 0) {
+        const periodo = getPeriodoBimestre(bimFaltas);
+        const { data: freq } = await supabase
+          .from('frequencia')
+          .select('aluno_id, presente')
+          .in('aluno_id', soAEE.map((a: any) => a.id))
+          .gte('data', periodo.inicio)
+          .lte('data', periodo.fim);
+        (freq || []).forEach((r: any) => { if (!r.presente) faltas.set(r.aluno_id, (faltas.get(r.aluno_id) ?? 0) + 2); });
+      }
+      setTodosAEE(soAEE);
+      setFaltasPorAluno(faltas);
       setCidPorNome(mapaCid);
       setBuscandoAlunos(false);
     }
     buscarAlunos();
-  }, [serie, turma]);
+  }, [serie, turma, bimFaltas]);
 
   // Retorna o texto gerado (além de já preencher o campo Objetivo) pra que
   // quem chamar (ex: o botão Gerar) possa usar o valor na hora, sem esperar
@@ -838,6 +857,18 @@ export function IAIdeiasAvaliacoes() {
           </label>
           <textarea value={objetivo} onChange={e => setObjetivo(e.target.value)} rows={2} placeholder="Preenchido automaticamente ao digitar o tema..." className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface resize-none" />
         </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-semibold text-on-surface-variant block mb-1">Faltas a partir de</label>
+            <input type="number" min={0} value={minFaltas} onChange={e => setMinFaltas(Math.max(0, parseInt(e.target.value, 10) || 0))} className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface" />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-on-surface-variant block mb-1">Bimestre das faltas</label>
+            <select value={bimFaltas} onChange={e => setBimFaltas(Number(e.target.value) as Bimestre)} className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface">
+              {[1, 2, 3, 4].map(b => <option key={b} value={b}>{b}º bimestre</option>)}
+            </select>
+          </div>
+        </div>
         <div>
           <label className="text-xs font-semibold text-on-surface-variant block mb-1">
             Aluno *
@@ -861,13 +892,17 @@ export function IAIdeiasAvaliacoes() {
               <option value="">Selecione o aluno (AEE)...</option>
               {listaAlunos.map(a => (
                 <option key={a.id} value={a.id}>
-                  {a.numero_chamada}. {a.nome}
+                  {a.numero_chamada}. {a.nome} ({faltasPorAluno.get(a.id) ?? 0} faltas)
                 </option>
               ))}
             </select>
           ) : (
             <div className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-surface-variant text-sm text-on-surface-variant">
-              {turma.trim() ? 'Nenhum aluno AEE cadastrado nesta turma.' : 'Selecione a Turma para carregar os alunos AEE.'}
+              {!turma.trim()
+                ? 'Selecione a Turma para carregar os alunos AEE.'
+                : todosAEE.length === 0
+                  ? 'Nenhum aluno AEE cadastrado nesta turma.'
+                  : `Nenhum aluno AEE com ${minFaltas} faltas ou mais no ${bimFaltas}º bimestre (${todosAEE.length} AEE na turma).`}
             </div>
           )}
           {aluno && (
