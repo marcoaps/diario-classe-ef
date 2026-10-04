@@ -63,20 +63,20 @@ export function alturaQuestao(q: QuestaoProva): number {
   return (h + 6) * AJUSTE_QUESTAO;
 }
 
-export function alturaCabecalho(p: ProvaDoAluno): number {
-  const orient = orientacoesDe(p);
-  return 66 + linhas(`Diagnóstico/NEE: ${p.diagnostico}`) * LINHA + orient.reduce((s, o) => s + linhas(o, false, 14) * LINHA, 0) + 8;
+// Cabeçalho completo só na 1ª folha de cada aluno (3 linhas); as demais levam só uma linha com o nome.
+export function alturaCabecalho(primeira: boolean): number {
+  return primeira ? 3 * LINHA + 24 : LINHA + 16;
 }
 
-/** Divide as questões em folhas: cada folha leva o cabeçalho e o máximo de questões que cabem. */
+/** Divide as questões em folhas: cada folha leva o máximo de questões que cabem depois do cabeçalho. */
 export function dividirEmFolhas(p: ProvaDoAluno): QuestaoProva[][] {
-  const orcamento = ALTURA_UTIL_PT - alturaCabecalho(p) - 14; // 14 = linha de créditos
   const folhas: QuestaoProva[][] = [];
   let atual: QuestaoProva[] = [];
   let usado = 0;
+  const orcamento = () => ALTURA_UTIL_PT - alturaCabecalho(folhas.length === 0) - 14; // 14 = linha de créditos
   for (const q of p.questoes) {
     const h = alturaQuestao(q);
-    if (atual.length > 0 && usado + h > orcamento) { folhas.push(atual); atual = []; usado = 0; }
+    if (atual.length > 0 && usado + h > orcamento()) { folhas.push(atual); atual = []; usado = 0; }
     atual.push(q);
     usado += h;
   }
@@ -95,22 +95,23 @@ function temaPrincipal(tema: string): string {
   return tema.split(/[:;,\n]/)[0].trim() || tema;
 }
 
-function cabecalhoAlunoHtml(p: ProvaDoAluno, d: DadosLote): string {
+// 1ª folha: título, identificação e diagnóstico. Folhas seguintes: só uma linha com o nome.
+function cabecalhoAlunoHtml(p: ProvaDoAluno, d: DadosLote, primeira: boolean): string {
+  if (!primeira) {
+    return `<p style="margin:0 0 6pt 0;padding-bottom:2pt;border-bottom:1px solid ${AZUL};font-size:11pt;">Aluno(a): <strong>${p.nomeAluno}</strong> &nbsp;&#183;&nbsp; ${p.serie} ${p.turma} &nbsp;&#183;&nbsp; <em>continua&#231;&#227;o</em></p>`;
+  }
   return `<table width="100%" style="border:1.5px solid ${AZUL};border-collapse:collapse;margin-bottom:8px;">
     <tr>
       <td width="52" rowspan="3" style="padding:4px 6px;text-align:center;vertical-align:middle;border-right:1px solid #cbd5e1;">
         <img src="${d.logoSrc}" width="44" height="44" style="width:44px;height:44px;" />
       </td>
-      <td style="padding:3px 8px;font-size:12pt;font-weight:bold;">Avalia&#231;&#227;o Adaptada de Educa&#231;&#227;o F&#237;sica &#8212; ${temaPrincipal(d.tema)} &nbsp;&#183;&nbsp; Prof. Marco Pedro &nbsp;&#183;&nbsp; 2026</td>
+      <td style="padding:3px 8px;font-size:12pt;font-weight:bold;">Avalia&#231;&#227;o Adaptada de Educa&#231;&#227;o F&#237;sica &#8212; ${temaPrincipal(d.tema)} &nbsp;&#183;&nbsp; 2026</td>
     </tr>
     <tr>
       <td style="padding:3px 8px;font-size:12pt;">Aluno(a): <strong>${p.nomeAluno}</strong> &nbsp; N&#186;: <strong>${p.alunoNumero || '___'}</strong> &nbsp; S&#233;rie: <strong>${p.serie}</strong> &nbsp; Turma: <strong>${p.turma || '___'}</strong> &nbsp; Data: ___/___/_____</td>
     </tr>
     <tr>
-      <td style="padding:3px 8px;font-size:12pt;">Diagn&#243;stico/NEE: <strong>${p.diagnostico}</strong> &nbsp;&#183;&nbsp; ${p.nivelRotulo}</td>
-    </tr>
-    <tr>
-      <td colspan="2" style="padding:3px 8px;font-size:12pt;border-top:1px solid #cbd5e1;background:#f1f5f9;"><strong>Orienta&#231;&#245;es:</strong> ${orientacoesDe(p).join(' ')}</td>
+      <td style="padding:3px 8px;font-size:12pt;">Diagn&#243;stico/NEE: <strong>${p.diagnostico}</strong></td>
     </tr>
   </table>`;
 }
@@ -127,14 +128,14 @@ function questaoLoteHtml(q: QuestaoProva): string {
 }
 
 /** Uma folha = cabeçalho do aluno + as questões que cabem nela + créditos das imagens. */
-function folhaHtml(p: ProvaDoAluno, d: DadosLote, questoes: QuestaoProva[], primeira: boolean, ultima: boolean, quebra: Quebra): string {
-  return `<div class="folha"${ultima ? '' : quebra.atributo}>${primeira ? '' : quebra.antes}${cabecalhoAlunoHtml(p, d)}${questoes.map(questaoLoteHtml).join('')}${creditosHtml(questoes)}</div>`;
+function folhaHtml(p: ProvaDoAluno, d: DadosLote, questoes: QuestaoProva[], primeira: boolean, primeiraDoAluno: boolean, ultima: boolean, quebra: Quebra): string {
+  return `<div class="folha"${ultima ? '' : quebra.atributo}>${primeira ? '' : quebra.antes}${cabecalhoAlunoHtml(p, d, primeiraDoAluno)}${questoes.map(questaoLoteHtml).join('')}${creditosHtml(questoes)}</div>`;
 }
 
 /** Gabarito de todos os alunos, numa folha final só do professor. */
 function gabaritoLoteHtml(d: DadosLote, quebra: Quebra): string {
   const linhasHtml = d.provas
-    .map(p => `<p style="margin:0 0 4pt 0;font-size:${CORPO}pt;"><strong>${p.alunoNumero ? p.alunoNumero + '. ' : ''}${p.nomeAluno}</strong> (${p.nee}): ${p.questoes.map(q => q.numero + ') ' + q.resposta).join(' &nbsp; ')}</p>`)
+    .map(p => `<p style="margin:0 0 4pt 0;font-size:${CORPO}pt;"><strong>${p.alunoNumero ? p.alunoNumero + '. ' : ''}${p.nomeAluno}</strong> (${p.nee}): ${p.questoes.map(q => q.numero + ') ' + q.resposta).join(' &nbsp; ')}<br><span style="font-size:10pt;color:#475569;">Orienta&#231;&#245;es: ${orientacoesDe(p).join(' ')}</span></p>`)
     .join('');
   return `<div class="folha">${quebra.antes}<p style="margin:0 0 8pt 0;font-size:14pt;font-weight:bold;">GABARITO &#8212; uso do professor (n&#227;o imprimir para os alunos)</p>${linhasHtml}</div>`;
 }
@@ -149,9 +150,9 @@ const QUEBRA_WORD: Quebra = { atributo: '', antes: '<p style="margin:0;font-size
 
 /** Todas as folhas, na ordem: aluno 1 (folha 1, 2...), aluno 2, ..., gabarito. */
 function corpoLoteHtml(d: DadosLote, comGabarito: boolean, quebra: Quebra): string {
-  const folhas: { p: ProvaDoAluno; qs: QuestaoProva[] }[] = [];
-  for (const p of d.provas) for (const qs of dividirEmFolhas(p)) folhas.push({ p, qs });
-  const partes = folhas.map(({ p, qs }, i) => folhaHtml(p, d, qs, i === 0, i === folhas.length - 1 && !comGabarito, quebra));
+  const folhas: { p: ProvaDoAluno; qs: QuestaoProva[]; primeiraDoAluno: boolean }[] = [];
+  for (const p of d.provas) dividirEmFolhas(p).forEach((qs, k) => folhas.push({ p, qs, primeiraDoAluno: k === 0 }));
+  const partes = folhas.map(({ p, qs, primeiraDoAluno }, i) => folhaHtml(p, d, qs, i === 0, primeiraDoAluno, i === folhas.length - 1 && !comGabarito, quebra));
   if (comGabarito) partes.push(gabaritoLoteHtml(d, quebra));
   return partes.join('');
 }
