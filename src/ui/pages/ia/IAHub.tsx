@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   BookOpen, Calendar, ClipboardList, Route,
   CalendarDays, FileQuestion, Gamepad2, Accessibility,
-  Lightbulb, ChevronRight, ClipboardCheck, BookImage, Target,
+  Lightbulb, ChevronRight, ClipboardCheck, BookImage, Target, FileStack,
 } from 'lucide-react';
 
 const FERRAMENTAS = [
@@ -98,6 +98,15 @@ const FERRAMENTAS = [
     icon: Lightbulb,
     cor: 'from-purple-600 to-indigo-500',
     tag: 'EDUCAÇÃO ESPECIAL',
+  },
+  {
+    rota: '/ia/organizador-provas',
+    titulo: 'Organizador de Provas',
+    descricao: 'Importe uma prova pronta (Word, PDF ou TXT) e deixe-a limpa para imprimir: A4, Arial 12, duas colunas, imagens proporcionais.',
+    icon: FileStack,
+    cor: 'from-sky-600 to-cyan-500',
+    tag: 'FORMATAÇÃO',
+    novo: true,
   },
   {
     rota: '/ia/charges',
