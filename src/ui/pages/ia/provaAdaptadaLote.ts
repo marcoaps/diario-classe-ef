@@ -25,6 +25,8 @@ export interface DadosLote {
   provas: ProvaDoAluno[];
   tema: string;
   logoSrc: string;
+  /** Sem a folha final de gabarito (quando as respostas não são conhecidas). */
+  semGabarito?: boolean;
 }
 
 // Orientações para quem aplica a prova (impressas no cabeçalho de cada folha do aluno).
@@ -102,7 +104,7 @@ function cabecalhoAlunoHtml(p: ProvaDoAluno, d: DadosLote, primeira: boolean): s
   }
   return `<table width="100%" style="border:1.5px solid ${AZUL};border-collapse:collapse;margin-bottom:8px;">
     <tr>
-      <td width="52" rowspan="3" style="padding:4px 6px;text-align:center;vertical-align:middle;border-right:1px solid #cbd5e1;">
+      <td width="52" rowspan="${p.diagnostico ? 3 : 2}" style="padding:4px 6px;text-align:center;vertical-align:middle;border-right:1px solid #cbd5e1;">
         <img src="${d.logoSrc}" width="44" height="44" style="width:44px;height:44px;" />
       </td>
       <td style="padding:3px 8px;font-size:12pt;font-weight:bold;">Avalia&#231;&#227;o Adaptada de Educa&#231;&#227;o F&#237;sica &#8212; ${temaPrincipal(d.tema)} &nbsp;&#183;&nbsp; 2026</td>
@@ -110,9 +112,9 @@ function cabecalhoAlunoHtml(p: ProvaDoAluno, d: DadosLote, primeira: boolean): s
     <tr>
       <td style="padding:3px 8px;font-size:12pt;">Aluno(a): <strong>${p.nomeAluno}</strong> &nbsp; N&#186;: <strong>${p.alunoNumero || '___'}</strong> &nbsp; S&#233;rie: <strong>${p.serie}</strong> &nbsp; Turma: <strong>${p.turma || '___'}</strong> &nbsp; Data: ___/___/_____</td>
     </tr>
-    <tr>
+    ${p.diagnostico ? `<tr>
       <td style="padding:3px 8px;font-size:12pt;">Diagn&#243;stico/NEE: <strong>${p.diagnostico}</strong></td>
-    </tr>
+    </tr>` : ''}
   </table>`;
 }
 
@@ -167,7 +169,7 @@ const CSS_BASE = `body{font-family:Arial,sans-serif;font-size:${CORPO}pt;color:#
 /** Documento do Word: um arquivo único, cada aluno (e cada folha) com page-break-after:always. */
 export function htmlWordLote(d: DadosLote): string {
   const css = `${CSS_BASE}@page WordSection1 {size:595.3pt 841.9pt;margin:36.0pt 36.0pt 36.0pt 36.0pt;mso-header-margin:20.0pt;mso-footer-margin:20.0pt;mso-paper-source:0;}div.WordSection1 {page:WordSection1;}`;
-  return emEntidades(`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>Avaliacao Adaptada - Lote</title><style>${css}</style></head><body><div class=WordSection1>${corpoLoteHtml(d, true, QUEBRA_WORD)}</div></body></html>`);
+  return emEntidades(`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>Avaliacao Adaptada - Lote</title><style>${css}</style></head><body><div class=WordSection1>${corpoLoteHtml(d, !d.semGabarito, QUEBRA_WORD)}</div></body></html>`);
 }
 
 /** Documento para imprimir direto (sem gabarito: são as folhas dos alunos). */
