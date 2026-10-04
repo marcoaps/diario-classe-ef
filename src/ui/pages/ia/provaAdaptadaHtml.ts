@@ -79,7 +79,7 @@ export function escolherDensidade(questoes: QuestaoProva[]): Densidade {
   return DENSIDADES[DENSIDADES.length - 1];
 }
 
-const AZUL = '#1e3a5f';
+export const AZUL = '#1e3a5f';
 
 /** Cabeçalho de 2 linhas, com o brasão pequeno. */
 export function cabecalhoHtml(d: DadosProva): string {
@@ -96,7 +96,7 @@ export function cabecalhoHtml(d: DadosProva): string {
   </table>`;
 }
 
-function opcoesDa(q: QuestaoProva): [string, string][] {
+export function opcoesDa(q: QuestaoProva): [string, string][] {
   const opcoes: [string, string][] = [['A', q.opcaoA], ['B', q.opcaoB]];
   if (q.opcaoC) opcoes.push(['C', q.opcaoC]);
   return opcoes;
@@ -165,7 +165,7 @@ export function htmlImpressao(d: DadosProva, comImpressaoAutomatica = true): str
 // Assim o professor consegue editar e mexer no layout à vontade. As questões ficam numa
 // seção de 2 colunas de verdade; a imagem vai acima do texto de cada questão.
 
-function imagemWordHtml(q: QuestaoProva, largura: number): string {
+export function imagemWordHtml(q: QuestaoProva, largura: number): string {
   const altura = Math.round(largura / 1.5);
   if (!q.imagemDataUrl) {
     if (q.tipoImagem === 'nenhuma') return '';
