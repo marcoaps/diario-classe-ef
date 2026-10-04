@@ -44,25 +44,26 @@ const ORIENTACAO_PADRAO = ['Confirmar com a Educação Especial o apoio adequado
 const CORPO = 12;
 const LINHA = CORPO * 1.2;
 const LARGURA_TEXTO_PT = 520;
-const IMAGEM_PX = 200; // altura = largura / 1,5 → 133 px = 100 pt
-const ALTURA_UTIL_PT = 735; // A4 (842) − margens (2 × 36) − folga
+const IMAGEM_PX = 170; // altura = largura / 1,5 → 113 px = 85 pt (cabem 3 questões por folha)
+const ALTURA_UTIL_PT = 750; // A4 (842) − margens (2 × 36) − folga
+const AJUSTE_QUESTAO = 1;
 
 function linhas(texto: string, negrito = false, recuoPt = 0): number {
   const limpo = texto.replace(/<[^>]+>/g, '');
-  const porLinha = Math.max(10, Math.floor((LARGURA_TEXTO_PT - recuoPt) / (CORPO * (negrito ? 0.52 : 0.47))));
+  const porLinha = Math.max(10, Math.floor((LARGURA_TEXTO_PT - recuoPt) / (CORPO * (negrito ? 0.56 : 0.5))));
   return Math.max(1, Math.ceil(limpo.length / porLinha));
 }
 
-function alturaQuestao(q: QuestaoProva): number {
+export function alturaQuestao(q: QuestaoProva): number {
   let h = LINHA + 8;
   if (q.imagemDataUrl || q.tipoImagem !== 'nenhuma') h += (IMAGEM_PX / 1.5) * 0.75 + 6;
   if (q.contexto) h += linhas(q.contexto) * LINHA + 3;
   h += linhas(q.pergunta, true) * LINHA + 3;
   for (const [letra, texto] of opcoesDa(q)) h += linhas(`${letra}) ${texto}`, false, 12) * LINHA + 2;
-  return h + 6;
+  return (h + 6) * AJUSTE_QUESTAO;
 }
 
-function alturaCabecalho(p: ProvaDoAluno): number {
+export function alturaCabecalho(p: ProvaDoAluno): number {
   const orient = orientacoesDe(p);
   return 66 + linhas(`Diagnóstico/NEE: ${p.diagnostico}`) * LINHA + orient.reduce((s, o) => s + linhas(o, false, 14) * LINHA, 0) + 8;
 }
@@ -89,13 +90,18 @@ function orientacoesDe(p: ProvaDoAluno): string[] {
 
 // ── HTML ──────────────────────────────────────────────────────────────────────
 
+// "Handebol:História,Fundamentos e Regras" -> "Handebol" (o tema inteiro quebrava o título em 2 linhas).
+function temaPrincipal(tema: string): string {
+  return tema.split(/[:;,\n]/)[0].trim() || tema;
+}
+
 function cabecalhoAlunoHtml(p: ProvaDoAluno, d: DadosLote): string {
   return `<table width="100%" style="border:1.5px solid ${AZUL};border-collapse:collapse;margin-bottom:8px;">
     <tr>
       <td width="52" rowspan="3" style="padding:4px 6px;text-align:center;vertical-align:middle;border-right:1px solid #cbd5e1;">
         <img src="${d.logoSrc}" width="44" height="44" style="width:44px;height:44px;" />
       </td>
-      <td style="padding:3px 8px;font-size:12pt;font-weight:bold;">Avalia&#231;&#227;o Adaptada de Educa&#231;&#227;o F&#237;sica &#8212; ${d.tema} &nbsp;&#183;&nbsp; Prof. Marco Pedro &nbsp;&#183;&nbsp; 2026</td>
+      <td style="padding:3px 8px;font-size:12pt;font-weight:bold;">Avalia&#231;&#227;o Adaptada de Educa&#231;&#227;o F&#237;sica &#8212; ${temaPrincipal(d.tema)} &nbsp;&#183;&nbsp; Prof. Marco Pedro &nbsp;&#183;&nbsp; 2026</td>
     </tr>
     <tr>
       <td style="padding:3px 8px;font-size:12pt;">Aluno(a): <strong>${p.nomeAluno}</strong> &nbsp; N&#186;: <strong>${p.alunoNumero || '___'}</strong> &nbsp; S&#233;rie: <strong>${p.serie}</strong> &nbsp; Turma: <strong>${p.turma || '___'}</strong> &nbsp; Data: ___/___/_____</td>
