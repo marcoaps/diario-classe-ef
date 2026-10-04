@@ -54,6 +54,8 @@ export interface Configuracao {
   /** Espaço (pt) acima e abaixo de cada imagem. */
   imagemMargemSup: number;
   imagemMargemInf: number;
+  /** Tira a logo/imagens do cabeçalho (economiza espaço no topo de cada prova). */
+  removerLogo: boolean;
 }
 
 export const CONFIG_PADRAO: Configuracao = {
@@ -66,6 +68,7 @@ export const CONFIG_PADRAO: Configuracao = {
   imagemAlinhamento: 'centro',
   imagemMargemSup: 3,
   imagemMargemInf: 4,
+  removerLogo: true,
 };
 
 export const textoPlano = (trechos: Trecho[]): string => trechos.map(t => t.t).join('');

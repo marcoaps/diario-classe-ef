@@ -197,6 +197,10 @@ export function OrganizadorProvas() {
                 </Campo>
               </div>
             </div>
+            <label className="flex items-center gap-2 text-xs text-on-surface">
+              <input type="checkbox" checked={config.removerLogo} onChange={e => alterar({ removerLogo: e.target.checked })} />
+              Remover a logo do cabeçalho (economiza espaço)
+            </label>
             <p className="text-[11px] text-on-surface-variant">Cada questão (texto + imagem + alternativas) é mantida junta. A fonte nunca é reduzida para caber: a questão inteira vai para o próximo espaço.</p>
             <div className="flex gap-2">
               <button onClick={organizar} disabled={totalDeQuestoes(original) === 0} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-on-primary font-semibold text-sm disabled:opacity-50">

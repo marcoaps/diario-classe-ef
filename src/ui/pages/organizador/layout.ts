@@ -190,6 +190,7 @@ export function formatarCabecalho(blocos: Bloco[], cfg: Configuracao, geo: Geome
       itens.push(it);
       y += it.h + ESPACO_APOS_PARAGRAFO;
     } else if (b.tipo === 'imagem') {
+      if (cfg.removerLogo) continue;
       const t = calcularTamanhoImagem(b.w, b.h, larg, ALTURA_MAXIMA_LOGO, { ...cfg, imagemTamanho: 'auto' });
       itens.push({ k: 'img', x: (larg - t.w) / 2, y, w: t.w, h: t.h, src: b.src, formato: b.formato });
       y += t.h + ALTURA_EXTRA_LINHA_IMAGEM + ESPACO_APOS_PARAGRAFO;

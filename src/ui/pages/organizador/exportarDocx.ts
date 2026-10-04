@@ -130,6 +130,7 @@ function filhosDoCabecalho(blocos: Bloco[], cfg: Configuracao, layout: Layout): 
       primeiroTexto = false;
       filhos.push(paragrafoTexto(b.trechos, cfg, { ...est, depois, manter: false }));
     } else if (b.tipo === 'imagem') {
+      if (cfg.removerLogo) return;
       const t = calcularTamanhoImagem(b.w, b.h, layout.geo.larguraUtil, ALTURA_MAXIMA_LOGO, { ...cfg, imagemTamanho: 'auto' });
       filhos.push(new Paragraph({
         alignment: AlignmentType.CENTER,
