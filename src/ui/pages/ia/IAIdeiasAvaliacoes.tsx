@@ -276,7 +276,8 @@ async function pedirObjetivo(tema: string, nee: string, nivel: Nivel): Promise<s
       messages: [{ role: 'user', content: `Gere UM objetivo de aprendizagem curto (1 frase) para uma avaliacao adaptada de Educacao Fisica sobre "${tema}" para aluno com ${nee}. ${foco} Responda APENAS a frase do objetivo, sem introducao.` }]
     })
   });
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error?.message ?? data?.error ?? `Erro HTTP ${res.status}`);
   return (data.content?.[0]?.text || '').trim();
 }
 
