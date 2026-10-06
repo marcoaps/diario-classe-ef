@@ -11,7 +11,7 @@ import {
   type Modalidade, type InscricaoInterclasses, type EquipeInterclasses,
 } from '../../../domain/interclasses';
 import {
-  ADAPTERS, REGRAS_PADRAO, FORMATOS, gerarJogosIniciais, aplicarResultado, aplicarResultadoDuplo, aplicarResultadoMelhorDe3, calcSt, genElim, genSwiss, contarDerrotas, empatadosNoTopo,
+  ADAPTERS, REGRAS_PADRAO, FORMATOS, resultadoWO, gerarJogosIniciais, aplicarResultado, aplicarResultadoDuplo, aplicarResultadoMelhorDe3, calcSt, genElim, genSwiss, contarDerrotas, empatadosNoTopo,
   type Jogo, type Resultado, type Standing, type ResultadoAdapter,
 } from '../../../domain/interclassesCampeonato';
 
@@ -509,6 +509,18 @@ export function CardJogo({ jogo, adapter, onLancar, compacto, mostrarGrupo = tru
   }
 
   const mostraNumeros = !ehVencedorOnly && jogo.jogado && jogo.resultado;
+  const foiWO = !!(jogo.resultado as { wo?: boolean } | null)?.wo;
+
+  // W.O.: o time ausente perde por 1 x 0 (marcado como W.O. no resultado).
+  function lancarWO(ausente: 'A' | 'B') {
+    if (!onLancar || !jogo.equipeA || !jogo.equipeB) return;
+    const nomeAusente = ausente === 'A' ? jogo.equipeA : jogo.equipeB;
+    const nomePresente = ausente === 'A' ? jogo.equipeB : jogo.equipeA;
+    if (!window.confirm(`W.O.: ${nomeAusente} não compareceu.\n\n${nomePresente} vence por 1 x 0. Confirmar?`)) return;
+    setErro(null);
+    onLancar(jogo.id, resultadoWO(adapter, ausente));
+    setEditando(false);
+  }
 
   return (
     <div className={cn('bg-white rounded-2xl border border-gray-100 shadow-sm relative', compacto ? 'p-3' : grande ? 'p-5' : 'p-4')}>
@@ -542,6 +554,9 @@ export function CardJogo({ jogo, adapter, onLancar, compacto, mostrarGrupo = tru
         {jogo.equipeB && <span className={cn('rounded-full flex-shrink-0', grande ? 'w-3.5 h-3.5' : 'w-2 h-2')} style={{ background: corDaEquipe(jogo.equipeB) }} />}
       </div>
 
+      {jogo.jogado && foiWO && (
+        <div className={cn('text-center font-bold text-amber-600 -mt-1 mb-1', grande ? 'text-xs' : 'text-[10px]')}>W.O.</div>
+      )}
       {somenteLeitura ? (
         jogo.jogado && jogo.resultado ? (
           ehVencedorOnly && (
@@ -568,17 +583,17 @@ export function CardJogo({ jogo, adapter, onLancar, compacto, mostrarGrupo = tru
         <ModalPlacar
           equipeA={jogo.equipeA} equipeB={jogo.equipeB} adapter={adapter}
           a={a} b={b} setA={v => { setA(v); setErro(null); }} setB={v => { setB(v); setErro(null); }} ehVencedorOnly={ehVencedorOnly}
-          erro={erro} onConfirmar={confirmar} onFechar={() => { setEditando(false); setErro(null); }}
+          erro={erro} onConfirmar={confirmar} onWO={lancarWO} onFechar={() => { setEditando(false); setErro(null); }}
         />
       )}
     </div>
   );
 }
 
-function ModalPlacar({ equipeA, equipeB, adapter, a, b, setA, setB, ehVencedorOnly, erro, onConfirmar, onFechar }: {
+function ModalPlacar({ equipeA, equipeB, adapter, a, b, setA, setB, ehVencedorOnly, erro, onConfirmar, onWO, onFechar }: {
   equipeA: string; equipeB: string; adapter: ResultadoAdapter;
   a: string; b: string; setA: (v: string) => void; setB: (v: string) => void;
-  ehVencedorOnly: boolean; erro?: string | null; onConfirmar: (v?: 'A' | 'B') => void; onFechar: () => void;
+  ehVencedorOnly: boolean; erro?: string | null; onConfirmar: (v?: 'A' | 'B') => void; onWO: (ausente: 'A' | 'B') => void; onFechar: () => void;
 }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onFechar}>
@@ -607,6 +622,13 @@ function ModalPlacar({ equipeA, equipeB, adapter, a, b, setA, setB, ehVencedorOn
             <button onClick={() => onConfirmar()} className="w-full py-2.5 rounded-xl bg-primary text-white text-sm font-bold">Salvar placar</button>
           </>
         )}
+        <div className="mt-4 pt-3 border-t border-gray-100">
+          <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 text-center">Time não compareceu (W.O. 1 x 0)</div>
+          <div className="flex flex-col gap-1.5">
+            <button onClick={() => onWO('A')} className="py-2 rounded-xl border border-amber-300 bg-amber-50 text-amber-700 text-xs font-bold hover:bg-amber-100">{equipeA} não compareceu</button>
+            <button onClick={() => onWO('B')} className="py-2 rounded-xl border border-amber-300 bg-amber-50 text-amber-700 text-xs font-bold hover:bg-amber-100">{equipeB} não compareceu</button>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -7,9 +7,11 @@ import type { Modalidade } from './interclasses';
 // objeto Team{id,color}, e o resultado de cada jogo passa por um
 // ResultadoAdapter em vez de assumir sempre "gols".
 
-export type ResultadoGols = { tipo: 'gols'; golsA: number; golsB: number };
-export type ResultadoSets = { tipo: 'sets'; setsA: number; setsB: number };
-export type ResultadoVencedor = { tipo: 'vencedor'; vencedor: 'A' | 'B' };
+// `wo: true` = vitória por W.O. (o outro time não compareceu); fica dentro do próprio
+// resultado (jsonb), então não precisa de coluna nova.
+export type ResultadoGols = { tipo: 'gols'; golsA: number; golsB: number; wo?: boolean };
+export type ResultadoSets = { tipo: 'sets'; setsA: number; setsB: number; wo?: boolean };
+export type ResultadoVencedor = { tipo: 'vencedor'; vencedor: 'A' | 'B'; wo?: boolean };
 export type Resultado = ResultadoGols | ResultadoSets | ResultadoVencedor;
 
 export interface DestinoJogo { jogoId: string; slot: 'A' | 'B'; }
@@ -81,7 +83,7 @@ export const ADAPTER_GOLS: ResultadoAdapter = {
   vencedor: (r) => { const x = r as ResultadoGols; return x.golsA > x.golsB ? 'A' : x.golsA < x.golsB ? 'B' : null; },
   valorA: (r) => (r as ResultadoGols).golsA,
   valorB: (r) => (r as ResultadoGols).golsB,
-  formatarPlacar: (r) => { const x = r as ResultadoGols; return `${x.golsA} – ${x.golsB}`; },
+  formatarPlacar: (r) => { const x = r as ResultadoGols; return `${x.golsA} – ${x.golsB}${x.wo ? ' (W.O.)' : ''}`; },
   criarResultado: (a, b) => ({ tipo: 'gols', golsA: a, golsB: b }),
   labelA: 'Gols', labelB: 'Gols',
   mensagemDesempate: 'Jogue a prorrogação/pênaltis em quadra e lance o placar já com um vencedor.',
@@ -92,7 +94,7 @@ export const ADAPTER_SETS: ResultadoAdapter = {
   vencedor: (r) => { const x = r as ResultadoSets; return x.setsA > x.setsB ? 'A' : x.setsA < x.setsB ? 'B' : null; },
   valorA: (r) => (r as ResultadoSets).setsA,
   valorB: (r) => (r as ResultadoSets).setsB,
-  formatarPlacar: (r) => { const x = r as ResultadoSets; return `${x.setsA} sets – ${x.setsB} sets`; },
+  formatarPlacar: (r) => { const x = r as ResultadoSets; return `${x.setsA} sets – ${x.setsB} sets${x.wo ? ' (W.O.)' : ''}`; },
   criarResultado: (a, b) => ({ tipo: 'sets', setsA: a, setsB: b }),
   labelA: 'Sets', labelB: 'Sets',
   mensagemDesempate: 'Jogue um set decisivo em quadra e lance o total de sets já com um vencedor (ex.: 2 × 1).',
@@ -103,12 +105,22 @@ export const ADAPTER_VENCEDOR: ResultadoAdapter = {
   vencedor: (r) => (r as ResultadoVencedor).vencedor,
   valorA: (r) => (r as ResultadoVencedor).vencedor === 'A' ? 1 : 0,
   valorB: (r) => (r as ResultadoVencedor).vencedor === 'B' ? 1 : 0,
-  formatarPlacar: (r) => (r as ResultadoVencedor).vencedor === 'A' ? 'Vitória — Equipe A' : 'Vitória — Equipe B',
+  formatarPlacar: (r) => `${(r as ResultadoVencedor).vencedor === 'A' ? 'Vitória — Equipe A' : 'Vitória — Equipe B'}${(r as ResultadoVencedor).wo ? ' (W.O.)' : ''}`,
   criarResultado: (a) => ({ tipo: 'vencedor', vencedor: a >= 1 ? 'A' : 'B' }),
   labelA: '', labelB: '',
   mensagemDesempate: '', // nunca empata -- o placar já é só "quem venceu"
   permiteEmpateNaLiga: true, // irrelevante -- essa modalidade nunca gera um empate na UI
 };
+
+// W.O.: o time `ausente` não compareceu. Placar fixo de 1 x 0 pro time presente
+// (2 x 0 em sets, no vôlei), marcado com `wo: true`.
+export function resultadoWO(adapter: ResultadoAdapter, ausente: 'A' | 'B'): Resultado {
+  const base = adapter.criarResultado(ausente === 'B' ? 1 : 0, ausente === 'A' ? 1 : 0);
+  const r = base.tipo === 'sets'
+    ? adapter.criarResultado(ausente === 'B' ? 2 : 0, ausente === 'A' ? 2 : 0)
+    : base;
+  return { ...r, wo: true } as Resultado;
+}
 
 export const ADAPTERS: Record<Modalidade, ResultadoAdapter> = {
   futsal: ADAPTER_GOLS,
