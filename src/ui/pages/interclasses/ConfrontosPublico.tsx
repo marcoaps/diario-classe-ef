@@ -7,6 +7,7 @@ import { ADAPTERS, REGRAS_PADRAO, calcSt, type Jogo } from '../../../domain/inte
 import { linhaParaJogo, corDaEquipe, ListaJogos, Classificacao, Chave, FASES_LIGA } from './Confrontos';
 
 import { FinaisCampeoes, FINAIS } from './FinaisCampeoes';
+import { Cronograma } from './Cronograma';
 
 const EDICAO = '2026';
 const CATEGORIAS = [...ANOS_ESCOLARES, FINAIS];
@@ -22,6 +23,7 @@ export function ConfrontosPublico() {
   });
   const [categoriaAtiva, setCategoriaAtiva] = useState<string>(ANOS_ESCOLARES[0]);
   const [generoAtivo, setGeneroAtivo] = useState<GeneroCampeonato>('M');
+  const [verCronograma, setVerCronograma] = useState(false);
   const chaveCamp = chaveCampeonato(categoriaAtiva, generoAtivo);
   const [campeonato, setCampeonato] = useState<CampeonatoInterclasses | null>(null);
   const [jogos, setJogos] = useState<Jogo[]>([]);
@@ -112,6 +114,22 @@ export function ConfrontosPublico() {
         </div>
 
         <div className="flex gap-2">
+          {([[false, '🏆 Resultados'], [true, '📅 Cronograma']] as const).map(([valor, rotulo]) => (
+            <button
+              key={rotulo}
+              onClick={() => setVerCronograma(valor)}
+              className={cn('flex-1 py-3 rounded-xl text-base font-bold transition-all', verCronograma === valor ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}
+            >
+              {rotulo}
+            </button>
+          ))}
+        </div>
+
+        {verCronograma ? (
+          <Cronograma modalidade={modalidade} publico />
+        ) : (
+        <>
+        <div className="flex gap-2">
           {GENEROS_CAMPEONATO.map(g => (
             <button
               key={g.id}
@@ -180,6 +198,8 @@ export function ConfrontosPublico() {
 
             {aba === 'chave' && <Chave jogos={jogos} adapter={adapter} somenteLeitura grande />}
           </>
+        )}
+        </>
         )}
       </div>
     </div>

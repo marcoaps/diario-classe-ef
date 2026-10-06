@@ -86,7 +86,7 @@ export function montarCronograma(
   return { jogos: [...normais, ...finais], semHorario: [...sem1, ...sem2] };
 }
 
-export function Cronograma({ modalidade }: { modalidade: Modalidade }) {
+export function Cronograma({ modalidade, publico = false }: { modalidade: Modalidade; publico?: boolean }) {
   const [dados, setDados] = useState<Awaited<ReturnType<typeof buscarCampeonatosComJogos>>>([]);
   const [loading, setLoading] = useState(true);
   const [slotMin, setSlotMin] = useState<number>(() => {
@@ -139,14 +139,14 @@ export function Cronograma({ modalidade }: { modalidade: Modalidade }) {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <label className="text-xs text-gray-600 flex items-center gap-1.5">
+          {!publico && <label className="text-xs text-gray-600 flex items-center gap-1.5">
             Minutos por jogo
             <input
               type="number" min={5} max={90} value={slotMin} onChange={e => mudarSlot(e.target.value)}
               className="w-16 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-xs outline-none focus:border-primary"
               title="2 tempos de 10 + 3 de intervalo + 5 de troca = 28"
             />
-          </label>
+          </label>}
           <button onClick={carregar} disabled={loading} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-primary font-medium disabled:opacity-40">
             <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} /> Atualizar
           </button>
@@ -157,11 +157,11 @@ export function Cronograma({ modalidade }: { modalidade: Modalidade }) {
         <div className="flex gap-2 items-center justify-center py-10 text-gray-500 text-sm"><Loader2 className="w-4 h-4 animate-spin" /> Carregando...</div>
       ) : jogos.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-100 p-6 text-center text-sm text-gray-500">
-          Nenhum campeonato de Futsal iniciado ainda. Inicie os campeonatos na aba Torneios/Confrontos e os jogos aparecem aqui.
+          Nenhum campeonato de Futsal iniciado ainda. {publico ? 'Os jogos aparecem aqui assim que os campeonatos começarem.' : 'Inicie os campeonatos na aba Torneios/Confrontos e os jogos aparecem aqui.'}
         </div>
       ) : (
         <>
-          {semHorario.length > 0 && (
+          {!publico && semHorario.length > 0 && (
             <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-xs text-red-700">
               <strong>{semHorario.length} jogo{semHorario.length !== 1 ? 's' : ''} não cabe{semHorario.length !== 1 ? 'm' : ''} na janela da quadra</strong> (terça à tarde até sexta, e sábado só para as finais).
               Reduza os minutos por jogo ou abra mais horários.
