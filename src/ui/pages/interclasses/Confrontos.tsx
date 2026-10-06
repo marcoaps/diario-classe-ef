@@ -516,7 +516,7 @@ export function CardJogo({ jogo, adapter, onLancar, compacto, mostrarGrupo = tru
     if (!onLancar || !jogo.equipeA || !jogo.equipeB) return;
     const nomeAusente = ausente === 'A' ? jogo.equipeA : jogo.equipeB;
     const nomePresente = ausente === 'A' ? jogo.equipeB : jogo.equipeA;
-    if (!window.confirm(`W.O.: ${nomeAusente} não compareceu.\n\n${nomePresente} vence por 1 x 0. Confirmar?`)) return;
+    if (!window.confirm(`W.O.: ${nomeAusente} não se apresentou em até 10 minutos do horário previsto (ou não tem 3 atletas em quadra).\n\n${nomePresente} vence por 1 x 0. Confirmar?`)) return;
     setErro(null);
     onLancar(jogo.id, resultadoWO(adapter, ausente));
     setEditando(false);
@@ -624,6 +624,10 @@ function ModalPlacar({ equipeA, equipeB, adapter, a, b, setA, setB, ehVencedorOn
         )}
         <div className="mt-4 pt-3 border-t border-gray-100">
           <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 text-center">Time não compareceu (W.O. 1 x 0)</div>
+          <p className="text-[10px] text-gray-400 text-center mb-2 leading-snug">
+            Regra: perde por W.O. o time que não se apresentar até <strong>10 minutos</strong> após o horário previsto.
+            Para evitar o W.O., o time precisa de no mínimo <strong>3 atletas</strong> presentes em quadra.
+          </p>
           <div className="flex flex-col gap-1.5">
             <button onClick={() => onWO('A')} className="py-2 rounded-xl border border-amber-300 bg-amber-50 text-amber-700 text-xs font-bold hover:bg-amber-100">{equipeA} não compareceu</button>
             <button onClick={() => onWO('B')} className="py-2 rounded-xl border border-amber-300 bg-amber-50 text-amber-700 text-xs font-bold hover:bg-amber-100">{equipeB} não compareceu</button>
