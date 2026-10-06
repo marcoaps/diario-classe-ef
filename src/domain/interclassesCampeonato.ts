@@ -126,7 +126,7 @@ export const REGRAS_PADRAO: Record<Modalidade, RegrasPontuacao> = {
   queimada: { pontosVitoria: 2, pontosEmpate: 0, pontosDerrota: 0 },
 };
 
-export interface FormatoOption { id: string; nome: string; desc: string; icone: string; min: number; }
+export interface FormatoOption { id: string; nome: string; desc: string; icone: string; min: number; max?: number; }
 
 export const FORMATOS: FormatoOption[] = [
   { id: 'round_robin', nome: 'Pontos Corridos', desc: 'Todos jogam contra todos', icone: '⚽', min: 3 },
@@ -134,6 +134,8 @@ export const FORMATOS: FormatoOption[] = [
   { id: 'groups_ko', nome: 'Grupos + Mata-Mata', desc: 'Fase de grupos + eliminatória', icone: '🏆', min: 4 },
   { id: 'swiss', nome: 'Sistema Suíço', desc: 'Emparelhamento dinâmico', icone: '🇨🇭', min: 4 },
   { id: 'double_elim', nome: 'Mata-Mata Duplo', desc: 'Só é eliminado na 2ª derrota', icone: '🔥', min: 3 },
+  // Só quando o ano tem exatamente 2 times (sobra de um ano com poucas turmas).
+  { id: 'best_of_3', nome: 'Final melhor de 3', desc: 'Dois times — vence quem ganhar 2 jogos', icone: '🥇', min: 2, max: 2 },
 ];
 
 const nextPow2 = (n: number) => { let p = 1; while (p < n) p *= 2; return p; };
@@ -341,6 +343,41 @@ export function contarDerrotas(equipe: string, jogos: Jogo[]): number {
   ).length;
 }
 
+// Final melhor de 3 (ano com só 2 times): jogos 1 e 2 já nascem; o jogo 3 só
+// é criado por aplicarResultadoMelhorDe3 se a série empatar em 1 x 1.
+export function genMelhorDe3(equipes: string[]): Jogo[] {
+  const [a, b] = equipes;
+  return [1, 2].map(n => ({
+    id: `b3_j${n}_${uid()}`, equipeA: a, equipeB: b, jogado: false, vencedor: null, resultado: null,
+    rodada: n, fase: `Final · Jogo ${n}`, grupo: null,
+  }));
+}
+
+export function aplicarResultadoMelhorDe3(
+  jogos: Jogo[], jogoId: string, resultado: Resultado, adapter: ResultadoAdapter
+): { jogos: Jogo[]; campeao?: string } {
+  const js = jogos.map(x => ({ ...x }));
+  const atual = js.find(x => x.id === jogoId);
+  if (!atual) return { jogos };
+  const venc = adapter.vencedor(resultado);
+  atual.resultado = resultado; atual.jogado = true;
+  atual.vencedor = venc === 'A' ? atual.equipeA : venc === 'B' ? atual.equipeB : null;
+
+  const vitorias = new Map<string, number>();
+  js.filter(j => j.jogado && j.vencedor).forEach(j => vitorias.set(j.vencedor!, (vitorias.get(j.vencedor!) ?? 0) + 1));
+  const lider = [...vitorias.entries()].find(([, v]) => v >= 2);
+  if (lider) return { jogos: js, campeao: lider[0] };
+
+  // 1 x 1 depois de 2 jogos -> cria o jogo decisivo.
+  if (js.length === 2 && js.every(j => j.jogado)) {
+    js.push({
+      id: `b3_j3_${uid()}`, equipeA: atual.equipeA, equipeB: atual.equipeB, jogado: false, vencedor: null, resultado: null,
+      rodada: 3, fase: 'Final · Jogo 3 (decisivo)', grupo: null,
+    });
+  }
+  return { jogos: js };
+}
+
 export function genGroups(equipes: string[]): { grupos: Grupo[]; jogos: Jogo[] } {
   // Grupos pequenos demais (ex: 2 times, 1 jogo só) fazem a fase de grupos
   // parecer inútil — só divide em mais de um grupo quando dá pra manter
@@ -421,6 +458,7 @@ export function gerarJogosIniciais(equipes: string[], formato: string): { jogos:
   if (formato === 'round_robin') return { jogos: genRR(equipes), grupos: null, fase: 'league' };
   if (formato === 'single_elim') return { jogos: genElim(equipes, 'se'), grupos: null, fase: 'elimination' };
   if (formato === 'double_elim') return { jogos: genDoubleElim(equipes), grupos: null, fase: 'elimination' };
+  if (formato === 'best_of_3') return { jogos: genMelhorDe3(equipes), grupos: null, fase: 'elimination' };
   if (formato === 'groups_ko') { const r = genGroups(equipes); return { jogos: r.jogos, grupos: r.grupos, fase: 'groups' }; }
   if (formato === 'swiss') {
     const sh = shuffle([...equipes]); const jogos: Jogo[] = [];

@@ -11,7 +11,7 @@ import {
   type Modalidade, type InscricaoInterclasses, type EquipeInterclasses,
 } from '../../../domain/interclasses';
 import {
-  ADAPTERS, REGRAS_PADRAO, FORMATOS, gerarJogosIniciais, aplicarResultado, aplicarResultadoDuplo, calcSt, genElim, genSwiss, contarDerrotas, empatadosNoTopo,
+  ADAPTERS, REGRAS_PADRAO, FORMATOS, gerarJogosIniciais, aplicarResultado, aplicarResultadoDuplo, aplicarResultadoMelhorDe3, calcSt, genElim, genSwiss, contarDerrotas, empatadosNoTopo,
   type Jogo, type Resultado, type Standing, type ResultadoAdapter,
 } from '../../../domain/interclassesCampeonato';
 
@@ -157,7 +157,9 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
 
   async function lancarPlacar(jogoId: string, resultado: Resultado) {
     const ehDuplo = campeonato!.formato === 'double_elim';
-    const r = ehDuplo
+    const r = campeonato!.formato === 'best_of_3'
+      ? aplicarResultadoMelhorDe3(jogos, jogoId, resultado, adapter)
+      : ehDuplo
       ? aplicarResultadoDuplo(jogos, jogoId, resultado, adapter)
       : aplicarResultado(jogos, jogoId, resultado, adapter, { formato: campeonato!.formato, equipes: equipesDoCampeonato, regras });
     setJogos(r.jogos);
@@ -368,7 +370,10 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
 function SetupCampeonato({ equipesProntas, equipesIncompletas, onIniciar, criando }: {
   equipesProntas: string[]; equipesIncompletas: EquipeInterclasses[]; onIniciar: (formato: string) => void; criando?: boolean;
 }) {
-  const [formato, setFormato] = useState('round_robin');
+  // Com exatamente 2 times só faz sentido a "Final melhor de 3"; com 3+ ela some.
+  const formatosDisponiveis = FORMATOS.filter(f => f.max === undefined ? equipesProntas.length !== 2 : equipesProntas.length === f.max);
+  const [formatoEscolhido, setFormato] = useState('round_robin');
+  const formato = formatosDisponiveis.some(f => f.id === formatoEscolhido) ? formatoEscolhido : formatosDisponiveis[0].id;
   const podeIniciar = equipesProntas.length >= (FORMATOS.find(f => f.id === formato)?.min ?? 3);
 
   return (
@@ -393,7 +398,7 @@ function SetupCampeonato({ equipesProntas, equipesIncompletas, onIniciar, criand
         </div>
       )}
       <div className="flex flex-col gap-2 mb-4">
-        {FORMATOS.map(f => (
+        {formatosDisponiveis.map(f => (
           <div
             key={f.id}
             onClick={() => setFormato(f.id)}
