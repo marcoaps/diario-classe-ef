@@ -901,6 +901,29 @@ export async function buscarJogos(campeonatoId: string): Promise<JogoInterclasse
   return (data || []) as JogoInterclasses[];
 }
 
+// Todos os campeonatos de uma modalidade (qualquer ano/gênero/final) com seus
+// jogos — base do Cronograma, que ordena os jogos de todos os campeonatos
+// numa fila única pra uma quadra só.
+export async function buscarCampeonatosComJogos(
+  edicao: string, modalidade: string
+): Promise<{ campeonato: CampeonatoInterclasses; jogos: JogoInterclasses[] }[]> {
+  const { data: camps, error } = await supabase
+    .from('interclasses_campeonatos')
+    .select('*')
+    .eq('edicao', edicao).eq('modalidade', modalidade);
+  if (error) throw error;
+  const lista = (camps || []) as CampeonatoInterclasses[];
+  if (lista.length === 0) return [];
+  const { data: jogos, error: erroJogos } = await supabase
+    .from('interclasses_jogos')
+    .select('*')
+    .in('campeonato_id', lista.map(c => c.id))
+    .order('rodada', { ascending: true });
+  if (erroJogos) throw erroJogos;
+  const todos = (jogos || []) as JogoInterclasses[];
+  return lista.map(c => ({ campeonato: c, jogos: todos.filter(j => j.campeonato_id === c.id) }));
+}
+
 export async function criarJogos(
   campeonatoId: string,
   jogos: Omit<JogoInterclasses, 'id' | 'campeonato_id' | 'criado_em' | 'atualizado_em'>[]
