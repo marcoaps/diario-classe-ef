@@ -376,7 +376,7 @@ function SetupCampeonato({ equipesProntas, equipesIncompletas, onIniciar, criand
 }) {
   // Com exatamente 2 times só faz sentido a "Final melhor de 3"; com 3+ ela some.
   const formatosDisponiveis = FORMATOS.filter(f => f.max === undefined ? equipesProntas.length !== 2 : equipesProntas.length === f.max);
-  const [formatoEscolhido, setFormato] = useState('round_robin');
+  const [formatoEscolhido, setFormato] = useState('double_elim'); // padrão: mata-mata duplo (formato do Interclasses)
   const formato = formatosDisponiveis.some(f => f.id === formatoEscolhido) ? formatoEscolhido : formatosDisponiveis[0].id;
   const podeIniciar = equipesProntas.length >= (FORMATOS.find(f => f.id === formato)?.min ?? 3);
 
