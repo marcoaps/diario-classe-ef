@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Loader2, Pencil, Check, X, Trash2, FileDown } from 'lucide-react';
-import { agruparPorTime, EDICAO_PADRAO, modalidadeConfig,chaveElegibilidade, ELEGIBILIDADE_COR, ELEGIBILIDADE_LABEL, MAXIMO_JOGADORES_TIME, mensagemMinimoNaoAtingido } from '../../../domain/interclasses';
+import { agruparPorTime, EDICAO_PADRAO, MODALIDADES, modalidadeConfig,chaveElegibilidade, ELEGIBILIDADE_COR, ELEGIBILIDADE_LABEL, MAXIMO_JOGADORES_TIME, mensagemMinimoNaoAtingido } from '../../../domain/interclasses';
 import type { InscricaoInterclasses } from '../../../domain/interclasses';
-import { renomearTimeInterclasses, excluirInscricaoInterclasses, atualizarNotasVermelhasElegibilidade } from '../../../data/supabase';
+import { renomearTimeInterclasses, excluirInscricaoInterclasses, atualizarNotasVermelhasElegibilidade, moverTimeDeModalidade } from '../../../data/supabase';
 import type { ElegibilidadeInterclasses } from '../../../data/supabase';
 import { baixarEquipesWord } from './exportarEquipesWord';
 
@@ -151,6 +151,21 @@ export function Equipes({ inscricoes, elegibilidade, loading, onRefetch }: Props
     });
   }
 
+  // Inscreveu o time na modalidade errada: move todos os jogadores de uma vez.
+  async function moverTime(eq: { nomeTime: string; alunos: InscricaoInterclasses[] }, destino: string) {
+    const origem = eq.alunos[0]?.modalidade ?? 'futsal';
+    const rotulo = modalidadeConfig(destino).label;
+    if (!window.confirm(`Mover o time "${eq.nomeTime}" (${eq.alunos.length} aluno${eq.alunos.length !== 1 ? 's' : ''}) de ${modalidadeConfig(origem).label} para ${rotulo}?
+
+Eles deixam de estar inscritos em ${modalidadeConfig(origem).label}.`)) return;
+    try {
+      await moverTimeDeModalidade(EDICAO_PADRAO, eq.alunos, eq.nomeTime, origem, destino);
+      await onRefetch();
+    } catch (e: any) {
+      alert(e?.message || 'Erro ao mover o time. Tente novamente.');
+    }
+  }
+
   async function confirmarRenomear(eq: { nomeTime: string; alunos: InscricaoInterclasses[] }) {
     const nome = novoNome.trim();
     if (!nome || nome === eq.nomeTime) { setRenomeando(null); return; }
@@ -220,6 +235,17 @@ export function Equipes({ inscricoes, elegibilidade, loading, onRefetch }: Props
               </div>
             )}
             <div className="flex items-center gap-1.5 flex-shrink-0">
+              <select
+                value=""
+                onChange={e => { if (e.target.value) moverTime(eq, e.target.value); }}
+                className="text-[11px] text-gray-500 bg-gray-50 border border-gray-200 rounded-full px-2 py-0.5 outline-none cursor-pointer"
+                title="Inscreveu na modalidade errada? Mova o time inteiro"
+              >
+                <option value="">Mover para…</option>
+                {MODALIDADES.filter(m => m.id !== (eq.alunos[0]?.modalidade ?? 'futsal')).map(m => (
+                  <option key={m.id} value={m.id}>{m.icone} {m.label}</option>
+                ))}
+              </select>
               <span className="text-[11px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{eq.turmas.join(', ')}</span>
               <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${eq.cheio ? 'bg-gray-200 text-gray-600' : eq.completo ? 'bg-secondary-container text-on-secondary-container' : 'bg-amber-100 text-amber-700'}`}>
                 {eq.cheio ? `🔒 Cheio (${eq.alunos.length}/${MAXIMO_JOGADORES_TIME})` : eq.completo ? `✅ Completo (${eq.alunos.length}/${MAXIMO_JOGADORES_TIME})` : `⏳ Faltam ${eq.minimoJogadores - eq.alunos.length}`}

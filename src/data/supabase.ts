@@ -624,6 +624,46 @@ export async function renomearTimeInterclasses(ids: string[], nomeNovo: string) 
   if (error) throw error;
 }
 
+// Move um time inteiro para outra modalidade (ex.: inscrito em Queimada por
+// engano). Recusa se algum aluno já estiver na modalidade de destino ou se já
+// existir um time com o mesmo nome lá — nada é movido pela metade. O código de
+// edição do time vai junto (quando existe).
+export async function moverTimeDeModalidade(
+  edicao: string,
+  inscricoes: { id: string; aluno_id: string | null; turma_id: string; nome_completo: string }[],
+  nomeTime: string,
+  origem: string,
+  destino: string,
+) {
+  const { data: destinoRows, error: erroBusca } = await supabase
+    .from('interclasses_inscricoes')
+    .select('aluno_id, turma_id, nome_completo, nome_time')
+    .eq('edicao', edicao)
+    .eq('modalidade', destino);
+  if (erroBusca) throw erroBusca;
+  const rows = destinoRows || [];
+  const norm = (t: string) => t.trim().toLowerCase();
+  if (rows.some(r => norm(r.nome_time) === norm(nomeTime))) {
+    throw new Error(`Já existe um time chamado "${nomeTime}" na modalidade de destino. Renomeie um deles antes de mover.`);
+  }
+  const idsDestino = new Set(rows.map(r => r.aluno_id).filter(Boolean));
+  const chavesDestino = new Set(rows.map(r => `${r.turma_id}|${norm(r.nome_completo)}`));
+  const conflitos = inscricoes.filter(i =>
+    (i.aluno_id && idsDestino.has(i.aluno_id)) || chavesDestino.has(`${i.turma_id}|${norm(i.nome_completo)}`));
+  if (conflitos.length > 0) {
+    throw new Error(`Já inscritos na modalidade de destino: ${conflitos.map(c => c.nome_completo).join(', ')}. Resolva isso antes de mover.`);
+  }
+  const { error } = await supabase
+    .from('interclasses_inscricoes')
+    .update({ modalidade: destino })
+    .in('id', inscricoes.map(i => i.id));
+  if (error) throw error;
+  await supabase
+    .from('interclasses_times_codigos')
+    .update({ modalidade: destino })
+    .eq('edicao', edicao).eq('modalidade', origem).eq('time_norm', norm(nomeTime));
+}
+
 // Apaga TODAS as inscrições de uma edição de uma vez — usado pra zerar dados
 // de teste antes de abrir pra valer.
 export async function limparInscricoesInterclasses(edicao: string) {
