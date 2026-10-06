@@ -2,12 +2,12 @@ import { useState, useEffect, useMemo } from 'react';
 import { Trophy, Loader2 } from 'lucide-react';
 import { cn } from '../../AppLayout';
 import { buscarCampeonato, buscarJogos, type CampeonatoInterclasses } from '../../../data/supabase';
-import { CATEGORIA_6_7, CATEGORIA_8_9, GENEROS_CAMPEONATO, chaveCampeonato, MODALIDADES, type GeneroCampeonato, type Modalidade } from '../../../domain/interclasses';
+import { ANOS_ESCOLARES, GENEROS_CAMPEONATO, chaveCampeonato, MODALIDADES, type GeneroCampeonato, type Modalidade } from '../../../domain/interclasses';
 import { ADAPTERS, REGRAS_PADRAO, calcSt, type Jogo } from '../../../domain/interclassesCampeonato';
 import { linhaParaJogo, corDaEquipe, ListaJogos, Classificacao, Chave, FASES_LIGA } from './Confrontos';
 
 const EDICAO = '2026';
-const CATEGORIAS = [CATEGORIA_6_7, CATEGORIA_8_9];
+const CATEGORIAS = ANOS_ESCOLARES;
 const MODALIDADE_STORAGE_KEY = 'interclasses_modalidade_resultados_publico';
 
 // Página pública (sem login) só de leitura — jogos, placar, classificação e
@@ -18,7 +18,7 @@ export function ConfrontosPublico() {
   const [modalidade, setModalidade] = useState<Modalidade>(() => {
     try { return (localStorage.getItem(MODALIDADE_STORAGE_KEY) as Modalidade) || 'futsal'; } catch { return 'futsal'; }
   });
-  const [categoriaAtiva, setCategoriaAtiva] = useState<string>(CATEGORIA_6_7);
+  const [categoriaAtiva, setCategoriaAtiva] = useState<string>(ANOS_ESCOLARES[0]);
   const [generoAtivo, setGeneroAtivo] = useState<GeneroCampeonato>('M');
   const chaveCamp = chaveCampeonato(categoriaAtiva, generoAtivo);
   const [campeonato, setCampeonato] = useState<CampeonatoInterclasses | null>(null);

@@ -7,7 +7,7 @@ import {
   type CampeonatoInterclasses, type JogoInterclasses,
 } from '../../../data/supabase';
 import {
-  agruparPorTime, categoriaFromTurma, CATEGORIA_6_7, CATEGORIA_8_9, GENEROS_CAMPEONATO, chaveCampeonato, generoDoTime, type GeneroCampeonato, mensagemMinimoNaoAtingido,
+  agruparPorTime, ANOS_ESCOLARES, anoDoTime, GENEROS_CAMPEONATO, chaveCampeonato, generoDoTime, type GeneroCampeonato, mensagemMinimoNaoAtingido,
   type Modalidade, type InscricaoInterclasses, type EquipeInterclasses,
 } from '../../../domain/interclasses';
 import {
@@ -16,7 +16,7 @@ import {
 } from '../../../domain/interclassesCampeonato';
 
 const EDICAO = '2026';
-const CATEGORIAS = [CATEGORIA_6_7, CATEGORIA_8_9];
+const CATEGORIAS = ANOS_ESCOLARES;
 
 // Cor determinística por nome de equipe — mesma equipe sempre com a mesma
 // cor, sem precisar guardar isso em lugar nenhum.
@@ -63,7 +63,7 @@ interface Props {
 }
 
 export function Confrontos({ modalidade, inscricoes }: Props) {
-  const [categoriaAtiva, setCategoriaAtiva] = useState<string>(CATEGORIA_6_7);
+  const [categoriaAtiva, setCategoriaAtiva] = useState<string>(ANOS_ESCOLARES[0]);
   const [generoAtivo, setGeneroAtivo] = useState<GeneroCampeonato>('M');
   const chaveCamp = chaveCampeonato(categoriaAtiva, generoAtivo);
   const [campeonato, setCampeonato] = useState<CampeonatoInterclasses | null>(null);
@@ -75,13 +75,11 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
   const adapter = ADAPTERS[modalidade];
   const regras = REGRAS_PADRAO[modalidade];
 
-  const inscricoesCategoria = useMemo(
-    () => inscricoes.filter(i => categoriaFromTurma(i.turma_id) === categoriaAtiva),
-    [inscricoes, categoriaAtiva]
-  );
+  // Chave isolada por ano: só entram times do ano escolhido (e do gênero
+  // escolhido) — o mata-mata duplo gera W e L só com esses times.
   const equipes = useMemo(
-    () => agruparPorTime(inscricoesCategoria).filter(e => generoDoTime(e.alunos) === generoAtivo),
-    [inscricoesCategoria, generoAtivo]
+    () => agruparPorTime(inscricoes).filter(e => anoDoTime(e.alunos) === categoriaAtiva && generoDoTime(e.alunos) === generoAtivo),
+    [inscricoes, categoriaAtiva, generoAtivo]
   );
   const equipesProntas = useMemo(() => equipes.filter(e => e.completo).map(e => e.nomeTime), [equipes]);
 

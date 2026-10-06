@@ -45,6 +45,42 @@ export function generoDoTime(alunos: { genero: string | null }[]): GeneroCampeon
   return generos.has('F') && !generos.has('M') ? 'F' : 'M';
 }
 
+// ---------------------------------------------------------------------------
+// Chaves por ANO ESCOLAR (mata-mata duplo e demais formatos): cada ano (6º,
+// 7º, 8º, 9º) é um torneio fechado, separado também por modalidade e gênero.
+// Time de um ano nunca enfrenta time de outro ano — nem na chave de
+// vencedores nem na de repescagem, porque os jogos de cada campeonato só
+// são gerados com as equipes do seu próprio ano.
+// ---------------------------------------------------------------------------
+export const ANOS_ESCOLARES = ['6º ano', '7º ano', '8º ano', '9º ano'] as const;
+export type AnoEscolar = typeof ANOS_ESCOLARES[number];
+
+// Ano de uma turma: "9B" / "9ºB" / "9°B" -> '9º ano'.
+export function anoFromTurma(turmaId: string): AnoEscolar | null {
+  const serie = turmaId.trim().charAt(0);
+  return ANOS_ESCOLARES.find(a => a.startsWith(serie)) ?? null;
+}
+
+// Ano de um time = ano da maioria dos seus alunos (um time só deveria ter
+// alunos de um ano; se a gestão abriu exceção e misturou, vale o ano que
+// aparece mais vezes — empate fica com o menor ano).
+export function anoDoTime(alunos: { turma_id: string }[]): AnoEscolar | null {
+  const contagem = new Map<AnoEscolar, number>();
+  alunos.forEach(a => { const ano = anoFromTurma(a.turma_id); if (ano) contagem.set(ano, (contagem.get(ano) ?? 0) + 1); });
+  let melhor: AnoEscolar | null = null;
+  ANOS_ESCOLARES.forEach(ano => { if ((contagem.get(ano) ?? 0) > (melhor ? contagem.get(melhor) ?? 0 : 0)) melhor = ano; });
+  return melhor;
+}
+
+// Particiona os times por ano escolar ANTES de gerar a chave: devolve, pra
+// cada ano, só os times daquele ano (entrada de genDoubleElim/gerarJogosIniciais
+// de cada torneio independente).
+export function particionarTimesPorAno<T extends { alunos: { turma_id: string }[] }>(equipes: T[]): Record<AnoEscolar, T[]> {
+  const out = { '6º ano': [], '7º ano': [], '8º ano': [], '9º ano': [] } as Record<AnoEscolar, T[]>;
+  equipes.forEach(e => { const ano = anoDoTime(e.alunos); if (ano) out[ano].push(e); });
+  return out;
+}
+
 export function categoriaFromTurma(turmaId: string): string {
   const serie = turmaId.trim().charAt(0);
   if (serie === '6' || serie === '7') return CATEGORIA_6_7;
