@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Loader2, Pencil, Check, X, Trash2, FileDown } from 'lucide-react';
 import { agruparPorTime, EDICAO_PADRAO, modalidadeConfig,chaveElegibilidade, ELEGIBILIDADE_COR, ELEGIBILIDADE_LABEL, MAXIMO_JOGADORES_TIME, mensagemMinimoNaoAtingido } from '../../../domain/interclasses';
 import type { InscricaoInterclasses } from '../../../domain/interclasses';
-import { renomearTimeInterclasses, excluirInscricaoInterclasses } from '../../../data/supabase';
+import { renomearTimeInterclasses, excluirInscricaoInterclasses, atualizarNotasVermelhasElegibilidade } from '../../../data/supabase';
 import type { ElegibilidadeInterclasses } from '../../../data/supabase';
 import { baixarEquipesWord } from './exportarEquipesWord';
 
@@ -44,6 +44,25 @@ function SeloElegibilidade({ eleg }: { eleg: ElegibilidadeInterclasses }) {
       {ELEGIBILIDADE_ICONE[eleg.status]} {textoElegibilidade(eleg)}
     </span>
   );
+}
+
+// Secretaria regularizou notas depois do instantâneo importado: o professor
+// corrige o nº de notas vermelhas direto na lista do time.
+async function ajustarNotasVermelhas(eleg: ElegibilidadeInterclasses, onRefetch: () => Promise<void>) {
+  const resp = window.prompt(
+    `Quantas notas vermelhas ${eleg.nome} tem agora (após a regularização da Secretaria)?
+0 = apto · 1 = atenção (pode jogar) · 2 ou mais = inapto`,
+    String(Math.max(0, eleg.notas_vermelhas_final - 1))
+  );
+  if (resp === null) return;
+  const n = parseInt(resp, 10);
+  if (!Number.isInteger(n) || n < 0 || String(n) !== resp.trim()) { alert('Digite um número inteiro (0, 1, 2...).'); return; }
+  try {
+    await atualizarNotasVermelhasElegibilidade(eleg.id, n);
+    await onRefetch();
+  } catch {
+    alert('Não foi possível atualizar. Tente novamente.');
+  }
 }
 
 export function Equipes({ inscricoes, elegibilidade, loading, onRefetch }: Props) {
@@ -222,6 +241,16 @@ export function Equipes({ inscricoes, elegibilidade, loading, onRefetch }: Props
                   <span className="text-primary font-mono text-xs w-8 flex-shrink-0">#{a.numero_camisa}</span>
                   <span className="flex-1 text-on-surface truncate">{a.nome_completo}</span>
                   <span className="text-gray-400 text-xs flex-shrink-0">{a.turma_id}</span>
+                  {eleg && (eleg.status === 'inapto' || eleg.status === 'atencao') && (
+                    <button
+                      type="button"
+                      onClick={e => { e.preventDefault(); ajustarNotasVermelhas(eleg, onRefetch); }}
+                      className="text-[11px] text-primary font-semibold hover:underline flex-shrink-0"
+                      title="Atualizar o número de notas vermelhas (ex.: Secretaria regularizou)"
+                    >
+                      Atualizar
+                    </button>
+                  )}
                   {eleg ? <SeloElegibilidade eleg={eleg} /> : (
                     <span className="text-[10px] text-gray-300 flex-shrink-0" title="Sem dado de elegibilidade importado do SIMAED">—</span>
                   )}
