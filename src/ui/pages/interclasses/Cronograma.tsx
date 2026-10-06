@@ -111,15 +111,18 @@ export function Cronograma({ modalidade, publico = false }: { modalidade: Modali
   }, [modalidade]);
   useEffect(() => { carregar(); }, [carregar]);
 
-  function mudarSlot(v: string) {
-    const n = Math.max(5, Math.min(90, parseInt(v, 10) || SLOT_PADRAO_MIN));
-    setSlotMin(n);
-    try { localStorage.setItem(SLOT_STORAGE_KEY, String(n)); } catch { /* ignore */ }
-  }
+  // O campo guarda o texto digitado (senão digitar "26" viraria "5" no 1º dígito,
+  // pelo mínimo de 5) e só aplica/valida o valor ao sair do campo.
+  const [slotTexto, setSlotTexto] = useState<string | null>(null);
+  const aplicarSlot = (v: string) => Math.max(5, Math.min(90, parseInt(v, 10) || SLOT_PADRAO_MIN));
 
   // Grava no banco ao sair do campo (não a cada tecla).
   async function salvarSlot() {
-    try { await salvarMinutosPorJogo(EDICAO, slotMin); setAvisoSlot(null); }
+    const n = aplicarSlot(slotTexto ?? String(slotMin));
+    setSlotTexto(null);
+    setSlotMin(n);
+    try { localStorage.setItem(SLOT_STORAGE_KEY, String(n)); } catch { /* ignore */ }
+    try { await salvarMinutosPorJogo(EDICAO, n); setAvisoSlot(null); }
     catch { setAvisoSlot('Salvo só neste navegador — rode sql/interclasses_cronograma_minutos.sql no Supabase para valer na página pública.'); }
   }
 
@@ -157,7 +160,7 @@ export function Cronograma({ modalidade, publico = false }: { modalidade: Modali
           {!publico && <label className="text-xs text-gray-600 flex items-center gap-1.5">
             Minutos por jogo
             <input
-              type="number" min={5} max={90} value={slotMin} onChange={e => mudarSlot(e.target.value)} onBlur={salvarSlot}
+              type="number" min={5} max={90} value={slotTexto ?? slotMin} onChange={e => setSlotTexto(e.target.value)} onBlur={salvarSlot}
               className="w-16 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-xs outline-none focus:border-primary"
               title="2 tempos de 10 + 3 de intervalo + 5 de troca = 28"
             />
