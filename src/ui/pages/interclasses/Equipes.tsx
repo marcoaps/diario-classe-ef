@@ -155,9 +155,7 @@ export function Equipes({ inscricoes, elegibilidade, loading, onRefetch }: Props
   async function moverTime(eq: { nomeTime: string; alunos: InscricaoInterclasses[] }, destino: string) {
     const origem = eq.alunos[0]?.modalidade ?? 'futsal';
     const rotulo = modalidadeConfig(destino).label;
-    if (!window.confirm(`Mover o time "${eq.nomeTime}" (${eq.alunos.length} aluno${eq.alunos.length !== 1 ? 's' : ''}) de ${modalidadeConfig(origem).label} para ${rotulo}?
-
-Eles deixam de estar inscritos em ${modalidadeConfig(origem).label}.`)) return;
+    if (!window.confirm(`Mover o time "${eq.nomeTime}" (${eq.alunos.length} aluno${eq.alunos.length !== 1 ? 's' : ''}) de ${modalidadeConfig(origem).label} para ${rotulo}?\n\nEles deixam de estar inscritos em ${modalidadeConfig(origem).label}.`)) return;
     try {
       await moverTimeDeModalidade(EDICAO_PADRAO, eq.alunos, eq.nomeTime, origem, destino);
       await onRefetch();
@@ -177,11 +175,7 @@ Ele continua em ${modalidadeConfig(origem).label}. Quem já estiver inscrito em 
     try {
       const { copiados, ignorados } = await copiarTimeParaModalidade(EDICAO_PADRAO, eq.alunos, eq.nomeTime, destino, MAXIMO_JOGADORES_TIME);
       await onRefetch();
-      alert(`${copiados} aluno(s) copiado(s) para ${rotulo}.` + (ignorados.length ? `
-
-Ignorados:
-${ignorados.join('
-')}` : ''));
+      alert(`${copiados} aluno(s) copiado(s) para ${rotulo}.` + (ignorados.length ? `\n\nIgnorados:\n${ignorados.join('\n')}` : ''));
     } catch (e: any) {
       alert(e?.message || 'Erro ao copiar o time. Tente novamente.');
     }
