@@ -664,6 +664,61 @@ export async function moverTimeDeModalidade(
     .eq('edicao', edicao).eq('modalidade', origem).eq('time_norm', norm(nomeTime));
 }
 
+// Copia um time para outra modalidade, sem tirar ninguém da original. Se já
+// existir um time com o mesmo nome no destino, só acrescenta quem falta (merge).
+// Quem já está inscrito no destino (em qualquer time) é ignorado e devolvido em
+// "ignorados"; o que passar do máximo de jogadores também.
+export async function copiarTimeParaModalidade(
+  edicao: string,
+  inscricoes: InscricaoInterclasses[],
+  nomeTime: string,
+  destino: string,
+  maximoJogadores: number,
+): Promise<{ copiados: number; ignorados: string[] }> {
+  const { data: destinoRows, error: erroBusca } = await supabase
+    .from('interclasses_inscricoes')
+    .select('aluno_id, turma_id, nome_completo, nome_time, numero_camisa')
+    .eq('edicao', edicao)
+    .eq('modalidade', destino);
+  if (erroBusca) throw erroBusca;
+  const rows = destinoRows || [];
+  const norm = (t: string) => t.trim().toLowerCase();
+  const idsDestino = new Set(rows.map(r => r.aluno_id).filter(Boolean));
+  const chavesDestino = new Set(rows.map(r => `${r.turma_id}|${norm(r.nome_completo)}`));
+  const doTime = rows.filter(r => norm(r.nome_time) === norm(nomeTime));
+  const camisasUsadas = new Set<number>(doTime.map(r => r.numero_camisa));
+  const timeJaExistia = doTime.length > 0;
+  let vagas = Math.max(0, maximoJogadores - doTime.length);
+
+  const ignorados: string[] = [];
+  const novos: Record<string, unknown>[] = [];
+  for (const i of inscricoes) {
+    const jaNoDestino = (i.aluno_id && idsDestino.has(i.aluno_id)) || chavesDestino.has(`${i.turma_id}|${norm(i.nome_completo)}`);
+    if (jaNoDestino) { ignorados.push(`${i.nome_completo} (já inscrito no destino)`); continue; }
+    if (vagas <= 0) { ignorados.push(`${i.nome_completo} (time cheio)`); continue; }
+    let camisa = i.numero_camisa;
+    while (camisasUsadas.has(camisa)) camisa++;
+    camisasUsadas.add(camisa);
+    vagas--;
+    novos.push({
+      edicao, aluno_id: i.aluno_id, nome_completo: i.nome_completo, turma_id: i.turma_id,
+      numero_chamada: i.numero_chamada, numero_camisa: camisa, nome_time: nomeTime,
+      modalidade: destino, categoria: i.categoria, genero: i.genero,
+    });
+  }
+  if (novos.length > 0) {
+    const { error } = await supabase.from('interclasses_inscricoes').insert(novos);
+    if (error) throw error;
+    if (!timeJaExistia) {
+      const alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      const codigo = Array.from({ length: 6 }, () => alfabeto[Math.floor(Math.random() * alfabeto.length)]).join('');
+      await supabase.from('interclasses_times_codigos')
+        .upsert({ edicao, modalidade: destino, time_norm: norm(nomeTime), codigo }, { onConflict: 'edicao,modalidade,time_norm', ignoreDuplicates: true });
+    }
+  }
+  return { copiados: novos.length, ignorados };
+}
+
 // Apaga TODAS as inscrições de uma edição de uma vez — usado pra zerar dados
 // de teste antes de abrir pra valer.
 export async function limparInscricoesInterclasses(edicao: string) {
