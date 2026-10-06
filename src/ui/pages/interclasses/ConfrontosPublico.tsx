@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Trophy, Loader2 } from 'lucide-react';
 import { cn } from '../../AppLayout';
 import { buscarCampeonato, buscarJogos, type CampeonatoInterclasses } from '../../../data/supabase';
-import { CATEGORIA_6_7, CATEGORIA_8_9, MODALIDADES, type Modalidade } from '../../../domain/interclasses';
+import { CATEGORIA_6_7, CATEGORIA_8_9, GENEROS_CAMPEONATO, chaveCampeonato, MODALIDADES, type GeneroCampeonato, type Modalidade } from '../../../domain/interclasses';
 import { ADAPTERS, REGRAS_PADRAO, calcSt, type Jogo } from '../../../domain/interclassesCampeonato';
 import { linhaParaJogo, corDaEquipe, ListaJogos, Classificacao, Chave, FASES_LIGA } from './Confrontos';
 
@@ -19,6 +19,8 @@ export function ConfrontosPublico() {
     try { return (localStorage.getItem(MODALIDADE_STORAGE_KEY) as Modalidade) || 'futsal'; } catch { return 'futsal'; }
   });
   const [categoriaAtiva, setCategoriaAtiva] = useState<string>(CATEGORIA_6_7);
+  const [generoAtivo, setGeneroAtivo] = useState<GeneroCampeonato>('M');
+  const chaveCamp = chaveCampeonato(categoriaAtiva, generoAtivo);
   const [campeonato, setCampeonato] = useState<CampeonatoInterclasses | null>(null);
   const [jogos, setJogos] = useState<Jogo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,7 +39,7 @@ export function ConfrontosPublico() {
     setLoading(true);
     (async () => {
       try {
-        const camp = await buscarCampeonato(EDICAO, modalidade, categoriaAtiva);
+        const camp = await buscarCampeonato(EDICAO, modalidade, chaveCamp);
         if (!mounted) return;
         setCampeonato(camp);
         if (camp) {
@@ -53,9 +55,9 @@ export function ConfrontosPublico() {
       }
     })();
     return () => { mounted = false; };
-  }, [modalidade, categoriaAtiva]);
+  }, [modalidade, chaveCamp]);
 
-  useEffect(() => { setAba('jogos'); }, [modalidade, categoriaAtiva]);
+  useEffect(() => { setAba('jogos'); }, [modalidade, chaveCamp]);
 
   const equipes = useMemo(() => {
     const nomes = new Set<string>();
@@ -108,6 +110,18 @@ export function ConfrontosPublico() {
         </div>
 
         <div className="flex gap-2">
+          {GENEROS_CAMPEONATO.map(g => (
+            <button
+              key={g.id}
+              onClick={() => setGeneroAtivo(g.id)}
+              className={cn('flex-1 py-3 rounded-xl text-base font-bold transition-all', generoAtivo === g.id ? 'bg-secondary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}
+            >
+              {g.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex gap-2">
           {CATEGORIAS.map(c => (
             <button
               key={c}
@@ -130,7 +144,7 @@ export function ConfrontosPublico() {
         ) : campeonato.campeao ? (
           <div className="bg-gradient-to-br from-yellow-50 to-white rounded-2xl border border-yellow-200 shadow-sm p-7 text-center">
             <Trophy className="w-16 h-16 text-yellow-500 mx-auto mb-3" />
-            <div className="text-sm font-bold text-gray-400 uppercase tracking-widest">Campeão — {categoriaAtiva}</div>
+            <div className="text-sm font-bold text-gray-400 uppercase tracking-widest">Campeão — {chaveCamp}</div>
             <div className="text-3xl font-bold text-on-surface mt-2 flex items-center justify-center gap-2.5">
               <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ background: corDaEquipe(campeonato.campeao) }} />
               {campeonato.campeao}

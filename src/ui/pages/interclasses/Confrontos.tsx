@@ -7,7 +7,7 @@ import {
   type CampeonatoInterclasses, type JogoInterclasses,
 } from '../../../data/supabase';
 import {
-  agruparPorTime, categoriaFromTurma, CATEGORIA_6_7, CATEGORIA_8_9, mensagemMinimoNaoAtingido,
+  agruparPorTime, categoriaFromTurma, CATEGORIA_6_7, CATEGORIA_8_9, GENEROS_CAMPEONATO, chaveCampeonato, generoDoTime, type GeneroCampeonato, mensagemMinimoNaoAtingido,
   type Modalidade, type InscricaoInterclasses, type EquipeInterclasses,
 } from '../../../domain/interclasses';
 import {
@@ -64,6 +64,8 @@ interface Props {
 
 export function Confrontos({ modalidade, inscricoes }: Props) {
   const [categoriaAtiva, setCategoriaAtiva] = useState<string>(CATEGORIA_6_7);
+  const [generoAtivo, setGeneroAtivo] = useState<GeneroCampeonato>('M');
+  const chaveCamp = chaveCampeonato(categoriaAtiva, generoAtivo);
   const [campeonato, setCampeonato] = useState<CampeonatoInterclasses | null>(null);
   const [jogos, setJogos] = useState<Jogo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,13 +79,16 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
     () => inscricoes.filter(i => categoriaFromTurma(i.turma_id) === categoriaAtiva),
     [inscricoes, categoriaAtiva]
   );
-  const equipes = useMemo(() => agruparPorTime(inscricoesCategoria), [inscricoesCategoria]);
+  const equipes = useMemo(
+    () => agruparPorTime(inscricoesCategoria).filter(e => generoDoTime(e.alunos) === generoAtivo),
+    [inscricoesCategoria, generoAtivo]
+  );
   const equipesProntas = useMemo(() => equipes.filter(e => e.completo).map(e => e.nomeTime), [equipes]);
 
   const carregar = useCallback(async () => {
     setLoading(true);
     try {
-      const camp = await buscarCampeonato(EDICAO, modalidade, categoriaAtiva);
+      const camp = await buscarCampeonato(EDICAO, modalidade, chaveCamp);
       setCampeonato(camp);
       if (camp) {
         const rows = await buscarJogos(camp.id);
@@ -96,10 +101,10 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [modalidade, categoriaAtiva]);
+  }, [modalidade, chaveCamp]);
 
   useEffect(() => { carregar(); }, [carregar]);
-  useEffect(() => { setAba('jogos'); }, [categoriaAtiva]);
+  useEffect(() => { setAba('jogos'); }, [chaveCamp]);
 
   const equipesDoCampeonato = useMemo(() => {
     const nomes = new Set<string>();
@@ -111,7 +116,7 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
     if (criandoCampeonato) return; // trava contra duplo clique
     setCriandoCampeonato(true);
     try {
-      const camp = await criarCampeonato({ edicao: EDICAO, modalidade, categoria: categoriaAtiva, formato });
+      const camp = await criarCampeonato({ edicao: EDICAO, modalidade, categoria: chaveCamp, formato });
       const { jogos: iniciais } = gerarJogosIniciais(equipesProntas, formato);
       const inseridos = await criarJogos(camp.id, iniciais.map(jogoParaLinha));
 
@@ -147,7 +152,7 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
 
   async function excluirTudo() {
     if (!campeonato) return;
-    if (!window.confirm(`Excluir este campeonato — ${categoriaAtiva}? Isso apaga todos os jogos e placares lançados.`)) return;
+    if (!window.confirm(`Excluir este campeonato — ${chaveCamp}? Isso apaga todos os jogos e placares lançados.`)) return;
     await excluirCampeonato(campeonato.id);
     await carregar();
   }
@@ -268,6 +273,17 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex gap-1.5">
+        {GENEROS_CAMPEONATO.map(g => (
+          <button
+            key={g.id}
+            onClick={() => setGeneroAtivo(g.id)}
+            className={cn('flex-1 py-2 rounded-xl text-xs font-bold transition-all', generoAtivo === g.id ? 'bg-secondary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}
+          >
+            {g.label}
+          </button>
+        ))}
+      </div>
+      <div className="flex gap-1.5">
         {CATEGORIAS.map(c => (
           <button
             key={c}
@@ -290,7 +306,7 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
           {campeonato.campeao && (
             <div className="bg-gradient-to-br from-yellow-50 to-white rounded-2xl border border-yellow-200 shadow-sm p-6 text-center">
               <Trophy className="w-12 h-12 text-yellow-500 mx-auto mb-2" />
-              <div className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Campeão — {categoriaAtiva}</div>
+              <div className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Campeão — {chaveCamp}</div>
               <div className="text-2xl font-bold text-on-surface mt-1 flex items-center justify-center gap-2">
                 <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: corDaEquipe(campeonato.campeao) }} />
                 {campeonato.campeao}

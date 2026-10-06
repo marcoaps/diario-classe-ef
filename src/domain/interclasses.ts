@@ -26,6 +26,25 @@ export function modalidadeConfig(id: string | null): ModalidadeConfig {
 export const CATEGORIA_6_7 = '6º e 7º anos';
 export const CATEGORIA_8_9 = '8º e 9º anos';
 
+// Campeonatos são separados por gênero (menino/menina nunca se enfrentam).
+// O gênero entra na própria chave de categoria do campeonato — assim não
+// precisa de coluna nova no banco: "8º e 9º anos · Masculino" e
+// "8º e 9º anos · Feminino" são dois campeonatos independentes.
+export type GeneroCampeonato = 'M' | 'F';
+export const GENEROS_CAMPEONATO: { id: GeneroCampeonato; label: string }[] = [
+  { id: 'M', label: '♂ Masculino' },
+  { id: 'F', label: '♀ Feminino' },
+];
+export function chaveCampeonato(categoria: string, genero: GeneroCampeonato): string {
+  return `${categoria} · ${genero === 'F' ? 'Feminino' : 'Masculino'}`;
+}
+// Time só de meninas = feminino. Qualquer outro caso (só meninos, misto por
+// exceção da gestão, ou sem gênero registrado) = masculino.
+export function generoDoTime(alunos: { genero: string | null }[]): GeneroCampeonato {
+  const generos = new Set(alunos.map(a => a.genero).filter(Boolean));
+  return generos.has('F') && !generos.has('M') ? 'F' : 'M';
+}
+
 export function categoriaFromTurma(turmaId: string): string {
   const serie = turmaId.trim().charAt(0);
   if (serie === '6' || serie === '7') return CATEGORIA_6_7;
