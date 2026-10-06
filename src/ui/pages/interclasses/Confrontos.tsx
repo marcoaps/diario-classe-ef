@@ -15,8 +15,10 @@ import {
   type Jogo, type Resultado, type Standing, type ResultadoAdapter,
 } from '../../../domain/interclassesCampeonato';
 
+import { FinaisCampeoes, FINAIS } from './FinaisCampeoes';
+
 const EDICAO = '2026';
-const CATEGORIAS = ANOS_ESCOLARES;
+const CATEGORIAS = [...ANOS_ESCOLARES, FINAIS];
 
 // Cor determinística por nome de equipe — mesma equipe sempre com a mesma
 // cor, sem precisar guardar isso em lugar nenhum.
@@ -40,7 +42,7 @@ export function linhaParaJogo(row: JogoInterclasses): Jogo {
   };
 }
 
-function jogoParaLinha(j: Jogo): Omit<JogoInterclasses, 'id' | 'campeonato_id' | 'criado_em' | 'atualizado_em'> {
+export function jogoParaLinha(j: Jogo): Omit<JogoInterclasses, 'id' | 'campeonato_id' | 'criado_em' | 'atualizado_em'> {
   return {
     equipe_a: j.equipeA, equipe_b: j.equipeB, grupo_nome: j.grupo, fase: j.fase, rodada: j.rodada,
     bracket_idx: j.bracketIdx ?? null, is_bye: !!j.isBye, jogado: j.jogado, vencedor: j.vencedor,
@@ -295,7 +297,9 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
         ))}
       </div>
 
-      {loading ? (
+      {categoriaAtiva === FINAIS ? (
+        <FinaisCampeoes modalidade={modalidade} genero={generoAtivo} />
+      ) : loading ? (
         <div className="flex gap-2 items-center justify-center py-10 text-gray-500 text-sm">
           <Loader2 className="w-4 h-4 animate-spin" /> Carregando...
         </div>

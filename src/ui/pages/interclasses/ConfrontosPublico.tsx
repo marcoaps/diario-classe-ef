@@ -6,8 +6,10 @@ import { ANOS_ESCOLARES, GENEROS_CAMPEONATO, chaveCampeonato, MODALIDADES, type 
 import { ADAPTERS, REGRAS_PADRAO, calcSt, type Jogo } from '../../../domain/interclassesCampeonato';
 import { linhaParaJogo, corDaEquipe, ListaJogos, Classificacao, Chave, FASES_LIGA } from './Confrontos';
 
+import { FinaisCampeoes, FINAIS } from './FinaisCampeoes';
+
 const EDICAO = '2026';
-const CATEGORIAS = ANOS_ESCOLARES;
+const CATEGORIAS = [...ANOS_ESCOLARES, FINAIS];
 const MODALIDADE_STORAGE_KEY = 'interclasses_modalidade_resultados_publico';
 
 // Página pública (sem login) só de leitura — jogos, placar, classificação e
@@ -133,7 +135,9 @@ export function ConfrontosPublico() {
           ))}
         </div>
 
-        {loading ? (
+        {categoriaAtiva === FINAIS ? (
+          <FinaisCampeoes modalidade={modalidade} genero={generoAtivo} somenteLeitura grande />
+        ) : loading ? (
           <div className="flex gap-2 items-center justify-center py-10 text-gray-500 text-base">
             <Loader2 className="w-5 h-5 animate-spin" /> Carregando...
           </div>
