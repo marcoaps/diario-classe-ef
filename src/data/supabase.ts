@@ -696,6 +696,22 @@ export async function buscarElegibilidadeInterclasses(edicao: string, turmaIds?:
   return (data || []) as ElegibilidadeInterclasses[];
 }
 
+// Ajuste manual feito pelo professor quando a Secretaria regulariza notas
+// depois do instantâneo importado: recalcula o status pela mesma regra do SQL
+// (0 vermelhas = apto, 1 = atenção, 2+ = inapto). Reimportar o SQL de
+// elegibilidade sobrescreve esse ajuste (ON CONFLICT).
+export async function atualizarNotasVermelhasElegibilidade(id: string, notasVermelhasFinal: number): Promise<ElegibilidadeInterclasses> {
+  const status = notasVermelhasFinal >= 2 ? 'inapto' : notasVermelhasFinal === 1 ? 'atencao' : 'apto';
+  const { data, error } = await supabase
+    .from('interclasses_elegibilidade')
+    .update({ status, notas_vermelhas_final: notasVermelhasFinal, atualizado_em: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as ElegibilidadeInterclasses;
+}
+
 // Interclasses IOP — campeonatos/jogos (motor de competição, isolado por
 // modalidade + categoria)
 // ------------------------------------------------------------

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Loader2, RefreshCw, ShieldAlert } from 'lucide-react';
 import { cn } from '../../AppLayout';
-import { buscarElegibilidadeInterclasses, type ElegibilidadeInterclasses } from '../../../data/supabase';
+import { buscarElegibilidadeInterclasses, atualizarNotasVermelhasElegibilidade, type ElegibilidadeInterclasses } from '../../../data/supabase';
 import { ELEGIBILIDADE_LABEL } from '../../../domain/interclasses';
 
 interface Props {
@@ -31,6 +31,25 @@ export function AlunosSugeridosCorte({ edicao }: Props) {
   }
 
   useEffect(() => { carregar(); }, [edicao]);
+
+  // A Secretaria pode regularizar notas depois do instantâneo importado
+  // (ex.: aluno com 2 vermelhas passa a ter 1) — o professor corrige aqui.
+  async function ajustarNotas(a: ElegibilidadeInterclasses) {
+    const resp = window.prompt(
+      `Quantas notas vermelhas ${a.nome} tem agora (após a regularização da Secretaria)?
+0 = apto · 1 = atenção (pode jogar) · 2 ou mais = inapto`,
+      String(Math.max(0, a.notas_vermelhas_final - 1))
+    );
+    if (resp === null) return;
+    const n = parseInt(resp, 10);
+    if (!Number.isInteger(n) || n < 0 || String(n) !== resp.trim()) { alert('Digite um número inteiro (0, 1, 2...).'); return; }
+    try {
+      await atualizarNotasVermelhasElegibilidade(a.id, n);
+      await carregar();
+    } catch {
+      alert('Não foi possível atualizar. Tente novamente.');
+    }
+  }
 
   const turmasComDados = useMemo(
     () => Array.from(new Set(lista.map(l => l.turma_id))).sort((a: string, b: string) => a.localeCompare(b, 'pt-BR', { numeric: true })),
@@ -160,6 +179,13 @@ export function AlunosSugeridosCorte({ edicao }: Props) {
                       >
                         {a.notas_vermelhas_final} vermelha{a.notas_vermelhas_final !== 1 ? 's' : ''}
                       </span>
+                      <button
+                        onClick={() => ajustarNotas(a)}
+                        className="text-[11px] text-primary font-semibold hover:underline flex-shrink-0"
+                        title="Atualizar o número de notas vermelhas (ex.: Secretaria regularizou)"
+                      >
+                        Atualizar
+                      </button>
                     </div>
                   ))}
                 </div>
