@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCw, CalendarClock } from 'lucide-react';
 import { cn } from '../../AppLayout';
-import { buscarCampeonatosComJogos } from '../../../data/supabase';
+import { buscarCampeonatosComJogos, buscarMinutosPorJogo, salvarMinutosPorJogo } from '../../../data/supabase';
 import { ADAPTERS, type Resultado } from '../../../domain/interclassesCampeonato';
 import type { Modalidade } from '../../../domain/interclasses';
 import { corDaEquipe } from './Confrontos';
@@ -92,7 +92,16 @@ export function Cronograma({ modalidade, publico = false }: { modalidade: Modali
   const [slotMin, setSlotMin] = useState<number>(() => {
     try { return Number(localStorage.getItem(SLOT_STORAGE_KEY)) || SLOT_PADRAO_MIN; } catch { return SLOT_PADRAO_MIN; }
   });
+  const [avisoSlot, setAvisoSlot] = useState<string | null>(null);
   const adapter = ADAPTERS[modalidade];
+
+  // Valor do banco (vale pra todo mundo, inclusive a página pública) tem
+  // prioridade sobre o guardado no navegador.
+  useEffect(() => {
+    let mounted = true;
+    buscarMinutosPorJogo(EDICAO).then(n => { if (mounted && n && n > 0) setSlotMin(n); });
+    return () => { mounted = false; };
+  }, []);
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -106,6 +115,12 @@ export function Cronograma({ modalidade, publico = false }: { modalidade: Modali
     const n = Math.max(5, Math.min(90, parseInt(v, 10) || SLOT_PADRAO_MIN));
     setSlotMin(n);
     try { localStorage.setItem(SLOT_STORAGE_KEY, String(n)); } catch { /* ignore */ }
+  }
+
+  // Grava no banco ao sair do campo (não a cada tecla).
+  async function salvarSlot() {
+    try { await salvarMinutosPorJogo(EDICAO, slotMin); setAvisoSlot(null); }
+    catch { setAvisoSlot('Salvo só neste navegador — rode sql/interclasses_cronograma_minutos.sql no Supabase para valer na página pública.'); }
   }
 
   const { jogos, semHorario } = useMemo(() => montarCronograma(dados, slotMin), [dados, slotMin]);
@@ -142,7 +157,7 @@ export function Cronograma({ modalidade, publico = false }: { modalidade: Modali
           {!publico && <label className="text-xs text-gray-600 flex items-center gap-1.5">
             Minutos por jogo
             <input
-              type="number" min={5} max={90} value={slotMin} onChange={e => mudarSlot(e.target.value)}
+              type="number" min={5} max={90} value={slotMin} onChange={e => mudarSlot(e.target.value)} onBlur={salvarSlot}
               className="w-16 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-xs outline-none focus:border-primary"
               title="2 tempos de 10 + 3 de intervalo + 5 de troca = 28"
             />
@@ -152,6 +167,8 @@ export function Cronograma({ modalidade, publico = false }: { modalidade: Modali
           </button>
         </div>
       </div>
+
+      {avisoSlot && !publico && <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-700">{avisoSlot}</div>}
 
       {loading ? (
         <div className="flex gap-2 items-center justify-center py-10 text-gray-500 text-sm"><Loader2 className="w-4 h-4 animate-spin" /> Carregando...</div>

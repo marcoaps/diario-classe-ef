@@ -734,6 +734,8 @@ export interface ConfigInterclasses {
   inscricoes_fim: string;
   inscricoes_desativadas: boolean;
   congresso_tecnico: string | null;
+  // Só existe depois de rodar sql/interclasses_cronograma_minutos.sql.
+  minutos_por_jogo?: number | null;
   atualizado_em: string;
 }
 
@@ -758,6 +760,24 @@ export async function salvarConfigInterclasses(
     .single();
   if (error) throw error;
   return data as ConfigInterclasses;
+}
+
+// Minutos por jogo do Cronograma, compartilhado com a página pública. Se a
+// coluna ainda não existe (SQL não rodado), devolve null / lança no salvar e
+// a tela cai pro valor guardado no navegador.
+export async function buscarMinutosPorJogo(edicao: string): Promise<number | null> {
+  try {
+    const cfg = await buscarConfigInterclasses(edicao);
+    return cfg?.minutos_por_jogo ?? null;
+  } catch { return null; }
+}
+
+export async function salvarMinutosPorJogo(edicao: string, minutos: number): Promise<void> {
+  const { error } = await supabase
+    .from('interclasses_configuracoes')
+    .update({ minutos_por_jogo: minutos, atualizado_em: new Date().toISOString() })
+    .eq('edicao', edicao);
+  if (error) throw error;
 }
 
 // Elegibilidade pela regra de notas vermelhas (máx. 1 nota < 7,0 após a
