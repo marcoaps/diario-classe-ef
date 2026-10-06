@@ -66,8 +66,21 @@ async function ajustarNotasVermelhas(eleg: ElegibilidadeInterclasses, onRefetch:
 }
 
 export function Equipes({ inscricoes, elegibilidade, loading, onRefetch }: Props) {
-  const equipes = useMemo(() => agruparPorTime(inscricoes), [inscricoes]);
-  const nomesExistentes = useMemo(() => equipes.map(e => e.nomeTime), [equipes]);
+  const todasEquipes = useMemo(() => agruparPorTime(inscricoes), [inscricoes]);
+  const nomesExistentes = useMemo(() => todasEquipes.map(e => e.nomeTime), [todasEquipes]);
+
+  // Separa masculino/feminino pelo gênero dos jogadores do time. Time misto
+  // (exceção da gestão) aparece nos dois grupos.
+  const [filtroGenero, setFiltroGenero] = useState<'TODOS' | 'M' | 'F'>('TODOS');
+  const generosDoTime = (eq: { alunos: InscricaoInterclasses[] }) => new Set(eq.alunos.map(a => a.genero).filter(Boolean) as string[]);
+  const contagemGenero = useMemo(() => ({
+    M: todasEquipes.filter(e => generosDoTime(e).has('M')).length,
+    F: todasEquipes.filter(e => generosDoTime(e).has('F')).length,
+  }), [todasEquipes]);
+  const equipes = useMemo(
+    () => filtroGenero === 'TODOS' ? todasEquipes : todasEquipes.filter(e => generosDoTime(e).has(filtroGenero)),
+    [todasEquipes, filtroGenero]
+  );
 
   const elegibilidadePorAlunoId = useMemo(() => {
     const mapa = new Map<string, ElegibilidadeInterclasses>();
@@ -204,7 +217,7 @@ Ele continua em ${modalidadeConfig(origem).label}. Quem já estiver inscrito em 
     );
   }
 
-  if (equipes.length === 0) {
+  if (todasEquipes.length === 0) {
     return (
       <div className="text-center text-gray-500 py-10 font-medium px-4">
         Nenhuma equipe formada ainda. Inscreva alunos na aba "Inscrição de Alunos".
@@ -214,12 +227,26 @@ Ele continua em ${modalidadeConfig(origem).label}. Quem já estiver inscrito em 
 
   return (
     <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {([['TODOS', `Todos (${todasEquipes.length})`], ['M', `♂ Masculino (${contagemGenero.M})`], ['F', `♀ Feminino (${contagemGenero.F})`]] as const).map(([id, rotulo]) => (
+          <button
+            key={id}
+            onClick={() => setFiltroGenero(id)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold ${filtroGenero === id ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+          >
+            {rotulo}
+          </button>
+        ))}
+      </div>
       <button
         onClick={baixarWord}
         className="self-end flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-primary text-white hover:opacity-90"
       >
         <FileDown className="w-4 h-4" /> Baixar Word
       </button>
+      {equipes.length === 0 && (
+        <div className="text-center text-gray-500 py-8 text-sm">Nenhuma equipe {filtroGenero === 'F' ? 'feminina' : 'masculina'} nesta modalidade.</div>
+      )}
       {equipes.map(eq => (
         <div key={eq.nomeTime} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
@@ -244,6 +271,9 @@ Ele continua em ${modalidadeConfig(origem).label}. Quem já estiver inscrito em 
             ) : (
               <div className="flex items-center gap-1.5 min-w-0">
                 <h3 className="font-bold text-on-surface text-sm truncate">{eq.nomeTime}</h3>
+                {generosDoTime(eq).size > 1 && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 flex-shrink-0" title="Time com meninos e meninas">misto</span>
+                )}
                 <button onClick={() => iniciarRenomear(eq.nomeTime)} className="text-gray-300 hover:text-primary flex-shrink-0" title="Renomear ou mesclar com outro time">
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
