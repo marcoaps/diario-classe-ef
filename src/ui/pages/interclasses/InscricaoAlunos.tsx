@@ -8,7 +8,7 @@ import {
   gerarCodigoTime, validarCodigoTime, removerAlunoComCodigo, atualizarCamisaComCodigo, buscarCodigosTimes,
 } from '../../../data/supabase';
 import {
-  agruparPorTime, categoriaFromTurma, MAXIMO_JOGADORES_TIME, minimoJogadoresPara, modalidadeConfig,
+  agruparPorTime, categoriaFromTurma, maximoJogadoresPara, minimoJogadoresPara, modalidadeConfig,
   chaveElegibilidade, ELEGIBILIDADE_LABEL,
 } from '../../../domain/interclasses';
 import { corDaEquipe } from './Confrontos';
@@ -456,7 +456,7 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
     if (camisaDuplicada) return `O número da camisa ${camisa} já está sendo utilizado por outro aluno do time ${time}.`;
 
     const jogadoresNoTime = inscricoes.filter(i => i.id !== editingId && i.nome_time.trim().toLowerCase() === timeNorm).length;
-    if (jogadoresNoTime >= MAXIMO_JOGADORES_TIME) return `O time "${time}" já atingiu o máximo de ${MAXIMO_JOGADORES_TIME} jogadores.`;
+    if (jogadoresNoTime >= maximoJogadoresPara(modalidade)) return `O time "${time}" já atingiu o máximo de ${maximoJogadoresPara(modalidade)} jogadores.`;
 
     return null;
   }
@@ -556,10 +556,10 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
     // time com um nome diferente pro restante).
     const timeNorm = nomeTime.trim().toLowerCase();
     const jogadoresNoTimeAtual = inscricoes.filter(i => i.nome_time.trim().toLowerCase() === timeNorm).length;
-    const vagasRestantes = Math.max(0, MAXIMO_JOGADORES_TIME - jogadoresNoTimeAtual);
+    const vagasRestantes = Math.max(0, maximoJogadoresPara(modalidade) - jogadoresNoTimeAtual);
     const cabem = validos.slice(0, vagasRestantes);
     const naoCoube = validos.slice(vagasRestantes);
-    naoCoube.forEach(({ aluno }) => erros.push(`${aluno.nome}: não coube no time (máximo ${MAXIMO_JOGADORES_TIME} jogadores) — crie outro time pro restante`));
+    naoCoube.forEach(({ aluno }) => erros.push(`${aluno.nome}: não coube no time (máximo ${maximoJogadoresPara(modalidade)} jogadores) — crie outro time pro restante`));
     validos.length = 0; validos.push(...cabem);
 
     if (validos.length === 0) { setErro(erros.join(' | ') || 'Nenhum aluno válido para inscrever.'); return; }
@@ -985,7 +985,7 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
               </div>
             )}
             <p className="text-[11px] text-gray-400 mt-1">
-              Não precisa ser igual ao nome da turma. Cada time deve ter entre {minimoJogadoresPara(modalidade)} e {MAXIMO_JOGADORES_TIME} jogadores. {timesUnicos.length > 0 && 'Se o time já existe, selecione a sugestão em vez de digitar de novo — evita duplicar o time por erro de digitação.'}
+              Não precisa ser igual ao nome da turma. Cada time deve ter entre {minimoJogadoresPara(modalidade)} e {maximoJogadoresPara(modalidade)} jogadores. {timesUnicos.length > 0 && 'Se o time já existe, selecione a sugestão em vez de digitar de novo — evita duplicar o time por erro de digitação.'}
             </p>
           </div>
 
@@ -1239,7 +1239,7 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
                       'text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0 bg-white/90',
                       eq.completo ? 'text-secondary' : 'text-amber-700'
                     )}>
-                      {eq.completo ? `✅ ${eq.alunos.length}/${MAXIMO_JOGADORES_TIME}` : `⏳ ${eq.alunos.length}/${eq.minimoJogadores}`}
+                      {eq.completo ? `✅ ${eq.alunos.length}/${maximoJogadoresPara(modalidade)}` : `⏳ ${eq.alunos.length}/${eq.minimoJogadores}`}
                     </span>
                   </div>
                   <div className="divide-y divide-gray-50">
@@ -1275,7 +1275,7 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
                   {timeEditando && timeEditando.nome.trim().toLowerCase() === eq.nomeTime.trim().toLowerCase() && (
                     <button
                       type="button"
-                      disabled={eq.alunos.length >= MAXIMO_JOGADORES_TIME}
+                      disabled={eq.alunos.length >= maximoJogadoresPara(modalidade)}
                       onClick={() => {
                         setForm(f => ({ ...f, nomeTime: eq.nomeTime }));
                         formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1283,7 +1283,7 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
                       className="w-full flex items-center justify-center gap-2 px-4 py-3.5 text-base font-bold text-primary bg-primary/5 hover:bg-primary/10 disabled:opacity-50 disabled:cursor-not-allowed border-t border-gray-100"
                     >
                       <Plus className="w-5 h-5" />
-                      {eq.alunos.length >= MAXIMO_JOGADORES_TIME ? `Time completo (${MAXIMO_JOGADORES_TIME}/${MAXIMO_JOGADORES_TIME})` : 'Adicionar jogador'}
+                      {eq.alunos.length >= maximoJogadoresPara(modalidade) ? `Time completo (${maximoJogadoresPara(modalidade)}/${maximoJogadoresPara(modalidade)})` : 'Adicionar jogador'}
                     </button>
                   )}
                 </div>

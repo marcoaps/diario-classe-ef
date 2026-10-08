@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Loader2, Pencil, Check, X, Trash2, FileDown } from 'lucide-react';
-import { agruparPorTime, EDICAO_PADRAO, MODALIDADES, modalidadeConfig,chaveElegibilidade, ELEGIBILIDADE_COR, ELEGIBILIDADE_LABEL, MAXIMO_JOGADORES_TIME, mensagemMinimoNaoAtingido } from '../../../domain/interclasses';
+import { agruparPorTime, EDICAO_PADRAO, MODALIDADES, modalidadeConfig,chaveElegibilidade, ELEGIBILIDADE_COR, ELEGIBILIDADE_LABEL, maximoJogadoresPara, mensagemMinimoNaoAtingido } from '../../../domain/interclasses';
 import type { InscricaoInterclasses } from '../../../domain/interclasses';
 import { renomearTimeInterclasses, excluirInscricaoInterclasses, atualizarNotasVermelhasElegibilidade, moverTimeDeModalidade, copiarTimeParaModalidade } from '../../../data/supabase';
 import type { ElegibilidadeInterclasses } from '../../../data/supabase';
@@ -186,7 +186,7 @@ export function Equipes({ inscricoes, elegibilidade, loading, onRefetch }: Props
 
 Ele continua em ${modalidadeConfig(origem).label}. Quem já estiver inscrito em ${rotulo} é ignorado.`)) return;
     try {
-      const { copiados, ignorados } = await copiarTimeParaModalidade(EDICAO_PADRAO, eq.alunos, eq.nomeTime, destino, MAXIMO_JOGADORES_TIME);
+      const { copiados, ignorados } = await copiarTimeParaModalidade(EDICAO_PADRAO, eq.alunos, eq.nomeTime, destino, maximoJogadoresPara(destino));
       await onRefetch();
       alert(`${copiados} aluno(s) copiado(s) para ${rotulo}.` + (ignorados.length ? `\n\nIgnorados:\n${ignorados.join('\n')}` : ''));
     } catch (e: any) {
@@ -304,7 +304,7 @@ Ele continua em ${modalidadeConfig(origem).label}. Quem já estiver inscrito em 
               </select>
               <span className="text-[11px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{eq.turmas.join(', ')}</span>
               <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${eq.cheio ? 'bg-gray-200 text-gray-600' : eq.completo ? 'bg-secondary-container text-on-secondary-container' : 'bg-amber-100 text-amber-700'}`}>
-                {eq.cheio ? `🔒 Cheio (${eq.alunos.length}/${MAXIMO_JOGADORES_TIME})` : eq.completo ? `✅ Completo (${eq.alunos.length}/${MAXIMO_JOGADORES_TIME})` : `⏳ Faltam ${eq.minimoJogadores - eq.alunos.length}`}
+                {eq.cheio ? `🔒 Cheio (${eq.alunos.length}/${eq.maximoJogadores})` : eq.completo ? `✅ Completo (${eq.alunos.length}/${eq.maximoJogadores})` : `⏳ Faltam ${eq.minimoJogadores - eq.alunos.length}`}
               </span>
             </div>
           </div>

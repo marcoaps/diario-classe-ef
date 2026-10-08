@@ -113,9 +113,22 @@ export const MINIMO_JOGADORES_POR_MODALIDADE: Record<Modalidade, number> = {
 // Mantido pra quem ainda não passa a modalidade (compatibilidade) — mesmo
 // valor de sempre, usado como padrão do Futsal.
 export const MINIMO_JOGADORES_TIME = MINIMO_JOGADORES_POR_MODALIDADE.futsal;
-// Acima disso a inscrição de novos jogadores nesse time é bloqueada — mesmo
-// teto pra todas as modalidades por enquanto.
+// Acima disso a inscrição de novos jogadores nesse time é bloqueada. Padrão
+// de 10; a Queimada aceita mais gente no time.
+export const MAXIMO_JOGADORES_POR_MODALIDADE: Record<Modalidade, number> = {
+  futsal: 10,
+  voleibol: 10,
+  handebol: 10,
+  queimada: 12,
+};
 export const MAXIMO_JOGADORES_TIME = 10;
+
+export function maximoJogadoresPara(modalidade: string | null | undefined): number {
+  if (modalidade && modalidade in MAXIMO_JOGADORES_POR_MODALIDADE) {
+    return MAXIMO_JOGADORES_POR_MODALIDADE[modalidade as Modalidade];
+  }
+  return MAXIMO_JOGADORES_TIME;
+}
 
 export function minimoJogadoresPara(modalidade: string | null | undefined): number {
   if (modalidade && modalidade in MINIMO_JOGADORES_POR_MODALIDADE) {
@@ -188,6 +201,7 @@ export interface EquipeInterclasses {
   turmas: string[];
   alunos: InscricaoInterclasses[];
   minimoJogadores: number;
+  maximoJogadores: number;
   completo: boolean;
   cheio: boolean;
 }
@@ -215,13 +229,15 @@ export function agruparPorTime(inscricoes: InscricaoInterclasses[]): EquipeInter
       // lista já chega filtrada por modalidade em todo lugar ativo do app),
       // então basta olhar o primeiro pra saber qual mínimo vale aqui.
       const minimo = minimoJogadoresPara(alunos[0]?.modalidade);
+      const maximo = maximoJogadoresPara(alunos[0]?.modalidade);
       return {
+        maximoJogadores: maximo,
         nomeTime: nomeExibicao,
         turmas: Array.from(new Set(alunos.map(a => a.turma_id))).sort(),
         alunos: [...alunos].sort((a, b) => a.numero_camisa - b.numero_camisa),
         minimoJogadores: minimo,
         completo: alunos.length >= minimo,
-        cheio: alunos.length >= MAXIMO_JOGADORES_TIME,
+        cheio: alunos.length >= maximo,
       };
     })
     .sort((a, b) => a.nomeTime.localeCompare(b.nomeTime, 'pt-BR'));
