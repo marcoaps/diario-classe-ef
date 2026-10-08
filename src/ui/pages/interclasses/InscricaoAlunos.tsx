@@ -226,6 +226,18 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
     } catch { /* migração ainda não rodou — inscrição segue sem código */ }
   }
 
+  // Times criados pelo professor (ou antes da migração) ficam sem código; aqui
+  // ele gera na hora. O banco só gera se o time ainda não tiver código.
+  async function gerarCodigoParaProfessor(nomeTime: string) {
+    try {
+      const codigo = await gerarCodigoTime(edicao, modalidade, nomeTime);
+      if (codigo) setCodigosTimes(prev => ({ ...prev, [nomeTime.trim().toLowerCase()]: codigo }));
+      else alert('Esse time já tem código — recarregue a página.');
+    } catch (e: any) {
+      alert('Não foi possível gerar o código: ' + (e?.message || 'tente novamente.'));
+    }
+  }
+
   async function entrarEdicaoTime(nome: string, codigo: string) {
     setErroCodigo(null);
     setValidandoCodigo(true);
@@ -816,7 +828,9 @@ export function InscricaoAlunos({ edicao, modalidade, inscricoes, turmas, loadin
                 {timesUnicos.map(t => (
                   <div key={t} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-1.5 text-xs">
                     <span className="truncate text-on-surface">{t}</span>
-                    <span className="font-mono font-bold tracking-widest text-primary">{codigosTimes[t.trim().toLowerCase()] ?? '—'}</span>
+                    {codigosTimes[t.trim().toLowerCase()]
+                      ? <span className="font-mono font-bold tracking-widest text-primary">{codigosTimes[t.trim().toLowerCase()]}</span>
+                      : <button type="button" onClick={() => gerarCodigoParaProfessor(t)} className="font-bold text-primary underline">Gerar código</button>}
                   </div>
                 ))}
               </div>
