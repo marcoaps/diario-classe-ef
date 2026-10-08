@@ -3,7 +3,7 @@ import { LayoutGrid, ClipboardPlus, Users2, Trophy, ShieldAlert, CalendarClock }
 import { cn } from '../AppLayout';
 import { buscarInscricoesInterclasses, buscarTurmasDisponiveis, buscarElegibilidadeInterclasses } from '../../data/supabase';
 import type { ElegibilidadeInterclasses } from '../../data/supabase';
-import { EDICAO_PADRAO, unirTurmas, MODALIDADES } from '../../domain/interclasses';
+import { EDICAO_PADRAO, unirTurmas, MODALIDADES, normalizarNomeTime } from '../../domain/interclasses';
 import type { InscricaoInterclasses, Modalidade } from '../../domain/interclasses';
 import { VisaoGeral } from './interclasses/VisaoGeral';
 import { InscricaoAlunos } from './interclasses/InscricaoAlunos';
@@ -70,6 +70,20 @@ export default function InterclassesIOP() {
     [inscricoes, modalidade]
   );
 
+  // Nº de times por modalidade (todas as modalidades, não só a ativa) — mostra
+  // no seletor onde estão as inscrições.
+  const contagemTimes = useMemo(() => {
+    const porModalidade = new Map<string, Set<string>>();
+    inscricoes.forEach(i => {
+      const m = i.modalidade ?? 'futsal';
+      if (!porModalidade.has(m)) porModalidade.set(m, new Set());
+      porModalidade.get(m)!.add(normalizarNomeTime(i.nome_time.trim()));
+    });
+    const out: Record<string, number> = {};
+    porModalidade.forEach((nomes, m) => { out[m] = nomes.size; });
+    return out;
+  }, [inscricoes]);
+
   return (
     <div className="flex flex-col gap-4 pb-28 font-sans">
       <div className="rounded-3xl px-5 pt-6 pb-5 flex flex-col items-center text-center gap-4" style={{ background: 'linear-gradient(180deg, #0066cc 0%, #0052a3 100%)' }}>
@@ -78,7 +92,7 @@ export default function InterclassesIOP() {
           <h1 className="text-white text-xl font-extrabold tracking-tight">Interclasses IOP {EDICAO_ATUAL}</h1>
           <p className="text-blue-100 text-xs mt-1">Painel do professor — Instituto Odilon Pratagi</p>
         </div>
-        <ModalidadeSeletor modalidade={modalidade} onSelecionar={selecionarModalidade} variant="hero" />
+        <ModalidadeSeletor modalidade={modalidade} onSelecionar={selecionarModalidade} variant="hero" contagem={loading ? undefined : contagemTimes} />
       </div>
       <SubTabBar tab={tab} setTab={setTab} />
       {tab === 'visao' && <VisaoGeral inscricoes={inscricoesModalidade} turmas={turmas} loading={loading} modalidade={modalidade} />}
@@ -100,7 +114,7 @@ export default function InterclassesIOP() {
   );
 }
 
-export function ModalidadeSeletor({ modalidade, onSelecionar, variant = 'default' }: { modalidade: Modalidade; onSelecionar: (m: Modalidade) => void; variant?: 'default' | 'hero' }) {
+export function ModalidadeSeletor({ modalidade, onSelecionar, variant = 'default', contagem }: { modalidade: Modalidade; onSelecionar: (m: Modalidade) => void; variant?: 'default' | 'hero'; contagem?: Record<string, number> }) {
   const hero = variant === 'hero';
   return (
     <div className={cn('flex gap-1.5 overflow-x-auto', hero ? 'justify-center flex-wrap pb-1' : 'pt-2')}>
@@ -124,6 +138,11 @@ export function ModalidadeSeletor({ modalidade, onSelecionar, variant = 'default
           >
             <span>{m.icone}</span>
             {m.label}
+            {m.disponivel && contagem && (
+              <span className={cn('text-[10px] font-bold rounded-full px-1.5 py-0.5', ativo ? 'bg-white/30' : 'bg-black/10')} title="Times inscritos">
+                {contagem[m.id] ?? 0}
+              </span>
+            )}
             {!m.disponivel && <span className="text-[9px] opacity-70">(em breve)</span>}
           </button>
         );

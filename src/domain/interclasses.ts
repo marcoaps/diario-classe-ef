@@ -197,7 +197,7 @@ export interface EquipeInterclasses {
 // digitação de verdade (ex: "O Pernas de Pau" faltando o "s") continuam
 // virando equipes separadas, já que não há como saber se é o mesmo time
 // sem confirmação de quem está cadastrando.
-function normalizarNomeTime(nome: string): string {
+export function normalizarNomeTime(nome: string): string {
   return nome.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
