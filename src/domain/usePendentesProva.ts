@@ -32,12 +32,18 @@ export function normNome(s: string) { return s.toLowerCase().trim().normalize('N
 
 export type ProvaOnline = { id: string; titulo: string; turma_id?: string | null };
 export type Envio = { prova_id: string; turma_id: string; aluno_numero: number | null; aluno_nome: string | null; nota: number | null };
+// Prova IMPRESSA já corrigida e vinculada a um aluno (tela "Correções
+// realizadas"). Correções ainda anônimas (aluno_id nulo) não entram aqui.
+export type AvaliacaoImpressa = { id: string; titulo: string; bimestre: string | null; valor_total_objetivas: number | null; valor_total_discursivas: number | null };
+export type CorrecaoImpressa = { avaliacao_id: string; aluno_id: string; nota_final: number | null };
 
 export interface ContextoPendentesProva {
   nomesExcluidos: Set<string>; // transferidos/remanejados — turma|nome
   aeeNomes: Set<string>;
   provasOnline: ProvaOnline[];
   envios: Envio[];
+  avaliacoesImpressas: AvaliacaoImpressa[];
+  correcoesImpressas: CorrecaoImpressa[];
 }
 
 // Busca uma vez (independe de turma/bimestre) os dados compartilhados entre
@@ -48,6 +54,8 @@ export function useContextoPendentesProva(): ContextoPendentesProva {
   const [aeeNomes, setAeeNomes] = useState<Set<string>>(new Set());
   const [provasOnline, setProvasOnline] = useState<ProvaOnline[]>([]);
   const [envios, setEnvios] = useState<Envio[]>([]);
+  const [avaliacoesImpressas, setAvaliacoesImpressas] = useState<AvaliacaoImpressa[]>([]);
+  const [correcoesImpressas, setCorrecoesImpressas] = useState<CorrecaoImpressa[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -62,17 +70,37 @@ export function useContextoPendentesProva(): ContextoPendentesProva {
       setProvasOnline(provas || []);
       setEnvios(resp || []);
     })();
+    // Provas impressas corrigidas e já vinculadas a um aluno. Na página
+    // pública dos líderes (sem login) a RLS de avaliacoes_respostas não
+    // libera leitura -- aí volta vazio e a página segue só com as online.
+    (async () => {
+      try {
+        const { data: cor, error } = await supabase
+          .from('avaliacoes_respostas')
+          .select('avaliacao_id, aluno_id, nota_final')
+          .not('aluno_id', 'is', null);
+        if (error || !cor || cor.length === 0) return;
+        const ids = Array.from(new Set(cor.map((c: any) => c.avaliacao_id)));
+        const { data: avs } = await supabase
+          .from('avaliacoes')
+          .select('id, titulo, bimestre, valor_total_objetivas, valor_total_discursivas')
+          .in('id', ids);
+        setAvaliacoesImpressas((avs || []) as AvaliacaoImpressa[]);
+        setCorrecoesImpressas(cor as CorrecaoImpressa[]);
+      } catch { /* sem acesso: mantém só as provas online */ }
+    })();
   }, []);
 
-  return { nomesExcluidos, aeeNomes, provasOnline, envios };
+  return { nomesExcluidos, aeeNomes, provasOnline, envios, avaliacoesImpressas, correcoesImpressas };
 }
 
 // Pra uma turma+bimestre, calcula quem precisa fazer a prova (farao), quem
-// está dispensado pela presença (naoFarao) e quem já fez a prova online
-// (fizeramOnline, não entra em farao nem em naoFarao).
+// está dispensado pela presença (naoFarao) e quem já fez a prova -- online
+// ou impressa já corrigida e vinculada (fizeramOnline, nome mantido; não
+// entra em farao nem em naoFarao).
 export function usePendentesProva(turmaId: string, bimestre: Bimestre, ctx: ContextoPendentesProva) {
   const { alunos: alunosBrutos, loading, erro } = useRelatorioFrequencia(turmaId, bimestre);
-  const { nomesExcluidos, aeeNomes, provasOnline, envios } = ctx;
+  const { nomesExcluidos, aeeNomes, provasOnline, envios, avaliacoesImpressas, correcoesImpressas } = ctx;
 
   // Transferido/remanejado: exclui de vez, só vale na turma em que a situação
   // foi registrada (quem mudou de turma continua fazendo a prova na atual).
@@ -123,8 +151,22 @@ export function usePendentesProva(turmaId: string, bimestre: Bimestre, ctx: Cont
         });
       }
     }
+    // Provas impressas corrigidas e vinculadas a um aluno desta turma, de uma
+    // avaliação deste bimestre (campo bimestre; sem ele, o título). A nota
+    // vai pra escala 0-10, a mesma da prova online; vale a maior das duas.
+    const avsDoBim = new Map(avaliacoesImpressas
+      .filter(a => (a.bimestre ? String(a.bimestre).trim() === String(bimestre) : re.test(a.titulo || '')))
+      .map(a => [a.id, a]));
+    const idsDaTurma = new Set(alunosBrutos.map(a => a.id));
+    for (const c of correcoesImpressas) {
+      const av = avsDoBim.get(c.avaliacao_id);
+      if (!av || !idsDaTurma.has(c.aluno_id)) continue;
+      const total = (av.valor_total_objetivas || 0) + (av.valor_total_discursivas || 0);
+      const nota = c.nota_final == null ? null : total > 0 ? Math.round((c.nota_final / total) * 100) / 10 : c.nota_final;
+      registrar(c.aluno_id, nota);
+    }
     return mapa;
-  }, [provasOnline, envios, bimestre, turmaId, alunosBrutos]);
+  }, [provasOnline, envios, avaliacoesImpressas, correcoesImpressas, bimestre, turmaId, alunosBrutos]);
 
   const fizeramOnline = alunos
     .filter(a => precisaFazerProva(a) && notasOnline.has(a.id))

@@ -67,7 +67,7 @@ function TurmaBloco({ turmaId, bimestre, contexto, onResultado }: {
         <div className="border-t border-outline-variant bg-green-50/60 px-4 py-2.5">
           <p className="text-[11px] font-bold text-green-800 flex items-center gap-1 mb-1.5">
             <CheckCircle2 className="w-3.5 h-3.5" />
-            Já fizeram a prova online ({fizeramOnline.length}) — não entram na lista nem no Word
+            Já fizeram a prova (online ou impressa) ({fizeramOnline.length}) — não entram na lista nem no Word
           </p>
           <ul className="flex flex-col gap-1">
             {fizeramOnline.map(a => (
@@ -233,7 +233,7 @@ export function AlunosProva() {
         <div className="bg-green-50 rounded-3xl p-4 flex flex-col items-center justify-center gap-1 border border-green-200">
           <CheckCircle2 className="w-5 h-5 text-green-700" />
           <p className="text-2xl font-black text-green-700">{totalOnline}</p>
-          <p className="text-[11px] font-bold text-green-700 text-center leading-tight">Já fizeram online</p>
+          <p className="text-[11px] font-bold text-green-700 text-center leading-tight">Já fizeram a prova</p>
         </div>
       </div>
 

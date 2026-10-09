@@ -4,14 +4,16 @@ import { supabase } from '../../../data/supabase';
 import { ArrowLeft, Download, ClipboardList } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
-import type { Avaliacao } from './tiposCorretorProvas';
-import { labelTurmaOuGrupo, ehGrupoDeTurmas } from './tiposCorretorProvas';
+import type { Avaliacao, Aluno } from './tiposCorretorProvas';
+import { labelTurmaOuGrupo, ehGrupoDeTurmas, turmasDoValor } from './tiposCorretorProvas';
 
 // ============================================================================
 // "Correções realizadas" — lista TODA correção anônima desta avaliação
-// (codigo_anonimo), sem depender de nenhum aluno. A coluna Aluno começa
-// sempre em "—"; a associação manual com o aluno é uma etapa futura,
-// separada desta tela (ver seção 9/15 do módulo de correção anônima).
+// (codigo_anonimo). A correção continua nascendo sem aluno; aqui o professor
+// VINCULA cada código a um aluno (só preenche avaliacoes_respostas.aluno_id —
+// código, respostas e notas ficam intactos). Uma vez vinculada, a correção
+// aparece em Resultados da avaliação e tira o aluno dos pendentes em
+// "Alunos para a Prova", igual à prova online.
 // ============================================================================
 
 interface Correcao {
@@ -31,12 +33,25 @@ export function AvaliacaoCorrecoes() {
   const [avaliacao, setAvaliacao] = useState<Avaliacao | null>(null);
   const [correcoes, setCorrecoes] = useState<Correcao[]>([]);
   const [loading, setLoading] = useState(true);
+  const [alunos, setAlunos] = useState<Aluno[]>([]);
+  const [salvandoId, setSalvandoId] = useState<string | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
     async function init() {
       if (!id) return;
       const { data: av } = await supabase.from('avaliacoes').select('*').eq('id', id).single();
       setAvaliacao(av);
+
+      if (av) {
+        const { data: als } = await supabase
+          .from('alunos')
+          .select('id, nome, numero_chamada, turma_id')
+          .in('turma_id', turmasDoValor(av.turma_id))
+          .order('turma_id')
+          .order('numero_chamada');
+        setAlunos(als || []);
+      }
 
       const { data: cor } = await supabase
         .from('avaliacoes_respostas')
@@ -50,6 +65,29 @@ export function AvaliacaoCorrecoes() {
     init();
   }, [id]);
 
+  const alunoPorId = new Map<string, Aluno>(alunos.map(a => [a.id, a]));
+  const rotuloAluno = (a: Aluno) => `${a.turma_id ? a.turma_id + ' · ' : ''}${a.numero_chamada ?? '?'} — ${a.nome}`;
+
+  // Grava só o aluno_id da correção (ou limpa, pra desfazer um vínculo
+  // errado). O índice único (avaliacao_id, aluno_id) do banco impede o mesmo
+  // aluno em duas correções da mesma avaliação.
+  async function vincularAluno(correcaoId: string, alunoId: string | null) {
+    setErro(null);
+    setSalvandoId(correcaoId);
+    const { error } = await supabase
+      .from('avaliacoes_respostas')
+      .update({ aluno_id: alunoId })
+      .eq('id', correcaoId);
+    setSalvandoId(null);
+    if (error) {
+      setErro(error.code === '23505'
+        ? 'Esse aluno já está vinculado a outra correção desta avaliação.'
+        : `Não foi possível salvar o vínculo: ${error.message}`);
+      return;
+    }
+    setCorrecoes(cs => cs.map(c => (c.id === correcaoId ? { ...c, aluno_id: alunoId } : c)));
+  }
+
   function exportarExcel() {
     if (!avaliacao) return;
     const dados = correcoes.map(c => ({
@@ -60,7 +98,7 @@ export function AvaliacaoCorrecoes() {
       'Erros': c.erros ?? '',
       'Brancas': c.brancas ?? '',
       'Nota': c.nota_final ?? '',
-      'Aluno': c.aluno_id ? c.aluno_id : '',
+      'Aluno': c.aluno_id ? (alunoPorId.get(c.aluno_id) ? rotuloAluno(alunoPorId.get(c.aluno_id)!) : c.aluno_id) : '',
     }));
     const ws = XLSX.utils.json_to_sheet(dados);
     const wb = XLSX.utils.book_new();
@@ -80,6 +118,8 @@ export function AvaliacaoCorrecoes() {
 
   const valorTotal = (avaliacao.valor_total_objetivas || 0) + (avaliacao.valor_total_discursivas || 0);
   const media = correcoes.length > 0 ? correcoes.reduce((s, c) => s + (c.nota_final || 0), 0) / correcoes.length : 0;
+  const vinculadas = correcoes.filter(c => c.aluno_id).length;
+  const idsVinculados = new Set(correcoes.map(c => c.aluno_id).filter(Boolean) as string[]);
 
   return (
     <div className="py-4 space-y-4">
@@ -105,7 +145,7 @@ export function AvaliacaoCorrecoes() {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <div className="bg-surface border border-outline-variant rounded-2xl p-3 text-center">
           <p className="text-xs text-on-surface-variant">Corrigidas</p>
           <p className="text-2xl font-bold text-primary">{correcoes.length}</p>
@@ -114,7 +154,18 @@ export function AvaliacaoCorrecoes() {
           <p className="text-xs text-on-surface-variant">Média</p>
           <p className="text-2xl font-bold text-primary">{media.toFixed(1)}</p>
         </div>
+        <div className="bg-surface border border-outline-variant rounded-2xl p-3 text-center">
+          <p className="text-xs text-on-surface-variant">Vinculadas</p>
+          <p className="text-2xl font-bold text-primary">{vinculadas}/{correcoes.length}</p>
+        </div>
       </div>
+
+      {correcoes.length > 0 && (
+        <p className="text-xs text-on-surface-variant">
+          Escolha o aluno de cada correção. Depois de vinculada, ela entra em Resultados e o aluno sai da lista de pendentes.
+        </p>
+      )}
+      {erro && <p className="text-xs font-semibold text-red-600">{erro}</p>}
 
       {correcoes.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-16 text-center text-on-surface-variant">
@@ -138,7 +189,22 @@ export function AvaliacaoCorrecoes() {
                   <td className="py-2 pr-2 font-mono text-xs text-on-surface">{c.codigo_anonimo}</td>
                   <td className="py-2 pr-2 text-on-surface">{c.acertos ?? '—'}/{avaliacao.quantidade_objetivas}</td>
                   <td className="py-2 pr-2 font-bold text-primary">{(c.nota_final ?? 0).toFixed(1)} / {valorTotal.toFixed(1)}</td>
-                  <td className="py-2 pr-2 text-on-surface-variant">{c.aluno_id ? c.aluno_id : '—'}</td>
+                  <td className="py-2 pr-2 text-on-surface-variant">
+                    <select
+                      value={c.aluno_id || ''}
+                      disabled={salvandoId === c.id}
+                      onChange={e => vincularAluno(c.id, e.target.value || null)}
+                      className={`w-full max-w-[16rem] px-2 py-1 rounded-lg border text-xs bg-background ${c.aluno_id ? 'border-primary text-on-surface font-semibold' : 'border-outline-variant text-on-surface-variant'} disabled:opacity-50`}
+                    >
+                      <option value="">— vincular aluno —</option>
+                      {c.aluno_id && !alunoPorId.has(c.aluno_id) && (
+                        <option value={c.aluno_id}>Aluno não encontrado na turma</option>
+                      )}
+                      {alunos
+                        .filter(a => a.id === c.aluno_id || !idsVinculados.has(a.id))
+                        .map(a => <option key={a.id} value={a.id}>{rotuloAluno(a)}</option>)}
+                    </select>
+                  </td>
                 </tr>
               ))}
             </tbody>
