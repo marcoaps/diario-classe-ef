@@ -572,7 +572,9 @@ export function AvaliacaoFolha() {
       }
 
       const canvas = document.createElement('canvas');
-      await desenharFolhaModelo(canvas, avaliacao, codigo, turma ? formatarTurma(turma) : undefined);
+      // Folha de uma turma: o QR leva "codigo|turma" pro corretor selecionar a
+      // turma sozinho. Sem turma, segue só o código (formato antigo).
+      await desenharFolhaModelo(canvas, avaliacao, turma ? `${codigo}|${turma}` : codigo, turma ? formatarTurma(turma) : undefined);
       setFolhaDataUrl(canvas.toDataURL('image/png'));
     } catch (e) {
       setErroGeracao(`Erro ao gerar a folha-modelo: ${(e as Error).message}`);

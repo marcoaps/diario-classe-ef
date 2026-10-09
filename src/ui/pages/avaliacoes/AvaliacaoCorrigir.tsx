@@ -20,6 +20,12 @@ import type { MotivoFalhaOMR } from '../../../utils/omrEngine';
 // (ver AvaliacaoCorrecoes.tsx).
 // ============================================================================
 
+/** O QR da folha é "codigo" (formato antigo) ou "codigo|turma" (folha de uma turma). */
+function lerConteudoQr(lido: string): { codigo: string; turma: string } {
+  const [codigo, turma] = lido.trim().split('|');
+  return { codigo: codigo.trim(), turma: (turma || '').trim() };
+}
+
 type SituacaoQuestao = 'correta' | 'incorreta' | 'branco' | 'dupla';
 type ResultadoIdentificacao = 'ok' | 'invalido';
 
@@ -257,7 +263,8 @@ export function AvaliacaoCorrigir() {
 
             // Avaliação já confirmada por essa MESMA leitura — já está
             // mostrando o card "Avaliação identificada", não reprocessa.
-            if (avaliacaoConfirmadaRef.current && chaveLida === avaliacaoRef.current?.codigo_avaliacao) {
+            if (avaliacaoConfirmadaRef.current && lerConteudoQr(chaveLida).codigo === avaliacaoRef.current?.codigo_avaliacao) {
+              aplicarTurmaDoQr(lerConteudoQr(chaveLida).turma);
               loop();
               return;
             }
@@ -355,13 +362,26 @@ export function AvaliacaoCorrigir() {
     return `COR-${String(maior + 1).padStart(6, '0')}`;
   }
 
+  // Folha de uma turma traz a turma no QR: seleciona sozinha (só se for uma
+  // das turmas desta avaliação e mudou). Folha antiga não traz: fica manual.
+  function aplicarTurmaDoQr(turma: string) {
+    const av = avaliacaoRef.current;
+    if (!turma || !av || !turmasDoValor(av.turma_id).includes(turma)) return;
+    setTurmaFiltro(prev => {
+      if (prev !== turma) setAlunoSelecionado('');
+      return turma;
+    });
+  }
+
   // Confirma o QR da AVALIAÇÃO (nunca de aluno) — por desenho, NENHUMA
   // consulta à tabela `alunos` acontece na leitura do QR (a lista de alunos
   // só é usada no seletor opcional antes de salvar). Só compara o texto lido com avaliacao.codigo_avaliacao.
   async function confirmarAvaliacao(lido: string): Promise<ResultadoIdentificacao> {
     const av = avaliacaoRef.current;
-    if (!av?.codigo_avaliacao || lido.trim() !== av.codigo_avaliacao) return 'invalido';
+    const { codigo: codigoLido, turma: turmaLida } = lerConteudoQr(lido);
+    if (!av?.codigo_avaliacao || codigoLido !== av.codigo_avaliacao) return 'invalido';
     setErro('');
+    aplicarTurmaDoQr(turmaLida);
     const codigo = await proximoCodigoCorrecao();
     setCodigoCorrecao(codigo);
     setAvaliacaoConfirmada(true);
@@ -456,11 +476,13 @@ export function AvaliacaoCorrigir() {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const code = jsQR(imageData.data, imageData.width, imageData.height);
 
-        if (!code || code.data.trim() !== avaliacao.codigo_avaliacao) {
+        const qrLido = code ? lerConteudoQr(code.data) : null;
+        if (!qrLido || qrLido.codigo !== avaliacao.codigo_avaliacao) {
           setErro('Este QR Code não é desta avaliação (ou não foi encontrado na foto).');
           setFotoPreview(url);
           return;
         }
+        aplicarTurmaDoQr(qrLido.turma);
         const codigo = await proximoCodigoCorrecao();
         setCodigoCorrecao(codigo);
 
