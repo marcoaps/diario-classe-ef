@@ -4,7 +4,7 @@
 
 -- 1) Conferir antes (deve listar 6 alunos, 1+ linha cada):
 select turma, bimestre, numero, nome, nota, situacao, data_situacao from notas
-where (turma, numero) in (('7C',35),('7E',29),('7E',33),('7F',4),('7F',31),('7F',34))
+where (turma, numero) in (('7C',35),('7E',29),('7E',33),('7F',4),('7F',31),('7F',3),('7F',34))
 order by turma, numero, bimestre;
 
 -- 2) Atualizar (nome confere pelo 1º nome, pra não pegar outro aluno se o nº mudou):
@@ -15,5 +15,6 @@ where (turma, numero, upper(split_part(nome,' ',1))) in (
   ('7E',33,'ANNA'),
   ('7F',4,'AYSHA'),
   ('7F',31,'FERNANDA'),
+  ('7F',3,'ANTONIA'),   -- nº3 no Simaed; se o script de cadastro ainda não rodou, ela está como 34:
   ('7F',34,'ANTONIA')
 );
