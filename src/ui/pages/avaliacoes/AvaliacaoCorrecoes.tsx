@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
-import { ArrowLeft, Download, ClipboardList } from 'lucide-react';
+import { ArrowLeft, Download, ClipboardList, Trash2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 import type { Avaliacao, Aluno } from './tiposCorretorProvas';
@@ -105,6 +105,21 @@ export function AvaliacaoCorrecoes() {
     ? new Date(c.escaneado_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
     : '';
 
+  // Exclui UMA correção (pra corrigir a folha de novo, já escolhendo o aluno).
+  // Pede confirmação; o histórico de ajustes de bolha fica preservado.
+  async function excluirCorrecao(c: Correcao) {
+    const ok = window.confirm(
+      `Excluir a correção ${c.codigo_anonimo} (nota ${(c.nota_final ?? 0).toFixed(1)})?\n\n` +
+      'Ela some desta lista e dos Resultados. Depois é só corrigir a folha de novo. Esta ação não pode ser desfeita.');
+    if (!ok) return;
+    setErro(null);
+    setSalvandoId(c.id);
+    const { error } = await supabase.from('avaliacoes_respostas').delete().eq('id', c.id);
+    setSalvandoId(null);
+    if (error) { setErro(`Não foi possível excluir: ${error.message}`); return; }
+    setCorrecoes(cs => cs.filter(x => x.id !== c.id));
+  }
+
   function exportarExcel() {
     if (!avaliacao) return;
     const dados = correcoes.map(c => ({
@@ -201,6 +216,7 @@ export function AvaliacaoCorrecoes() {
                 <th className="py-2 pr-2 font-semibold">Acertos</th>
                 <th className="py-2 pr-2 font-semibold">Nota</th>
                 <th className="py-2 pr-2 font-semibold">Aluno</th>
+                <th className="py-2 font-semibold sr-only">Excluir</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant">
@@ -228,6 +244,16 @@ export function AvaliacaoCorrecoes() {
                         .filter(a => a.id === c.aluno_id || !idsVinculados.has(a.id))
                         .map(a => <option key={a.id} value={a.id}>{rotuloAluno(a)}</option>)}
                     </select>
+                  </td>
+                  <td className="py-2">
+                    <button
+                      onClick={() => excluirCorrecao(c)}
+                      disabled={salvandoId === c.id}
+                      title="Excluir esta correção"
+                      className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-40"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </td>
                 </tr>
               ))}

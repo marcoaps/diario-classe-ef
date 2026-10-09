@@ -3,8 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
 import { ArrowLeft, Upload, Camera, CheckCircle2, AlertCircle, Save, RefreshCw, ChevronDown, ChevronUp, ListChecks } from 'lucide-react';
 import jsQR from 'jsqr';
-import type { Avaliacao } from './tiposCorretorProvas';
-import { arredondar, valorPorQuestaoObjetiva, labelTurmaOuGrupo, ehGrupoDeTurmas } from './tiposCorretorProvas';
+import type { Avaliacao, Aluno } from './tiposCorretorProvas';
+import { arredondar, valorPorQuestaoObjetiva, labelTurmaOuGrupo, ehGrupoDeTurmas, turmasDoValor } from './tiposCorretorProvas';
 import { processarFolhaOMR, localizarAncorasNaFoto } from '../../../utils/omrEngine';
 import type { MotivoFalhaOMR } from '../../../utils/omrEngine';
 
@@ -94,6 +94,13 @@ export function AvaliacaoCorrigir() {
   const [ajustesFeitos, setAjustesFeitos] = useState<Array<{ questao: string; de: string; para: string }>>([]);
   const [resultados, setResultados] = useState<Array<{ codigo: string; nota_final: number }>>([]);
   const [mostrarResultados, setMostrarResultados] = useState(false);
+  // Aluno OPCIONAL escolhido antes de salvar. A leitura do QR continua sem
+  // depender de aluno; isto só evita ter que vincular depois em "Correções
+  // realizadas". A turma escolhida fica lembrada entre folhas.
+  const [alunosAv, setAlunosAv] = useState<Aluno[]>([]);
+  const [turmaFiltro, setTurmaFiltro] = useState('');
+  const [alunoSelecionado, setAlunoSelecionado] = useState('');
+  const [alunosJaCorrigidos, setAlunosJaCorrigidos] = useState<Set<string>>(new Set());
 
   // Modo de captura: câmera ao vivo (padrão, ganha tempo) ou arquivo/galeria.
   const [modoCamera, setModoCamera] = useState(true);
@@ -109,6 +116,18 @@ export function AvaliacaoCorrigir() {
       setAvaliacao(av);
       setLoading(false);
       setProfessorNome(prev => prev || av?.professor || '');
+      if (av) {
+        const { data: als } = await supabase
+          .from('alunos')
+          .select('id, nome, numero_chamada, turma_id')
+          .in('turma_id', turmasDoValor(av.turma_id))
+          .order('turma_id')
+          .order('numero_chamada');
+        setAlunosAv(als || []);
+        const turmas = turmasDoValor(av.turma_id);
+        if (turmas.length === 1) setTurmaFiltro(turmas[0]);
+        await carregarAlunosJaCorrigidos();
+      }
     }
     init();
   }, [id]);
@@ -304,20 +323,36 @@ export function AvaliacaoCorrigir() {
     loopRef.current();
   }
 
-  // Gera o próximo código sequencial de correção (ex: "COR-000037") pra esta
-  // avaliação -- puramente organizacional, NUNCA identifica aluno.
-  async function proximoCodigoCorrecao(): Promise<string> {
-    const { count } = await supabase
+  async function carregarAlunosJaCorrigidos() {
+    if (!id) return;
+    const { data } = await supabase
       .from('avaliacoes_respostas')
-      .select('id', { count: 'exact', head: true })
+      .select('aluno_id')
+      .eq('avaliacao_id', id)
+      .not('aluno_id', 'is', null);
+    setAlunosJaCorrigidos(new Set((data || []).map((r: any) => r.aluno_id as string)));
+  }
+
+  // Gera o próximo código sequencial de correção (ex: "COR-000037") pra esta
+  // avaliação -- puramente organizacional. Usa o MAIOR número já existente
+  // (não a contagem), pra não repetir código depois que uma correção é
+  // excluída em "Correções realizadas".
+  async function proximoCodigoCorrecao(): Promise<string> {
+    const { data } = await supabase
+      .from('avaliacoes_respostas')
+      .select('codigo_anonimo')
       .eq('avaliacao_id', id)
       .not('codigo_anonimo', 'is', null);
-    return `COR-${String((count || 0) + 1).padStart(6, '0')}`;
+    const maior = (data || []).reduce((m: number, r: any) => {
+      const n = parseInt(String(r.codigo_anonimo).replace(/\D/g, ''), 10);
+      return Number.isFinite(n) && n > m ? n : m;
+    }, 0);
+    return `COR-${String(maior + 1).padStart(6, '0')}`;
   }
 
   // Confirma o QR da AVALIAÇÃO (nunca de aluno) — por desenho, NENHUMA
-  // consulta à tabela `alunos` acontece aqui nem em nenhum outro ponto desta
-  // tela. Só compara o texto lido com avaliacao.codigo_avaliacao.
+  // consulta à tabela `alunos` acontece na leitura do QR (a lista de alunos
+  // só é usada no seletor opcional antes de salvar). Só compara o texto lido com avaliacao.codigo_avaliacao.
   async function confirmarAvaliacao(lido: string): Promise<ResultadoIdentificacao> {
     const av = avaliacaoRef.current;
     if (!av?.codigo_avaliacao || lido.trim() !== av.codigo_avaliacao) return 'invalido';
@@ -605,11 +640,12 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
       ? 1 - (ambiguas + brancas) / avaliacao.quantidade_objetivas
       : 1;
 
-    // Correção 100% ANÔNIMA -- sem aluno_id nenhum. A associação com o aluno
-    // é uma etapa futura e separada (ver AvaliacaoCorrecoes.tsx).
+    // Sem aluno escolhido, a correção continua anônima (vincula depois em
+    // "Correções realizadas"). Com aluno, já nasce vinculada.
+    const alunoId = alunoSelecionado || null;
     const { error } = await supabase.from('avaliacoes_respostas').insert({
       avaliacao_id: avaliacao.id,
-      aluno_id: null,
+      aluno_id: alunoId,
       codigo_anonimo: codigoCorrecao,
       grupo_codigo: avaliacao.turma_id,
       respostas,
@@ -623,20 +659,27 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
       nota: notaFinal, // campo legado, mantido para telas antigas
       confianca: arredondar(confiancaMedia, 2),
       revisada: true,
-      identificacao_manual: false,
+      identificacao_manual: !!alunoId,
       arquivo_hash: arquivoHash || null,
       metodo_scan: 'qr',
       escaneado_em: new Date().toISOString(),
       professor_nome: professorNome.trim() || null,
     });
 
-    if (error) { setSalvando(false); setErro('Erro ao salvar: ' + error.message); return; }
+    if (error) {
+      setSalvando(false);
+      setErro(error.code === '23505' && alunoId
+        ? 'Esse aluno já tem uma correção salva nesta avaliação. Escolha outro aluno ou exclua a correção antiga em "Correções realizadas".'
+        : 'Erro ao salvar: ' + error.message);
+      return;
+    }
+    if (alunoId) setAlunosJaCorrigidos(prev => new Set(prev).add(alunoId));
 
     if (ajustesFeitos.length > 0) {
       await supabase.from('avaliacoes_respostas_ajustes').insert(
         ajustesFeitos.map(a => ({
           avaliacao_id: avaliacao.id,
-          aluno_id: null,
+          aluno_id: alunoId,
           questao: a.questao,
           resposta_anterior: a.de,
           resposta_nova: a.para,
@@ -658,6 +701,7 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
     setFotoPreview('');
     setArquivoHash('');
     setAjustesFeitos([]);
+    setAlunoSelecionado('');
     setErro('');
     setConfiancaPorQuestao({});
     setNotaDiscursivaStr('');
@@ -1042,6 +1086,37 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
             <span className="text-lg font-bold text-primary">{notaFinal.toFixed(1)} pts</span>
           </div>
 
+          {alunosAv.length > 0 && (() => {
+            const turmas = turmasDoValor(avaliacao.turma_id);
+            const disponiveis = alunosAv.filter(a =>
+              (!turmaFiltro || a.turma_id === turmaFiltro) && !alunosJaCorrigidos.has(a.id));
+            return (
+              <div className="bg-surface border border-outline-variant rounded-xl px-4 py-3 space-y-2">
+                <p className="text-xs font-semibold text-on-surface">Aluno desta folha <span className="font-normal text-on-surface-variant">(opcional — veja o nome no cabeçalho)</span></p>
+                <div className="flex gap-2">
+                  {turmas.length > 1 && (
+                    <select value={turmaFiltro} onChange={e => { setTurmaFiltro(e.target.value); setAlunoSelecionado(''); }}
+                      className="px-2 py-2 rounded-lg border border-outline-variant bg-background text-sm text-on-surface">
+                      <option value="">Turma</option>
+                      {turmas.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  )}
+                  <select value={alunoSelecionado} onChange={e => setAlunoSelecionado(e.target.value)}
+                    disabled={turmas.length > 1 && !turmaFiltro}
+                    className="flex-1 min-w-0 px-2 py-2 rounded-lg border border-outline-variant bg-background text-sm text-on-surface disabled:opacity-50">
+                    <option value="">{turmas.length > 1 && !turmaFiltro ? 'Escolha a turma primeiro' : '— sem aluno (vincular depois) —'}</option>
+                    {disponiveis.map(a => (
+                      <option key={a.id} value={a.id}>{a.numero_chamada ?? '?'} — {a.nome}</option>
+                    ))}
+                  </select>
+                </div>
+                {alunosJaCorrigidos.size > 0 && (
+                  <p className="text-[11px] text-on-surface-variant">Alunos já corrigidos nesta avaliação não aparecem na lista.</p>
+                )}
+              </div>
+            );
+          })()}
+
           {erro && (
             <div className="flex items-center gap-2 text-sm text-error bg-error-container rounded-xl px-3 py-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />{erro}
@@ -1079,9 +1154,15 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
             </p>
           </div>
 
-          <div className="bg-amber-50 border border-amber-200 text-amber-700 rounded-2xl px-4 py-3 text-xs">
-            Corrigido sem nome de aluno. A associação com um aluno é feita depois, manualmente, em "Correções realizadas".
-          </div>
+          {alunoSelecionado && alunosAv.find(a => a.id === alunoSelecionado) ? (
+            <div className="bg-green-50 border border-green-200 text-green-700 rounded-2xl px-4 py-3 text-xs">
+              Vinculada a <strong>{(() => { const a = alunosAv.find(x => x.id === alunoSelecionado)!; return `${a.turma_id} · ${a.numero_chamada ?? '?'} — ${a.nome}`; })()}</strong>. Já saiu da lista de pendentes.
+            </div>
+          ) : (
+            <div className="bg-amber-50 border border-amber-200 text-amber-700 rounded-2xl px-4 py-3 text-xs">
+              Corrigido sem nome de aluno. A associação com um aluno é feita depois, manualmente, em "Correções realizadas".
+            </div>
+          )}
 
           <button onClick={() => proximaFolha()} className="w-full py-3 rounded-2xl bg-primary text-on-primary font-semibold">
             📷 Nova Correção (câmera já ligada)
