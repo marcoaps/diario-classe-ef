@@ -102,6 +102,12 @@ export function AvaliacaoCorrecoes() {
   // foram vinculadas antes de existir o lançamento automático). Idempotente.
   const [lancandoTodas, setLancandoTodas] = useState(false);
   const [msgLancamento, setMsgLancamento] = useState<string | null>(null);
+  // Aviso fixo no rodapé (a lista é longa: a mensagem do topo some da vista).
+  useEffect(() => {
+    if (!msgLancamento && !erro) return;
+    const t = setTimeout(() => { setMsgLancamento(null); setErro(null); }, 9000);
+    return () => clearTimeout(t);
+  }, [msgLancamento, erro]);
   async function lancarVinculadasNoDiario() {
     if (!avaliacao) return;
     const vinculadas = correcoes.filter(c => c.aluno_id && alunoPorId.get(c.aluno_id));
@@ -244,6 +250,12 @@ export function AvaliacaoCorrecoes() {
         </button>
       )}
       {msgLancamento && <p className="text-xs font-semibold text-on-surface-variant">{msgLancamento}</p>}
+      {(msgLancamento || erro) && (
+        <div role="status" onClick={() => { setMsgLancamento(null); setErro(null); }}
+          className={`fixed left-3 right-3 bottom-20 z-50 mx-auto max-w-md rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg text-white ${erro ? 'bg-red-600' : 'bg-green-700'}`}>
+          {erro ? '✗ ' : '✓ '}{erro || msgLancamento}
+        </div>
+      )}
 
       {correcoes.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-16 text-center text-on-surface-variant">
