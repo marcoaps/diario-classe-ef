@@ -5,7 +5,7 @@ import { ArrowLeft, Upload, Camera, CheckCircle2, AlertCircle, Save, RefreshCw, 
 import jsQR from 'jsqr';
 import type { Avaliacao, Aluno } from './tiposCorretorProvas';
 import { arredondar, valorPorQuestaoObjetiva, labelTurmaOuGrupo, ehGrupoDeTurmas, turmasDoValor } from './tiposCorretorProvas';
-import { lancarNotaImpressaNoDiario } from '../../../domain/notaProvaImpressa';
+import { lancarNotaImpressaNoDiario, textoLancamento } from '../../../domain/notaProvaImpressa';
 import { processarFolhaOMR, localizarAncorasNaFoto } from '../../../utils/omrEngine';
 import type { MotivoFalhaOMR } from '../../../utils/omrEngine';
 
@@ -113,6 +113,8 @@ export function AvaliacaoCorrigir() {
   // direto na tela "PROVA CORRIGIDA", sem ir até "Correções realizadas").
   const [ultimaCorrecaoId, setUltimaCorrecaoId] = useState<string | null>(null);
   const [alunoGravado, setAlunoGravado] = useState<string | null>(null);
+  // Resultado do lançamento da nota no Diário (tabela notas): sucesso ou falha.
+  const [msgDiario, setMsgDiario] = useState<{ ok: boolean; texto: string } | null>(null);
   const [vinculando, setVinculando] = useState(false);
 
   // Modo de captura: câmera ao vivo (padrão, ganha tempo) ou arquivo/galeria.
@@ -668,6 +670,7 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
     if (!avaliacao || !id || !codigoCorrecao) return;
     setSalvando(true);
     setErro('');
+    setMsgDiario(null);
 
     const confiancaMedia = avaliacao.quantidade_objetivas > 0
       ? 1 - (ambiguas + brancas) / avaliacao.quantidade_objetivas
@@ -712,7 +715,7 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
     const alunoLancar = alunoId ? alunosAv.find(a => a.id === alunoId) : null;
     if (alunoLancar) {
       const erroNota = await lancarNotaImpressaNoDiario(avaliacao, alunoLancar, notaFinal);
-      if (erroNota) setErro(erroNota);
+      setMsgDiario(erroNota ? { ok: false, texto: erroNota } : { ok: true, texto: textoLancamento(avaliacao, notaFinal) });
     }
 
     if (ajustesFeitos.length > 0) {
@@ -752,7 +755,7 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
     if (alunoLancar && avaliacao) {
       const { data: salva } = await supabase.from('avaliacoes_respostas').select('nota_final').eq('id', ultimaCorrecaoId).single();
       const erroNota = await lancarNotaImpressaNoDiario(avaliacao, alunoLancar, salva?.nota_final ?? 0);
-      if (erroNota) setErro(erroNota);
+      setMsgDiario(erroNota ? { ok: false, texto: erroNota } : { ok: true, texto: textoLancamento(avaliacao, salva?.nota_final ?? 0) });
     }
   }
 
@@ -1231,6 +1234,9 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
           {alunoGravado && alunoEscolhido ? (
             <div className="bg-green-50 border border-green-200 text-green-700 rounded-2xl px-4 py-3 text-xs">
               Vinculada a <strong>{rotuloAlunoEscolhido}</strong>. Já saiu da lista de pendentes.
+              {msgDiario && (
+                <p className={`mt-1 font-semibold ${msgDiario.ok ? 'text-green-800' : 'text-red-600'}`}>{msgDiario.ok ? '✓ ' : '✗ '}{msgDiario.texto}</p>
+              )}
             </div>
           ) : alunosAv.length > 0 && ultimaCorrecaoId ? (
             seletorAluno('Salva sem aluno — de quem é esta folha?',

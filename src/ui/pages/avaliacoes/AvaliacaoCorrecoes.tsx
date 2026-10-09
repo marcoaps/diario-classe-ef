@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
 import { ArrowLeft, Download, ClipboardList, Trash2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { lancarNotaImpressaNoDiario, normalizarNotaImpressa } from '../../../domain/notaProvaImpressa';
+import { lancarNotaImpressaNoDiario, normalizarNotaImpressa, textoLancamento } from '../../../domain/notaProvaImpressa';
 
 import type { Avaliacao, Aluno } from './tiposCorretorProvas';
 import { labelTurmaOuGrupo, ehGrupoDeTurmas, turmasDoValor } from './tiposCorretorProvas';
@@ -94,6 +94,7 @@ export function AvaliacaoCorrecoes() {
     if (aluno && corr && avaliacao) {
       const erroNota = await lancarNotaImpressaNoDiario(avaliacao, aluno, corr.nota_final ?? 0);
       if (erroNota) setErro(erroNota);
+      else setMsgLancamento(`${aluno.nome}: ${textoLancamento(avaliacao, corr.nota_final ?? 0)}`);
     }
   }
 

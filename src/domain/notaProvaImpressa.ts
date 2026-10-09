@@ -35,3 +35,8 @@ export async function lancarNotaImpressaNoDiario(
     return 'A correção foi salva, mas a nota não foi para o Diário: ' + ((e as Error)?.message || 'erro desconhecido');
   }
 }
+
+/** Texto de confirmação: "Nota 9,5 lançada no Diário (3º bim)". */
+export function textoLancamento(av: { bimestre: string | null; titulo: string }, notaFinal: number): string {
+  return `Nota ${normalizarNotaImpressa(notaFinal).toFixed(1).replace('.', ',')} lançada no Diário (${bimestreDaAvaliacao(av)}º bim).`;
+}
