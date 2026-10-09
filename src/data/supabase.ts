@@ -258,10 +258,13 @@ export async function lancarNotaCorretorProva(
 ) {
   const nomeChave = limparAnotacaoDeSituacao(aluno.nome).toUpperCase();
   const existentes = await buscarNotas(turma, bimestre);
-  const atual = existentes.find((n: any) => n.nome === nomeChave) as any;
+  // Casa por nome e, se a grafia no Diário for outra (caixa/acento), pelo nº
+  // de chamada -- assim não cria uma linha duplicada do mesmo aluno.
+  const atual = (existentes.find((n: any) => n.nome === nomeChave)
+    ?? existentes.find((n: any) => n.numero === aluno.numero)) as any;
   await salvarNotas(turma, bimestre, [{
     numero: aluno.numero,
-    nome: aluno.nome,
+    nome: atual?.nome ?? aluno.nome,
     nota,
     nota_texto: atual?.nota_texto ?? null,
     situacao: atual?.situacao ?? 'Em Curso',

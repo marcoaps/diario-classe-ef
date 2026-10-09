@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
 import { ArrowLeft, Download, ClipboardList, Trash2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { lancarNotaImpressaNoDiario, normalizarNotaImpressa } from '../../../domain/notaProvaImpressa';
 
 import type { Avaliacao, Aluno } from './tiposCorretorProvas';
 import { labelTurmaOuGrupo, ehGrupoDeTurmas, turmasDoValor } from './tiposCorretorProvas';
@@ -87,6 +88,37 @@ export function AvaliacaoCorrecoes() {
       return;
     }
     setCorrecoes(cs => cs.map(c => (c.id === correcaoId ? { ...c, aluno_id: alunoId } : c)));
+    // Vinculou: a nota vai pro Diário (como na prova online). Desvincular não mexe nas notas.
+    const aluno = alunoId ? alunoPorId.get(alunoId) : null;
+    const corr = correcoes.find(c => c.id === correcaoId);
+    if (aluno && corr && avaliacao) {
+      const erroNota = await lancarNotaImpressaNoDiario(avaliacao, aluno, corr.nota_final ?? 0);
+      if (erroNota) setErro(erroNota);
+    }
+  }
+
+  // Lança no Diário a nota de TODAS as correções já vinculadas (útil pras que
+  // foram vinculadas antes de existir o lançamento automático). Idempotente.
+  const [lancandoTodas, setLancandoTodas] = useState(false);
+  const [msgLancamento, setMsgLancamento] = useState<string | null>(null);
+  async function lancarVinculadasNoDiario() {
+    if (!avaliacao) return;
+    const vinculadas = correcoes.filter(c => c.aluno_id && alunoPorId.get(c.aluno_id));
+    if (!vinculadas.length) { setMsgLancamento('Nenhuma correção vinculada a aluno.'); return; }
+    const lista = vinculadas.map(c => {
+      const a = alunoPorId.get(c.aluno_id!)!;
+      return `${a.turma_id} ${a.numero_chamada} ${a.nome}: ${(c.nota_final ?? 0).toFixed(1)} → ${normalizarNotaImpressa(c.nota_final ?? 0).toFixed(1)}`;
+    }).join('\n');
+    if (!window.confirm(`Lançar no Diário (substitui a nota do bimestre) estas ${vinculadas.length} notas?\n\n${lista}`)) return;
+    setLancandoTodas(true); setMsgLancamento(null);
+    let ok = 0; const falhas: string[] = [];
+    for (const c of vinculadas) {
+      const a = alunoPorId.get(c.aluno_id!)!;
+      const e = await lancarNotaImpressaNoDiario(avaliacao, a, c.nota_final ?? 0);
+      if (e) falhas.push(`${a.nome}: ${e}`); else ok++;
+    }
+    setLancandoTodas(false);
+    setMsgLancamento(`${ok} nota(s) lançada(s) no Diário.` + (falhas.length ? ` Falhas: ${falhas.join(' | ')}` : ''));
   }
 
   // Bolhas marcadas na folha (ex: "1-A 2-C 3-·"), pra achar a folha de papel
@@ -201,6 +233,16 @@ export function AvaliacaoCorrecoes() {
         </p>
       )}
       {erro && <p className="text-xs font-semibold text-red-600">{erro}</p>}
+      {vinculadas > 0 && (
+        <button
+          onClick={lancarVinculadasNoDiario}
+          disabled={lancandoTodas}
+          className="self-start px-3 py-1.5 rounded-full bg-primary text-on-primary text-xs font-semibold disabled:opacity-50"
+        >
+          {lancandoTodas ? 'Lançando…' : `Lançar notas no Diário (${vinculadas})`}
+        </button>
+      )}
+      {msgLancamento && <p className="text-xs font-semibold text-on-surface-variant">{msgLancamento}</p>}
 
       {correcoes.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-16 text-center text-on-surface-variant">

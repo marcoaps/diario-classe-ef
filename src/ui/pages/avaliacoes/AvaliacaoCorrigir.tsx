@@ -5,6 +5,7 @@ import { ArrowLeft, Upload, Camera, CheckCircle2, AlertCircle, Save, RefreshCw, 
 import jsQR from 'jsqr';
 import type { Avaliacao, Aluno } from './tiposCorretorProvas';
 import { arredondar, valorPorQuestaoObjetiva, labelTurmaOuGrupo, ehGrupoDeTurmas, turmasDoValor } from './tiposCorretorProvas';
+import { lancarNotaImpressaNoDiario } from '../../../domain/notaProvaImpressa';
 import { processarFolhaOMR, localizarAncorasNaFoto } from '../../../utils/omrEngine';
 import type { MotivoFalhaOMR } from '../../../utils/omrEngine';
 
@@ -708,6 +709,11 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
     if (alunoId) setAlunosJaCorrigidos(prev => new Set(prev).add(alunoId));
     setUltimaCorrecaoId(salva?.id ?? null);
     setAlunoGravado(alunoId);
+    const alunoLancar = alunoId ? alunosAv.find(a => a.id === alunoId) : null;
+    if (alunoLancar) {
+      const erroNota = await lancarNotaImpressaNoDiario(avaliacao, alunoLancar, notaFinal);
+      if (erroNota) setErro(erroNota);
+    }
 
     if (ajustesFeitos.length > 0) {
       await supabase.from('avaliacoes_respostas_ajustes').insert(
@@ -742,6 +748,12 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
     }
     setAlunosJaCorrigidos(prev => new Set(prev).add(alunoSelecionado));
     setAlunoGravado(alunoSelecionado);
+    const alunoLancar = alunosAv.find(a => a.id === alunoSelecionado);
+    if (alunoLancar && avaliacao) {
+      const { data: salva } = await supabase.from('avaliacoes_respostas').select('nota_final').eq('id', ultimaCorrecaoId).single();
+      const erroNota = await lancarNotaImpressaNoDiario(avaliacao, alunoLancar, salva?.nota_final ?? 0);
+      if (erroNota) setErro(erroNota);
+    }
   }
 
   function proximaFolha(manterCamera = true) {
