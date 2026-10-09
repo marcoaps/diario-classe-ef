@@ -60,6 +60,7 @@ export function AvaliacaoCorrigir() {
   const scanAtivoRef = useRef(false);
   const processandoRef = useRef(false);
   const ultimoQrLidoRef = useRef<string | null>(null);
+  const turmaQrAplicadaRef = useRef('');
   const contagemConfirmacaoRef = useRef(0);
   const qrIgnoradoRef = useRef<string | null>(null);
   const falhasQrRef = useRef<{ conteudo: string | null; count: number }>({ conteudo: null, count: 0 });
@@ -299,6 +300,7 @@ export function AvaliacaoCorrigir() {
             }
           } else {
             setQrVisivel(false);
+            turmaQrAplicadaRef.current = '';
             setUltimoQrLidoDebug('');
             ultimoQrLidoRef.current = null;
             contagemConfirmacaoRef.current = 0;
@@ -367,10 +369,12 @@ export function AvaliacaoCorrigir() {
   function aplicarTurmaDoQr(turma: string) {
     const av = avaliacaoRef.current;
     if (!turma || !av || !turmasDoValor(av.turma_id).includes(turma)) return;
-    setTurmaFiltro(prev => {
-      if (prev !== turma) setAlunoSelecionado('');
-      return turma;
-    });
+    // Só aplica uma vez por folha: enquanto o QR segue na imagem, não
+    // sobrescreve uma troca manual de turma feita pelo professor.
+    if (turmaQrAplicadaRef.current === turma) return;
+    turmaQrAplicadaRef.current = turma;
+    setTurmaFiltro(turma);
+    setAlunoSelecionado('');
   }
 
   // Confirma o QR da AVALIAÇÃO (nunca de aluno) — por desenho, NENHUMA
@@ -482,6 +486,7 @@ export function AvaliacaoCorrigir() {
           setFotoPreview(url);
           return;
         }
+        turmaQrAplicadaRef.current = '';
         aplicarTurmaDoQr(qrLido.turma);
         const codigo = await proximoCodigoCorrecao();
         setCodigoCorrecao(codigo);
