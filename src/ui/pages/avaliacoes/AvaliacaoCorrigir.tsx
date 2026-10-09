@@ -101,6 +101,11 @@ export function AvaliacaoCorrigir() {
   const [turmaFiltro, setTurmaFiltro] = useState('');
   const [alunoSelecionado, setAlunoSelecionado] = useState('');
   const [alunosJaCorrigidos, setAlunosJaCorrigidos] = useState<Set<string>>(new Set());
+  // id da correção recém-salva + aluno efetivamente gravado nela (pra vincular
+  // direto na tela "PROVA CORRIGIDA", sem ir até "Correções realizadas").
+  const [ultimaCorrecaoId, setUltimaCorrecaoId] = useState<string | null>(null);
+  const [alunoGravado, setAlunoGravado] = useState<string | null>(null);
+  const [vinculando, setVinculando] = useState(false);
 
   // Modo de captura: câmera ao vivo (padrão, ganha tempo) ou arquivo/galeria.
   const [modoCamera, setModoCamera] = useState(true);
@@ -643,7 +648,7 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
     // Sem aluno escolhido, a correção continua anônima (vincula depois em
     // "Correções realizadas"). Com aluno, já nasce vinculada.
     const alunoId = alunoSelecionado || null;
-    const { error } = await supabase.from('avaliacoes_respostas').insert({
+    const { data: salva, error } = await supabase.from('avaliacoes_respostas').insert({
       avaliacao_id: avaliacao.id,
       aluno_id: alunoId,
       codigo_anonimo: codigoCorrecao,
@@ -664,7 +669,7 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
       metodo_scan: 'qr',
       escaneado_em: new Date().toISOString(),
       professor_nome: professorNome.trim() || null,
-    });
+    }).select('id').single();
 
     if (error) {
       setSalvando(false);
@@ -674,6 +679,8 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
       return;
     }
     if (alunoId) setAlunosJaCorrigidos(prev => new Set(prev).add(alunoId));
+    setUltimaCorrecaoId(salva?.id ?? null);
+    setAlunoGravado(alunoId);
 
     if (ajustesFeitos.length > 0) {
       await supabase.from('avaliacoes_respostas_ajustes').insert(
@@ -692,6 +699,24 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
     setEtapa('salvo');
   }
 
+  async function vincularAlunoNaCorrecaoSalva() {
+    if (!ultimaCorrecaoId || !alunoSelecionado) return;
+    setVinculando(true);
+    setErro('');
+    const { error } = await supabase.from('avaliacoes_respostas')
+      .update({ aluno_id: alunoSelecionado, identificacao_manual: true })
+      .eq('id', ultimaCorrecaoId);
+    setVinculando(false);
+    if (error) {
+      setErro(error.code === '23505'
+        ? 'Esse aluno já tem uma correção salva nesta avaliação.'
+        : 'Erro ao vincular: ' + error.message);
+      return;
+    }
+    setAlunosJaCorrigidos(prev => new Set(prev).add(alunoSelecionado));
+    setAlunoGravado(alunoSelecionado);
+  }
+
   function proximaFolha(manterCamera = true) {
     setEtapa('identificar');
     setAvaliacaoConfirmada(false);
@@ -702,6 +727,8 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
     setArquivoHash('');
     setAjustesFeitos([]);
     setAlunoSelecionado('');
+    setUltimaCorrecaoId(null);
+    setAlunoGravado(null);
     setErro('');
     setConfiancaPorQuestao({});
     setNotaDiscursivaStr('');
@@ -710,6 +737,41 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
     if (inputRef.current) inputRef.current.value = '';
     setModoCamera(manterCamera);
   }
+
+  // Seletor turma → aluno (opcional), usado antes de salvar e, se a folha foi
+  // salva sem aluno, também na tela "PROVA CORRIGIDA" pra vincular na hora.
+  function seletorAluno(titulo: string, extra?: React.ReactNode) {
+    if (!avaliacao || alunosAv.length === 0) return null;
+    const turmas = turmasDoValor(avaliacao.turma_id);
+    const disponiveis = alunosAv.filter(a =>
+      (!turmaFiltro || a.turma_id === turmaFiltro) && !alunosJaCorrigidos.has(a.id));
+    return (
+      <div className="bg-surface border-2 border-primary/40 rounded-xl px-4 py-3 space-y-2">
+        <p className="text-xs font-semibold text-on-surface">{titulo}</p>
+        <div className="flex gap-2">
+          {turmas.length > 1 && (
+            <select value={turmaFiltro} onChange={e => { setTurmaFiltro(e.target.value); setAlunoSelecionado(''); }}
+              className="px-2 py-2 rounded-lg border border-outline-variant bg-background text-sm text-on-surface">
+              <option value="">Turma</option>
+              {turmas.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          )}
+          <select value={alunoSelecionado} onChange={e => setAlunoSelecionado(e.target.value)}
+            disabled={turmas.length > 1 && !turmaFiltro}
+            className="flex-1 min-w-0 px-2 py-2 rounded-lg border border-outline-variant bg-background text-sm text-on-surface disabled:opacity-50">
+            <option value="">{turmas.length > 1 && !turmaFiltro ? 'Escolha a turma primeiro' : '— escolha o aluno —'}</option>
+            {disponiveis.map(a => (
+              <option key={a.id} value={a.id}>{a.numero_chamada ?? '?'} — {a.nome}</option>
+            ))}
+          </select>
+        </div>
+        {extra}
+      </div>
+    );
+  }
+
+  const alunoEscolhido = alunosAv.find(a => a.id === alunoSelecionado) || null;
+  const rotuloAlunoEscolhido = alunoEscolhido ? `${alunoEscolhido.turma_id} · ${alunoEscolhido.numero_chamada ?? '?'} — ${alunoEscolhido.nome}` : '';
 
   if (loading) return (
     <div className="flex justify-center py-20">
@@ -978,10 +1040,13 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
           <div className="bg-secondary-container rounded-2xl px-4 py-3 flex items-center gap-3">
             <CheckCircle2 className="w-5 h-5 text-on-secondary-container flex-shrink-0" />
             <div>
-              <p className="text-xs text-on-secondary-container">Correção anônima — sem aluno identificado</p>
+              <p className="text-xs text-on-secondary-container">{alunoEscolhido ? rotuloAlunoEscolhido : 'Correção sem aluno identificado'}</p>
               <p className="text-sm font-bold text-on-secondary-container">{codigoCorrecao}</p>
             </div>
           </div>
+
+          {seletorAluno('Aluno desta folha (veja o nome no cabeçalho)',
+            <p className="text-[11px] text-on-surface-variant">Opcional. Alunos já corrigidos nesta avaliação não aparecem.</p>)}
 
           {fotoPreview && (
             <div className="rounded-xl overflow-hidden border border-outline-variant">
@@ -1086,36 +1151,6 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
             <span className="text-lg font-bold text-primary">{notaFinal.toFixed(1)} pts</span>
           </div>
 
-          {alunosAv.length > 0 && (() => {
-            const turmas = turmasDoValor(avaliacao.turma_id);
-            const disponiveis = alunosAv.filter(a =>
-              (!turmaFiltro || a.turma_id === turmaFiltro) && !alunosJaCorrigidos.has(a.id));
-            return (
-              <div className="bg-surface border border-outline-variant rounded-xl px-4 py-3 space-y-2">
-                <p className="text-xs font-semibold text-on-surface">Aluno desta folha <span className="font-normal text-on-surface-variant">(opcional — veja o nome no cabeçalho)</span></p>
-                <div className="flex gap-2">
-                  {turmas.length > 1 && (
-                    <select value={turmaFiltro} onChange={e => { setTurmaFiltro(e.target.value); setAlunoSelecionado(''); }}
-                      className="px-2 py-2 rounded-lg border border-outline-variant bg-background text-sm text-on-surface">
-                      <option value="">Turma</option>
-                      {turmas.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                  )}
-                  <select value={alunoSelecionado} onChange={e => setAlunoSelecionado(e.target.value)}
-                    disabled={turmas.length > 1 && !turmaFiltro}
-                    className="flex-1 min-w-0 px-2 py-2 rounded-lg border border-outline-variant bg-background text-sm text-on-surface disabled:opacity-50">
-                    <option value="">{turmas.length > 1 && !turmaFiltro ? 'Escolha a turma primeiro' : '— sem aluno (vincular depois) —'}</option>
-                    {disponiveis.map(a => (
-                      <option key={a.id} value={a.id}>{a.numero_chamada ?? '?'} — {a.nome}</option>
-                    ))}
-                  </select>
-                </div>
-                {alunosJaCorrigidos.size > 0 && (
-                  <p className="text-[11px] text-on-surface-variant">Alunos já corrigidos nesta avaliação não aparecem na lista.</p>
-                )}
-              </div>
-            );
-          })()}
 
           {erro && (
             <div className="flex items-center gap-2 text-sm text-error bg-error-container rounded-xl px-3 py-2">
@@ -1135,7 +1170,7 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
         </div>
       )}
 
-      {/* ETAPA: SALVO — "PROVA CORRIGIDA", sem nome de aluno nenhum. */}
+      {/* ETAPA: SALVO — "PROVA CORRIGIDA" (com aluno, ou seletor pra vincular na hora). */}
       {etapa === 'salvo' && codigoCorrecao && (
         <div className="space-y-4">
           <div className="bg-surface border border-outline-variant rounded-2xl p-5 text-center space-y-2">
@@ -1154,10 +1189,19 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
             </p>
           </div>
 
-          {alunoSelecionado && alunosAv.find(a => a.id === alunoSelecionado) ? (
+          {alunoGravado && alunoEscolhido ? (
             <div className="bg-green-50 border border-green-200 text-green-700 rounded-2xl px-4 py-3 text-xs">
-              Vinculada a <strong>{(() => { const a = alunosAv.find(x => x.id === alunoSelecionado)!; return `${a.turma_id} · ${a.numero_chamada ?? '?'} — ${a.nome}`; })()}</strong>. Já saiu da lista de pendentes.
+              Vinculada a <strong>{rotuloAlunoEscolhido}</strong>. Já saiu da lista de pendentes.
             </div>
+          ) : alunosAv.length > 0 && ultimaCorrecaoId ? (
+            seletorAluno('Salva sem aluno — de quem é esta folha?',
+              <>
+                {erro && <p className="text-xs text-error">{erro}</p>}
+                <button onClick={vincularAlunoNaCorrecaoSalva} disabled={!alunoSelecionado || vinculando}
+                  className="w-full py-2.5 rounded-xl bg-primary text-on-primary text-sm font-semibold disabled:opacity-50">
+                  {vinculando ? 'Vinculando...' : 'Vincular aluno'}
+                </button>
+              </>)
           ) : (
             <div className="bg-amber-50 border border-amber-200 text-amber-700 rounded-2xl px-4 py-3 text-xs">
               Corrigido sem nome de aluno. A associação com um aluno é feita depois, manualmente, em "Correções realizadas".
