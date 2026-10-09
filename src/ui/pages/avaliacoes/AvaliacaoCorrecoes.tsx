@@ -25,6 +25,7 @@ interface Correcao {
   nota_final: number;
   escaneado_em: string | null;
   aluno_id: string | null;
+  respostas: Record<string, string> | null;
 }
 
 export function AvaliacaoCorrecoes() {
@@ -55,7 +56,7 @@ export function AvaliacaoCorrecoes() {
 
       const { data: cor } = await supabase
         .from('avaliacoes_respostas')
-        .select('id, codigo_anonimo, acertos, erros, brancas, nota_final, escaneado_em, aluno_id')
+        .select('id, codigo_anonimo, acertos, erros, brancas, nota_final, escaneado_em, aluno_id, respostas')
         .eq('avaliacao_id', id)
         .not('codigo_anonimo', 'is', null)
         .order('codigo_anonimo');
@@ -88,6 +89,22 @@ export function AvaliacaoCorrecoes() {
     setCorrecoes(cs => cs.map(c => (c.id === correcaoId ? { ...c, aluno_id: alunoId } : c)));
   }
 
+  // Bolhas marcadas na folha (ex: "1-A 2-C 3-·"), pra achar a folha de papel
+  // correspondente e descobrir de qual aluno ela é. Minúscula = errou.
+  function marcadas(c: Correcao): string {
+    const r = c.respostas || {};
+    const gab = avaliacao?.gabarito || {};
+    return Array.from({ length: avaliacao?.quantidade_objetivas || 0 }, (_, i) => {
+      const n = String(i + 1);
+      const m = (r[n] || '').trim();
+      if (!m) return `${n}-·`;
+      return `${n}-${gab[n] && gab[n] !== m ? m.toLowerCase() : m.toUpperCase()}`;
+    }).join(' ');
+  }
+  const horaCorrecao = (c: Correcao) => c.escaneado_em
+    ? new Date(c.escaneado_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : '';
+
   function exportarExcel() {
     if (!avaliacao) return;
     const dados = correcoes.map(c => ({
@@ -98,6 +115,8 @@ export function AvaliacaoCorrecoes() {
       'Erros': c.erros ?? '',
       'Brancas': c.brancas ?? '',
       'Nota': c.nota_final ?? '',
+      'Marcadas': marcadas(c),
+      'Corrigida em': horaCorrecao(c),
       'Aluno': c.aluno_id ? (alunoPorId.get(c.aluno_id) ? rotuloAluno(alunoPorId.get(c.aluno_id)!) : c.aluno_id) : '',
     }));
     const ws = XLSX.utils.json_to_sheet(dados);
@@ -163,6 +182,7 @@ export function AvaliacaoCorrecoes() {
       {correcoes.length > 0 && (
         <p className="text-xs text-on-surface-variant">
           Escolha o aluno de cada correção. Depois de vinculada, ela entra em Resultados e o aluno sai da lista de pendentes.
+          Não sabe de quem é? Compare as bolhas marcadas (embaixo do código) com as folhas de papel: letra minúscula = errou, · = em branco.
         </p>
       )}
       {erro && <p className="text-xs font-semibold text-red-600">{erro}</p>}
@@ -186,7 +206,11 @@ export function AvaliacaoCorrecoes() {
             <tbody className="divide-y divide-outline-variant">
               {correcoes.map(c => (
                 <tr key={c.id}>
-                  <td className="py-2 pr-2 font-mono text-xs text-on-surface">{c.codigo_anonimo}</td>
+                  <td className="py-2 pr-2 font-mono text-xs text-on-surface">
+                    {c.codigo_anonimo}
+                    <div className="mt-1 text-[10px] leading-snug text-on-surface-variant whitespace-normal break-words max-w-[9rem]">{marcadas(c)}</div>
+                    {horaCorrecao(c) && <div className="text-[10px] text-on-surface-variant">{horaCorrecao(c)}</div>}
+                  </td>
                   <td className="py-2 pr-2 text-on-surface">{c.acertos ?? '—'}/{avaliacao.quantidade_objetivas}</td>
                   <td className="py-2 pr-2 font-bold text-primary">{(c.nota_final ?? 0).toFixed(1)} / {valorTotal.toFixed(1)}</td>
                   <td className="py-2 pr-2 text-on-surface-variant">
