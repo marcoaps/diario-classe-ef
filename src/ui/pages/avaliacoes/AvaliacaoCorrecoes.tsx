@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
 import { ArrowLeft, Download, ClipboardList, Trash2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { lancarNotaImpressaNoDiario, normalizarNotaImpressa, textoLancamento } from '../../../domain/notaProvaImpressa';
+import { lancarNotaImpressaNoDiario, normalizarNotaImpressa, textoLancamento, bimestreDaAvaliacao } from '../../../domain/notaProvaImpressa';
 
 import type { Avaliacao, Aluno } from './tiposCorretorProvas';
 import { labelTurmaOuGrupo, ehGrupoDeTurmas, turmasDoValor } from './tiposCorretorProvas';
@@ -95,6 +95,7 @@ export function AvaliacaoCorrecoes() {
       const erroNota = await lancarNotaImpressaNoDiario(avaliacao, aluno, corr.nota_final ?? 0);
       if (erroNota) setErro(erroNota);
       else setMsgLancamento(`${aluno.nome}: ${textoLancamento(avaliacao, corr.nota_final ?? 0)}`);
+      carregarNotasDiario();
     }
   }
 
@@ -102,6 +103,23 @@ export function AvaliacaoCorrecoes() {
   // foram vinculadas antes de existir o lançamento automático). Idempotente.
   const [lancandoTodas, setLancandoTodas] = useState(false);
   const [msgLancamento, setMsgLancamento] = useState<string | null>(null);
+  // Notas que já estão no Diário (tabela notas) deste bimestre: "turma|nº" -> nota.
+  // Serve só pro check ✓ da lista (nota do Diário == nota que seria lançada).
+  const [notasDiario, setNotasDiario] = useState<Map<string, number | null>>(new Map());
+  async function carregarNotasDiario(av = avaliacao, als = alunos) {
+    const bim = av ? bimestreDaAvaliacao(av) : null;
+    const turmas = Array.from(new Set(als.map(a => a.turma_id).filter(Boolean))) as string[];
+    if (!bim || !turmas.length) return;
+    const { data } = await supabase.from('notas').select('turma, numero, nota').eq('bimestre', bim).in('turma', turmas);
+    setNotasDiario(new Map((data || []).map((n: any) => [`${n.turma}|${n.numero}`, n.nota == null ? null : Number(n.nota)])));
+  }
+  useEffect(() => { carregarNotasDiario(); }, [avaliacao, alunos]);
+  const jaNoDiario = (c: Correcao) => {
+    const a = c.aluno_id ? alunoPorId.get(c.aluno_id) : null;
+    if (!a) return false;
+    const n = notasDiario.get(`${a.turma_id}|${a.numero_chamada}`);
+    return n != null && Math.abs(n - normalizarNotaImpressa(c.nota_final ?? 0)) < 0.001;
+  };
   // Aviso fixo no rodapé (a lista é longa: a mensagem do topo some da vista).
   useEffect(() => {
     if (!msgLancamento && !erro) return;
@@ -125,6 +143,7 @@ export function AvaliacaoCorrecoes() {
       if (e) falhas.push(`${a.nome}: ${e}`); else ok++;
     }
     setLancandoTodas(false);
+    carregarNotasDiario();
     setMsgLancamento(`${ok} nota(s) lançada(s) no Diário.` + (falhas.length ? ` Falhas: ${falhas.join(' | ')}` : ''));
   }
 
@@ -283,7 +302,12 @@ export function AvaliacaoCorrecoes() {
                     {horaCorrecao(c) && <div className="text-[10px] text-on-surface-variant">{horaCorrecao(c)}</div>}
                   </td>
                   <td className="py-2 pr-2 text-on-surface">{c.acertos ?? '—'}/{avaliacao.quantidade_objetivas}</td>
-                  <td className="py-2 pr-2 font-bold text-primary">{(c.nota_final ?? 0).toFixed(1)} / {valorTotal.toFixed(1)}</td>
+                  <td className="py-2 pr-2 font-bold text-primary">
+                    {(c.nota_final ?? 0).toFixed(1)} / {valorTotal.toFixed(1)}
+                    {c.aluno_id && (jaNoDiario(c)
+                      ? <div className="text-[10px] font-semibold text-green-700" title="A nota já está no Diário (aba Notas)">✓ no Diário</div>
+                      : <div className="text-[10px] font-semibold text-amber-600" title="A nota ainda não está no Diário (aba Notas)">○ não lançada</div>)}
+                  </td>
                   <td className="py-2 pr-2 text-on-surface-variant">
                     <select
                       value={c.aluno_id || ''}
