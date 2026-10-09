@@ -214,7 +214,7 @@ export function AvaliacaoCorrecoes() {
   const idsVinculados = new Set(correcoes.map(c => c.aluno_id).filter(Boolean) as string[]);
 
   return (
-    <div className="py-4 space-y-4">
+    <div className="pt-4 pb-32 space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <button onClick={() => navigate('/avaliacoes')} className="p-1 rounded-lg text-on-surface-variant">
