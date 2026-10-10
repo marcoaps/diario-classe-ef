@@ -23,8 +23,8 @@ const NOME_PADRAO_CERCA = 'Time da Cerca';
 const OPCOES_LIMITE = ['sem_limite', '2', '3', '4', 'personalizado'] as const;
 type OpcaoLimite = typeof OPCOES_LIMITE[number];
 
-function primeiroNome(nomeCompleto: string) {
-  return nomeCurto(nomeCompleto);
+function primeiroNome(nomeCompleto: string, outros: string[] = []) {
+  return nomeCurto(nomeCompleto, outros);
 }
 
 interface Props {
@@ -65,7 +65,7 @@ export function RodizioSetup({ alunos, loading, chamadaCarregada, criando, onIni
     if (!aluno) return;
     setTimes(prev => [...prev, {
       tempId: uuidv4(),
-      nome: `Time ${primeiroNome(aluno.nome)}`,
+      nome: `Time ${primeiroNome(aluno.nome, prev.map(t => t.capitaoNome))}`,
       capitaoAlunoId: aluno.id,
       capitaoNome: aluno.nome,
       jogadores: [aluno],
@@ -133,7 +133,7 @@ export function RodizioSetup({ alunos, loading, chamadaCarregada, criando, onIni
   const handleIniciar = async () => {
     try {
       await onIniciar('Futsal', limitePermanencia, times.map(t => ({
-        nome: t.nome.trim() || (t.ehTimeCerca ? NOME_PADRAO_CERCA : `Time ${primeiroNome(t.capitaoNome)}`),
+        nome: t.nome.trim() || (t.ehTimeCerca ? NOME_PADRAO_CERCA : `Time ${primeiroNome(t.capitaoNome, times.filter(x => x !== t).map(x => x.capitaoNome))}`),
         capitaoAlunoId: t.capitaoAlunoId || null,
         capitaoNome: t.capitaoNome,
         ehTimeCerca: t.ehTimeCerca,

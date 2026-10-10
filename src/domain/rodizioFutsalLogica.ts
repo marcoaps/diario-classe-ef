@@ -169,11 +169,32 @@ export function calcularProximaFila(
   return [vencedorId, ...resto, perdedor];
 }
 
-/** Primeiro e segundo nome ("José Carlos"); pula "de/da/do/dos/das/e" para não ficar "Maria da". */
-export function nomeCurto(nomeCompleto: string): string {
-  const partes = nomeCompleto.trim().split(/\s+/).filter(Boolean);
-  if (partes.length <= 1) return partes[0] ?? '';
-  const ligacao = new Set(['de', 'da', 'do', 'das', 'dos', 'e']);
-  const fim = ligacao.has(partes[1].toLowerCase()) && partes[2] ? 3 : 2;
-  return partes.slice(0, fim).join(' ');
+/** Primeiro e segundo nome ("José Carlos"); pula "de/da/do/dos/das/e" para não ficar "Maria da".
+ *  Se outro capitão (`outros`) ficaria com o mesmo nome curto, acrescenta a inicial do sobrenome
+ *  ("José Carlos S."); se ainda empatar, usa o nome completo. */
+const LIGACAO = new Set(['de', 'da', 'do', 'das', 'dos', 'e']);
+const partir = (n: string) => n.trim().split(/\s+/).filter(Boolean);
+function curto(partes: string[]): string[] {
+  if (partes.length <= 1) return partes;
+  const fim = LIGACAO.has(partes[1].toLowerCase()) && partes[2] ? 3 : 2;
+  return partes.slice(0, fim);
+}
+export function nomeCurto(nomeCompleto: string, outros: string[] = []): string {
+  const partes = partir(nomeCompleto);
+  const base = curto(partes);
+  const completo = partes.join(' ');
+  const rivais = outros.map(partir).filter(o => o.length && o.join(' ').toLowerCase() !== completo.toLowerCase());
+  const colide = (txt: string, f: (o: string[]) => string) =>
+    rivais.some(o => f(o).toLowerCase() === txt.toLowerCase());
+  const nome = base.join(' ');
+  if (!colide(nome, o => curto(o).join(' '))) return nome;
+  const resto = partes.slice(base.length).filter(p => !LIGACAO.has(p.toLowerCase()));
+  if (!resto.length) return completo;
+  const comInicial = (o: string[]) => {
+    const b = curto(o);
+    const r = o.slice(b.length).filter(p => !LIGACAO.has(p.toLowerCase()));
+    return r.length ? `${b.join(' ')} ${r[0][0].toUpperCase()}.` : b.join(' ');
+  };
+  const com = `${nome} ${resto[0][0].toUpperCase()}.`;
+  return colide(com, comInicial) ? completo : com;
 }

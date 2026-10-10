@@ -170,7 +170,7 @@ export function RodizioControle({
         )
       )}
 
-      <RodizioAdicionarTime alunos={alunos} onAdicionar={onAdicionarTime} />
+      <RodizioAdicionarTime alunos={alunos} nomesCapitaes={times.map(t => t.capitaoNome)} onAdicionar={onAdicionarTime} />
 
       <button
         onClick={() => setMostrarDetalhes(prev => !prev)}

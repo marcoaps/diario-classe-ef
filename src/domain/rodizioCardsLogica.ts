@@ -147,8 +147,8 @@ export function removerJogador(times: TimeCard[], timeId: string, alunoId: strin
   return times.map(t => (t.id !== timeId || t.capitaoAlunoId === alunoId ? t : { ...t, jogadores: t.jogadores.filter(j => j.alunoId !== alunoId) }));
 }
 
-export function novoTime(id: string, capitao: { id: string; nome: string }, nome?: string): TimeCard {
-  const primeiro = nomeCurto(capitao.nome);
+export function novoTime(id: string, capitao: { id: string; nome: string }, nome?: string, outrosCapitaes: string[] = []): TimeCard {
+  const primeiro = nomeCurto(capitao.nome, outrosCapitaes);
   return { id, nome: nome?.trim() || `Time ${primeiro}`, capitaoAlunoId: capitao.id, jogadores: [{ alunoId: capitao.id, nome: capitao.nome, vezes: 0 }], jogos: 0 };
 }
 

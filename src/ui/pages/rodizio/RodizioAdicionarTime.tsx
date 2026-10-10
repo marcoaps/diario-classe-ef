@@ -3,8 +3,8 @@ import { Plus, X, Loader2, UserPlus } from 'lucide-react';
 import type { AlunoSupabase } from '../../../domain/useAlunosPresentesHoje';
 import { nomeCurto } from '../../../domain/rodizioFutsalLogica';
 
-function primeiroNome(nomeCompleto: string) {
-  return nomeCurto(nomeCompleto);
+function primeiroNome(nomeCompleto: string, outros: string[] = []) {
+  return nomeCurto(nomeCompleto, outros);
 }
 
 interface Props {
@@ -13,10 +13,12 @@ interface Props {
   // sobrou e com jogadores que já perderam nos times originais, sem tirar
   // ninguém de lá.
   alunos: AlunoSupabase[];
+  /** Capitães dos times já existentes: quem tiver o mesmo nome curto ganha a inicial do sobrenome. */
+  nomesCapitaes?: string[];
   onAdicionar: (nome: string, capitaoAlunoId: string | null, capitaoNome: string, jogadores: { alunoId: string; alunoNome: string }[]) => Promise<void>;
 }
 
-export function RodizioAdicionarTime({ alunos, onAdicionar }: Props) {
+export function RodizioAdicionarTime({ alunos, nomesCapitaes = [], onAdicionar }: Props) {
   const [aberto, setAberto] = useState(false);
   const [capitao, setCapitao] = useState<AlunoSupabase | null>(null);
   const [nome, setNome] = useState('');
@@ -33,7 +35,7 @@ export function RodizioAdicionarTime({ alunos, onAdicionar }: Props) {
     const aluno = alunos.find(a => a.id === alunoId);
     if (!aluno) return;
     setCapitao(aluno);
-    setNome(`Time ${primeiroNome(aluno.nome)}`);
+    setNome(`Time ${primeiroNome(aluno.nome, nomesCapitaes)}`);
     setJogadores([aluno]);
   };
 
@@ -53,7 +55,7 @@ export function RodizioAdicionarTime({ alunos, onAdicionar }: Props) {
     setEnviando(true);
     try {
       await onAdicionar(
-        nome.trim() || `Time ${primeiroNome(capitao.nome)}`,
+        nome.trim() || `Time ${primeiroNome(capitao.nome, nomesCapitaes)}`,
         capitao.id,
         capitao.nome,
         jogadores.map(j => ({ alunoId: j.id, alunoNome: j.nome })),
