@@ -92,9 +92,9 @@ export function AvaliacaoCorrecoes() {
     const aluno = alunoId ? alunoPorId.get(alunoId) : null;
     const corr = correcoes.find(c => c.id === correcaoId);
     if (aluno && corr && avaliacao) {
-      const erroNota = await lancarNotaImpressaNoDiario(avaliacao, aluno, corr.nota_final ?? 0);
-      if (erroNota) setErro(erroNota);
-      else setMsgLancamento(`${aluno.nome}: ${textoLancamento(avaliacao, corr.nota_final ?? 0)}`);
+      const r = await lancarNotaImpressaNoDiario(avaliacao, aluno, corr.nota_final ?? 0);
+      if (r.erro) setErro(r.erro);
+      else setMsgLancamento(`${aluno.nome}: ${textoLancamento(avaliacao, corr.nota_final ?? 0, r.nota)}`);
       carregarNotasDiario();
     }
   }
@@ -121,7 +121,8 @@ export function AvaliacaoCorrecoes() {
     const a = c.aluno_id ? alunoPorId.get(c.aluno_id) : null;
     if (!a) return false;
     const n = notasDiario.get(`${a.turma_id}|${a.numero_chamada}`);
-    return n != null && Math.abs(n - normalizarNotaImpressa(c.nota_final ?? 0)) < 0.001;
+    // Vale a maior nota: Diário com nota MAIOR que a da correção também conta como resolvido.
+    return n != null && n >= normalizarNotaImpressa(c.nota_final ?? 0) - 0.001;
   };
   // Aviso fixo no rodapé (a lista é longa: a mensagem do topo some da vista).
   useEffect(() => {
@@ -137,13 +138,13 @@ export function AvaliacaoCorrecoes() {
       const a = alunoPorId.get(c.aluno_id!)!;
       return `${a.turma_id} ${a.numero_chamada} ${a.nome}: ${(c.nota_final ?? 0).toFixed(1)} → ${normalizarNotaImpressa(c.nota_final ?? 0).toFixed(1)}`;
     }).join('\n');
-    if (!window.confirm(`Lançar no Diário (substitui a nota do bimestre) estas ${vinculadas.length} notas?\n\n${lista}`)) return;
+    if (!window.confirm(`Lançar no Diário (vale a maior nota: nunca rebaixa) estas ${vinculadas.length} notas?\n\n${lista}`)) return;
     setLancandoTodas(true); setMsgLancamento(null);
     let ok = 0; const falhas: string[] = [];
     for (const c of vinculadas) {
       const a = alunoPorId.get(c.aluno_id!)!;
-      const e = await lancarNotaImpressaNoDiario(avaliacao, a, c.nota_final ?? 0);
-      if (e) falhas.push(`${a.nome}: ${e}`); else ok++;
+      const r = await lancarNotaImpressaNoDiario(avaliacao, a, c.nota_final ?? 0);
+      if (r.erro) falhas.push(`${a.nome}: ${r.erro}`); else ok++;
     }
     setLancandoTodas(false);
     carregarNotasDiario();

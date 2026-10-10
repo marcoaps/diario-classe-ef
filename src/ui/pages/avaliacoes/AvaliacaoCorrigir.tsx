@@ -714,8 +714,8 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
     setAlunoGravado(alunoId);
     const alunoLancar = alunoId ? alunosAv.find(a => a.id === alunoId) : null;
     if (alunoLancar) {
-      const erroNota = await lancarNotaImpressaNoDiario(avaliacao, alunoLancar, notaFinal);
-      setMsgDiario(erroNota ? { ok: false, texto: erroNota } : { ok: true, texto: textoLancamento(avaliacao, notaFinal) });
+      const r = await lancarNotaImpressaNoDiario(avaliacao, alunoLancar, notaFinal);
+      setMsgDiario(r.erro ? { ok: false, texto: r.erro } : { ok: true, texto: textoLancamento(avaliacao, notaFinal, r.nota) });
     }
 
     if (ajustesFeitos.length > 0) {
@@ -754,8 +754,8 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
     const alunoLancar = alunosAv.find(a => a.id === alunoSelecionado);
     if (alunoLancar && avaliacao) {
       const { data: salva } = await supabase.from('avaliacoes_respostas').select('nota_final').eq('id', ultimaCorrecaoId).single();
-      const erroNota = await lancarNotaImpressaNoDiario(avaliacao, alunoLancar, salva?.nota_final ?? 0);
-      setMsgDiario(erroNota ? { ok: false, texto: erroNota } : { ok: true, texto: textoLancamento(avaliacao, salva?.nota_final ?? 0) });
+      const r = await lancarNotaImpressaNoDiario(avaliacao, alunoLancar, salva?.nota_final ?? 0);
+      setMsgDiario(r.erro ? { ok: false, texto: r.erro } : { ok: true, texto: textoLancamento(avaliacao, salva?.nota_final ?? 0, r.nota) });
     }
   }
 

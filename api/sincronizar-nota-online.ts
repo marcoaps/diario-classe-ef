@@ -7,9 +7,9 @@ import { createClient } from '@supabase/supabase-js';
 // propósito, pra um aluno não conseguir forjar a própria nota mexendo no
 // navegador).
 //
-// Regra (confirmada com o professor em 2026-09-29): a nota da prova online
-// sempre SUBSTITUI a nota atual do aluno em Notas pro bimestre da prova --
-// é a avaliação alternativa dele, não é somada/combinada com outra coisa.
+// Regra (2026-09-29, ajustada em 2026-10-10): a nota da prova online vai pra
+// Notas no bimestre da prova, mas NUNCA rebaixa: se a nota atual do aluno já é
+// maior (ex.: 8,5 de outra avaliação), ela é mantida -- vale a maior nota.
 // Se o aluno ainda não tem linha em Notas pra esse bimestre, cria uma
 // (faltas 0, situação "Em Curso"). Entre as até 3 tentativas do aluno na
 // mesma prova, vale a de maior nota (mesma regra de AvaliacaoResultados.tsx
@@ -74,22 +74,24 @@ export default async function handler(req: any, res: any) {
 
     const nomeChave = aluno.nome.toUpperCase();
     const { data: atual } = await supabase
-      .from('notas').select('situacao, data_situacao, faltas')
+      .from('notas').select('nota, situacao, data_situacao, faltas')
       .eq('turma', turma_id).eq('bimestre', bimestre).eq('nome', nomeChave).maybeSingle();
+
+    const notaGravada = atual?.nota != null && Number(atual.nota) > melhorNota ? Number(atual.nota) : melhorNota;
 
     const { error: eUpsert } = await supabase.from('notas').upsert({
       turma: turma_id,
       bimestre,
       numero: aluno_numero,
       nome: nomeChave,
-      nota: melhorNota,
+      nota: notaGravada,
       situacao: atual?.situacao ?? 'Em Curso',
       data_situacao: atual?.data_situacao ?? '',
       faltas: atual?.faltas ?? 0,
     }, { onConflict: 'turma,bimestre,nome' });
     if (eUpsert) throw eUpsert;
 
-    return res.status(200).json({ ok: true, nota: melhorNota, bimestre });
+    return res.status(200).json({ ok: true, nota: notaGravada, bimestre });
   } catch (e: any) {
     console.error('Erro ao sincronizar nota online:', e);
     return res.status(500).json({ ok: false, error: e?.message || String(e) });

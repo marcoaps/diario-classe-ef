@@ -255,13 +255,17 @@ export async function lancarNotaCorretorProva(
   bimestre: number,
   aluno: { numero: number; nome: string },
   nota: number
-) {
+): Promise<number> {
   const nomeChave = limparAnotacaoDeSituacao(aluno.nome).toUpperCase();
   const existentes = await buscarNotas(turma, bimestre);
   // Casa por nome e, se a grafia no Diário for outra (caixa/acento), pelo nº
   // de chamada -- assim não cria uma linha duplicada do mesmo aluno.
   const atual = (existentes.find((n: any) => n.nome === nomeChave)
     ?? existentes.find((n: any) => n.numero === aluno.numero)) as any;
+  // Regra (10/10/2026): vale sempre a MAIOR nota. Corrigir/recorrigir uma
+  // prova nunca rebaixa uma nota que já está no Diário (ex.: 8,5 não vira 7,0).
+  const atualNota = atual?.nota == null ? null : Number(atual.nota);
+  if (atualNota != null && atualNota >= nota) return atualNota; // nada a gravar
   await salvarNotas(turma, bimestre, [{
     numero: aluno.numero,
     nome: atual?.nome ?? aluno.nome,
@@ -271,6 +275,7 @@ export async function lancarNotaCorretorProva(
     data_situacao: atual?.data_situacao ?? '',
     faltas: atual?.faltas ?? 0,
   }]);
+  return nota;
 }
 
 // Corrige nomes/sobrenomes dos alunos da turma comparando por posição na lista
