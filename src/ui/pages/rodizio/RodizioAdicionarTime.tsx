@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Plus, X, Loader2, UserPlus } from 'lucide-react';
 import type { AlunoSupabase } from '../../../domain/useAlunosPresentesHoje';
+import { nomeCurto } from '../../../domain/rodizioFutsalLogica';
 
 function primeiroNome(nomeCompleto: string) {
-  return nomeCompleto.trim().split(/\s+/)[0];
+  return nomeCurto(nomeCompleto);
 }
 
 interface Props {

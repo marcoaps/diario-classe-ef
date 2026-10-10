@@ -4,6 +4,7 @@ import { Loader2, Plus, X, ArrowUp, ArrowDown, Pencil, Crown } from 'lucide-reac
 import { cn } from '../../AppLayout';
 import type { AlunoSupabase } from '../../../domain/useAlunosPresentesHoje';
 import type { NovoTimeRodizio } from '../../../domain/useRodizioFutsal';
+import { nomeCurto } from '../../../domain/rodizioFutsalLogica';
 
 interface TimeSetup {
   tempId: string;
@@ -23,7 +24,7 @@ const OPCOES_LIMITE = ['sem_limite', '2', '3', '4', 'personalizado'] as const;
 type OpcaoLimite = typeof OPCOES_LIMITE[number];
 
 function primeiroNome(nomeCompleto: string) {
-  return nomeCompleto.trim().split(/\s+/)[0];
+  return nomeCurto(nomeCompleto);
 }
 
 interface Props {

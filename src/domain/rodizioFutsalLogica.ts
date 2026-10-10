@@ -168,3 +168,12 @@ export function calcularProximaFila(
   }
   return [vencedorId, ...resto, perdedor];
 }
+
+/** Primeiro e segundo nome ("José Carlos"); pula "de/da/do/dos/das/e" para não ficar "Maria da". */
+export function nomeCurto(nomeCompleto: string): string {
+  const partes = nomeCompleto.trim().split(/\s+/).filter(Boolean);
+  if (partes.length <= 1) return partes[0] ?? '';
+  const ligacao = new Set(['de', 'da', 'do', 'das', 'dos', 'e']);
+  const fim = ligacao.has(partes[1].toLowerCase()) && partes[2] ? 3 : 2;
+  return partes.slice(0, fim).join(' ');
+}

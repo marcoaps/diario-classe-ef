@@ -2,6 +2,8 @@
 // de quantas vezes já jogou. Só serve para o professor equilibrar a participação — não tem
 // fila nem resultado (isso é o "Rei da Quadra"). Funções puras, sem depender da tela.
 
+import { nomeCurto } from './rodizioFutsalLogica';
+
 export interface JogadorCard {
   alunoId: string;
   nome: string;
@@ -101,7 +103,7 @@ export function resumoJogos(times: TimeCard[]): ResumoJogos {
 /** Primeiro nome do capitão (o card se chama "Time X", mas o aviso fala do capitão). */
 export function nomeDoCapitao(time: TimeCard): string {
   const capitao = time.jogadores.find(j => j.alunoId === time.capitaoAlunoId) ?? time.jogadores[0];
-  return (capitao?.nome ?? time.nome).trim().split(/\s+/)[0];
+  return nomeCurto(capitao?.nome ?? time.nome);
 }
 
 // ── Alterações (sempre devolvem uma cópia nova; nunca mexem no estado recebido) ──
@@ -146,7 +148,7 @@ export function removerJogador(times: TimeCard[], timeId: string, alunoId: strin
 }
 
 export function novoTime(id: string, capitao: { id: string; nome: string }, nome?: string): TimeCard {
-  const primeiro = capitao.nome.trim().split(/\s+/)[0];
+  const primeiro = nomeCurto(capitao.nome);
   return { id, nome: nome?.trim() || `Time ${primeiro}`, capitaoAlunoId: capitao.id, jogadores: [{ alunoId: capitao.id, nome: capitao.nome, vezes: 0 }], jogos: 0 };
 }
 
