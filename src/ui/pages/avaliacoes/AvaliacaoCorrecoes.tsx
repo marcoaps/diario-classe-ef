@@ -106,12 +106,15 @@ export function AvaliacaoCorrecoes() {
   // Notas que já estão no Diário (tabela notas) deste bimestre: "turma|nº" -> nota.
   // Serve só pro check ✓ da lista (nota do Diário == nota que seria lançada).
   const [notasDiario, setNotasDiario] = useState<Map<string, number | null>>(new Map());
+  const [notasCarregadas, setNotasCarregadas] = useState(false);
+  const [soNaoLancadas, setSoNaoLancadas] = useState(false);
   async function carregarNotasDiario(av = avaliacao, als = alunos) {
     const bim = av ? bimestreDaAvaliacao(av) : null;
     const turmas = Array.from(new Set(als.map(a => a.turma_id).filter(Boolean))) as string[];
     if (!bim || !turmas.length) return;
     const { data } = await supabase.from('notas').select('turma, numero, nota').eq('bimestre', bim).in('turma', turmas);
     setNotasDiario(new Map((data || []).map((n: any) => [`${n.turma}|${n.numero}`, n.nota == null ? null : Number(n.nota)])));
+    setNotasCarregadas(true);
   }
   useEffect(() => { carregarNotasDiario(); }, [avaliacao, alunos]);
   const jaNoDiario = (c: Correcao) => {
@@ -128,8 +131,8 @@ export function AvaliacaoCorrecoes() {
   }, [msgLancamento, erro]);
   async function lancarVinculadasNoDiario() {
     if (!avaliacao) return;
-    const vinculadas = correcoes.filter(c => c.aluno_id && alunoPorId.get(c.aluno_id));
-    if (!vinculadas.length) { setMsgLancamento('Nenhuma correção vinculada a aluno.'); return; }
+    const vinculadas = correcoes.filter(c => c.aluno_id && alunoPorId.get(c.aluno_id) && !jaNoDiario(c));
+    if (!vinculadas.length) { setMsgLancamento('Nenhuma nota pendente: todas as correções vinculadas já estão no Diário.'); return; }
     const lista = vinculadas.map(c => {
       const a = alunoPorId.get(c.aluno_id!)!;
       return `${a.turma_id} ${a.numero_chamada} ${a.nome}: ${(c.nota_final ?? 0).toFixed(1)} → ${normalizarNotaImpressa(c.nota_final ?? 0).toFixed(1)}`;
@@ -211,6 +214,9 @@ export function AvaliacaoCorrecoes() {
   const valorTotal = (avaliacao.valor_total_objetivas || 0) + (avaliacao.valor_total_discursivas || 0);
   const media = correcoes.length > 0 ? correcoes.reduce((s, c) => s + (c.nota_final || 0), 0) / correcoes.length : 0;
   const vinculadas = correcoes.filter(c => c.aluno_id).length;
+  const naoLancadas = notasCarregadas ? correcoes.filter(c => c.aluno_id && alunoPorId.has(c.aluno_id) && !jaNoDiario(c)) : [];
+  const semAluno = correcoes.filter(c => !c.aluno_id).length;
+  const visiveis = soNaoLancadas ? correcoes.filter(c => !c.aluno_id || naoLancadas.includes(c)) : correcoes;
   const idsVinculados = new Set(correcoes.map(c => c.aluno_id).filter(Boolean) as string[]);
 
   return (
@@ -259,13 +265,29 @@ export function AvaliacaoCorrecoes() {
         </p>
       )}
       {erro && <p className="text-xs font-semibold text-red-600">{erro}</p>}
+      {vinculadas > 0 && notasCarregadas && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={`px-3 py-1.5 rounded-full text-xs font-semibold ${naoLancadas.length ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'}`}>
+            {naoLancadas.length ? `${naoLancadas.length} ainda não lançada(s) no Diário` : '✓ Todas as vinculadas estão no Diário'}
+            {semAluno > 0 ? ` · ${semAluno} sem aluno` : ''}
+          </span>
+          {(naoLancadas.length > 0 || semAluno > 0) && (
+            <button
+              onClick={() => setSoNaoLancadas(v => !v)}
+              className="px-3 py-1.5 rounded-full border border-outline-variant text-xs font-semibold text-on-surface"
+            >
+              {soNaoLancadas ? 'Mostrar todas' : 'Mostrar só as pendentes'}
+            </button>
+          )}
+        </div>
+      )}
       {vinculadas > 0 && (
         <button
           onClick={lancarVinculadasNoDiario}
-          disabled={lancandoTodas}
+          disabled={lancandoTodas || (notasCarregadas && naoLancadas.length === 0)}
           className="self-start px-3 py-1.5 rounded-full bg-primary text-on-primary text-xs font-semibold disabled:opacity-50"
         >
-          {lancandoTodas ? 'Lançando…' : `Lançar notas no Diário (${vinculadas})`}
+          {lancandoTodas ? 'Lançando…' : `Lançar no Diário as pendentes (${notasCarregadas ? naoLancadas.length : vinculadas})`}
         </button>
       )}
       {msgLancamento && <p className="text-xs font-semibold text-on-surface-variant">{msgLancamento}</p>}
@@ -294,8 +316,8 @@ export function AvaliacaoCorrecoes() {
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant">
-              {correcoes.map(c => (
-                <tr key={c.id}>
+              {visiveis.map(c => (
+                <tr key={c.id} className={c.aluno_id && notasCarregadas && !jaNoDiario(c) ? 'bg-amber-50' : undefined}>
                   <td className="py-2 pr-2 font-mono text-xs text-on-surface">
                     {c.codigo_anonimo}
                     <div className="mt-1 text-[10px] leading-snug text-on-surface-variant whitespace-normal break-words max-w-[9rem]">{marcadas(c)}</div>
