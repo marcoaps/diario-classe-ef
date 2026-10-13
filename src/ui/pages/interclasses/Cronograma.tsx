@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, RefreshCw, CalendarClock } from 'lucide-react';
+import { Loader2, RefreshCw, CalendarClock, FileDown } from 'lucide-react';
 import { cn } from '../../AppLayout';
 import { buscarCampeonatosComJogos, buscarMinutosPorJogo, salvarMinutosPorJogo } from '../../../data/supabase';
 import { ADAPTERS, type Resultado } from '../../../domain/interclassesCampeonato';
 import type { Modalidade } from '../../../domain/interclasses';
 import { corDaEquipe } from './Confrontos';
+import { baixarCronogramaWord } from './exportarCronogramaWord';
 
 const EDICAO = '2026';
 const SLOT_STORAGE_KEY = 'interclasses_cronograma_slot_min';
@@ -134,6 +135,29 @@ export function Cronograma({ modalidade, publico = false }: { modalidade: Modali
     return m;
   }, [jogos]);
 
+  // .docx editável com um bloco por janela da quadra (imprimir a tela traria
+  // abas e botões junto). Segue a mesma grade que aparece na tela.
+  async function baixarWord() {
+    const linha = (j: JogoCronograma) => ({
+      horario: j.horario ?? '—',
+      equipeA: j.equipeA ?? 'a definir',
+      equipeB: j.equipeB ?? 'a definir',
+      detalhe: `${j.categoria} · ${j.genero === 'F' ? 'Feminino' : 'Masculino'} · ${j.fase}`,
+      resultado: j.jogado && j.resultado ? adapter.formatarPlacar(j.resultado) : 'pendente',
+      jogado: j.jogado,
+    });
+    const blocos = PERIODOS
+      .map(p => ({ titulo: `${p.dia} · ${p.rotulo}`, janela: `${p.ini}–${p.fim}`, linhas: (porPeriodo.get(p) ?? []).map(linha) }))
+      .filter(b => b.linhas.length > 0);
+    if (semHorario.length > 0) blocos.push({ titulo: 'Sem horário', janela: 'fora da janela da quadra', linhas: semHorario.map(linha) });
+    await baixarCronogramaWord({
+      titulo: `Cronograma do Futsal · Interclasses IOP ${EDICAO}`,
+      subtitulo: `Instituto Odilon Pratagi · ${jogos.length} jogo${jogos.length !== 1 ? 's' : ''} · ${slotMin} min por jogo · gerado em ${new Date().toLocaleDateString('pt-BR')}`,
+      nomeArquivo: `Cronograma-Futsal-Interclasses-${EDICAO}`,
+      blocos,
+    });
+  }
+
   if (modalidade !== 'futsal') {
     return (
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 text-center text-sm text-gray-500">
@@ -165,6 +189,9 @@ export function Cronograma({ modalidade, publico = false }: { modalidade: Modali
               title="2 tempos de 10 + 3 de intervalo + 5 de troca = 28"
             />
           </label>}
+          <button onClick={baixarWord} disabled={loading || jogos.length === 0} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-primary font-medium disabled:opacity-40">
+            <FileDown className="w-3.5 h-3.5" /> Baixar Word
+          </button>
           <button onClick={carregar} disabled={loading} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-primary font-medium disabled:opacity-40">
             <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} /> Atualizar
           </button>
