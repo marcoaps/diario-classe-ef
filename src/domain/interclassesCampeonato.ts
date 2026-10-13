@@ -466,6 +466,53 @@ export function genSwiss(equipes: string[], jogosAnteriores: Jogo[], rodada: num
   return novos;
 }
 
+// Reordena as equipes (a ordem é a semeadura do mata-mata) para que os
+// primeiros confrontos sejam manhã × tarde sempre que o número de turmas de
+// cada turno permitir. Pontua cada ordem: +10 por jogo da 1ª rodada entre
+// turnos diferentes e +3 por confronto da 2ª rodada já definido (dois times
+// com bye) entre turnos diferentes. Empate de pontos mantém a ordem original.
+export function ordenarCruzandoTurnos(equipes: string[], turnoDe: (equipe: string) => string | null): string[] {
+  const n = equipes.length;
+  if (n < 3) return equipes;
+  const size = nextPow2(n);
+  const cruza = (a: string, b: string) => { const x = turnoDe(a), y = turnoDe(b); return !!x && !!y && x !== y; };
+  const pontos = (ordem: string[]) => {
+    const s: (string | null)[] = [...ordem];
+    while (s.length < size) s.push(null);
+    let pts = 0;
+    const bye: (string | null)[] = [];
+    for (let i = 0; i < size / 2; i++) {
+      const a = s[i], b = s[size - 1 - i];
+      if (a && b) { if (cruza(a, b)) pts += 10; bye.push(null); } else bye.push(a ?? b);
+    }
+    for (let k = 0; k + 1 < bye.length; k += 2) {
+      const x = bye[k], y = bye[k + 1];
+      if (x && y && cruza(x, y)) pts += 3;
+    }
+    return pts;
+  };
+  let melhor = [...equipes], melhorPts = pontos(melhor);
+  const tenta = (ordem: string[]) => { const p = pontos(ordem); if (p > melhorPts) { melhorPts = p; melhor = [...ordem]; } };
+  if (n <= 7) {
+    // Todas as ordens, em ordem lexicográfica dos índices (a original vem primeiro).
+    const usado = new Array(n).fill(false);
+    const atual: string[] = [];
+    const rec = () => {
+      if (atual.length === n) { tenta(atual); return; }
+      for (let i = 0; i < n; i++) {
+        if (usado[i]) continue;
+        usado[i] = true; atual.push(equipes[i]);
+        rec();
+        atual.pop(); usado[i] = false;
+      }
+    };
+    rec();
+  } else {
+    for (let t = 0; t < 4000; t++) tenta(shuffle(equipes));
+  }
+  return melhor;
+}
+
 export function gerarJogosIniciais(equipes: string[], formato: string): { jogos: Jogo[]; grupos: Grupo[] | null; fase: string } {
   if (formato === 'round_robin') return { jogos: genRR(equipes), grupos: null, fase: 'league' };
   if (formato === 'single_elim') return { jogos: genElim(equipes, 'se'), grupos: null, fase: 'elimination' };

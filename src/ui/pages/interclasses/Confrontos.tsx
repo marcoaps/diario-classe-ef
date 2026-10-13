@@ -7,11 +7,11 @@ import {
   type CampeonatoInterclasses, type JogoInterclasses,
 } from '../../../data/supabase';
 import {
-  modalidadeConfig, agruparPorTime, ANOS_ESCOLARES, anoDoTime, GENEROS_CAMPEONATO, chaveCampeonato, generoDoTime, type GeneroCampeonato, mensagemMinimoNaoAtingido,
+  modalidadeConfig, turnoDoTime, agruparPorTime, ANOS_ESCOLARES, anoDoTime, GENEROS_CAMPEONATO, chaveCampeonato, generoDoTime, type GeneroCampeonato, mensagemMinimoNaoAtingido,
   type Modalidade, type InscricaoInterclasses, type EquipeInterclasses,
 } from '../../../domain/interclasses';
 import {
-  ADAPTERS, REGRAS_PADRAO, FORMATOS, resultadoWO, gerarJogosIniciais, aplicarResultado, aplicarResultadoDuplo, aplicarResultadoMelhorDe3, calcSt, genElim, genSwiss, contarDerrotas, empatadosNoTopo,
+  ADAPTERS, REGRAS_PADRAO, FORMATOS, ordenarCruzandoTurnos, resultadoWO, gerarJogosIniciais, aplicarResultado, aplicarResultadoDuplo, aplicarResultadoMelhorDe3, calcSt, genElim, genSwiss, contarDerrotas, empatadosNoTopo,
   type Jogo, type Resultado, type Standing, type ResultadoAdapter,
 } from '../../../domain/interclassesCampeonato';
 
@@ -160,7 +160,12 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
     setCriandoCampeonato(true);
     try {
       const camp = await criarCampeonato({ edicao: EDICAO, modalidade, categoria: chaveCamp, formato });
-      const { jogos: iniciais } = gerarJogosIniciais(equipesProntas, formato);
+      // Mata-mata: os primeiros confrontos cruzam manhã × tarde (turno pelas turmas do time).
+      const turnoPorTime = new Map(equipes.map(e => [e.nomeTime, turnoDoTime(e.alunos)]));
+      const semeadura = formato === 'single_elim' || formato === 'double_elim'
+        ? ordenarCruzandoTurnos(equipesProntas, nome => turnoPorTime.get(nome) ?? null)
+        : equipesProntas;
+      const { jogos: iniciais } = gerarJogosIniciais(semeadura, formato);
       const inseridos = await criarJogos(camp.id, iniciais.map(jogoParaLinha));
 
       // Mata-Mata Duplo: destinoVencedor/destinoPerdedor foram gerados

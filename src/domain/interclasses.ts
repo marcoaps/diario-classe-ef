@@ -72,6 +72,24 @@ export function anoDoTime(alunos: { turma_id: string }[]): AnoEscolar | null {
   return melhor;
 }
 
+// Turno da turma pelo horário da escola (AgendaHoje): letras A–C são do
+// turno da tarde e D–F do turno da manhã. Usado só para cruzar manhã × tarde
+// nos primeiros confrontos; turma que não segue o padrão fica sem turno.
+export type Turno = 'M' | 'T';
+export function turnoDaTurma(turmaId: string): Turno | null {
+  const letra = turmaId.replace(/[^A-Za-z]/g, '').toUpperCase().charAt(0);
+  if ('ABC'.includes(letra) && letra) return 'T';
+  if ('DEF'.includes(letra) && letra) return 'M';
+  return null;
+}
+
+// Turno do time = o da maioria dos alunos (empate ou sem turma conhecida = sem turno).
+export function turnoDoTime(alunos: { turma_id: string }[]): Turno | null {
+  let m = 0, t = 0;
+  alunos.forEach(a => { const x = turnoDaTurma(a.turma_id); if (x === 'M') m++; else if (x === 'T') t++; });
+  return m === t ? null : m > t ? 'M' : 'T';
+}
+
 // Particiona os times por ano escolar ANTES de gerar a chave: devolve, pra
 // cada ano, só os times daquele ano (entrada de genDoubleElim/gerarJogosIniciais
 // de cada torneio independente).
