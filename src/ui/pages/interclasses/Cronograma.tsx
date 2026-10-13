@@ -147,12 +147,11 @@ export function Cronograma({ modalidade, publico = false }: { modalidade: Modali
       jogado: j.jogado,
     });
     const blocos = PERIODOS
-      .map(p => ({ titulo: `${p.dia} · ${p.rotulo}`, janela: `${p.ini}–${p.fim}`, linhas: (porPeriodo.get(p) ?? []).map(linha) }))
+      .map(p => ({ titulo: `${p.dia} · ${p.rotulo}`, linhas: (porPeriodo.get(p) ?? []).map(linha) }))
       .filter(b => b.linhas.length > 0);
-    if (semHorario.length > 0) blocos.push({ titulo: 'Sem horário', janela: 'fora da janela da quadra', linhas: semHorario.map(linha) });
+    if (semHorario.length > 0) blocos.push({ titulo: 'Sem horário', linhas: semHorario.map(linha) });
     await baixarCronogramaWord({
       titulo: `Cronograma do Futsal · Interclasses IOP ${EDICAO}`,
-      subtitulo: `Instituto Odilon Pratagi · ${jogos.length} jogo${jogos.length !== 1 ? 's' : ''} · ${slotMin} min por jogo · gerado em ${new Date().toLocaleDateString('pt-BR')}`,
       nomeArquivo: `Cronograma-Futsal-Interclasses-${EDICAO}`,
       blocos,
     });

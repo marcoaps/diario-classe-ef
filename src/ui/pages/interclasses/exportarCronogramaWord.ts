@@ -13,12 +13,11 @@ export interface LinhaCronogramaWord {
 
 export interface BlocoCronogramaWord {
   titulo: string;      // "Terça 20/10 · Tarde"
-  janela: string;      // "13:00–17:00"
   linhas: LinhaCronogramaWord[];
 }
 
 export async function baixarCronogramaWord(params: {
-  titulo: string; subtitulo: string; blocos: BlocoCronogramaWord[]; nomeArquivo: string;
+  titulo: string; blocos: BlocoCronogramaWord[]; nomeArquivo: string;
 }) {
   const {
     Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
@@ -47,18 +46,14 @@ export async function baixarCronogramaWord(params: {
   });
 
   const children: (InstanceType<typeof Paragraph> | InstanceType<typeof Table>)[] = [
-    new Paragraph({ spacing: { after: 40 }, children: [new TextRun({ text: params.titulo, bold: true, size: 32, font: 'Arial' })] }),
-    new Paragraph({ spacing: { after: 240 }, children: [new TextRun({ text: params.subtitulo, size: 20, color: '555555', font: 'Arial' })] }),
+    new Paragraph({ spacing: { after: 240 }, children: [new TextRun({ text: params.titulo, bold: true, size: 32, font: 'Arial' })] }),
   ];
 
   for (const b of params.blocos) {
     children.push(new Paragraph({
       keepNext: true,
       spacing: { before: 240, after: 80 },
-      children: [
-        new TextRun({ text: b.titulo, bold: true, size: 26, font: 'Arial' }),
-        new TextRun({ text: `   ${b.janela} · ${b.linhas.length} jogo${b.linhas.length !== 1 ? 's' : ''}`, size: 20, color: '666666', font: 'Arial' }),
-      ],
+      children: [new TextRun({ text: b.titulo, bold: true, size: 26, font: 'Arial' })],
     }));
     children.push(new Table({
       width: { size: W, type: WidthType.DXA },
