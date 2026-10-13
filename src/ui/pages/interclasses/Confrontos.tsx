@@ -1,13 +1,13 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Loader2, Trophy, RefreshCw } from 'lucide-react';
+import { Loader2, Trophy, RefreshCw, FileDown } from 'lucide-react';
 import { cn } from '../../AppLayout';
 import {
   buscarCampeonato, criarCampeonato, atualizarCampeonato, excluirCampeonato,
-  buscarJogos, criarJogos, salvarResultadoJogo, atualizarJogo,
+  buscarJogos, criarJogos, salvarResultadoJogo, atualizarJogo, buscarCampeonatosComJogos,
   type CampeonatoInterclasses, type JogoInterclasses,
 } from '../../../data/supabase';
 import {
-  agruparPorTime, ANOS_ESCOLARES, anoDoTime, GENEROS_CAMPEONATO, chaveCampeonato, generoDoTime, type GeneroCampeonato, mensagemMinimoNaoAtingido,
+  modalidadeConfig, agruparPorTime, ANOS_ESCOLARES, anoDoTime, GENEROS_CAMPEONATO, chaveCampeonato, generoDoTime, type GeneroCampeonato, mensagemMinimoNaoAtingido,
   type Modalidade, type InscricaoInterclasses, type EquipeInterclasses,
 } from '../../../domain/interclasses';
 import {
@@ -16,6 +16,7 @@ import {
 } from '../../../domain/interclassesCampeonato';
 
 import { FinaisCampeoes, FINAIS } from './FinaisCampeoes';
+import { baixarConfrontosWord, type BlocoConfrontoWord } from './exportarConfrontosWord';
 
 const EDICAO = '2026';
 const CATEGORIAS = [...ANOS_ESCOLARES, FINAIS];
@@ -111,6 +112,48 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
     jogos.forEach(j => { if (j.equipeA) nomes.add(j.equipeA); if (j.equipeB) nomes.add(j.equipeB); });
     return Array.from(nomes);
   }, [jogos]);
+
+  // .docx com TODOS os campeonatos da modalidade (cada ano × gênero), jogo a
+  // jogo, na ordem da chave — imprimir a tela traria abas e botões junto.
+  async function baixarWord() {
+    const dados = await buscarCampeonatosComJogos(EDICAO, modalidade);
+    const ordemChave = (c: string | null) => (c === 'L' ? 1 : c === 'GF' ? 2 : 0);
+    const anoIdx = (cat: string) => ANOS_ESCOLARES.findIndex(a => cat.startsWith(a));
+    const blocos: BlocoConfrontoWord[] = dados
+      .filter(d => d.jogos.length > 0)
+      .sort((a, b) => anoIdx(a.campeonato.categoria) - anoIdx(b.campeonato.categoria)
+        || (a.campeonato.categoria.includes('Feminino') ? 1 : 0) - (b.campeonato.categoria.includes('Feminino') ? 1 : 0))
+      .map(({ campeonato, jogos: rows }) => {
+        const times = new Set<string>();
+        rows.forEach(j => { if (j.equipe_a) times.add(j.equipe_a); if (j.equipe_b) times.add(j.equipe_b); });
+        const formato = FORMATOS.find(f => f.id === campeonato.formato)?.nome ?? campeonato.formato;
+        const linhas = [...rows]
+          .sort((x, y) => ordemChave(x.chave) - ordemChave(y.chave) || x.rodada - y.rodada || (x.bracket_idx ?? 0) - (y.bracket_idx ?? 0))
+          .map(j => {
+            const bye = j.is_bye;
+            return {
+              fase: j.grupo_nome ? `Grupo ${j.grupo_nome} · ${j.fase}` : j.fase,
+              jogo: bye ? `${j.equipe_a ?? j.equipe_b ?? 'a definir'} avança (bye)` : `${j.equipe_a ?? 'a definir'}  ×  ${j.equipe_b ?? 'a definir'}`,
+              resultado: bye ? 'bye' : j.jogado && j.resultado ? adapter.formatarPlacar(j.resultado as unknown as Resultado) : 'pendente',
+              jogado: j.jogado && !bye,
+              aDefinir: !bye && !j.equipe_a && !j.equipe_b,
+            };
+          });
+        return {
+          titulo: campeonato.categoria,
+          detalhe: `${formato} · ${times.size} equipe${times.size !== 1 ? 's' : ''}`,
+          campeao: campeonato.campeao,
+          linhas,
+        };
+      });
+    if (blocos.length === 0) { alert('Nenhum campeonato iniciado ainda para gerar o Word.'); return; }
+    const mod = modalidadeConfig(modalidade);
+    await baixarConfrontosWord({
+      titulo: `Confrontos do ${mod.label} · Interclasses IOP ${EDICAO}`,
+      nomeArquivo: `Confrontos-${mod.label}-Interclasses-${EDICAO}`,
+      blocos,
+    });
+  }
 
   async function iniciarCampeonato(formato: string) {
     if (criandoCampeonato) return; // trava contra duplo clique
@@ -296,6 +339,10 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
           </button>
         ))}
       </div>
+
+      <button onClick={baixarWord} className="self-end flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-primary text-white hover:opacity-90">
+        <FileDown className="w-4 h-4" /> Baixar Word (todos os confrontos)
+      </button>
 
       {categoriaAtiva === FINAIS ? (
         <FinaisCampeoes modalidade={modalidade} genero={generoAtivo} />
