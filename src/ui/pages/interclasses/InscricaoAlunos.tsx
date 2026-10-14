@@ -90,10 +90,10 @@ function LinhaAlunoSelecao({ aluno, marcado, valorCamisa, onToggle, onCamisaChan
   return (
     <label className={cn('flex items-center gap-2 cursor-pointer hover:bg-gray-50', marcado && 'bg-primary/5', grande ? 'px-4 py-3.5' : 'px-3 py-2')}>
       <input type="checkbox" checked={marcado} onChange={onToggle} className={cn('accent-primary flex-shrink-0', grande ? 'w-6 h-6' : 'w-4 h-4')} />
-      <span className={cn('flex-1 text-on-surface truncate', grande ? 'text-lg' : 'text-sm')}>{aluno.nome}</span>
+      <span className={cn('flex-1 min-w-0 text-on-surface break-words leading-tight', grande ? 'text-base sm:text-lg' : 'text-sm')}>{aluno.nome}</span>
       <BadgeElegibilidade elegibilidade={elegibilidade} />
       {mostrarTurma && <span className={cn('text-primary/70 font-mono font-semibold flex-shrink-0', grande ? 'text-sm' : 'text-[11px]')}>{aluno.turma_id}</span>}
-      {aluno.numero_chamada != null && <span className={cn('text-gray-400 flex-shrink-0', grande ? 'text-sm' : 'text-xs')}>chamada #{aluno.numero_chamada}</span>}
+      {aluno.numero_chamada != null && <span className={cn('text-gray-400 flex-shrink-0', grande ? 'text-sm' : 'text-xs')}><span className="hidden sm:inline">chamada </span>#{aluno.numero_chamada}</span>}
       {marcado && (
         <input
           type="number" min="1"
