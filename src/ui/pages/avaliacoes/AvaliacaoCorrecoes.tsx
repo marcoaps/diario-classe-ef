@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
 import { ArrowLeft, Download, ClipboardList, Trash2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { lancarNotaImpressaNoDiario, normalizarNotaImpressa, textoLancamento, bimestreDaAvaliacao } from '../../../domain/notaProvaImpressa';
+import { lancarNotaImpressaNoDiario, normalizarNotaImpressa, textoLancamento, bimestreDaAvaliacao, alunosQueFizeramOnline, chaveAlunoOnline } from '../../../domain/notaProvaImpressa';
 
 import type { Avaliacao, Aluno } from './tiposCorretorProvas';
 import { labelTurmaOuGrupo, ehGrupoDeTurmas, turmasDoValor } from './tiposCorretorProvas';
@@ -95,7 +95,7 @@ export function AvaliacaoCorrecoes() {
     if (aluno && corr && avaliacao) {
       const r = await lancarNotaImpressaNoDiario(avaliacao, aluno, corr.nota_final ?? 0);
       if (r.erro) setErro(r.erro);
-      else setMsgLancamento(`${aluno.nome}: ${textoLancamento(avaliacao, corr.nota_final ?? 0, r.nota)}`);
+      else setMsgLancamento(`${aluno.nome}: ${textoLancamento(avaliacao, corr.nota_final ?? 0, r.nota, r.fezOnline)}`);
       carregarNotasDiario();
     }
   }
@@ -118,12 +118,19 @@ export function AvaliacaoCorrecoes() {
     setNotasCarregadas(true);
   }
   useEffect(() => { carregarNotasDiario(); }, [avaliacao, alunos]);
+  // Quem também fez a prova online (teto 9,5). Carregado junto com a avaliação.
+  const [onlineSet, setOnlineSet] = useState<Set<string>>(new Set());
+  useEffect(() => { if (avaliacao) alunosQueFizeramOnline(avaliacao).then(setOnlineSet); }, [avaliacao]);
+  const fezOnlineC = (c: Correcao) => {
+    const a = c.aluno_id ? alunoPorId.get(c.aluno_id) : null;
+    return !!a && onlineSet.has(chaveAlunoOnline(a));
+  };
   const jaNoDiario = (c: Correcao) => {
     const a = c.aluno_id ? alunoPorId.get(c.aluno_id) : null;
     if (!a) return false;
     const n = notasDiario.get(`${a.turma_id}|${a.numero_chamada}`);
     // Vale a maior nota: Diário com nota MAIOR que a da correção também conta como resolvido.
-    return n != null && n >= normalizarNotaImpressa(c.nota_final ?? 0) - 0.001;
+    return n != null && n >= normalizarNotaImpressa(c.nota_final ?? 0, fezOnlineC(c)) - 0.001;
   };
   // Aviso fixo no rodapé (a lista é longa: a mensagem do topo some da vista).
   useEffect(() => {
@@ -137,7 +144,7 @@ export function AvaliacaoCorrecoes() {
     if (!vinculadas.length) { setMsgLancamento('Nenhuma nota pendente: todas as correções vinculadas já estão no Diário.'); return; }
     const lista = vinculadas.map(c => {
       const a = alunoPorId.get(c.aluno_id!)!;
-      return `${a.turma_id} ${a.numero_chamada} ${a.nome}: ${(c.nota_final ?? 0).toFixed(1)} → ${normalizarNotaImpressa(c.nota_final ?? 0).toFixed(1)}`;
+      return `${a.turma_id} ${a.numero_chamada} ${a.nome}: ${(c.nota_final ?? 0).toFixed(1)} → ${normalizarNotaImpressa(c.nota_final ?? 0, fezOnlineC(c)).toFixed(1)}`;
     }).join('\n');
     if (!window.confirm(`Lançar no Diário (vale a maior nota: nunca rebaixa) estas ${vinculadas.length} notas?\n\n${lista}`)) return;
     setLancandoTodas(true); setMsgLancamento(null);
@@ -161,7 +168,7 @@ export function AvaliacaoCorrecoes() {
     const gab = avaliacao.gabarito || {};
     const qtd = avaliacao.quantidade_objetivas || 0;
     const valorQ = qtd > 0 ? (avaliacao.valor_total_objetivas || 0) / qtd : 0;
-    const maxTotal = (avaliacao.valor_total_objetivas || 0) + (avaliacao.valor_total_discursivas || 0);
+    const maxTotal0 = (avaliacao.valor_total_objetivas || 0) + (avaliacao.valor_total_discursivas || 0);
     const novos = correcoes.map(c => {
       let acertos = 0, erros = 0, brancas = 0;
       for (let i = 1; i <= qtd; i++) {
@@ -170,7 +177,8 @@ export function AvaliacaoCorrecoes() {
       }
       const obj = Math.round(acertos * valorQ * 100) / 100;
       const disc = Math.min(c.nota_discursiva || 0, avaliacao.valor_total_discursivas || 0);
-      const final = Math.min(Math.round((obj + disc) * 100) / 100, maxTotal, 9.5); // ninguém fica com 10,0: teto 9,5
+      const maxTotal = fezOnlineC(c) ? Math.min(maxTotal0, 9.5) : maxTotal0; // teto 9,5 só p/ quem fez online + impressa
+      const final = Math.min(Math.round((obj + disc) * 100) / 100, maxTotal);
       return { c, acertos, erros, brancas, obj, final };
     });
     const mudam = novos.filter(n => n.acertos !== (n.c.acertos ?? -1) || Math.abs(n.final - (n.c.nota_final ?? 0)) > 0.001);

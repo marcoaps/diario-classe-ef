@@ -638,7 +638,7 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
     const valorMaximoDiscursiva = avaliacao.valor_total_discursivas || 0;
     const notaDiscursivaLimitada = Math.min(notaDiscursiva, valorMaximoDiscursiva);
     const valorMaximoTotal = (avaliacao.valor_total_objetivas || 0) + valorMaximoDiscursiva;
-    const notaFinal = Math.min(arredondar(notaObjetiva + notaDiscursivaLimitada), valorMaximoTotal, 9.5); // teto 9,5: ninguém fica com 10,0
+    const notaFinal = Math.min(arredondar(notaObjetiva + notaDiscursivaLimitada), valorMaximoTotal);
     return { acertos, erros, brancas, ambiguas, notaObjetiva, notaDiscursiva: notaDiscursivaLimitada, notaFinal };
   }
 
@@ -715,7 +715,7 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
     const alunoLancar = alunoId ? alunosAv.find(a => a.id === alunoId) : null;
     if (alunoLancar) {
       const r = await lancarNotaImpressaNoDiario(avaliacao, alunoLancar, notaFinal);
-      setMsgDiario(r.erro ? { ok: false, texto: r.erro } : { ok: true, texto: textoLancamento(avaliacao, notaFinal, r.nota) });
+      setMsgDiario(r.erro ? { ok: false, texto: r.erro } : { ok: true, texto: textoLancamento(avaliacao, notaFinal, r.nota, r.fezOnline) });
     }
 
     if (ajustesFeitos.length > 0) {
@@ -755,7 +755,7 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
     if (alunoLancar && avaliacao) {
       const { data: salva } = await supabase.from('avaliacoes_respostas').select('nota_final').eq('id', ultimaCorrecaoId).single();
       const r = await lancarNotaImpressaNoDiario(avaliacao, alunoLancar, salva?.nota_final ?? 0);
-      setMsgDiario(r.erro ? { ok: false, texto: r.erro } : { ok: true, texto: textoLancamento(avaliacao, salva?.nota_final ?? 0, r.nota) });
+      setMsgDiario(r.erro ? { ok: false, texto: r.erro } : { ok: true, texto: textoLancamento(avaliacao, salva?.nota_final ?? 0, r.nota, r.fezOnline) });
     }
   }
 
