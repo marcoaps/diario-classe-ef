@@ -160,14 +160,15 @@ export function AlunosProva() {
   };
 
   const abrirParaTodos = async () => {
-    if (!provaAtual) return;
-    if (!window.confirm(`Abrir "${provaAtual.titulo}" para TODOS os alunos das turmas da prova? A lista liberada deixa de valer.`)) return;
+    if (provasDoBimestre.length === 0) return;
+    const ids = provasDoBimestre.map(p => p.id);
+    if (!window.confirm(`Abrir ${ids.length} prova(s) do ${bimestre}º bimestre (6º-7º e 8º-9º) para TODOS os alunos das turmas? A lista liberada deixa de valer.`)) return;
     setLiberando(true); setMsgLiberar(null);
     try {
-      const { data: up, error } = await supabase.from('provas').update({ restringir_alunos: false }).eq('id', provaAtual.id).select('id');
+      const { data: up, error } = await supabase.from('provas').update({ restringir_alunos: false }).in('id', ids).select('id');
       if (error) throw error;
-      if (!up || up.length === 0) throw new Error('Não consegui alterar a prova. Faça login novamente.');
-      setMsgLiberar('Pronto: a prova está aberta para todos os alunos das turmas.');
+      if (!up || up.length === 0) throw new Error('Não consegui alterar as provas. Faça login novamente.');
+      setMsgLiberar(`Pronto: ${up.length} prova(s) do ${bimestre}º bimestre abertas para todos os alunos das turmas.`);
     } catch (e: any) {
       setMsgLiberar('Erro: ' + String(e?.message || e));
     } finally { setLiberando(false); }
@@ -284,9 +285,9 @@ export function AlunosProva() {
               {liberando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
               Liberar {totalFarao} aluno(s) na prova online
             </button>
-            <button type="button" disabled={liberando || !provaAtual} onClick={abrirParaTodos}
+            <button type="button" disabled={liberando || provasDoBimestre.length === 0} onClick={abrirParaTodos}
               className="flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold bg-surface-container text-on-surface border border-outline-variant active:scale-95 transition-all disabled:opacity-40">
-              Abrir a prova para todos os alunos
+              Abrir TODAS as provas do bimestre para todos os alunos
             </button>
           </>
         )}
