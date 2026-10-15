@@ -1,60 +1,60 @@
-import React, { useEffect, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { StoreProvider } from './store';
 import { AppLayout } from './ui/AppLayout';
-import { Dashboard } from './ui/pages/Dashboard';
-import { Attendance } from './ui/pages/Attendance';
-import { MarcarGenero } from './ui/pages/MarcarGenero';
-import { AttendanceHistory } from './ui/pages/AttendanceHistory';
-import { AttendanceReport } from './ui/pages/AttendanceReport';
-import { Evaluations } from './ui/pages/Evaluations';
-import { GradeReport } from './ui/pages/GradeReport';
-import { Trabalhos } from './ui/pages/Trabalhos';
-import { SystemReset } from './ui/pages/SystemReset';
+const Dashboard = lazy(() => import('./ui/pages/Dashboard').then(m => ({ default: m.Dashboard })));
+const Attendance = lazy(() => import('./ui/pages/Attendance').then(m => ({ default: m.Attendance })));
+const MarcarGenero = lazy(() => import('./ui/pages/MarcarGenero').then(m => ({ default: m.MarcarGenero })));
+const AttendanceHistory = lazy(() => import('./ui/pages/AttendanceHistory').then(m => ({ default: m.AttendanceHistory })));
+const AttendanceReport = lazy(() => import('./ui/pages/AttendanceReport').then(m => ({ default: m.AttendanceReport })));
+const Evaluations = lazy(() => import('./ui/pages/Evaluations').then(m => ({ default: m.Evaluations })));
+const GradeReport = lazy(() => import('./ui/pages/GradeReport').then(m => ({ default: m.GradeReport })));
+const Trabalhos = lazy(() => import('./ui/pages/Trabalhos').then(m => ({ default: m.Trabalhos })));
+const SystemReset = lazy(() => import('./ui/pages/SystemReset').then(m => ({ default: m.SystemReset })));
 import { Login } from './ui/pages/Login';
-import { PortalAluno } from './ui/pages/PortalAluno';
-import { GerarQRCodes } from './ui/pages/GerarQRCodes';
-import { ProvasOnline } from './ui/pages/ProvasOnline';
-import { ResponderProva } from './ui/pages/ResponderProva';
-import { TestePublico } from './ui/pages/TestePublico';
-import { CentralAluno } from './ui/pages/CentralAluno';
-import { IAHub } from './ui/pages/ia/IAHub';
-import { IAPlanoAula } from './ui/pages/ia/IAPlanoAula';
-import { IASequencia } from './ui/pages/ia/IASequencia';
-import { IAEsportesInvasao } from './ui/pages/ia/IAEsportesInvasao';
-import { IAPlanejamentoAnual } from './ui/pages/ia/IAPlanejamentoAnual';
-import { IARoteiro } from './ui/pages/ia/IARoteiro';
-import { IAPlanoMensal } from './ui/pages/ia/IAPlanoMensal';
-import { IAProvasIA } from './ui/pages/ia/IAProvasIA';
-import { IAAtividadesLudicas } from './ui/pages/ia/IAAtividadesLudicas';
-import { IAAtividadesAdaptadas } from './ui/pages/ia/IAAtividadesAdaptadas';
-import { IAIdeiasAvaliacoes } from './ui/pages/ia/IAIdeiasAvaliacoes';
-import { OrganizadorProvas } from './ui/pages/organizador/OrganizadorProvas';
-import { DiarioAulas } from './ui/pages/DiarioAulas';
-import { IAProvaOficial } from './ui/pages/ia/IAProvaOficial';
-import { RendimentoBimestre } from './ui/pages/RendimentoBimestre';
-import { Avaliacoes } from './ui/pages/avaliacoes/Avaliacoes';
-import { AvaliacaoFolha } from './ui/pages/avaliacoes/AvaliacaoFolha';
-import { AvaliacaoCorrigir } from './ui/pages/avaliacoes/AvaliacaoCorrigir';
-import { AvaliacaoResultados } from './ui/pages/avaliacoes/AvaliacaoResultados';
-import { AvaliacaoCorrecoes } from './ui/pages/avaliacoes/AvaliacaoCorrecoes';
-import { AvaliacaoFormatar } from './ui/pages/avaliacoes/AvaliacaoFormatar';
-import { ExerciciosFixacao } from './ui/pages/exercicios/ExerciciosFixacao';
-import { ExercicioFormatar } from './ui/pages/exercicios/ExercicioFormatar';
-import { GeradorQuestoes } from './ui/pages/avaliacoes/GeradorQuestoes';
-import { AvaliacaoGabaritoRapido } from './ui/pages/avaliacoes/AvaliacaoGabaritoRapido';
-import { GeradorCharges } from './ui/pages/charges/GeradorCharges';
-import { ChargesHistorico } from './ui/pages/charges/ChargesHistorico';
-import InterclassesIOP from './ui/pages/InterclassesIOP';
-import { InscricaoAlunosPublico } from './ui/pages/InscricaoAlunosPublico';
-import { ConfrontosPublico } from './ui/pages/interclasses/ConfrontosPublico';
-import { InscricaoTime } from './ui/pages/InscricaoTime';
-import { TimesFutsal } from './ui/pages/TimesFutsal';
-import { RodizioFutsal } from './ui/pages/rodizio/RodizioFutsal';
-import { AgendaHoje } from './ui/pages/AgendaHoje';
-import { AlunosProva } from './ui/pages/AlunosProva';
-import { LideresProva } from './ui/pages/LideresProva';
-import { AlunosEspeciais } from './ui/pages/AlunosEspeciais';
+const PortalAluno = lazy(() => import('./ui/pages/PortalAluno').then(m => ({ default: m.PortalAluno })));
+const GerarQRCodes = lazy(() => import('./ui/pages/GerarQRCodes').then(m => ({ default: m.GerarQRCodes })));
+const ProvasOnline = lazy(() => import('./ui/pages/ProvasOnline').then(m => ({ default: m.ProvasOnline })));
+const ResponderProva = lazy(() => import('./ui/pages/ResponderProva').then(m => ({ default: m.ResponderProva })));
+const TestePublico = lazy(() => import('./ui/pages/TestePublico').then(m => ({ default: m.TestePublico })));
+const CentralAluno = lazy(() => import('./ui/pages/CentralAluno').then(m => ({ default: m.CentralAluno })));
+const IAHub = lazy(() => import('./ui/pages/ia/IAHub').then(m => ({ default: m.IAHub })));
+const IAPlanoAula = lazy(() => import('./ui/pages/ia/IAPlanoAula').then(m => ({ default: m.IAPlanoAula })));
+const IASequencia = lazy(() => import('./ui/pages/ia/IASequencia').then(m => ({ default: m.IASequencia })));
+const IAEsportesInvasao = lazy(() => import('./ui/pages/ia/IAEsportesInvasao').then(m => ({ default: m.IAEsportesInvasao })));
+const IAPlanejamentoAnual = lazy(() => import('./ui/pages/ia/IAPlanejamentoAnual').then(m => ({ default: m.IAPlanejamentoAnual })));
+const IARoteiro = lazy(() => import('./ui/pages/ia/IARoteiro').then(m => ({ default: m.IARoteiro })));
+const IAPlanoMensal = lazy(() => import('./ui/pages/ia/IAPlanoMensal').then(m => ({ default: m.IAPlanoMensal })));
+const IAProvasIA = lazy(() => import('./ui/pages/ia/IAProvasIA').then(m => ({ default: m.IAProvasIA })));
+const IAAtividadesLudicas = lazy(() => import('./ui/pages/ia/IAAtividadesLudicas').then(m => ({ default: m.IAAtividadesLudicas })));
+const IAAtividadesAdaptadas = lazy(() => import('./ui/pages/ia/IAAtividadesAdaptadas').then(m => ({ default: m.IAAtividadesAdaptadas })));
+const IAIdeiasAvaliacoes = lazy(() => import('./ui/pages/ia/IAIdeiasAvaliacoes').then(m => ({ default: m.IAIdeiasAvaliacoes })));
+const OrganizadorProvas = lazy(() => import('./ui/pages/organizador/OrganizadorProvas').then(m => ({ default: m.OrganizadorProvas })));
+const DiarioAulas = lazy(() => import('./ui/pages/DiarioAulas').then(m => ({ default: m.DiarioAulas })));
+const IAProvaOficial = lazy(() => import('./ui/pages/ia/IAProvaOficial').then(m => ({ default: m.IAProvaOficial })));
+const RendimentoBimestre = lazy(() => import('./ui/pages/RendimentoBimestre').then(m => ({ default: m.RendimentoBimestre })));
+const Avaliacoes = lazy(() => import('./ui/pages/avaliacoes/Avaliacoes').then(m => ({ default: m.Avaliacoes })));
+const AvaliacaoFolha = lazy(() => import('./ui/pages/avaliacoes/AvaliacaoFolha').then(m => ({ default: m.AvaliacaoFolha })));
+const AvaliacaoCorrigir = lazy(() => import('./ui/pages/avaliacoes/AvaliacaoCorrigir').then(m => ({ default: m.AvaliacaoCorrigir })));
+const AvaliacaoResultados = lazy(() => import('./ui/pages/avaliacoes/AvaliacaoResultados').then(m => ({ default: m.AvaliacaoResultados })));
+const AvaliacaoCorrecoes = lazy(() => import('./ui/pages/avaliacoes/AvaliacaoCorrecoes').then(m => ({ default: m.AvaliacaoCorrecoes })));
+const AvaliacaoFormatar = lazy(() => import('./ui/pages/avaliacoes/AvaliacaoFormatar').then(m => ({ default: m.AvaliacaoFormatar })));
+const ExerciciosFixacao = lazy(() => import('./ui/pages/exercicios/ExerciciosFixacao').then(m => ({ default: m.ExerciciosFixacao })));
+const ExercicioFormatar = lazy(() => import('./ui/pages/exercicios/ExercicioFormatar').then(m => ({ default: m.ExercicioFormatar })));
+const GeradorQuestoes = lazy(() => import('./ui/pages/avaliacoes/GeradorQuestoes').then(m => ({ default: m.GeradorQuestoes })));
+const AvaliacaoGabaritoRapido = lazy(() => import('./ui/pages/avaliacoes/AvaliacaoGabaritoRapido').then(m => ({ default: m.AvaliacaoGabaritoRapido })));
+const GeradorCharges = lazy(() => import('./ui/pages/charges/GeradorCharges').then(m => ({ default: m.GeradorCharges })));
+const ChargesHistorico = lazy(() => import('./ui/pages/charges/ChargesHistorico').then(m => ({ default: m.ChargesHistorico })));
+const InterclassesIOP = lazy(() => import('./ui/pages/InterclassesIOP'));
+const InscricaoAlunosPublico = lazy(() => import('./ui/pages/InscricaoAlunosPublico').then(m => ({ default: m.InscricaoAlunosPublico })));
+const ConfrontosPublico = lazy(() => import('./ui/pages/interclasses/ConfrontosPublico').then(m => ({ default: m.ConfrontosPublico })));
+const InscricaoTime = lazy(() => import('./ui/pages/InscricaoTime').then(m => ({ default: m.InscricaoTime })));
+const TimesFutsal = lazy(() => import('./ui/pages/TimesFutsal').then(m => ({ default: m.TimesFutsal })));
+const RodizioFutsal = lazy(() => import('./ui/pages/rodizio/RodizioFutsal').then(m => ({ default: m.RodizioFutsal })));
+const AgendaHoje = lazy(() => import('./ui/pages/AgendaHoje').then(m => ({ default: m.AgendaHoje })));
+const AlunosProva = lazy(() => import('./ui/pages/AlunosProva').then(m => ({ default: m.AlunosProva })));
+const LideresProva = lazy(() => import('./ui/pages/LideresProva').then(m => ({ default: m.LideresProva })));
+const AlunosEspeciais = lazy(() => import('./ui/pages/AlunosEspeciais').then(m => ({ default: m.AlunosEspeciais })));
 import { supabase } from './data/supabase';
 
 export function useAuth() {
@@ -91,6 +91,7 @@ function LayoutProtegido() {
 export default function App() {
   return (
     <BrowserRouter>
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-4 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" /></div>}>
       <Routes>
         <Route path="/teste" element={<TestePublico />} />
         <Route path="/aluno" element={<PortalAluno />} />
@@ -159,6 +160,7 @@ export default function App() {
 
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }
