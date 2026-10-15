@@ -8,6 +8,7 @@ import { supabase } from '../../data/supabase';
 import { ConteudoAulas } from './ConteudoAulas';
 import { PARTICIPACAO_OPCOES, MOTIVOS_JUSTIFICATIVA, type Participacao } from '../../domain/frequenciaPontos';
 import { buscarTrabalhos, type Trabalho } from '../../data/supabase';
+import { enfileirarChamada, gravarChamada, chamadaPendente, descartarChamadaPendente, erroDeRede } from '../../data/filaChamada';
 import { bimestreAtual } from '../../domain/useRelatorioFrequencia';
 import { situacoesEfetivasDaTurma, chaveNomeSituacao } from '../../domain/situacaoAluno';
 
@@ -178,6 +179,22 @@ export function Attendance() {
           novoSemQuadra = presentes.length > 0 && presentes.every((r: any) => !r.participacao);
         }
 
+        // Chamada salva offline e ainda não enviada: vale o que o professor marcou.
+        const pendente = turmaNorm ? await chamadaPendente(turmaNorm, date) : null;
+        if (pendente) {
+          pendente.registros.forEach(r => {
+            novosRecords[r.aluno_id] = {
+              presente: r.presente,
+              participacao: (r.participacao as Participacao) ?? null,
+              justificativaMotivo: r.justificativa_motivo,
+              justificativaObservacao: r.justificativa_observacao,
+              trabalhoCompensatorioId: r.trabalho_compensatorio_id,
+            };
+          });
+          const pres = pendente.registros.filter(r => r.presente);
+          novoSemQuadra = pres.length > 0 && pres.every(r => !r.participacao);
+        }
+
         if (mounted) { setRecords(novosRecords); setSemQuadra(novoSemQuadra); }
 
       } catch (err) {
@@ -323,13 +340,6 @@ export function Attendance() {
     try {
       const ids = alunos.map(a => a.id);
 
-      const { error: errDel } = await supabase
-        .from('frequencia')
-        .delete()
-        .in('aluno_id', ids)
-        .eq('data', date);
-      if (errDel) throw errDel;
-
       // Nao salva frequencia de transferidos
       const recordsToSave = alunos
         .filter(a => !transferidos.has(a.id))
@@ -347,8 +357,25 @@ export function Attendance() {
           };
         });
 
-      const { error: insError } = await supabase.from('frequencia').insert(recordsToSave);
-      if (insError) throw insError;
+      // Sem rede: guarda a chamada inteira no celular; envia quando voltar a internet.
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        await enfileirarChamada(turmaNorm, date, ids, recordsToSave);
+        alert('Sem internet: chamada guardada no celular. Ela será enviada sozinha quando a rede voltar.');
+        return;
+      }
+
+      try {
+        await gravarChamada({ alunoIds: ids, data: date, registros: recordsToSave });
+        await descartarChamadaPendente(turmaNorm, date);
+      } catch (e) {
+        // Rede caiu no meio: a chamada não pode se perder (o apagar pode já ter rodado).
+        if (erroDeRede(e)) {
+          await enfileirarChamada(turmaNorm, date, ids, recordsToSave);
+          alert('A conexão falhou: chamada guardada no celular. Ela será enviada sozinha quando a rede voltar.');
+          return;
+        }
+        throw e;
+      }
 
       alert('Chamada registrada com sucesso!');
     } catch (err) {
@@ -370,6 +397,7 @@ export function Attendance() {
       const ids = alunos.map(a => a.id);
       const { error } = await supabase.from('frequencia').delete().in('aluno_id', ids).eq('data', date);
       if (error) throw error;
+      await descartarChamadaPendente(turmaNorm, date);
 
       const vazios: Record<string, RegistroChamada> = {};
       alunos.forEach(a => { vazios[a.id] = registroVazio(false, false); });

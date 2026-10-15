@@ -6,6 +6,7 @@ import {
   Sparkles, MoreHorizontal, X, BookOpen, Trophy, ClipboardCheck, Goal, NotebookPen, Crown, UserCheck, HeartHandshake
 } from 'lucide-react';
 import { useStore } from '../store';
+import { aoMudarFila, listarFila, sincronizarFila } from '../data/filaChamada';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -27,8 +28,20 @@ function useOnline() {
   return online;
 }
 
+function useFilaPendente(online: boolean) {
+  const [pendentes, setPendentes] = useState(0);
+  useEffect(() => {
+    const atualizar = () => { listarFila().then(l => setPendentes(l.length)); };
+    atualizar();
+    return aoMudarFila(atualizar);
+  }, []);
+  useEffect(() => { if (online) sincronizarFila(); }, [online]);
+  return pendentes;
+}
+
 export function AppLayout() {
   const online = useOnline();
+  const pendentes = useFilaPendente(online);
   const { isSynced, triggerSync } = useStore();
   const [maisAberto, setMaisAberto] = useState(false);
   const location = useLocation();
@@ -40,6 +53,11 @@ export function AppLayout() {
       className="flex flex-col h-[100dvh] bg-background text-on-surface overflow-hidden font-sans"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
+      {pendentes > 0 && (
+        <div className="bg-blue-600 text-white text-xs font-bold text-center px-3 py-1.5">
+          {pendentes} chamada(s) guardada(s) no celular{online ? ' — enviando...' : ' — serão enviadas quando a rede voltar.'}
+        </div>
+      )}
       {!online && (
         <div className="bg-amber-500 text-white text-xs font-bold text-center px-3 py-1.5">
           Sem rede — mostrando os últimos dados salvos. Alterações só funcionam com internet.
