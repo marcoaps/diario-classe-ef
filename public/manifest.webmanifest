@@ -1,0 +1,10 @@
+{
+  "name": "Diário de Classe - IOP",
+  "short_name": "Diário EF",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0B7A3D",
+  "lang": "pt-BR",
+  "icons": [{ "src": "/logo-iop.png", "sizes": "any", "type": "image/png", "purpose": "any" }]
+}
