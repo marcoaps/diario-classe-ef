@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import type { Participacao } from '../domain/frequenciaPontos';
 import type { InscricaoInterclasses } from '../domain/interclasses';
+import { criarFetchComCache, limparCacheLeitura } from './cacheLeitura';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://rsifjxeqitgiecqwvien.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_Vw7h5WZ5BF-GzaAM0hOECg_TMjwdiby';
@@ -11,8 +12,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
-  }
+  },
+  global: { fetch: criarFetchComCache(supabaseAnonKey) },
 });
+
+// Cache de leitura offline é do professor logado: some ao sair.
+supabase.auth.onAuthStateChange(evento => { if (evento === 'SIGNED_OUT') limparCacheLeitura(); });
 
 export async function salvarChamada(
   registros: { aluno_id: string; data: string; presente: boolean; participacao?: Participacao }[]

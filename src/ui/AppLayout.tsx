@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import {
   Users, CheckSquare, GraduationCap, CloudOff, Cloud,
@@ -17,7 +17,18 @@ export function cn(...inputs: ClassValue[]) {
 
 const MAIS_PATHS = ['/ia', '/avaliacoes', '/alunos', '/diario-aulas', '/torneio', '/trabalhos', '/futsal', '/rodizio', '/prova-alunos', '/alunos-especiais'];
 
+function useOnline() {
+  const [online, setOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine !== false);
+  useEffect(() => {
+    const on = () => setOnline(true), off = () => setOnline(false);
+    window.addEventListener('online', on); window.addEventListener('offline', off);
+    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
+  }, []);
+  return online;
+}
+
 export function AppLayout() {
+  const online = useOnline();
   const { isSynced, triggerSync } = useStore();
   const [maisAberto, setMaisAberto] = useState(false);
   const location = useLocation();
@@ -29,6 +40,11 @@ export function AppLayout() {
       className="flex flex-col h-[100dvh] bg-background text-on-surface overflow-hidden font-sans"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
+      {!online && (
+        <div className="bg-amber-500 text-white text-xs font-bold text-center px-3 py-1.5">
+          Sem rede — mostrando os últimos dados salvos. Alterações só funcionam com internet.
+        </div>
+      )}
       {/* Header */}
       <header className="flex-shrink-0 flex items-center justify-between px-margin-mobile h-20 bg-surface z-50 sticky top-0 shadow-sm border-b border-outline-variant pt-2">
         <div className="flex items-center gap-2 px-2 py-1">
