@@ -24,6 +24,7 @@ interface Correcao {
   erros: number;
   brancas: number;
   nota_final: number;
+  nota_discursiva?: number | null;
   escaneado_em: string | null;
   aluno_id: string | null;
   respostas: Record<string, string> | null;
@@ -57,7 +58,7 @@ export function AvaliacaoCorrecoes() {
 
       const { data: cor } = await supabase
         .from('avaliacoes_respostas')
-        .select('id, codigo_anonimo, acertos, erros, brancas, nota_final, escaneado_em, aluno_id, respostas')
+        .select('id, codigo_anonimo, acertos, erros, brancas, nota_final, nota_discursiva, escaneado_em, aluno_id, respostas')
         .eq('avaliacao_id', id)
         .not('codigo_anonimo', 'is', null)
         .order('codigo_anonimo');
@@ -149,6 +150,47 @@ export function AvaliacaoCorrecoes() {
     setLancandoTodas(false);
     carregarNotasDiario();
     setMsgLancamento(`${ok} nota(s) lançada(s) no Diário.` + (falhas.length ? ` Falhas: ${falhas.join(' | ')}` : ''));
+  }
+
+  // Recalcula acertos/erros/brancas/nota de TODAS as correções com o gabarito
+  // ATUAL da avaliação (usa quando o gabarito foi corrigido depois das folhas).
+  // Mantém as respostas marcadas e a nota da discursiva; não mexe no Diário.
+  const [recalculando, setRecalculando] = useState(false);
+  async function recalcularComGabarito() {
+    if (!avaliacao) return;
+    const gab = avaliacao.gabarito || {};
+    const qtd = avaliacao.quantidade_objetivas || 0;
+    const valorQ = qtd > 0 ? (avaliacao.valor_total_objetivas || 0) / qtd : 0;
+    const maxTotal = (avaliacao.valor_total_objetivas || 0) + (avaliacao.valor_total_discursivas || 0);
+    const novos = correcoes.map(c => {
+      let acertos = 0, erros = 0, brancas = 0;
+      for (let i = 1; i <= qtd; i++) {
+        const m = (c.respostas?.[String(i)] || '').trim().toUpperCase();
+        if (!m) brancas++; else if (m === 'AMBIGUA') erros++; else if (m === gab[String(i)]) acertos++; else erros++;
+      }
+      const obj = Math.round(acertos * valorQ * 100) / 100;
+      const disc = Math.min(c.nota_discursiva || 0, avaliacao.valor_total_discursivas || 0);
+      const final = Math.min(Math.round((obj + disc) * 100) / 100, maxTotal);
+      return { c, acertos, erros, brancas, obj, final };
+    });
+    const mudam = novos.filter(n => n.acertos !== (n.c.acertos ?? -1) || Math.abs(n.final - (n.c.nota_final ?? 0)) > 0.001);
+    if (!mudam.length) { setMsgLancamento('Todas as correções já estão de acordo com o gabarito atual.'); return; }
+    const lista = mudam.map(n => `${n.c.codigo_anonimo}: ${(n.c.nota_final ?? 0).toFixed(1)} → ${n.final.toFixed(1)} (${n.acertos} acertos)`).join('\n');
+    if (!window.confirm(`Recalcular ${mudam.length} correção(ões) com o gabarito atual?\n\n${lista}`)) return;
+    setRecalculando(true); setErro(null);
+    let ok = 0; const falhas: string[] = [];
+    for (const n of mudam) {
+      const { data, error } = await supabase.from('avaliacoes_respostas')
+        .update({ acertos: n.acertos, erros: n.erros, brancas: n.brancas, nota: n.final, nota_objetiva: n.obj, nota_final: n.final })
+        .eq('id', n.c.id).select('id');
+      if (error || !data?.length) falhas.push(n.c.codigo_anonimo); else ok++;
+    }
+    setRecalculando(false);
+    setCorrecoes(cs => cs.map(c => {
+      const n = mudam.find(m => m.c.id === c.id);
+      return n && !falhas.includes(c.codigo_anonimo) ? { ...c, acertos: n.acertos, erros: n.erros, brancas: n.brancas, nota_final: n.final } : c;
+    }));
+    setMsgLancamento(`${ok} correção(ões) recalculada(s). Agora use "Lançar no Diário as pendentes".` + (falhas.length ? ` Falharam: ${falhas.join(', ')}` : ''));
   }
 
   // Bolhas marcadas na folha (ex: "1-A 2-C 3-·"), pra achar a folha de papel
@@ -281,6 +323,15 @@ export function AvaliacaoCorrecoes() {
             </button>
           )}
         </div>
+      )}
+      {correcoes.length > 0 && (
+        <button
+          onClick={recalcularComGabarito}
+          disabled={recalculando}
+          className="self-start px-3 py-1.5 rounded-full bg-secondary-container text-on-secondary-container text-xs font-semibold disabled:opacity-50"
+        >
+          {recalculando ? 'Recalculando…' : 'Recalcular notas com o gabarito atual'}
+        </button>
       )}
       {vinculadas > 0 && (
         <button
