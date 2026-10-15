@@ -170,7 +170,7 @@ export function AvaliacaoCorrecoes() {
       }
       const obj = Math.round(acertos * valorQ * 100) / 100;
       const disc = Math.min(c.nota_discursiva || 0, avaliacao.valor_total_discursivas || 0);
-      const final = Math.min(Math.round((obj + disc) * 100) / 100, maxTotal);
+      const final = Math.min(Math.round((obj + disc) * 100) / 100, maxTotal, 9.5); // ninguém fica com 10,0: teto 9,5
       return { c, acertos, erros, brancas, obj, final };
     });
     const mudam = novos.filter(n => n.acertos !== (n.c.acertos ?? -1) || Math.abs(n.final - (n.c.nota_final ?? 0)) > 0.001);

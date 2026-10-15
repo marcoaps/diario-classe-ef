@@ -638,7 +638,7 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
     const valorMaximoDiscursiva = avaliacao.valor_total_discursivas || 0;
     const notaDiscursivaLimitada = Math.min(notaDiscursiva, valorMaximoDiscursiva);
     const valorMaximoTotal = (avaliacao.valor_total_objetivas || 0) + valorMaximoDiscursiva;
-    const notaFinal = Math.min(arredondar(notaObjetiva + notaDiscursivaLimitada), valorMaximoTotal);
+    const notaFinal = Math.min(arredondar(notaObjetiva + notaDiscursivaLimitada), valorMaximoTotal, 9.5); // teto 9,5: ninguém fica com 10,0
     return { acertos, erros, brancas, ambiguas, notaObjetiva, notaDiscursiva: notaDiscursivaLimitada, notaFinal };
   }
 
