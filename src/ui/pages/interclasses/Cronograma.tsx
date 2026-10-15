@@ -12,7 +12,7 @@ const SLOT_STORAGE_KEY = 'interclasses_cronograma_slot_min';
 const SLOT_PADRAO_MIN = 28; // 2 tempos de 10 + 3 de intervalo + 5 de troca de times
 
 // Janelas em que a quadra está livre (uma quadra só). Os jogos "normais"
-// ocupam as janelas em ordem; as finais por faixa ficam na janela do sábado.
+// ocupam as janelas em ordem; as finais por faixa ficam na janela de sexta à tarde (15h–17h).
 interface Periodo { dia: string; rotulo: string; ini: string; fim: string; soFinais?: boolean }
 export const PERIODOS: Periodo[] = [
   { dia: 'Terça 20/10', rotulo: 'Tarde', ini: '13:00', fim: '17:00' },
@@ -21,8 +21,8 @@ export const PERIODOS: Periodo[] = [
   { dia: 'Quinta 22/10', rotulo: 'Manhã', ini: '07:00', fim: '11:00' },
   { dia: 'Quinta 22/10', rotulo: 'Tarde', ini: '13:00', fim: '17:00' },
   { dia: 'Sexta 23/10', rotulo: 'Manhã', ini: '07:00', fim: '11:00' },
-  { dia: 'Sexta 23/10', rotulo: 'Tarde', ini: '13:00', fim: '17:00' },
-  { dia: 'Sábado 24/10', rotulo: 'Finais', ini: '07:00', fim: '11:00', soFinais: true },
+  { dia: 'Sexta 23/10', rotulo: 'Tarde', ini: '13:00', fim: '15:00' },
+  { dia: 'Sexta 23/10', rotulo: 'Finais', ini: '15:00', fim: '17:00', soFinais: true },
 ];
 
 const paraMin = (hhmm: string) => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
@@ -209,7 +209,7 @@ export function Cronograma({ modalidade, publico = false }: { modalidade: Modali
         <>
           {!publico && semHorario.length > 0 && (
             <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-xs text-red-700">
-              <strong>{semHorario.length} jogo{semHorario.length !== 1 ? 's' : ''} não cabe{semHorario.length !== 1 ? 'm' : ''} na janela da quadra</strong> (terça à tarde até sexta, e sábado só para as finais).
+              <strong>{semHorario.length} jogo{semHorario.length !== 1 ? 's' : ''} não cabe{semHorario.length !== 1 ? 'm' : ''} na janela da quadra</strong> (terça à tarde até sexta, com as finais na sexta às 15h).
               Reduza os minutos por jogo ou abra mais horários.
             </div>
           )}
