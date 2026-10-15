@@ -404,6 +404,22 @@ export function Avaliacoes() {
     carregar();
   }
 
+  // Corrige só o gabarito (letras) de uma avaliação já criada. As notas das
+  // correções já feitas NÃO mudam sozinhas: use "Recalcular notas" em Correções.
+  async function editarGabarito(av: Avaliacao) {
+    const qtd = av.quantidade_objetivas || Object.keys(av.gabarito || {}).length;
+    const atual = Array.from({ length: qtd }, (_, i) => av.gabarito?.[String(i + 1)] || '').join(' ');
+    const txt = window.prompt(`Gabarito das ${qtd} questões objetivas, em ordem, separado por espaço (ex: D C C C A C B B):`, atual);
+    if (txt == null) return;
+    const letras = txt.toUpperCase().split(/[^A-E]+/).filter(Boolean);
+    if (letras.length !== qtd) { alert(`Preciso de ${qtd} letras; recebi ${letras.length}.`); return; }
+    const novo: Record<string, string> = {};
+    letras.forEach((l, i) => { novo[String(i + 1)] = l; });
+    const { data, error } = await supabase.from('avaliacoes').update({ gabarito: novo }).eq('id', av.id).select('id');
+    if (error || !data?.length) { alert('Não consegui salvar o gabarito' + (error ? ': ' + error.message : ' (sem permissão).')); return; }
+    carregar();
+  }
+
   async function excluir(id: string) {
     if (!confirm('Excluir esta avaliação e todas as respostas/folhas relacionadas?')) return;
     await supabase.from('avaliacoes').delete().eq('id', id);
@@ -978,6 +994,12 @@ export function Avaliacoes() {
                   >
                     <Printer className="w-4 h-4" />
                     Selecionar alunos e imprimir
+                  </button>
+                  <button
+                    onClick={() => editarGabarito(av)}
+                    className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-xl bg-secondary-container text-on-secondary-container text-xs font-semibold"
+                  >
+                    Corrigir gabarito
                   </button>
                   <button
                     onClick={() => excluir(av.id)}
