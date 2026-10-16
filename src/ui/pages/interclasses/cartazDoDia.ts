@@ -1,3 +1,5 @@
+import { logoIOPBase64 } from '../../../assets/logoIOP';
+
 // Cartaz A4 do dia (Interclasses) para imprimir e colar no mural da escola.
 // Abre uma página própria (só o cartaz + botão Imprimir) com @page A4 e cores
 // de impressão ligadas; "Salvar como PDF" no diálogo de impressão também serve.
@@ -71,44 +73,46 @@ export function abrirCartazDoDia(params: { dia: string; periodos: PeriodoCartaz[
 <style>
 @page { size: A4; margin: 0 }
 * { box-sizing: border-box; margin: 0; padding: 0 }
-html, body { background: #dfe7e1; -webkit-print-color-adjust: exact; print-color-adjust: exact }
-body { font-family: 'Segoe UI', Roboto, Arial, sans-serif; color: #10231a }
-.bar { position: sticky; top: 0; z-index: 5; display: flex; gap: 10px; align-items: center; justify-content: center; padding: 10px; background: #0b2e1d; color: #fff; font-size: 14px }
-.bar button { font: inherit; font-weight: 700; padding: 8px 18px; border: 0; border-radius: 999px; background: #ffd23f; color: #3a2a00; cursor: pointer }
+html, body { background: #dde1f0; -webkit-print-color-adjust: exact; print-color-adjust: exact }
+body { font-family: 'Segoe UI', Roboto, Arial, sans-serif; color: #0a1376 }
+.bar { position: sticky; top: 0; z-index: 5; display: flex; gap: 10px; align-items: center; justify-content: center; padding: 10px; background: #0a1376; color: #fff; font-size: 14px }
+.bar button { font: inherit; font-weight: 700; padding: 8px 18px; border: 0; border-radius: 999px; background: #e4051f; color: #fff; cursor: pointer }
 .page { width: 210mm; height: 297mm; margin: 14px auto; background: #fff; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 6px 30px rgba(0,0,0,.25); position: relative }
-.hero { height: 66mm; flex: none; position: relative; overflow: hidden; color: #fff; padding: 10mm 13mm;
-  background: radial-gradient(circle at 88% 12%, rgba(255,255,255,.16) 0 22mm, transparent 22.5mm),
-              radial-gradient(circle at 70% 118%, rgba(255,210,63,.35) 0 34mm, transparent 34.5mm),
-              linear-gradient(125deg, #03481f 0%, #087a3d 55%, #14a85a 100%) }
-.hero:after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3mm; background: repeating-linear-gradient(90deg, #ffd23f 0 8mm, #fff 8mm 16mm) }
-.kicker { font-size: 10.5pt; font-weight: 800; letter-spacing: .32em; color: #ffd23f }
-.hero h1 { font-size: 50pt; line-height: .95; font-weight: 900; letter-spacing: .01em; margin-top: 2.5mm; text-shadow: 0 2px 0 rgba(0,0,0,.18) }
-.hero .sub { margin-top: 3mm; font-size: 12.5pt; font-weight: 600; opacity: .95 }
-.data { position: absolute; right: 13mm; top: 10mm; width: 52mm; background: #fff; color: #06391d; border-radius: 5mm; text-align: center; padding: 4mm 3mm 4.5mm; box-shadow: 0 3mm 0 rgba(0,0,0,.18) }
-.data .sem { font-size: 9.5pt; font-weight: 800; letter-spacing: .12em; color: #0a8a46 }
-.data .num { font-size: 50pt; font-weight: 900; line-height: 1; margin: 1mm 0 }
-.data .mes { font-size: 14pt; font-weight: 800; text-transform: uppercase }
+.hero { height: 68mm; flex: none; position: relative; overflow: hidden; color: #fff; padding: 9mm 13mm; display: flex; align-items: center; gap: 6mm;
+  background: radial-gradient(circle at 90% 10%, rgba(255,255,255,.14) 0 22mm, transparent 22.5mm),
+              radial-gradient(circle at 62% 120%, rgba(228,5,31,.55) 0 34mm, transparent 34.5mm),
+              linear-gradient(125deg, #0a1376 0%, #1324a0 55%, #333ec7 100%) }
+.hero:after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3.2mm; background: repeating-linear-gradient(90deg, #e4051f 0 8mm, #fff 8mm 16mm) }
+.logo { width: 42mm; height: 42mm; flex: none; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1.4mm #fff, 0 2mm 0 1.4mm rgba(0,0,0,.2) }
+.titulo { flex: 1; min-width: 0 }
+.kicker { display: inline-block; font-size: 9pt; font-weight: 800; letter-spacing: .26em; background: #e4051f; color: #fff; padding: 1.3mm 4mm; border-radius: 999px }
+.hero h1 { font-size: 46pt; line-height: .95; font-weight: 900; letter-spacing: .01em; margin-top: 3mm; text-shadow: 0 2px 0 rgba(0,0,0,.22) }
+.hero .sub { margin-top: 2.5mm; font-size: 11.5pt; font-weight: 600; opacity: .95 }
+.data { flex: none; width: 46mm; background: #fff; color: #0a1376; border-radius: 5mm; text-align: center; padding: 3.5mm 2mm 4mm; box-shadow: 0 2.6mm 0 rgba(0,0,0,.22) }
+.data .sem { font-size: 8.6pt; font-weight: 800; letter-spacing: .1em; color: #e4051f }
+.data .num { font-size: 46pt; font-weight: 900; line-height: 1; margin: 1mm 0 }
+.data .mes { font-size: 13pt; font-weight: 800; text-transform: uppercase }
 .corpo { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 3.5mm; padding: 6mm 13mm 4mm }
 .sec { flex: var(--n) 1 0; min-height: 0; display: flex; flex-direction: column; gap: 2mm }
-.sec h2 { flex: none; font-size: 10.5pt; font-weight: 900; letter-spacing: .2em; color: #0a6b39; display: flex; align-items: center; gap: 3mm }
-.sec h2:after { content: ''; flex: 1; height: .6mm; background: #cfe3d6 }
-.jogo { flex: 1 1 0; min-height: 0; max-height: 21mm; display: flex; align-items: center; gap: 4mm; padding: 0 4mm 0 0; border-radius: 4mm; background: #f2f8f4; border: .3mm solid #d8e8de; overflow: hidden }
-.hora { align-self: stretch; width: 25mm; flex: none; display: flex; align-items: center; justify-content: center; background: #0a8a46; color: #fff; font-weight: 900; font-size: 17pt; letter-spacing: .02em }
+.sec h2 { flex: none; font-size: 10.5pt; font-weight: 900; letter-spacing: .2em; color: #1324a0; display: flex; align-items: center; gap: 3mm }
+.sec h2:after { content: ''; flex: 1; height: .6mm; background: #d3d8f2 }
+.jogo { flex: 1 1 0; min-height: 0; max-height: 21mm; display: flex; align-items: center; gap: 4mm; padding: 0 4mm 0 0; border-radius: 4mm; background: #f1f3fc; border: .3mm solid #d5daf2; overflow: hidden }
+.hora { align-self: stretch; width: 25mm; flex: none; display: flex; align-items: center; justify-content: center; background: #1324a0; color: #fff; font-weight: 900; font-size: 17pt; letter-spacing: .02em }
 .duelo { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 3.5mm; font-weight: 800; font-size: 19pt }
 .time { display: inline-flex; align-items: center; gap: 2mm; white-space: nowrap }
-.time i { width: 3.4mm; height: 3.4mm; border-radius: 50%; flex: none; box-shadow: 0 0 0 .5mm #fff, 0 0 0 .8mm rgba(0,0,0,.12) }
-.time.indef { color: #9aaaa1; font-weight: 600; font-size: .78em; font-style: italic }
-.vs { color: #b9c7be; font-size: .8em }
-.placar { background: #06391d; color: #ffd23f; border-radius: 2.5mm; padding: .6mm 3.2mm; font-size: .86em }
-.tag { flex: none; width: 36mm; text-align: right; font-size: 8.6pt; line-height: 1.3; color: #5a6b62 }
-.tag strong { color: #06391d; font-size: 10pt }
-.jogo.decisivo { background: linear-gradient(90deg, #fff6d1, #fff); border-color: #f0c53a }
-.jogo.decisivo .hora { background: #d99a00 }
-.jogo.decisivo .tag strong, .jogo.decisivo .tag { color: #7a5600 }
-.jogo.feito .hora { background: #5d7567 }
-.rodape { flex: none; display: flex; justify-content: space-between; align-items: center; gap: 6mm; padding: 4mm 13mm 5mm; background: #06391d; color: #cfe9d9; font-size: 9.2pt; line-height: 1.4 }
+.time i { width: 3.4mm; height: 3.4mm; border-radius: 50%; flex: none; box-shadow: 0 0 0 .5mm #fff, 0 0 0 .8mm rgba(0,0,0,.14) }
+.time.indef { color: #9aa1c6; font-weight: 600; font-size: .78em; font-style: italic }
+.vs { color: #b4bbdd; font-size: .8em }
+.placar { background: #e4051f; color: #fff; border-radius: 2.5mm; padding: .6mm 3.2mm; font-size: .86em }
+.tag { flex: none; width: 36mm; text-align: right; font-size: 8.6pt; line-height: 1.3; color: #5c6590 }
+.tag strong { color: #0a1376; font-size: 10pt }
+.jogo.decisivo { background: linear-gradient(90deg, #ffe3e7, #fff); border-color: #e4051f }
+.jogo.decisivo .hora { background: #e4051f }
+.jogo.decisivo .tag, .jogo.decisivo .tag strong { color: #b00316 }
+.jogo.feito .hora { background: #6a73a8 }
+.rodape { flex: none; display: flex; justify-content: space-between; align-items: center; gap: 6mm; padding: 4mm 13mm 5mm; background: #0a1376; color: #c9cff0; font-size: 9.2pt; line-height: 1.4; border-top: 1.6mm solid #e4051f }
 .rodape b { color: #fff }
-.rodape .loc { font-weight: 700; color: #ffd23f; font-size: 10.5pt }
+.rodape .loc { font-weight: 700; color: #fff; font-size: 10.5pt }
 .larga .jogo { max-height: 28mm } .larga .duelo { font-size: 24pt; gap: 5mm } .larga .hora { font-size: 21pt; width: 30mm } .larga .tag { font-size: 10.5pt; width: 42mm } .larga .tag strong { font-size: 13pt } .larga .time i { width: 4.4mm; height: 4.4mm }
 .media .duelo { font-size: 17pt } .media .hora { font-size: 15pt }
 .densa .duelo { font-size: 15.5pt } .densa .hora { font-size: 13.5pt; width: 22mm } .densa .tag { font-size: 7.8pt } .densa .tag strong { font-size: 9pt }
@@ -117,14 +121,17 @@ body { font-family: 'Segoe UI', Roboto, Arial, sans-serif; color: #10231a }
 <div class="bar"><span>Cartaz A4 — ${esc(dia)}</span><button onclick="window.print()">🖨️ Imprimir / salvar PDF</button></div>
 <div class="page ${densidade}">
   <header class="hero">
-    <div class="kicker">INTERCLASSES IOP 2026</div>
-    <h1>FUTSAL</h1>
-    <div class="sub">Programação do dia · Quadra da escola</div>
+    <img class="logo" src="${logoIOPBase64}" alt="Logo I.O.P.">
+    <div class="titulo">
+      <div class="kicker">INTERCLASSES IOP 2026</div>
+      <h1>FUTSAL</h1>
+      <div class="sub">Programação do dia · Quadra da escola</div>
+    </div>
     <div class="data"><div class="sem">${esc(semana)}</div><div class="num">${isNaN(dd) ? '' : dd}</div><div class="mes">${MESES[mm] ?? ''}</div></div>
   </header>
   <main class="corpo">${periodos.map(secao).join('')}</main>
   <footer class="rodape">
-    <div><span class="loc">📍 Quadra da escola</span><br>E.E. Instituto Odilon Pratagi · Educação Física</div>
+    <div><span class="loc">★ Quadra da escola ★</span><br>E.E. Instituto Odilon Pratagi · Educação Física</div>
     <div style="text-align:right"><b>Organização:</b><br>Marco Antonio Pedro da Silva · Jamili Araujo da Silva</div>
   </footer>
 </div></body></html>`;
