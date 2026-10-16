@@ -486,18 +486,18 @@ function SituacaoEquipesDuplo({ equipes, jogos }: { equipes: string[]; jogos: Jo
   if (equipes.length === 0) return null;
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-      <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2.5">Situação das equipes</h4>
+      <h4 className="text-sm sm:text-xs font-bold text-gray-500 uppercase tracking-wide mb-2.5">Situação das equipes</h4>
       <div className="flex flex-col gap-1.5">
         {equipes.map(eq => {
           const derrotas = contarDerrotas(eq, jogos);
           const eliminada = derrotas >= 2;
           return (
             <div key={eq} className={cn('flex items-center justify-between px-3 py-2 rounded-xl', eliminada ? 'bg-gray-50' : 'bg-secondary-container/20')}>
-              <span className={cn('flex items-center gap-2 text-sm font-medium', eliminada ? 'text-gray-400 line-through' : 'text-on-surface')}>
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: corDaEquipe(eq) }} />
+              <span className={cn('flex items-center gap-2 text-base sm:text-sm font-medium', eliminada ? 'text-gray-400 line-through' : 'text-on-surface')}>
+                <span className="w-2.5 h-2.5 sm:w-2 sm:h-2 rounded-full flex-shrink-0" style={{ background: corDaEquipe(eq) }} />
                 {eq}
               </span>
-              <span className={cn('text-xs font-bold whitespace-nowrap', eliminada ? 'text-error' : derrotas === 1 ? 'text-amber-600' : 'text-on-secondary-container')}>
+              <span className={cn('text-sm sm:text-xs font-bold text-right sm:whitespace-nowrap', eliminada ? 'text-error' : derrotas === 1 ? 'text-amber-600' : 'text-on-secondary-container')}>
                 {eliminada ? '❌ Eliminado, sem mais chances' : derrotas === 1 ? '⚠️ 1 derrota — só pode perder mais 1' : '✅ Invicto'}
               </span>
             </div>
@@ -514,7 +514,7 @@ export function ListaJogos({ titulo, jogos, adapter, onLancar, mostrarGrupo, som
   if (jogos.length === 0) return null;
   return (
     <div>
-      <div className={cn('font-bold text-gray-500 uppercase tracking-wider mb-2 px-1', grande ? 'text-sm' : 'text-xs')}>{titulo}</div>
+      <div className={cn('font-bold text-gray-500 uppercase tracking-wider mb-2 px-1', grande ? 'text-sm' : 'text-sm sm:text-xs')}>{titulo}</div>
       <div className={cn('grid grid-cols-1 gap-3', colunas === 2 && 'sm:grid-cols-2')}>
         {jogos.map(j => <CardJogo key={j.id} jogo={j} adapter={adapter} onLancar={onLancar} mostrarGrupo={mostrarGrupo} somenteLeitura={somenteLeitura} grande={grande} />)}
       </div>
@@ -579,56 +579,56 @@ export function CardJogo({ jogo, adapter, onLancar, compacto, mostrarGrupo = tru
       {((jogo.grupo && mostrarGrupo) || jogo.fase === 'league' || jogo.fase === 'swiss' || !FASES_LIGA.has(jogo.fase)) && (
         <div className="flex justify-center items-center gap-1.5 mb-2">
           {jogo.grupo && mostrarGrupo && (
-            <span className={cn('font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full text-white', grande ? 'text-xs' : 'text-[10px]')} style={{ background: corDaEquipe(`grupo-${jogo.grupo}`) }}>
+            <span className={cn('font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full text-white', grande ? 'text-xs' : 'text-xs sm:text-[10px]')} style={{ background: corDaEquipe(`grupo-${jogo.grupo}`) }}>
               Grupo {jogo.grupo}
             </span>
           )}
           {(jogo.fase === 'league' || jogo.fase === 'swiss') && (
-            <span className={cn('font-semibold text-gray-400 uppercase tracking-wider', grande ? 'text-xs' : 'text-[10px]')}>Rodada {jogo.rodada}</span>
+            <span className={cn('font-semibold text-gray-400 uppercase tracking-wider', grande ? 'text-xs' : 'text-xs sm:text-[10px]')}>Rodada {jogo.rodada}</span>
           )}
           {!FASES_LIGA.has(jogo.fase) && (
-            <span className={cn('font-semibold text-gray-400 uppercase tracking-wider', grande ? 'text-xs' : 'text-[10px]')}>{jogo.fase}</span>
+            <span className={cn('font-semibold text-gray-400 uppercase tracking-wider', grande ? 'text-xs' : 'text-xs sm:text-[10px]')}>{jogo.fase}</span>
           )}
         </div>
       )}
       {jogo.fase === 'Grande Final (decisão)' && !jogo.jogado && (
-        <div className={cn('text-center font-bold text-error mb-2', grande ? 'text-xs' : 'text-[10px]')}>
+        <div className={cn('text-center font-bold text-error mb-2', grande ? 'text-xs' : 'text-xs sm:text-[10px]')}>
           🔥 DECISÃO — quem vencer é o campeão
         </div>
       )}
       <div className={cn('flex items-center justify-center text-center flex-wrap', grande ? 'gap-2.5 mb-3' : 'gap-1.5 mb-2.5')}>
-        {jogo.equipeA && <span className={cn('rounded-full flex-shrink-0', grande ? 'w-3.5 h-3.5' : 'w-2 h-2')} style={{ background: corDaEquipe(jogo.equipeA) }} />}
-        <span className={cn(grande ? 'text-lg' : 'text-xs', vencedorA ? 'font-bold text-on-surface' : 'text-gray-700')}>{jogo.equipeA ?? 'A definir'}</span>
-        <span className={cn('font-black text-gray-400', grande ? 'text-base px-1' : 'text-[10px] px-0.5')}>
+        {jogo.equipeA && <span className={cn('rounded-full flex-shrink-0', grande ? 'w-3.5 h-3.5' : 'w-3 h-3 sm:w-2 sm:h-2')} style={{ background: corDaEquipe(jogo.equipeA) }} />}
+        <span className={cn(grande ? 'text-lg' : 'text-lg sm:text-xs', vencedorA ? 'font-bold text-on-surface' : 'text-gray-700')}>{jogo.equipeA ?? 'A definir'}</span>
+        <span className={cn('font-black text-gray-400', grande ? 'text-base px-1' : 'text-sm sm:text-[10px] px-0.5')}>
           {mostraNumeros ? `${adapter.valorA(jogo.resultado!)} x ${adapter.valorB(jogo.resultado!)}` : 'X'}
         </span>
-        <span className={cn(grande ? 'text-lg' : 'text-xs', vencedorB ? 'font-bold text-on-surface' : 'text-gray-700')}>{jogo.equipeB ?? 'A definir'}</span>
-        {jogo.equipeB && <span className={cn('rounded-full flex-shrink-0', grande ? 'w-3.5 h-3.5' : 'w-2 h-2')} style={{ background: corDaEquipe(jogo.equipeB) }} />}
+        <span className={cn(grande ? 'text-lg' : 'text-lg sm:text-xs', vencedorB ? 'font-bold text-on-surface' : 'text-gray-700')}>{jogo.equipeB ?? 'A definir'}</span>
+        {jogo.equipeB && <span className={cn('rounded-full flex-shrink-0', grande ? 'w-3.5 h-3.5' : 'w-3 h-3 sm:w-2 sm:h-2')} style={{ background: corDaEquipe(jogo.equipeB) }} />}
       </div>
 
       {jogo.jogado && foiWO && (
-        <div className={cn('text-center font-bold text-amber-600 -mt-1 mb-1', grande ? 'text-xs' : 'text-[10px]')}>W.O.</div>
+        <div className={cn('text-center font-bold text-amber-600 -mt-1 mb-1', grande ? 'text-xs' : 'text-xs sm:text-[10px]')}>W.O.</div>
       )}
       {somenteLeitura ? (
         jogo.jogado && jogo.resultado ? (
           ehVencedorOnly && (
-            <div className={cn('text-center text-gray-500 font-medium py-1 border-t border-gray-50', grande ? 'text-sm' : 'text-xs')}>{adapter.formatarPlacar(jogo.resultado)}</div>
+            <div className={cn('text-center text-gray-500 font-medium py-1 border-t border-gray-50', grande ? 'text-sm' : 'text-sm sm:text-xs')}>{adapter.formatarPlacar(jogo.resultado)}</div>
           )
         ) : !jogo.equipeA || !jogo.equipeB ? (
-          <div className={cn('text-center text-gray-400 py-1', grande ? 'text-sm' : 'text-xs')}>aguardando definição</div>
+          <div className={cn('text-center text-gray-400 py-1', grande ? 'text-sm' : 'text-sm sm:text-xs')}>aguardando definição</div>
         ) : (
-          <div className={cn('text-center text-gray-400 py-1', grande ? 'text-sm' : 'text-xs')}>a jogar</div>
+          <div className={cn('text-center text-gray-400 py-1', grande ? 'text-sm' : 'text-sm sm:text-xs')}>a jogar</div>
         )
       ) : jogo.jogado && jogo.resultado ? (
-        <button onClick={() => setEditando(e => !e)} className="w-full text-center text-xs text-gray-500 hover:text-primary font-medium py-1 border-t border-gray-50">
+        <button onClick={() => setEditando(e => !e)} className="w-full text-center text-sm sm:text-xs text-gray-500 hover:text-primary font-medium py-1 border-t border-gray-50">
           {ehVencedorOnly ? adapter.formatarPlacar(jogo.resultado) : 'Editar placar'}
         </button>
       ) : jogo.equipeA && jogo.equipeB ? (
-        <button onClick={() => setEditando(e => !e)} className="w-full text-xs font-bold text-white bg-primary hover:bg-primary-dark py-2 rounded-lg transition-colors">
+        <button onClick={() => setEditando(e => !e)} className="w-full text-base sm:text-xs font-bold text-white bg-primary hover:bg-primary-dark py-3 sm:py-2 rounded-lg transition-colors">
           📝 Lançar placar
         </button>
       ) : (
-        <div className="text-center text-xs text-gray-400 py-1">aguardando definição</div>
+        <div className="text-center text-sm sm:text-xs text-gray-400 py-1">aguardando definição</div>
       )}
 
       {!somenteLeitura && editando && jogo.equipeA && jogo.equipeB && (
