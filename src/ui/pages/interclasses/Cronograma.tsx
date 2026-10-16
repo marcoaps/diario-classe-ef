@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, RefreshCw, CalendarClock, FileDown } from 'lucide-react';
+import { Loader2, RefreshCw, CalendarClock, FileDown, Printer } from 'lucide-react';
 import { cn } from '../../AppLayout';
 import { buscarCampeonatosComJogos, buscarMinutosPorJogo, salvarMinutosPorJogo } from '../../../data/supabase';
 import { ADAPTERS, type Resultado } from '../../../domain/interclassesCampeonato';
 import type { Modalidade } from '../../../domain/interclasses';
 import { corDaEquipe } from './Confrontos';
 import { baixarCronogramaWord } from './exportarCronogramaWord';
+import { abrirCartazDoDia } from './cartazDoDia';
 
 const EDICAO = '2026';
 const SLOT_STORAGE_KEY = 'interclasses_cronograma_slot_min';
@@ -157,6 +158,23 @@ export function Cronograma({ modalidade, publico = false }: { modalidade: Modali
     });
   }
 
+  // Cartaz A4 do dia (manhã + tarde + finais) para imprimir e colar no mural.
+  const diasComJogos = Array.from(new Set(PERIODOS.filter(p => (porPeriodo.get(p) ?? []).length > 0).map(p => p.dia)));
+  function imprimirCartaz(dia: string) {
+    abrirCartazDoDia({
+      dia,
+      cor: corDaEquipe,
+      periodos: PERIODOS.filter(p => p.dia === dia).map(p => ({
+        rotulo: p.rotulo,
+        jogos: (porPeriodo.get(p) ?? []).map(j => ({
+          horario: j.horario ?? '—', equipeA: j.equipeA, equipeB: j.equipeB,
+          categoria: j.categoria, genero: j.genero, fase: j.fase, jogado: j.jogado,
+          placar: j.jogado && j.resultado ? adapter.formatarPlacar(j.resultado) : null,
+        })),
+      })),
+    });
+  }
+
   if (modalidade !== 'futsal') {
     return (
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 text-center text-sm text-gray-500">
@@ -196,6 +214,17 @@ export function Cronograma({ modalidade, publico = false }: { modalidade: Modali
           </button>
         </div>
       </div>
+
+      {!publico && diasComJogos.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-bold text-gray-600 flex items-center gap-1.5"><Printer className="w-4 h-4 text-primary" /> Cartaz A4 para o mural:</span>
+          {diasComJogos.map(dia => (
+            <button key={dia} onClick={() => imprimirCartaz(dia)} className="px-3 py-1.5 rounded-xl text-xs font-bold bg-primary text-white hover:opacity-90">
+              {dia}
+            </button>
+          ))}
+        </div>
+      )}
 
       {avisoSlot && !publico && <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-700">{avisoSlot}</div>}
 
