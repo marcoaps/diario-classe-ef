@@ -46,6 +46,16 @@ const LARGURA_SCAN = 480;
 /** Depois de N falhas seguidas com o MESMO conteúdo de QR, para de tentar
  * automaticamente (evita loop infinito) e mostra um aviso. */
 const MAX_FALHAS_CONSECUTIVAS = 3;
+
+/** Rigor da sugestão de nota das discursivas. 'padrao' mantém exatamente o
+ * texto que o prompt sempre teve; os outros só trocam essa última frase. */
+type RigorIA = 'rigoroso' | 'padrao' | 'flexivel' | 'maxima';
+const RIGOR_IA: Record<RigorIA, { label: string; prompt: string }> = {
+  rigoroso: { label: 'Rigoroso', prompt: 'Seja rigoroso: exija precisão técnica, respostas vagas ou imprecisas valem pouco ou zero.' },
+  padrao: { label: 'Padrão', prompt: 'Seja justo mas rigoroso.' },
+  flexivel: { label: 'Flexível', prompt: 'Seja flexível: priorize o entendimento — se o aluno mostrou que sabe, conta, mesmo com redação incompleta ou simples.' },
+  maxima: { label: 'Máxima pontuação', prompt: 'Procure ativamente motivos para dar crédito e extraia o máximo de cada resposta (avaliação formativa), mas continue dando 0 para resposta em branco ou sem relação com o tema.' },
+};
 /** A cada quantos frames o indicativo "marcadores visíveis" (etapa 2) roda a
  * busca de âncoras — não precisa ser todo frame, é só um indicativo visual. */
 const INTERVALO_CHECAGEM_MARCADORES = 4;
@@ -89,6 +99,12 @@ export function AvaliacaoCorrigir() {
   const [notaDiscursivaStr, setNotaDiscursivaStr] = useState('');
   const [sugerindoNotaIA, setSugerindoNotaIA] = useState(false);
   const [justificativaIA, setJustificativaIA] = useState('');
+  const [rigorIA, setRigorIA] = useState<RigorIA>(() => {
+    try {
+      const v = localStorage.getItem('corretor_rigor_ia') as RigorIA | null;
+      return v && v in RIGOR_IA ? v : 'padrao';
+    } catch { return 'padrao'; }
+  });
   const [erroSugestaoIA, setErroSugestaoIA] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [analisando, setAnalisando] = useState(false);
@@ -559,7 +575,7 @@ export function AvaliacaoCorrigir() {
 QUESTÕES (cada uma vale ${valorPorQuestao.toFixed(1)} ponto${valorPorQuestao !== 1 ? 's' : ''}):
 ${numeros.map(n => `Q${n}: ${avaliacao.questoes_subjetivas?.[String(n)]?.trim() || '(sem enunciado cadastrado — só avalie completude/legibilidade, não se está correta)'}`).join('\n')}
 
-Na foto está(ão) a(s) resposta(s) manuscrita(s) do aluno pra essa(s) questão(ões) — pode ser que as duas apareçam juntas na mesma foto. Leia a letra manuscrita com atenção e avalie CADA QUESTÃO SEPARADAMENTE (não misture as duas num parecer só). Sem relação com o tema, ilegível ou em branco vale 0. Resposta parcial vale proporcionalmente. Seja justo mas rigoroso.
+Na foto está(ão) a(s) resposta(s) manuscrita(s) do aluno pra essa(s) questão(ões) — pode ser que as duas apareçam juntas na mesma foto. Leia a letra manuscrita com atenção e avalie CADA QUESTÃO SEPARADAMENTE (não misture as duas num parecer só). Sem relação com o tema, ilegível ou em branco vale 0. Resposta parcial vale proporcionalmente. ${RIGOR_IA[rigorIA].prompt}
 
 Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave por número de questão, neste formato: {${numeros.map(n => `"${n}": {"nota": <0 a ${valorPorQuestao}, até 1 casa decimal>, "justificativa": "<frase curta, até 20 palavras>"}`).join(', ')}}`;
 
@@ -1176,6 +1192,21 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
                 >
                   {sugerindoNotaIA ? (<><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Lendo...</>) : (<>📷 Sugerir nota com IA</>)}
                 </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <label htmlFor="rigor-ia" className="text-xs text-on-surface-variant">Rigor da IA</label>
+                <select
+                  id="rigor-ia"
+                  value={rigorIA}
+                  onChange={e => {
+                    const v = e.target.value as RigorIA;
+                    setRigorIA(v);
+                    try { localStorage.setItem('corretor_rigor_ia', v); } catch { /* sem storage: só não lembra */ }
+                  }}
+                  className="flex-1 px-2 py-1 rounded-lg border border-outline-variant bg-background text-xs"
+                >
+                  {(Object.keys(RIGOR_IA) as RigorIA[]).map(k => <option key={k} value={k}>{RIGOR_IA[k].label}</option>)}
+                </select>
               </div>
               {justificativaIA && (
                 <div className="text-xs text-on-surface-variant italic whitespace-pre-line">💬 {justificativaIA}

@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
-import { ArrowLeft, Download, Trophy, AlertCircle, Clock, Eye, X, Brain, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Download, Trophy, AlertCircle, Clock, Eye, X, Brain, ExternalLink, Printer } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { linhasObjetivas, estatisticaPorQuestao, htmlFolhasCorrecao } from './analiseQuestoes';
+import type { LinhaQuestao } from './analiseQuestoes';
 
 import type { Avaliacao, Aluno } from './tiposCorretorProvas';
 import { turmasDoValor, ehGrupoDeTurmas, labelTurmaOuGrupo } from './tiposCorretorProvas';
@@ -136,6 +138,35 @@ export function AvaliacaoResultados() {
     : 0;
   const aprovados = corrigidos.filter(r => notaDe(r.resposta) >= valorTotalAvaliacao / 2).length;
 
+  // Análise por questão (só leitura): ranking de erros + folhas de correção.
+  const linhasPorAluno = corrigidos.map(r => ({
+    r,
+    linhas: linhasObjetivas(r.resposta!, avaliacao?.quantidade_objetivas || 0, avaliacao?.gabarito || {}, questoesOnline),
+  }));
+  const estatQuestoes = estatisticaPorQuestao(linhasPorAluno.map(x => x.linhas).filter((l): l is LinhaQuestao[] => !!l));
+  const maisErradas = estatQuestoes.filter(e => e.pctAcerto < 100).slice(0, 5);
+
+  function imprimirFolhasCorrecao() {
+    if (!avaliacao || !linhasPorAluno.length) return;
+    const html = htmlFolhasCorrecao(
+      avaliacao.titulo,
+      valorTotalAvaliacao,
+      linhasPorAluno.map(({ r, linhas }) => ({
+        nome: r.aluno.nome,
+        turma: r.aluno.turma_id || avaliacao.turma_id,
+        numero: r.aluno.numero_chamada,
+        nota: notaDe(r.resposta),
+        linhas,
+      })),
+    );
+    const w = window.open('', '_blank');
+    if (!w) { window.alert('O navegador bloqueou a janela. Permita pop-ups para imprimir as folhas.'); return; }
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 300);
+  }
+
   const listaFiltrada = filtro === 'corrigidos' ? corrigidos
     : filtro === 'pendentes' ? pendentes
     : resultados;
@@ -165,13 +196,24 @@ export function AvaliacaoResultados() {
             </p>
           </div>
         </div>
-        <button
-          onClick={exportarExcel}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary-container text-on-secondary-container text-xs font-semibold"
-        >
-          <Download className="w-3.5 h-3.5" />
-          Excel
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={imprimirFolhasCorrecao}
+            disabled={corrigidos.length === 0}
+            title="Uma folha por aluno corrigido, com gabarito e nota"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary-container text-on-secondary-container text-xs font-semibold disabled:opacity-50"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            Folhas
+          </button>
+          <button
+            onClick={exportarExcel}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary-container text-on-secondary-container text-xs font-semibold"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Excel
+          </button>
+        </div>
       </div>
 
       {/* Cards de estatísticas */}
@@ -193,6 +235,34 @@ export function AvaliacaoResultados() {
           <p className="text-2xl font-bold text-red-500">{corrigidos.length - aprovados}</p>
         </div>
       </div>
+
+      {/* Questões com mais erros: o que a turma ainda não aprendeu */}
+      {maisErradas.length > 0 && (
+        <div className="bg-surface border border-outline-variant rounded-2xl p-4 space-y-2">
+          <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wide">Questões com mais erros</p>
+          {maisErradas.map(e => (
+            <div key={e.numero} className="space-y-1">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-semibold text-on-surface">Questão {e.numero}</span>
+                <span className="text-xs text-on-surface-variant">
+                  {e.total - e.acertos} de {e.total} erraram · {e.pctAcerto}% acerto
+                </span>
+              </div>
+              <div className="h-1.5 rounded-full bg-outline-variant/40 overflow-hidden">
+                <div className="h-full bg-red-400" style={{ width: `${100 - e.pctAcerto}%` }} />
+              </div>
+              {e.distrator && (
+                <p className="text-[11px] text-on-surface-variant">
+                  Gabarito {e.correta || '—'} · mais marcada errada: {e.distrator.letra} ({e.distrator.vezes}x)
+                </p>
+              )}
+            </div>
+          ))}
+          <p className="text-[11px] text-on-surface-variant">
+            Sugestão: retome o conteúdo das questões {maisErradas.slice(0, 3).map(e => e.numero).join(', ')} na próxima aula.
+          </p>
+        </div>
+      )}
 
       {/* Filtros */}
       <div className="flex gap-2">
