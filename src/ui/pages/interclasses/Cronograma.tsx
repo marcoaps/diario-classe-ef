@@ -15,13 +15,13 @@ const SLOT_PADRAO_MIN = 28; // 2 tempos de 10 + 3 de intervalo + 5 de troca de t
 // ocupam as janelas em ordem; as finais por faixa ficam na janela de sexta à tarde (15h–17h).
 interface Periodo { dia: string; rotulo: string; ini: string; fim: string; soFinais?: boolean }
 export const PERIODOS: Periodo[] = [
-  { dia: 'Terça 20/10', rotulo: 'Tarde', ini: '13:00', fim: '17:00' },
-  { dia: 'Quarta 21/10', rotulo: 'Manhã', ini: '07:00', fim: '11:00' },
-  { dia: 'Quarta 21/10', rotulo: 'Tarde', ini: '13:00', fim: '17:00' },
-  { dia: 'Quinta 22/10', rotulo: 'Manhã', ini: '07:00', fim: '11:00' },
-  { dia: 'Quinta 22/10', rotulo: 'Tarde', ini: '13:00', fim: '17:00' },
-  { dia: 'Sexta 23/10', rotulo: 'Manhã', ini: '07:00', fim: '11:00' },
-  { dia: 'Sexta 23/10', rotulo: 'Tarde', ini: '13:00', fim: '15:00' },
+  { dia: 'Terça 20/10', rotulo: 'Tarde', ini: '13:30', fim: '17:00' },
+  { dia: 'Quarta 21/10', rotulo: 'Manhã', ini: '07:30', fim: '11:00' },
+  { dia: 'Quarta 21/10', rotulo: 'Tarde', ini: '13:30', fim: '17:00' },
+  { dia: 'Quinta 22/10', rotulo: 'Manhã', ini: '07:30', fim: '11:00' },
+  { dia: 'Quinta 22/10', rotulo: 'Tarde', ini: '13:30', fim: '17:00' },
+  { dia: 'Sexta 23/10', rotulo: 'Manhã', ini: '07:30', fim: '11:00' },
+  { dia: 'Sexta 23/10', rotulo: 'Tarde', ini: '13:30', fim: '15:00' },
   { dia: 'Sexta 23/10', rotulo: 'Finais', ini: '15:00', fim: '17:00', soFinais: true },
 ];
 
