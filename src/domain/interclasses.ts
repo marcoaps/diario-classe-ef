@@ -52,6 +52,10 @@ export function generoDoTime(alunos: { genero: string | null }[]): GeneroCampeon
 // vencedores nem na de repescagem, porque os jogos de cada campeonato só
 // são gerados com as equipes do seu próprio ano.
 // ---------------------------------------------------------------------------
+// Queimada mistura anos no mesmo time (ex.: 7º e 9º), então o campeonato dela é
+// um só por gênero, com esta categoria no lugar do ano escolar.
+export const CATEGORIA_GERAL = 'Geral';
+
 export const ANOS_ESCOLARES = ['6º ano', '7º ano', '8º ano', '9º ano'] as const;
 export type AnoEscolar = typeof ANOS_ESCOLARES[number];
 

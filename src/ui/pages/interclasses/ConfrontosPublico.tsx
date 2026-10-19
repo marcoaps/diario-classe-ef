@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Trophy, Loader2 } from 'lucide-react';
 import { cn } from '../../AppLayout';
 import { buscarCampeonato, buscarJogos, type CampeonatoInterclasses } from '../../../data/supabase';
-import { ANOS_ESCOLARES, GENEROS_CAMPEONATO, chaveCampeonato, MODALIDADES, type GeneroCampeonato, type Modalidade } from '../../../domain/interclasses';
+import { ANOS_ESCOLARES, CATEGORIA_GERAL, GENEROS_CAMPEONATO, chaveCampeonato, MODALIDADES, type GeneroCampeonato, type Modalidade } from '../../../domain/interclasses';
 import { ADAPTERS, REGRAS_PADRAO, calcSt, type Jogo } from '../../../domain/interclassesCampeonato';
 import { linhaParaJogo, corDaEquipe, ListaJogos, Classificacao, Chave, FASES_LIGA } from './Confrontos';
 
@@ -21,7 +21,9 @@ export function ConfrontosPublico() {
   const [modalidade, setModalidade] = useState<Modalidade>(() => {
     try { return (localStorage.getItem(MODALIDADE_STORAGE_KEY) as Modalidade) || 'futsal'; } catch { return 'futsal'; }
   });
-  const [categoriaAtiva, setCategoriaAtiva] = useState<string>(ANOS_ESCOLARES[0]);
+  const [categoriaSel, setCategoriaSel] = useState<string>(ANOS_ESCOLARES[0]);
+  // Queimada mistura anos no mesmo time: um campeonato só por gênero.
+  const categoriaAtiva = modalidade === 'queimada' ? CATEGORIA_GERAL : categoriaSel;
   const [generoAtivo, setGeneroAtivo] = useState<GeneroCampeonato>('M');
   const [verCronograma, setVerCronograma] = useState(false);
   const chaveCamp = chaveCampeonato(categoriaAtiva, generoAtivo);
@@ -141,17 +143,19 @@ export function ConfrontosPublico() {
           ))}
         </div>
 
-        <div className="flex gap-2">
-          {CATEGORIAS.map(c => (
-            <button
-              key={c}
-              onClick={() => setCategoriaAtiva(c)}
-              className={cn('flex-1 py-3 rounded-xl text-base font-bold transition-all', categoriaAtiva === c ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
+        {modalidade !== 'queimada' && (
+          <div className="flex gap-2">
+            {CATEGORIAS.map(c => (
+              <button
+                key={c}
+                onClick={() => setCategoriaSel(c)}
+                className={cn('flex-1 py-3 rounded-xl text-base font-bold transition-all', categoriaAtiva === c ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        )}
 
         {categoriaAtiva === FINAIS ? (
           <FinaisCampeoes modalidade={modalidade} genero={generoAtivo} somenteLeitura grande />

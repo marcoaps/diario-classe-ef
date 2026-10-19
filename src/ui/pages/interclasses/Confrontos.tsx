@@ -7,7 +7,7 @@ import {
   type CampeonatoInterclasses, type JogoInterclasses,
 } from '../../../data/supabase';
 import {
-  modalidadeConfig, turnoDoTime, agruparPorTime, ANOS_ESCOLARES, anoDoTime, GENEROS_CAMPEONATO, chaveCampeonato, generoDoTime, type GeneroCampeonato, mensagemMinimoNaoAtingido,
+  modalidadeConfig, turnoDoTime, agruparPorTime, ANOS_ESCOLARES, CATEGORIA_GERAL, anoDoTime, GENEROS_CAMPEONATO, chaveCampeonato, generoDoTime, type GeneroCampeonato, mensagemMinimoNaoAtingido,
   type Modalidade, type InscricaoInterclasses, type EquipeInterclasses,
 } from '../../../domain/interclasses';
 import {
@@ -66,7 +66,10 @@ interface Props {
 }
 
 export function Confrontos({ modalidade, inscricoes }: Props) {
-  const [categoriaAtiva, setCategoriaAtiva] = useState<string>(ANOS_ESCOLARES[0]);
+  const [categoriaSel, setCategoriaSel] = useState<string>(ANOS_ESCOLARES[0]);
+  // Queimada mistura anos no mesmo time (ex.: 7º e 9º): um campeonato só por gênero.
+  const ehQueimada = modalidade === 'queimada';
+  const categoriaAtiva = ehQueimada ? CATEGORIA_GERAL : categoriaSel;
   const [generoAtivo, setGeneroAtivo] = useState<GeneroCampeonato>('M');
   const chaveCamp = chaveCampeonato(categoriaAtiva, generoAtivo);
   const [campeonato, setCampeonato] = useState<CampeonatoInterclasses | null>(null);
@@ -81,8 +84,8 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
   // Chave isolada por ano: só entram times do ano escolhido (e do gênero
   // escolhido) — o mata-mata duplo gera W e L só com esses times.
   const equipes = useMemo(
-    () => agruparPorTime(inscricoes).filter(e => anoDoTime(e.alunos) === categoriaAtiva && generoDoTime(e.alunos) === generoAtivo),
-    [inscricoes, categoriaAtiva, generoAtivo]
+    () => agruparPorTime(inscricoes).filter(e => (ehQueimada || anoDoTime(e.alunos) === categoriaAtiva) && generoDoTime(e.alunos) === generoAtivo),
+    [inscricoes, categoriaAtiva, generoAtivo, ehQueimada]
   );
   const equipesProntas = useMemo(() => equipes.filter(e => e.completo).map(e => e.nomeTime), [equipes]);
 
@@ -333,17 +336,23 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
           </button>
         ))}
       </div>
-      <div className="flex gap-1.5">
-        {CATEGORIAS.map(c => (
-          <button
-            key={c}
-            onClick={() => setCategoriaAtiva(c)}
-            className={cn('flex-1 py-2 rounded-xl text-xs font-bold transition-all', categoriaAtiva === c ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}
-          >
-            {c}
-          </button>
-        ))}
-      </div>
+      {ehQueimada ? (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-800">
+          🔥 Queimada: times de qualquer ano se enfrentam — um campeonato por gênero (sem separar por ano).
+        </div>
+      ) : (
+        <div className="flex gap-1.5">
+          {CATEGORIAS.map(c => (
+            <button
+              key={c}
+              onClick={() => setCategoriaSel(c)}
+              className={cn('flex-1 py-2 rounded-xl text-xs font-bold transition-all', categoriaAtiva === c ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      )}
 
       <button onClick={baixarWord} className="self-end flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-primary text-white hover:opacity-90">
         <FileDown className="w-4 h-4" /> Baixar Word (todos os confrontos)
