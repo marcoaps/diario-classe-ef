@@ -881,6 +881,8 @@ export interface JogoInterclasses {
   destino_vencedor: { jogoId: string; slot: 'A' | 'B' } | null;
   destino_perdedor: { jogoId: string; slot: 'A' | 'B' } | null;
   lado_ausente_fixo: 'A' | 'B' | null;
+  // Remarcação manual no Cronograma ("21/10 13:30"); null = horário da fila.
+  reprogramado?: string | null;
   criado_em: string;
   atualizado_em: string;
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCw, CalendarClock, FileDown, Printer } from 'lucide-react';
 import { cn } from '../../AppLayout';
-import { buscarCampeonatosComJogos, buscarMinutosPorJogo, salvarMinutosPorJogo } from '../../../data/supabase';
+import { atualizarJogo, buscarCampeonatosComJogos, buscarMinutosPorJogo, salvarMinutosPorJogo } from '../../../data/supabase';
 import { ADAPTERS, type Resultado } from '../../../domain/interclassesCampeonato';
 import type { Modalidade } from '../../../domain/interclasses';
 import { corDaEquipe } from './Confrontos';
@@ -42,11 +42,24 @@ export interface JogoCronograma {
   ehFinal: boolean;
   periodo?: Periodo;
   horario?: string;
+  // "21/10 13:30": jogo remarcado à mão. Ele continua ocupando a posição que tinha
+  // na fila (os demais jogos não mudam de horário); só ele aparece no dia/hora novos.
+  reprogramado: string | null;
 }
 
 // Fila única: rodada por rodada, alternando os anos (começando pelos de chave
 // mais longa) pra reduzir a chance do mesmo time jogar duas partidas seguidas.
 const ORDEM_ANO: Record<string, number> = { '6º ano': 0, '9º ano': 1, '7º ano': 2, '8º ano': 3 };
+
+// "21/10 13:30" -> janela da quadra que contém esse horário naquele dia.
+export function periodoDeReprogramacao(valor: string | null): { periodo: Periodo; horario: string } | null {
+  const m = valor?.match(/^(\d{2}\/\d{2}) (\d{2}:\d{2})$/);
+  if (!m) return null;
+  const min = paraMin(m[2]);
+  const naJanela = (p: Periodo) => p.dia.endsWith(m[1]) && paraMin(p.ini) <= min && min < paraMin(p.fim);
+  const periodo = PERIODOS.find(p => !p.soFinais && naJanela(p)) ?? PERIODOS.find(p => p.soFinais && naJanela(p));
+  return periodo ? { periodo, horario: m[2] } : null;
+}
 
 export function montarCronograma(
   dados: Awaited<ReturnType<typeof buscarCampeonatosComJogos>>, slotMin: number
@@ -60,6 +73,7 @@ export function montarCronograma(
       equipeA: j.equipe_a, equipeB: j.equipe_b, jogado: j.jogado,
       resultado: (j.resultado as Resultado | null) ?? null,
       ehFinal: categoria.startsWith('Final'),
+      reprogramado: j.reprogramado ?? null,
     }));
   });
 
@@ -85,7 +99,13 @@ export function montarCronograma(
   };
   const sem1 = alocar(normais, PERIODOS.filter(p => !p.soFinais));
   const sem2 = alocar(finais, PERIODOS.filter(p => p.soFinais));
-  return { jogos: [...normais, ...finais], semHorario: [...sem1, ...sem2] };
+  const todosJogos = [...normais, ...finais];
+  // Reprogramados: sobrepõem só o dia/hora do próprio jogo, depois de a fila toda ser alocada.
+  todosJogos.forEach(j => {
+    const alvo = periodoDeReprogramacao(j.reprogramado);
+    if (alvo) { j.periodo = alvo.periodo; j.horario = alvo.horario; }
+  });
+  return { jogos: todosJogos, semHorario: [...sem1, ...sem2].filter(j => !periodoDeReprogramacao(j.reprogramado)) };
 }
 
 export function Cronograma({ modalidade, publico = false }: { modalidade: Modalidade; publico?: boolean }) {
@@ -133,6 +153,7 @@ export function Cronograma({ modalidade, publico = false }: { modalidade: Modali
     const m = new Map<Periodo, JogoCronograma[]>();
     PERIODOS.forEach(p => m.set(p, []));
     jogos.forEach(j => { if (j.periodo) m.get(j.periodo)!.push(j); });
+    m.forEach(l => l.sort((a, b) => (a.horario ?? '').localeCompare(b.horario ?? '')));
     return m;
   }, [jogos]);
 
@@ -156,6 +177,14 @@ export function Cronograma({ modalidade, publico = false }: { modalidade: Modali
       nomeArquivo: `Cronograma-Futsal-Interclasses-${EDICAO}`,
       blocos,
     });
+  }
+
+  async function reprogramar(jogoId: string, valor: string | null) {
+    try { await atualizarJogo(jogoId, { reprogramado: valor }); await carregar(); setAvisoSlot(null); }
+    catch (e) {
+      console.error('Erro ao reprogramar o jogo:', e);
+      setAvisoSlot('Não foi possível salvar a reprogramação — rode sql/interclasses_jogos_reprogramar.sql no Supabase e tente de novo.');
+    }
   }
 
   // Cartaz A4 do dia (manhã + tarde + finais) para imprimir e colar no mural.
@@ -252,7 +281,8 @@ export function Cronograma({ modalidade, publico = false }: { modalidade: Modali
                   <span className="text-[11px] text-gray-400">{p.ini}–{p.fim} · {lista.length} jogo{lista.length !== 1 ? 's' : ''}</span>
                 </div>
                 <div className="divide-y divide-gray-50">
-                  {lista.map(j => <LinhaJogo key={j.id} j={j} adapter={adapter} />)}
+                  {lista.map(j => <LinhaJogo key={j.id} j={j} adapter={adapter} onReprogramar={publico ? undefined : reprogramar}
+                    horarioRepetido={!!j.reprogramado && lista.some(o => o.id !== j.id && o.horario === j.horario)} />)}
                 </div>
               </div>
             );
@@ -260,7 +290,7 @@ export function Cronograma({ modalidade, publico = false }: { modalidade: Modali
           {semHorario.length > 0 && (
             <div className="bg-white rounded-2xl border border-red-200 shadow-sm overflow-hidden">
               <div className="px-4 py-2 bg-red-50 border-b border-red-100 text-sm font-bold text-red-700">Sem horário</div>
-              <div className="divide-y divide-gray-50">{semHorario.map(j => <LinhaJogo key={j.id} j={j} adapter={adapter} />)}</div>
+              <div className="divide-y divide-gray-50">{semHorario.map(j => <LinhaJogo key={j.id} j={j} adapter={adapter} onReprogramar={publico ? undefined : reprogramar} />)}</div>
             </div>
           )}
         </>
@@ -269,24 +299,59 @@ export function Cronograma({ modalidade, publico = false }: { modalidade: Modali
   );
 }
 
-function LinhaJogo({ j, adapter }: { j: JogoCronograma; adapter: typeof ADAPTERS[Modalidade] }) {
+function LinhaJogo({ j, adapter, onReprogramar, horarioRepetido = false }: {
+  j: JogoCronograma;
+  horarioRepetido?: boolean;
+  adapter: typeof ADAPTERS[Modalidade];
+  onReprogramar?: (jogoId: string, valor: string | null) => Promise<void>;
+}) {
   const time = (n: string | null) => n
     ? <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: corDaEquipe(n) }} />{n}</span>
     : <span className="text-gray-400">a definir</span>;
+  const dias = Array.from(new Set(PERIODOS.map(p => p.dia.split(' ').pop()!)));
+  const [aberto, setAberto] = useState(false);
+  const [dia, setDia] = useState(() => j.reprogramado?.slice(0, 5) ?? j.periodo?.dia.split(' ').pop() ?? dias[0]);
+  const [hora, setHora] = useState(() => j.reprogramado?.slice(6) ?? j.horario ?? '13:30');
+  const [salvando, setSalvando] = useState(false);
+  async function salvar(valor: string | null) {
+    if (!onReprogramar) return;
+    setSalvando(true);
+    await onReprogramar(j.id, valor);
+    setSalvando(false);
+    setAberto(false);
+  }
   return (
-    <div className={cn('flex items-center gap-3 px-4 py-2.5 text-sm', j.jogado && 'bg-gray-50/60')}>
-      <span className="font-mono text-xs text-primary w-12 flex-shrink-0">{j.horario ?? '—'}</span>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap text-on-surface">
-          {time(j.equipeA)} <span className="text-gray-400 text-xs">×</span> {time(j.equipeB)}
+    <div className={cn('px-4 py-2.5 text-sm', j.jogado && 'bg-gray-50/60')}>
+      <div className="flex items-center gap-3">
+        <span className="font-mono text-xs text-primary w-12 flex-shrink-0">{j.horario ?? '—'}</span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap text-on-surface">
+            {time(j.equipeA)} <span className="text-gray-400 text-xs">×</span> {time(j.equipeB)}
+          </div>
+          <div className="text-[11px] text-gray-400 mt-0.5">
+            {j.categoria} · {j.genero === 'F' ? 'Feminino' : 'Masculino'} · {j.fase}
+            {j.reprogramado && <span className="ml-1.5 font-bold text-blue-600">· reprogramado</span>}
+            {horarioRepetido && <span className="ml-1.5 font-bold text-amber-600">· mesmo horário de outro jogo da fila</span>}
+          </div>
         </div>
-        <div className="text-[11px] text-gray-400 mt-0.5">
-          {j.categoria} · {j.genero === 'F' ? 'Feminino' : 'Masculino'} · {j.fase}
-        </div>
+        {onReprogramar && !j.jogado && j.equipeA && j.equipeB && (
+          <button onClick={() => setAberto(a => !a)} className="text-[11px] font-bold text-primary hover:underline flex-shrink-0">Reprogramar</button>
+        )}
+        {j.jogado && j.resultado
+          ? <span className="text-xs font-bold text-secondary flex-shrink-0">{adapter.formatarPlacar(j.resultado)}</span>
+          : <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 flex-shrink-0">pendente</span>}
       </div>
-      {j.jogado && j.resultado
-        ? <span className="text-xs font-bold text-secondary flex-shrink-0">{adapter.formatarPlacar(j.resultado)}</span>
-        : <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 flex-shrink-0">pendente</span>}
+      {aberto && onReprogramar && (
+        <div className="mt-2 flex items-center gap-2 flex-wrap text-xs bg-blue-50 border border-blue-100 rounded-xl px-3 py-2">
+          <select value={dia} onChange={e => setDia(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1 bg-white">
+            {dias.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+          <input type="time" value={hora} onChange={e => setHora(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1 bg-white" />
+          <button disabled={salvando || !hora} onClick={() => salvar(`${dia} ${hora}`)} className="px-3 py-1 rounded-lg bg-primary text-white font-bold disabled:opacity-50">Salvar</button>
+          {j.reprogramado && <button disabled={salvando} onClick={() => salvar(null)} className="px-3 py-1 rounded-lg bg-white border border-gray-200 text-gray-600 font-bold">Voltar ao horário da fila</button>}
+          <span className="text-gray-500">Só este jogo muda; os outros mantêm o horário.</span>
+        </div>
+      )}
     </div>
   );
 }
