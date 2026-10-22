@@ -50,6 +50,17 @@ export interface JogoCronograma {
 // mais longa) pra reduzir a chance do mesmo time jogar duas partidas seguidas.
 const ORDEM_ANO: Record<string, number> = { '6º ano': 0, '9º ano': 1, '7º ano': 2, '8º ano': 3 };
 
+// A partir de quinta 22/10 os jogos são mais curtos e variam por categoria:
+// 6º/7º anos = 2 tempos de 8 + 2 de intervalo + 5 de troca; 8º/9º anos = 2 tempos de 10 + 2 + 5.
+const DIA_DURACAO_POR_CATEGORIA = 'Quinta 22/10';
+const DURACAO_POR_ANO: Record<string, number> = { '6º ano': 23, '7º ano': 23, '8º ano': 27, '9º ano': 27 };
+function duracaoDoJogo(categoria: string, periodo: Periodo, slotMin: number): number {
+  const novo = PERIODOS.findIndex(p => p.dia === DIA_DURACAO_POR_CATEGORIA);
+  if (novo < 0 || PERIODOS.indexOf(periodo) < novo) return slotMin;
+  const ano = categoria.startsWith('Final') ? categoria.replace('Final ', '').split(' × ')[0] : categoria;
+  return DURACAO_POR_ANO[ano] ?? slotMin;
+}
+
 // "21/10 13:30" -> janela da quadra que contém esse horário naquele dia.
 export function periodoDeReprogramacao(valor: string | null): { periodo: Periodo; horario: string } | null {
   const m = valor?.match(/^(\d{2}\/\d{2}) (\d{2}:\d{2})$/);
@@ -82,17 +93,22 @@ export function montarCronograma(
     (a.genero === b.genero ? 0 : a.genero === 'M' ? -1 : 1));
   const finais = todos.filter(j => j.ehFinal).sort((a, b) => a.categoria.localeCompare(b.categoria, 'pt-BR'));
 
-  const slotsDe = (p: Periodo) => {
-    const ini = paraMin(p.ini), fim = paraMin(p.fim);
-    const qtd = Math.floor((fim - ini) / slotMin);
-    return Array.from({ length: qtd }, (_, k) => paraHHMM(ini + k * slotMin));
-  };
+  // Duração de cada jogo (já com a troca de times). Até quarta 21/10 vale o valor único
+  // "Minutos por jogo" (slotMin); de quinta 22/10 em diante, por categoria.
   const alocar = (jogos: JogoCronograma[], periodos: Periodo[]): JogoCronograma[] => {
     const semHorario: JogoCronograma[] = [];
-    const fila = periodos.flatMap(p => slotsDe(p).map(h => ({ p, h })));
-    jogos.forEach((j, i) => {
-      const slot = fila[i];
-      if (slot) { j.periodo = slot.p; j.horario = slot.h; } else semHorario.push(j);
+    let pi = 0;
+    let cursor = periodos.length ? paraMin(periodos[0].ini) : 0;
+    jogos.forEach(j => {
+      while (pi < periodos.length) {
+        const dur = duracaoDoJogo(j.categoria, periodos[pi], slotMin);
+        if (cursor + dur <= paraMin(periodos[pi].fim)) break;
+        pi++;
+        if (pi < periodos.length) cursor = paraMin(periodos[pi].ini);
+      }
+      if (pi >= periodos.length) { semHorario.push(j); return; }
+      j.periodo = periodos[pi]; j.horario = paraHHMM(cursor);
+      cursor += duracaoDoJogo(j.categoria, periodos[pi], slotMin);
     });
     return semHorario;
   };
@@ -222,12 +238,13 @@ export function Cronograma({ modalidade, publico = false }: { modalidade: Modali
             <p className="text-xs text-gray-500 mt-0.5">
               {jogos.length} jogo{jogos.length !== 1 ? 's' : ''} · {pendentes} pendente{pendentes !== 1 ? 's' : ''}. Os jogos entram na fila rodada por rodada, alternando os anos.
               Os horários mudam conforme os campeonatos andam (ex.: uma decisão extra empurra os jogos seguintes).
+              A partir de quinta 22/10: 6º e 7º anos 23 min por jogo · 8º e 9º anos 27 min (com a troca de times).
             </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           {!publico && <label className="text-xs text-gray-600 flex items-center gap-1.5">
-            Minutos por jogo
+            Minutos por jogo (até 21/10)
             <input
               type="number" min={5} max={90} value={slotTexto ?? slotMin} onChange={e => setSlotTexto(e.target.value)} onBlur={salvarSlot}
               className="w-16 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-xs outline-none focus:border-primary"
