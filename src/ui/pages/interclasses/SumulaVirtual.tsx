@@ -95,7 +95,7 @@ export function SumulaVirtual({ jogoId, equipeA, equipeB, fase, categoria, elimi
     return () => clearTimeout(t);
   }, [aviso]);
 
-  if (!s) return <div className="fixed inset-0 z-50 bg-white flex items-center justify-center text-gray-500 text-sm">Carregando súmula...</div>;
+  if (!s) return <div className="fixed inset-0 z-[70] bg-white flex items-center justify-center text-gray-500 text-sm">Carregando súmula...</div>;
 
   const somenteLeitura = jogado || s.encerrada;
   const p = placar(s.eventos);
@@ -202,7 +202,7 @@ export function SumulaVirtual({ jogoId, equipeA, equipeB, fase, categoria, elimi
   );
 
   return (
-    <div className="fixed inset-0 z-50 bg-background overflow-y-auto" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+    <div className="fixed inset-0 z-[70] bg-background overflow-y-auto" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-3 pt-2 pb-2 shadow-sm">
         <div className="flex items-center justify-between gap-2 mb-1">
           <div className="text-[11px] text-gray-500 truncate">📋 Súmula · {fase} · {categoria}</div>
@@ -211,6 +211,9 @@ export function SumulaVirtual({ jogoId, equipeA, equipeB, fase, categoria, elimi
               {pend > 0 ? <CloudOff className="w-3.5 h-3.5" /> : <Cloud className="w-3.5 h-3.5" />}
               {pend > 0 ? 'só no aparelho' : 'salvo'}
             </span>
+            {!somenteLeitura && (
+              <button onClick={() => setConfirmando(true)} className="px-3 py-1.5 rounded-lg bg-secondary text-white text-xs font-bold">🏁 Encerrar</button>
+            )}
             <button onClick={onFechar} aria-label="Fechar súmula" className="p-1.5 rounded-full hover:bg-gray-100"><X className="w-5 h-5" /></button>
           </div>
         </div>
@@ -288,7 +291,7 @@ export function SumulaVirtual({ jogoId, equipeA, equipeB, fase, categoria, elimi
       </div>
 
       {alvo && (
-        <div className="fixed inset-0 z-[60] bg-black/40 flex items-end sm:items-center justify-center" onClick={() => setAlvo(null)}>
+        <div className="fixed inset-0 z-[80] bg-black/40 flex items-end sm:items-center justify-center" onClick={() => setAlvo(null)}>
           <div className="bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl p-4" onClick={e => e.stopPropagation()}>
             <div className="text-center mb-3">
               <div className="text-3xl font-black">nº {alvo.camisa}</div>
@@ -311,7 +314,7 @@ export function SumulaVirtual({ jogoId, equipeA, equipeB, fase, categoria, elimi
       )}
 
       {confirmando && (
-        <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4" onClick={() => !enviando && setConfirmando(false)}>
+        <div className="fixed inset-0 z-[80] bg-black/40 flex items-center justify-center p-4" onClick={() => !enviando && setConfirmando(false)}>
           <div className="bg-white w-full max-w-sm rounded-2xl p-5" onClick={e => e.stopPropagation()}>
             <h4 className="font-bold text-center mb-1">Encerrar o jogo?</h4>
             <div className="text-center text-2xl font-black mb-3">{equipeA} {fechamento.golsA} x {fechamento.golsB} {equipeB}</div>

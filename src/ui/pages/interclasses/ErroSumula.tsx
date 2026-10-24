@@ -9,7 +9,7 @@ export class ErroSumula extends Component<{ children: ReactNode }, { erro: Error
   render() {
     if (!this.state.erro) return this.props.children;
     return (
-      <div className="fixed inset-0 z-50 bg-white p-5 overflow-auto text-sm">
+      <div className="fixed inset-0 z-[70] bg-white p-5 overflow-auto text-sm">
         <h3 className="font-bold text-red-600 mb-2">A súmula deu erro ao abrir</h3>
         <p className="mb-2 text-gray-600">Os lances já anotados continuam guardados no aparelho. Mande esta mensagem para o suporte:</p>
         <pre className="whitespace-pre-wrap text-xs bg-red-50 border border-red-200 rounded-lg p-3">{String(this.state.erro.stack || this.state.erro.message)}</pre>

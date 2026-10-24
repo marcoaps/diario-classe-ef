@@ -42,10 +42,10 @@ function SumulaJanelaInterna() {
     if (dados) document.title = `Súmula ${dados.jogo.equipe_a} × ${dados.jogo.equipe_b}`;
   }, [dados]);
 
-  if (erro) return <div className="fixed inset-0 z-50 bg-white flex items-center justify-center p-6 text-center text-sm text-red-600">{erro}</div>;
-  if (!dados) return <div className="fixed inset-0 z-50 bg-white flex items-center justify-center text-gray-500 text-sm">Carregando jogo...</div>;
+  if (erro) return <div className="fixed inset-0 z-[70] bg-white flex items-center justify-center p-6 text-center text-sm text-red-600">{erro}</div>;
+  if (!dados) return <div className="fixed inset-0 z-[70] bg-white flex items-center justify-center text-gray-500 text-sm">Carregando jogo...</div>;
   const { jogo, camp, insc } = dados;
-  if (!jogo.equipe_a || !jogo.equipe_b) return <div className="fixed inset-0 z-50 bg-white flex items-center justify-center p-6 text-center text-sm text-gray-500">Os times deste jogo ainda não foram definidos.</div>;
+  if (!jogo.equipe_a || !jogo.equipe_b) return <div className="fixed inset-0 z-[70] bg-white flex items-center justify-center p-6 text-center text-sm text-gray-500">Os times deste jogo ainda não foram definidos.</div>;
 
   return (
     <SumulaVirtual
