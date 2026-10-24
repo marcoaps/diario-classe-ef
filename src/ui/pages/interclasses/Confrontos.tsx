@@ -17,6 +17,7 @@ import {
 
 import { FinaisCampeoes, FINAIS } from './FinaisCampeoes';
 import { SumulaVirtual } from './SumulaVirtual';
+import { ErroSumula } from './ErroSumula';
 import { CANAL_SUMULA, urlSumulaJanela, type MsgSumula } from './comunicacaoSumula';
 import { baixarConfrontosWord, type BlocoConfrontoWord } from './exportarConfrontosWord';
 
@@ -463,7 +464,7 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
         </div>
       )}
       {jogoSumula && jogoSumula.equipeA && jogoSumula.equipeB && (
-        <SumulaVirtual
+        <ErroSumula><SumulaVirtual
           jogoId={jogoSumula.id}
           equipeA={jogoSumula.equipeA}
           equipeB={jogoSumula.equipeB}
@@ -474,7 +475,7 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
           inscricoes={inscricoes}
           onEncerrar={(ga, gb) => lancarPlacar(jogoSumula.id, adapter.criarResultado(ga, gb))}
           onFechar={() => setJogoSumula(null)}
-        />
+        /></ErroSumula>
       )}
     </div>
   );

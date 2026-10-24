@@ -5,12 +5,17 @@ import type { InscricaoInterclasses } from '../../../domain/interclasses';
 import { SumulaVirtual } from './SumulaVirtual';
 import { FASES_LIGA } from './Confrontos';
 import { pedirLancamento } from './comunicacaoSumula';
+import { ErroSumula } from './ErroSumula';
 
 const EDICAO = '2026';
 
 // Súmula numa janela própria: carrega o jogo sozinha e pede o lançamento do placar
 // à tela Confrontos (outra janela) quando o jogo é encerrado.
 export function SumulaJanela() {
+  return <ErroSumula><SumulaJanelaInterna /></ErroSumula>;
+}
+
+function SumulaJanelaInterna() {
   const { jogoId = '' } = useParams();
   const [dados, setDados] = useState<{ jogo: JogoInterclasses; camp: CampeonatoInterclasses; insc: InscricaoInterclasses[] } | null>(null);
   const [erro, setErro] = useState<string | null>(null);
