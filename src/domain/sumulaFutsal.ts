@@ -12,9 +12,9 @@ export const PERIODOS: { id: Periodo; rotulo: string; curto: string }[] = [
   { id: 'P2', rotulo: 'Prorrogação 2', curto: 'P2' },
 ];
 
-// Regras de futsal usadas como padrão — confirmar com o regulamento da escola.
+// Regras do Interclasse da escola (confirmadas pelo professor).
 export const REGRAS_SUMULA = {
-  faltasParaTiroLivre: 6, // a 6ª falta do tempo = tiro livre sem barreira
+  faltasParaTiroLivre: 4, // regra do Interclasse: a partir da 4ª falta do tempo = tiro livre
   amarelosParaVermelho: 2,
   temposPorPeriodo: 1,
 };
@@ -42,8 +42,9 @@ export interface Sumula {
   jogoId: string;
   eventos: EventoSumula[];
   relogio: Relogio;
-  // Só usado quando o jogo eliminatório termina empatado: quem ganhou nos pênaltis.
-  penaltis: { vencedor: Lado | null; golsA: number; golsB: number } | null;
+  // Só usado quando o jogo eliminatório termina empatado.
+  // Disputa de pênaltis: cada cobrança é true (converteu) ou false (perdeu), em ordem.
+  penaltis: { A: boolean[]; B: boolean[] } | null;
   encerrada: boolean;
   atualizadoEm: number;
 }
@@ -159,19 +160,47 @@ export interface FechamentoJogo {
   precisaPenaltis: boolean;
 }
 
-// Placar a lançar no fluxo atual. Em jogo eliminatório empatado exige o vencedor
-// dos pênaltis; o placar vai com +1 gol pro vencedor — convenção do app ("lance o
-// placar já com um vencedor"), a confirmar com o professor.
+export const convertidos = (c: boolean[]) => c.filter(Boolean).length;
+
+// Vencedor da disputa: com 3+ cobranças de cada lado e o mesmo número de cobranças,
+// ganha quem converteu mais; antes disso só decide se o adversário já não alcança
+// mais (mesmo convertendo todas as cobranças que faltam das 3 iniciais).
+export function vencedorPenaltis(p: { A: boolean[]; B: boolean[] } | null): Lado | null {
+  if (!p) return null;
+  const a = convertidos(p.A), b = convertidos(p.B);
+  if (p.A.length >= 3 && p.A.length === p.B.length) return a === b ? null : a > b ? 'A' : 'B';
+  if (p.A.length < 3 || p.B.length < 3) {
+    const faltaA = Math.max(0, 3 - p.A.length), faltaB = Math.max(0, 3 - p.B.length);
+    if (a > b + faltaB) return 'A';
+    if (b > a + faltaA) return 'B';
+  }
+  return null;
+}
+
+// Placar a lançar no fluxo atual. Em jogo eliminatório empatado exige a disputa de
+// pênaltis decidida; o placar vai com +1 gol pro vencedor — convenção do app ("lance
+// o placar já com um vencedor"); as cobranças ficam guardadas na súmula.
 export function fecharPlacar(s: Sumula, eliminatorio: boolean): FechamentoJogo & { lancar: { golsA: number; golsB: number } | null } {
   const p = placar(s.eventos);
   const empatado = p.A === p.B;
   const precisaPenaltis = empatado && eliminatorio;
   if (!precisaPenaltis) return { golsA: p.A, golsB: p.B, empatado, precisaPenaltis, lancar: { golsA: p.A, golsB: p.B } };
-  const v = s.penaltis?.vencedor ?? null;
+  const v = vencedorPenaltis(s.penaltis);
   return {
     golsA: p.A, golsB: p.B, empatado, precisaPenaltis,
     lancar: v ? { golsA: p.A + (v === 'A' ? 1 : 0), golsB: p.B + (v === 'B' ? 1 : 0) } : null,
   };
+}
+
+export function anotarCobranca(s: Sumula, lado: Lado, converteu: boolean): Sumula {
+  if (s.encerrada) return s;
+  const pen = s.penaltis ?? { A: [], B: [] };
+  return { ...s, penaltis: { ...pen, [lado]: [...pen[lado], converteu] }, atualizadoEm: Date.now() };
+}
+
+export function desfazerCobranca(s: Sumula, lado: Lado): Sumula {
+  if (s.encerrada || !s.penaltis || s.penaltis[lado].length === 0) return s;
+  return { ...s, penaltis: { ...s.penaltis, [lado]: s.penaltis[lado].slice(0, -1) }, atualizadoEm: Date.now() };
 }
 
 const NOME_TIPO: Record<TipoEvento, string> = {

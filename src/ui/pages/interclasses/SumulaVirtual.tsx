@@ -6,7 +6,7 @@ import type { InscricaoInterclasses } from '../../../domain/interclasses';
 import {
   PERIODOS, REGRAS_SUMULA, sumulaVazia, segundosDoRelogio, formatarTempo, placar, faltasNoPeriodo, temposNoPeriodo,
   cartoesDoJogador, golsDoJogador, adicionarEvento, desfazerUltimo, removerEvento, iniciarRelogio, pausarRelogio,
-  mudarPeriodo, ajustarRelogio, minutosPorTempo, fecharPlacar, nomeDoTipo,
+  mudarPeriodo, ajustarRelogio, minutosPorTempo, fecharPlacar, nomeDoTipo, anotarCobranca, desfazerCobranca, convertidos, vencedorPenaltis,
   type Sumula, type Lado, type TipoEvento, type Periodo,
 } from '../../../domain/sumulaFutsal';
 import {
@@ -119,7 +119,7 @@ export function SumulaVirtual({ jogoId, equipeA, equipeB, fase, categoria, elimi
       if (n >= REGRAS_SUMULA.faltasParaTiroLivre) msg += ` · ${n}ª falta: TIRO LIVRE para o adversário!`;
       else msg += ` · ${n}ª falta no tempo`;
     }
-    if (depois.eventos.length - antes.eventos.length > 1) msg += ' · 2º amarelo = EXPULSO';
+    if (depois.eventos.length - antes.eventos.length > 1) msg += ' · 2º amarelo = EXPULSO (time joga com 1 a menos)';
     if (tipo === 'gol') { const pl = placar(depois.eventos); msg += ` · ${pl.A} x ${pl.B}`; }
     setAviso(msg);
   }
@@ -131,10 +131,9 @@ export function SumulaVirtual({ jogoId, equipeA, equipeB, fase, categoria, elimi
     anotar('tempo', lado, null, null);
   }
 
-  async function encerrar(vencedorPenaltis?: Lado) {
+  async function encerrar() {
     if (!s) return;
-    let corrente = s;
-    if (vencedorPenaltis) corrente = { ...s, penaltis: { vencedor: vencedorPenaltis, golsA: 0, golsB: 0 } };
+    const corrente = s;
     const f = fecharPlacar(corrente, eliminatorio);
     if (!f.lancar) return;
     setEnviando(true);
@@ -162,6 +161,11 @@ export function SumulaVirtual({ jogoId, equipeA, equipeB, fase, categoria, elimi
           Tempo: <b>{temposNoPeriodo(s.eventos, lado, periodo)}/{REGRAS_SUMULA.temposPorPeriodo}</b>
         </div>
       </div>
+      {s.eventos.some(e => e.tipo === 'vermelho' && e.lado === lado) && (
+        <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold text-center py-1 px-1">
+          🟥 {s.eventos.filter(e => e.tipo === 'vermelho' && e.lado === lado).length} expulso(s) — joga com a menos
+        </div>
+      )}
       {!somenteLeitura && (
         <div className="grid grid-cols-2 gap-1">
           <button onClick={() => anotar('falta', lado, null, null)} className="py-2 rounded-lg bg-gray-100 text-xs font-bold active:bg-gray-300">Falta s/ nº</button>
@@ -314,12 +318,29 @@ export function SumulaVirtual({ jogoId, equipeA, equipeB, fase, categoria, elimi
             {fechamento.precisaPenaltis ? (
               <>
                 <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-2.5 mb-3">
-                  Empatado em jogo eliminatório. Quem venceu nos pênaltis? O placar será lançado com 1 gol a mais para o vencedor (como o app já pedia).
+                  Empatado em jogo eliminatório: registre a disputa de pênaltis (3 cobranças para cada time; depois, alternadas). O placar será lançado com 1 gol a mais para o vencedor, e as cobranças ficam guardadas na súmula.
                 </p>
-                <div className="flex flex-col gap-2">
-                  <button disabled={enviando} onClick={() => encerrar('A')} className="py-3 rounded-xl bg-primary text-white font-bold disabled:opacity-50">{equipeA} venceu nos pênaltis</button>
-                  <button disabled={enviando} onClick={() => encerrar('B')} className="py-3 rounded-xl bg-primary text-white font-bold disabled:opacity-50">{equipeB} venceu nos pênaltis</button>
-                </div>
+                {(['A', 'B'] as Lado[]).map(l => {
+                  const cob = s.penaltis?.[l] ?? [];
+                  return (
+                    <div key={l} className="mb-2.5">
+                      <div className="flex items-center justify-between text-sm font-bold mb-1">
+                        <span className="truncate">{nomes[l]}</span><span>{convertidos(cob)} / {cob.length}</span>
+                      </div>
+                      <div className="flex items-center gap-1 mb-1.5 min-h-[1.5rem] flex-wrap">
+                        {cob.map((c, i) => <span key={i} className={cn('w-6 h-6 rounded-full text-xs font-black flex items-center justify-center text-white', c ? 'bg-green-600' : 'bg-red-500')}>{c ? '✓' : '✗'}</span>)}
+                      </div>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <button onClick={() => aplicar(x => anotarCobranca(x, l, true))} className="py-2.5 rounded-xl bg-green-600 text-white text-sm font-bold">⚽ Gol</button>
+                        <button onClick={() => aplicar(x => anotarCobranca(x, l, false))} className="py-2.5 rounded-xl bg-red-500 text-white text-sm font-bold">✗ Perdeu</button>
+                        <button onClick={() => aplicar(x => desfazerCobranca(x, l))} disabled={cob.length === 0} className="py-2.5 rounded-xl bg-gray-100 text-sm font-bold disabled:opacity-40">↩ Desfazer</button>
+                      </div>
+                    </div>
+                  );
+                })}
+                <button disabled={enviando || !vencedorPenaltis(s.penaltis)} onClick={() => encerrar()} className="w-full py-3 rounded-xl bg-primary text-white font-bold disabled:opacity-40">
+                  {vencedorPenaltis(s.penaltis) ? `${nomes[vencedorPenaltis(s.penaltis)!]} venceu — lançar placar` : 'Disputa ainda sem vencedor'}
+                </button>
               </>
             ) : (
               <button disabled={enviando} onClick={() => encerrar()} className="w-full py-3 rounded-xl bg-primary text-white font-bold disabled:opacity-50">
