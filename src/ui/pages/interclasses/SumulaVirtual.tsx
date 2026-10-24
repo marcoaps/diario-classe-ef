@@ -205,7 +205,8 @@ export function SumulaVirtual({ jogoId, equipeA, equipeB, fase, categoria, elimi
     <div className="fixed inset-0 z-[70] bg-background overflow-y-auto" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-3 pt-2 pb-2 shadow-sm">
         <div className="flex items-center justify-between gap-2 mb-1">
-          <div className="text-[11px] text-gray-500 truncate">📋 Súmula · {fase} · {categoria}</div>
+          <button onClick={onFechar} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-xs font-bold hover:bg-gray-200 flex-shrink-0">← Voltar</button>
+          <div className="text-[11px] text-gray-500 truncate flex-1 min-w-0">📋 Súmula · {fase} · {categoria}</div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <span className={cn('text-[10px] flex items-center gap-1', pend > 0 ? 'text-amber-600' : 'text-green-600')} title={pend > 0 ? 'Há súmulas só neste aparelho' : 'Tudo enviado'}>
               {pend > 0 ? <CloudOff className="w-3.5 h-3.5" /> : <Cloud className="w-3.5 h-3.5" />}
