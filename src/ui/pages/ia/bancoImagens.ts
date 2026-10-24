@@ -600,6 +600,22 @@ const ITENS_DE_ARQUIVO: ItemBancoImagem[] = [
     tags: ['mundo', 'planeta', 'globo'],
     credito: 'Pictogramas: ARASAAC (arasaac.org), autor Sergio Palao, propriedade do Governo de Aragão (Espanha), licença CC BY-NC-SA',
   },
+  {
+    id: 'foto-capoeira-roda',
+    arquivo: '/banco-imagens/fotos/foto-capoeira-roda.jpg',
+    tipo: 'foto',
+    titulo: 'Roda de capoeira (palmas e berimbau)',
+    tags: ['capoeira', 'roda', 'roda de capoeira', 'berimbau', 'palmas', 'luta', 'cultura', 'brasil'],
+    credito: 'Foto: Estela Neto, Wikimedia Commons, CC BY-SA 4.0',
+  },
+  {
+    id: 'foto-capoeira-mestres',
+    arquivo: '/banco-imagens/fotos/foto-capoeira-mestres.jpg',
+    tipo: 'foto',
+    titulo: 'Mestres de capoeira cantando na roda',
+    tags: ['capoeira', 'mestre', 'mestres', 'roda', 'roda de capoeira', 'berimbau', 'pandeiro', 'atabaque', 'cantiga', 'musica', 'origem', 'historia', 'luta', 'cultura', 'brasil'],
+    credito: 'Foto: Turismo Bahia, Wikimedia Commons, CC BY-SA 2.0',
+  },
 ];
 
 /** Tudo que aparece no seletor: imagens de arquivo + diagramas da quadra (desenhados por código). */

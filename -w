@@ -1,0 +1,23 @@
+HTTP/1.1 200 OK
+Date: Wed, 23 Sep 2026 00:45:49 GMT
+Content-Type: application/json; charset=utf-8
+Transfer-Encoding: chunked
+Connection: keep-alive
+Content-Range: 0-777/778
+CF-Ray: a3f5875d9b66572a-GRU
+CF-Cache-Status: DYNAMIC
+set-cookie: __cf_bm=8U.4e171gRZA2DJjPs8PzPBrQ7vvgDl1bb0AQVcDcQM-1790124349.0551605-1.0.1.1-vyx3WpOYsPT.vvHhMcjhRFkLuQUkZM39QUhrhC8XTqVhBydGgBvWFxiFBdr2IaoWSWb5Xw.39duQeQr5rfFQ2XDUxkOtomklRTjgwP8ReOUKrN2JZwimGazctw2GV0Ad; HttpOnly; SameSite=None; Secure; Path=/; Domain=supabase.co; Expires=Wed, 23 Sep 2026 01:15:49 GMT
+Content-Location: /alunos?order=turma_id%2Cnome&select=id%2Cnome%2Cturma_id%2Cnumero_chamada%2Csexo
+Server: cloudflare
+Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+Vary: Accept-Encoding
+X-Content-Type-Options: nosniff
+content-profile: public
+preference-applied: count=exact
+sb-gateway-version: 1
+sb-project-ref: rsifjxeqitgiecqwvien
+sb-request-id: 01a0cbb9-d683-7c6b-ae80-5e3095f54620
+x-envoy-attempt-count: 1
+x-envoy-upstream-service-time: 30
+alt-svc: h3=":443"; ma=86400
+
