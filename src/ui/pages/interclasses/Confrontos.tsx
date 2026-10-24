@@ -16,6 +16,7 @@ import {
 } from '../../../domain/interclassesCampeonato';
 
 import { FinaisCampeoes, FINAIS } from './FinaisCampeoes';
+import { SumulaVirtual } from './SumulaVirtual';
 import { baixarConfrontosWord, type BlocoConfrontoWord } from './exportarConfrontosWord';
 
 const EDICAO = '2026';
@@ -77,6 +78,9 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
   const [loading, setLoading] = useState(true);
   const [criandoCampeonato, setCriandoCampeonato] = useState(false);
   const [aba, setAba] = useState<'jogos' | 'classificacao' | 'grupos' | 'chave'>('jogos');
+  const [jogoSumula, setJogoSumula] = useState<Jogo | null>(null);
+  // Súmula virtual (gols/faltas/cartões por toque) só no futsal por enquanto.
+  const abrirSumula = modalidade === 'futsal' ? setJogoSumula : undefined;
 
   const adapter = ADAPTERS[modalidade];
   const regras = REGRAS_PADRAO[modalidade];
@@ -406,8 +410,8 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
                   🏆 Iniciar mata-mata (classificados dos grupos)
                 </button>
               )}
-              <ListaJogos titulo={`Pendentes (${jogosPendentes.length})`} jogos={jogosPendentes} adapter={adapter} onLancar={lancarPlacar} mostrarGrupo={temMaisDeUmGrupo} />
-              <ListaJogos titulo={`Realizados (${jogosJogados.length})`} jogos={jogosJogados} adapter={adapter} onLancar={lancarPlacar} mostrarGrupo={temMaisDeUmGrupo} />
+              <ListaJogos titulo={`Pendentes (${jogosPendentes.length})`} jogos={jogosPendentes} adapter={adapter} onLancar={lancarPlacar} onSumula={abrirSumula} mostrarGrupo={temMaisDeUmGrupo} />
+              <ListaJogos titulo={`Realizados (${jogosJogados.length})`} jogos={jogosJogados} adapter={adapter} onLancar={lancarPlacar} onSumula={abrirSumula} mostrarGrupo={temMaisDeUmGrupo} />
               {jogos.length === 0 && <div className="text-center text-gray-400 text-sm py-8">Nenhum jogo gerado.</div>}
             </div>
           )}
@@ -425,8 +429,22 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
             </div>
           )}
 
-          {aba === 'chave' && <Chave jogos={jogos} adapter={adapter} onLancar={lancarPlacar} />}
+          {aba === 'chave' && <Chave jogos={jogos} adapter={adapter} onLancar={lancarPlacar} onSumula={abrirSumula} />}
         </div>
+      )}
+      {jogoSumula && jogoSumula.equipeA && jogoSumula.equipeB && (
+        <SumulaVirtual
+          jogoId={jogoSumula.id}
+          equipeA={jogoSumula.equipeA}
+          equipeB={jogoSumula.equipeB}
+          fase={jogoSumula.fase}
+          categoria={chaveCamp}
+          eliminatorio={!FASES_LIGA.has(jogoSumula.fase)}
+          jogado={jogos.find(j => j.id === jogoSumula.id)?.jogado ?? jogoSumula.jogado}
+          inscricoes={inscricoes}
+          onEncerrar={(ga, gb) => lancarPlacar(jogoSumula.id, adapter.criarResultado(ga, gb))}
+          onFechar={() => setJogoSumula(null)}
+        />
       )}
     </div>
   );
@@ -517,22 +535,22 @@ function SituacaoEquipesDuplo({ equipes, jogos }: { equipes: string[]; jogos: Jo
   );
 }
 
-export function ListaJogos({ titulo, jogos, adapter, onLancar, mostrarGrupo, somenteLeitura, grande, colunas = 2 }: {
-  titulo: string; jogos: Jogo[]; adapter: ResultadoAdapter; onLancar?: (id: string, r: Resultado) => void; mostrarGrupo?: boolean; somenteLeitura?: boolean; grande?: boolean; colunas?: 1 | 2;
+export function ListaJogos({ titulo, jogos, adapter, onLancar, onSumula, mostrarGrupo, somenteLeitura, grande, colunas = 2 }: {
+  titulo: string; jogos: Jogo[]; adapter: ResultadoAdapter; onLancar?: (id: string, r: Resultado) => void; onSumula?: (j: Jogo) => void; mostrarGrupo?: boolean; somenteLeitura?: boolean; grande?: boolean; colunas?: 1 | 2;
 }) {
   if (jogos.length === 0) return null;
   return (
     <div>
       <div className={cn('font-bold text-gray-500 uppercase tracking-wider mb-2 px-1', grande ? 'text-sm' : 'text-sm sm:text-xs')}>{titulo}</div>
       <div className={cn('grid grid-cols-1 gap-3', colunas === 2 && 'sm:grid-cols-2')}>
-        {jogos.map(j => <CardJogo key={j.id} jogo={j} adapter={adapter} onLancar={onLancar} mostrarGrupo={mostrarGrupo} somenteLeitura={somenteLeitura} grande={grande} />)}
+        {jogos.map(j => <CardJogo key={j.id} jogo={j} adapter={adapter} onLancar={onLancar} onSumula={onSumula} mostrarGrupo={mostrarGrupo} somenteLeitura={somenteLeitura} grande={grande} />)}
       </div>
     </div>
   );
 }
 
-export function CardJogo({ jogo, adapter, onLancar, compacto, mostrarGrupo = true, somenteLeitura = false, grande = false }: {
-  jogo: Jogo; adapter: ResultadoAdapter; onLancar?: (id: string, r: Resultado) => void; compacto?: boolean; mostrarGrupo?: boolean; somenteLeitura?: boolean; grande?: boolean;
+export function CardJogo({ jogo, adapter, onLancar, onSumula, compacto, mostrarGrupo = true, somenteLeitura = false, grande = false }: {
+  jogo: Jogo; adapter: ResultadoAdapter; onLancar?: (id: string, r: Resultado) => void; onSumula?: (j: Jogo) => void; compacto?: boolean; mostrarGrupo?: boolean; somenteLeitura?: boolean; grande?: boolean;
 }) {
   const [editando, setEditando] = useState(false);
   const [a, setA] = useState(jogo.resultado ? String(adapter.valorA(jogo.resultado)) : '');
@@ -638,6 +656,15 @@ export function CardJogo({ jogo, adapter, onLancar, compacto, mostrarGrupo = tru
         </button>
       ) : (
         <div className="text-center text-sm sm:text-xs text-gray-400 py-1">aguardando definição</div>
+      )}
+
+      {!somenteLeitura && onSumula && !ehVencedorOnly && jogo.equipeA && jogo.equipeB && (
+        <button
+          onClick={() => onSumula(jogo)}
+          className={cn('w-full mt-2 font-bold rounded-lg border', jogo.jogado ? 'py-1.5 text-xs text-gray-500 border-gray-200 hover:text-primary' : 'py-3 sm:py-2 text-base sm:text-xs text-primary border-primary/40 bg-primary/5 hover:bg-primary/10')}
+        >
+          📋 {jogo.jogado ? 'Ver súmula' : 'Súmula virtual (anotar o jogo)'}
+        </button>
       )}
 
       {!somenteLeitura && editando && jogo.equipeA && jogo.equipeB && (
@@ -778,7 +805,7 @@ export function Classificacao({ standings, adapter, jogos, compacto, destacarTop
   );
 }
 
-export function Chave({ jogos, adapter, onLancar, somenteLeitura, grande }: { jogos: Jogo[]; adapter: ResultadoAdapter; onLancar?: (id: string, r: Resultado) => void; somenteLeitura?: boolean; grande?: boolean }) {
+export function Chave({ jogos, adapter, onLancar, onSumula, somenteLeitura, grande }: { jogos: Jogo[]; adapter: ResultadoAdapter; onLancar?: (id: string, r: Resultado) => void; onSumula?: (j: Jogo) => void; somenteLeitura?: boolean; grande?: boolean }) {
   const jogosChave = jogos.filter(j => !FASES_LIGA.has(j.fase));
   const rodadas = Array.from(new Set(jogosChave.map(j => j.rodada))).sort((x, y) => x - y);
 
@@ -802,7 +829,7 @@ export function Chave({ jogos, adapter, onLancar, somenteLeitura, grande }: { jo
                       {j.equipeA} avança (bye)
                     </div>
                   )
-                  : <CardJogo key={j.id} jogo={j} adapter={adapter} onLancar={onLancar} compacto={!grande} somenteLeitura={somenteLeitura} grande={grande} />
+                  : <CardJogo key={j.id} jogo={j} adapter={adapter} onLancar={onLancar} onSumula={onSumula} compacto={!grande} somenteLeitura={somenteLeitura} grande={grande} />
               ))}
             </div>
           </div>

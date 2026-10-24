@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../store';
 import { aoMudarFila, listarFila, sincronizarFila } from '../data/filaChamada';
+import { sincronizarSumulas } from '../data/filaSumula';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -35,7 +36,7 @@ function useFilaPendente(online: boolean) {
     atualizar();
     return aoMudarFila(atualizar);
   }, []);
-  useEffect(() => { if (online) sincronizarFila(); }, [online]);
+  useEffect(() => { if (online) { sincronizarFila(); sincronizarSumulas(); } }, [online]);
   return pendentes;
 }
 
