@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Loader2, Trophy, RefreshCw, FileDown } from 'lucide-react';
 import { cn } from '../../AppLayout';
 import {
@@ -17,6 +17,7 @@ import {
 
 import { FinaisCampeoes, FINAIS } from './FinaisCampeoes';
 import { SumulaVirtual } from './SumulaVirtual';
+import { CANAL_SUMULA, urlSumulaJanela, type MsgSumula } from './comunicacaoSumula';
 import { baixarConfrontosWord, type BlocoConfrontoWord } from './exportarConfrontosWord';
 
 const EDICAO = '2026';
@@ -81,6 +82,10 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
   const [jogoSumula, setJogoSumula] = useState<Jogo | null>(null);
   // Súmula virtual (gols/faltas/cartões por toque) só no futsal por enquanto.
   const abrirSumula = modalidade === 'futsal' ? setJogoSumula : undefined;
+  // Mesma súmula, mas numa janela própria (dá para ter uma por jogo, lado a lado).
+  const abrirSumulaJanela = modalidade === 'futsal'
+    ? (j: Jogo) => { window.open(urlSumulaJanela(j.id), `sumula-${j.id}`, 'popup=yes,width=480,height=880'); }
+    : undefined;
 
   const adapter = ADAPTERS[modalidade];
   const regras = REGRAS_PADRAO[modalidade];
@@ -291,6 +296,31 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
     await carregar();
   }
 
+  // A janela da súmula pede o lançamento do placar por aqui, porque é esta tela que
+  // conhece a chave inteira (avanço de vencedor/perdedor, campeão).
+  const lancarRef = useRef(lancarPlacar);
+  lancarRef.current = lancarPlacar;
+  const jogosRef = useRef(jogos);
+  jogosRef.current = jogos;
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return;
+    const canal = new BroadcastChannel(CANAL_SUMULA);
+    canal.onmessage = async (ev: MessageEvent<MsgSumula>) => {
+      const m = ev.data;
+      if (m?.tipo !== 'encerrar') return;
+      const alvo = jogosRef.current.find(j => j.id === m.jogoId);
+      if (!alvo) return; // outro campeonato aberto aqui: não é com esta tela
+      try {
+        if (alvo.jogado) throw new Error('Este jogo já tem placar lançado.');
+        await lancarRef.current(m.jogoId, adapter.criarResultado(m.golsA, m.golsB));
+        canal.postMessage({ tipo: 'ok', reqId: m.reqId } satisfies MsgSumula);
+      } catch (e: any) {
+        canal.postMessage({ tipo: 'erro', reqId: m.reqId, mensagem: String(e?.message || e) } satisfies MsgSumula);
+      }
+    };
+    return () => canal.close();
+  }, [adapter]);
+
   async function iniciarMataMataDosGrupos() {
     if (!campeonato || campeonato.fase !== 'groups') return;
     const grupos = Array.from(new Set(jogos.map(j => j.grupo).filter(Boolean))) as string[];
@@ -410,8 +440,8 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
                   🏆 Iniciar mata-mata (classificados dos grupos)
                 </button>
               )}
-              <ListaJogos titulo={`Pendentes (${jogosPendentes.length})`} jogos={jogosPendentes} adapter={adapter} onLancar={lancarPlacar} onSumula={abrirSumula} mostrarGrupo={temMaisDeUmGrupo} />
-              <ListaJogos titulo={`Realizados (${jogosJogados.length})`} jogos={jogosJogados} adapter={adapter} onLancar={lancarPlacar} onSumula={abrirSumula} mostrarGrupo={temMaisDeUmGrupo} />
+              <ListaJogos titulo={`Pendentes (${jogosPendentes.length})`} jogos={jogosPendentes} adapter={adapter} onLancar={lancarPlacar} onSumula={abrirSumula} onSumulaJanela={abrirSumulaJanela} mostrarGrupo={temMaisDeUmGrupo} />
+              <ListaJogos titulo={`Realizados (${jogosJogados.length})`} jogos={jogosJogados} adapter={adapter} onLancar={lancarPlacar} onSumula={abrirSumula} onSumulaJanela={abrirSumulaJanela} mostrarGrupo={temMaisDeUmGrupo} />
               {jogos.length === 0 && <div className="text-center text-gray-400 text-sm py-8">Nenhum jogo gerado.</div>}
             </div>
           )}
@@ -429,7 +459,7 @@ export function Confrontos({ modalidade, inscricoes }: Props) {
             </div>
           )}
 
-          {aba === 'chave' && <Chave jogos={jogos} adapter={adapter} onLancar={lancarPlacar} onSumula={abrirSumula} />}
+          {aba === 'chave' && <Chave jogos={jogos} adapter={adapter} onLancar={lancarPlacar} onSumula={abrirSumula} onSumulaJanela={abrirSumulaJanela} />}
         </div>
       )}
       {jogoSumula && jogoSumula.equipeA && jogoSumula.equipeB && (
@@ -535,22 +565,22 @@ function SituacaoEquipesDuplo({ equipes, jogos }: { equipes: string[]; jogos: Jo
   );
 }
 
-export function ListaJogos({ titulo, jogos, adapter, onLancar, onSumula, mostrarGrupo, somenteLeitura, grande, colunas = 2 }: {
-  titulo: string; jogos: Jogo[]; adapter: ResultadoAdapter; onLancar?: (id: string, r: Resultado) => void; onSumula?: (j: Jogo) => void; mostrarGrupo?: boolean; somenteLeitura?: boolean; grande?: boolean; colunas?: 1 | 2;
+export function ListaJogos({ titulo, jogos, adapter, onLancar, onSumula, onSumulaJanela, mostrarGrupo, somenteLeitura, grande, colunas = 2 }: {
+  titulo: string; jogos: Jogo[]; adapter: ResultadoAdapter; onLancar?: (id: string, r: Resultado) => void; onSumula?: (j: Jogo) => void; onSumulaJanela?: (j: Jogo) => void; mostrarGrupo?: boolean; somenteLeitura?: boolean; grande?: boolean; colunas?: 1 | 2;
 }) {
   if (jogos.length === 0) return null;
   return (
     <div>
       <div className={cn('font-bold text-gray-500 uppercase tracking-wider mb-2 px-1', grande ? 'text-sm' : 'text-sm sm:text-xs')}>{titulo}</div>
       <div className={cn('grid grid-cols-1 gap-3', colunas === 2 && 'sm:grid-cols-2')}>
-        {jogos.map(j => <CardJogo key={j.id} jogo={j} adapter={adapter} onLancar={onLancar} onSumula={onSumula} mostrarGrupo={mostrarGrupo} somenteLeitura={somenteLeitura} grande={grande} />)}
+        {jogos.map(j => <CardJogo key={j.id} jogo={j} adapter={adapter} onLancar={onLancar} onSumula={onSumula} onSumulaJanela={onSumulaJanela} mostrarGrupo={mostrarGrupo} somenteLeitura={somenteLeitura} grande={grande} />)}
       </div>
     </div>
   );
 }
 
-export function CardJogo({ jogo, adapter, onLancar, onSumula, compacto, mostrarGrupo = true, somenteLeitura = false, grande = false }: {
-  jogo: Jogo; adapter: ResultadoAdapter; onLancar?: (id: string, r: Resultado) => void; onSumula?: (j: Jogo) => void; compacto?: boolean; mostrarGrupo?: boolean; somenteLeitura?: boolean; grande?: boolean;
+export function CardJogo({ jogo, adapter, onLancar, onSumula, onSumulaJanela, compacto, mostrarGrupo = true, somenteLeitura = false, grande = false }: {
+  jogo: Jogo; adapter: ResultadoAdapter; onLancar?: (id: string, r: Resultado) => void; onSumula?: (j: Jogo) => void; onSumulaJanela?: (j: Jogo) => void; compacto?: boolean; mostrarGrupo?: boolean; somenteLeitura?: boolean; grande?: boolean;
 }) {
   const [editando, setEditando] = useState(false);
   const [a, setA] = useState(jogo.resultado ? String(adapter.valorA(jogo.resultado)) : '');
@@ -659,12 +689,23 @@ export function CardJogo({ jogo, adapter, onLancar, onSumula, compacto, mostrarG
       )}
 
       {!somenteLeitura && onSumula && !ehVencedorOnly && jogo.equipeA && jogo.equipeB && (
-        <button
-          onClick={() => onSumula(jogo)}
-          className={cn('w-full mt-2 font-bold rounded-lg border', jogo.jogado ? 'py-1.5 text-xs text-gray-500 border-gray-200 hover:text-primary' : 'py-3 sm:py-2 text-base sm:text-xs text-primary border-primary/40 bg-primary/5 hover:bg-primary/10')}
-        >
-          📋 {jogo.jogado ? 'Ver súmula' : 'Súmula virtual (anotar o jogo)'}
-        </button>
+        <div className="flex gap-1.5 mt-2">
+          <button
+            onClick={() => onSumula(jogo)}
+            className={cn('flex-1 font-bold rounded-lg border', jogo.jogado ? 'py-1.5 text-xs text-gray-500 border-gray-200 hover:text-primary' : 'py-3 sm:py-2 text-base sm:text-xs text-primary border-primary/40 bg-primary/5 hover:bg-primary/10')}
+          >
+            📋 {jogo.jogado ? 'Ver súmula' : 'Súmula virtual (anotar o jogo)'}
+          </button>
+          {onSumulaJanela && (
+            <button
+              onClick={() => onSumulaJanela(jogo)}
+              title="Abrir a súmula numa janela própria"
+              className={cn('font-bold rounded-lg border px-3 text-primary border-primary/40 bg-primary/5 hover:bg-primary/10', jogo.jogado ? 'py-1.5 text-xs' : 'py-3 sm:py-2 text-base sm:text-xs')}
+            >
+              ↗ Janela
+            </button>
+          )}
+        </div>
       )}
 
       {!somenteLeitura && editando && jogo.equipeA && jogo.equipeB && (
@@ -805,7 +846,7 @@ export function Classificacao({ standings, adapter, jogos, compacto, destacarTop
   );
 }
 
-export function Chave({ jogos, adapter, onLancar, onSumula, somenteLeitura, grande }: { jogos: Jogo[]; adapter: ResultadoAdapter; onLancar?: (id: string, r: Resultado) => void; onSumula?: (j: Jogo) => void; somenteLeitura?: boolean; grande?: boolean }) {
+export function Chave({ jogos, adapter, onLancar, onSumula, onSumulaJanela, somenteLeitura, grande }: { jogos: Jogo[]; adapter: ResultadoAdapter; onLancar?: (id: string, r: Resultado) => void; onSumula?: (j: Jogo) => void; onSumulaJanela?: (j: Jogo) => void; somenteLeitura?: boolean; grande?: boolean }) {
   const jogosChave = jogos.filter(j => !FASES_LIGA.has(j.fase));
   const rodadas = Array.from(new Set(jogosChave.map(j => j.rodada))).sort((x, y) => x - y);
 
@@ -829,7 +870,7 @@ export function Chave({ jogos, adapter, onLancar, onSumula, somenteLeitura, gran
                       {j.equipeA} avança (bye)
                     </div>
                   )
-                  : <CardJogo key={j.id} jogo={j} adapter={adapter} onLancar={onLancar} onSumula={onSumula} compacto={!grande} somenteLeitura={somenteLeitura} grande={grande} />
+                  : <CardJogo key={j.id} jogo={j} adapter={adapter} onLancar={onLancar} onSumula={onSumula} onSumulaJanela={onSumulaJanela} compacto={!grande} somenteLeitura={somenteLeitura} grande={grande} />
               ))}
             </div>
           </div>

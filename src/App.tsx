@@ -47,6 +47,7 @@ const GeradorCharges = lazy(() => import('./ui/pages/charges/GeradorCharges').th
 const ChargesHistorico = lazy(() => import('./ui/pages/charges/ChargesHistorico').then(m => ({ default: m.ChargesHistorico })));
 const InterclassesIOP = lazy(() => import('./ui/pages/InterclassesIOP'));
 const InscricaoAlunosPublico = lazy(() => import('./ui/pages/InscricaoAlunosPublico').then(m => ({ default: m.InscricaoAlunosPublico })));
+const SumulaJanela = lazy(() => import('./ui/pages/interclasses/SumulaJanela').then(m => ({ default: m.SumulaJanela })));
 const ConfrontosPublico = lazy(() => import('./ui/pages/interclasses/ConfrontosPublico').then(m => ({ default: m.ConfrontosPublico })));
 const InscricaoTime = lazy(() => import('./ui/pages/InscricaoTime').then(m => ({ default: m.InscricaoTime })));
 const TimesFutsal = lazy(() => import('./ui/pages/TimesFutsal').then(m => ({ default: m.TimesFutsal })));
@@ -121,6 +122,7 @@ export default function App() {
           <Route path="/alunos" element={<CentralAluno />} />
           <Route path="/rendimento" element={<RendimentoBimestre />} />
           <Route path="/torneio" element={<InterclassesIOP />} />
+          <Route path="/interclasses/sumula/:jogoId" element={<SumulaJanela />} />
           <Route path="/futsal" element={<TimesFutsal />} />
           <Route path="/rodizio" element={<RodizioFutsal />} />
 
