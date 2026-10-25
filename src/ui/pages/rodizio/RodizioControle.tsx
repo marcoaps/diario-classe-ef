@@ -2,17 +2,10 @@ import React, { useMemo, useState } from 'react';
 import { Crown, Flag, Loader2, CheckCircle2, Users, PartyPopper, ClipboardList } from 'lucide-react';
 import type { RodizioSessaoCompleta, RodizioJogador } from '../../../data/supabase';
 import type { AlunoSupabase } from '../../../domain/useAlunosPresentesHoje';
-import { calcularParticipacaoAlunos, todosTimesOriginaisJaJogaram, type TimeRodizio, type JogoRodizio, type EstatisticasTime } from '../../../domain/rodizioFutsalLogica';
+import { calcularParticipacaoAlunos, todosTimesOriginaisJaJogaram, categoriaDaTurma, type TimeRodizio, type JogoRodizio, type EstatisticasTime } from '../../../domain/rodizioFutsalLogica';
 import { TabelaJogos, TabelaEstatisticas, TabelaParticipacao, NomeTime } from './RodizioTabelas';
 import { RodizioAdicionarTime } from './RodizioAdicionarTime';
 import { RodizioSumula } from './RodizioSumula';
-
-// "8A", "7B+7C" etc → "7º/8º ano" (só pra calibrar a duração do período da
-// súmula, ver domain/sumulaFutsal.ts#minutosPorTempo; não precisa ser exato).
-function categoriaDaTurma(turmaId: string): string {
-  const series = Array.from(new Set(turmaId.match(/\d/g) ?? [])).sort();
-  return series.length > 0 ? `${series.join('º/')}º ano` : turmaId;
-}
 
 interface Props {
   sessaoCompleta: RodizioSessaoCompleta;

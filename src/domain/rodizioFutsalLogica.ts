@@ -5,6 +5,13 @@ export const LABEL_MODO_RODIZIO: Record<string, string> = {
   rodizio_equilibrado: 'Rodízio Equilibrado',
 };
 
+// "8A", "7B+7C" etc → "7º/8º ano" (só pra calibrar a duração do período da
+// súmula, ver domain/sumulaFutsal.ts#minutosPorTempo; não precisa ser exato).
+export function categoriaDaTurma(turmaId: string): string {
+  const series = Array.from(new Set(turmaId.match(/\d/g) ?? [])).sort();
+  return series.length > 0 ? `${series.join('º/')}º ano` : turmaId;
+}
+
 // Lógica pura do modo "Rei da Quadra" — sem depender de Supabase/React, para
 // ficar fácil de verificar e de estender para os outros modos (fila_continua,
 // ordem_fixa, rodizio_equilibrado) mais pra frente.

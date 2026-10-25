@@ -1,40 +1,31 @@
 import React, { useMemo, useState } from 'react';
-import { Loader2, Crown, FlaskConical, Trash2 } from 'lucide-react';
+import { Crown, FlaskConical, Trash2 } from 'lucide-react';
 import { cn } from '../../AppLayout';
 import { SeletorTurmasGenero } from '../../components/SeletorTurmasGenero';
 import { useAlunosPresentesHoje } from '../../../domain/useAlunosPresentesHoje';
-import { useRodizioFutsal, type NovoTimeRodizio } from '../../../domain/useRodizioFutsal';
-import { useRodizioFutsalTeste } from '../../../domain/useRodizioFutsalTeste';
 import { gerarAlunosTeste } from '../../../domain/alunosTeste';
-import { RodizioSetup } from './RodizioSetup';
-import { RodizioControle } from './RodizioControle';
 import { RodizioHistorico } from './RodizioHistorico';
 import { RodizioCards } from './RodizioCards';
 
-type Aba = 'em_aula' | 'cards' | 'historico';
+type Aba = 'em_aula' | 'historico';
 
 export function RodizioFutsal() {
   const [aba, setAba] = useState<Aba>('em_aula');
   const [turmasSelecionadas, setTurmasSelecionadas] = useState<Set<string>>(new Set());
   const [genero, setGenero] = useState<'M' | 'F' | null>('M');
-  const [criandoSessao, setCriandoSessao] = useState(false);
 
-  // Chamada de teste: alunos fictícios + rodízio 100% local, exclusivamente
-  // pra testar times/Cerca/confrontos sem precisar de uma chamada oficial
-  // feita e sem gravar nada no Supabase (ver useRodizioFutsalTeste).
+  // Chamada de teste: alunos fictícios, 100% local — permite testar os cards
+  // (capitães, contador de vezes, confrontos) sem precisar de uma chamada
+  // oficial feita e sem afetar nenhum registro oficial.
   const [modoTeste, setModoTeste] = useState(false);
   const [alunosTeste, setAlunosTeste] = useState(() => gerarAlunosTeste());
-  const rodizioTeste = useRodizioFutsalTeste();
 
   const ativarModoTeste = () => {
     setAlunosTeste(gerarAlunosTeste());
     setModoTeste(true);
   };
 
-  const apagarChamadaTeste = () => {
-    rodizioTeste.limparChamadaTeste();
-    setModoTeste(false);
-  };
+  const apagarChamadaTeste = () => setModoTeste(false);
 
   const turmasArray = useMemo(() => Array.from(turmasSelecionadas).sort(), [turmasSelecionadas]);
   const turmaKey = turmasArray.join('+');
@@ -57,11 +48,8 @@ export function RodizioFutsal() {
   };
 
   const alunosReais = useAlunosPresentesHoje(turmasArray, genero);
-  const rodizioReal = useRodizioFutsal(turmaKey);
 
-  const alunos = modoTeste ? alunosTeste : alunosReais.alunos;
-
-  // Aba "Cards": todos os alunos da(s) turma(s), sem exigir a chamada; quem já está presente
+  // Todos os alunos da(s) turma(s), sem exigir a chamada; quem já está presente
   // só serve para o filtro opcional "só presentes". Guardado por turma + gênero + dia.
   const alunosDosCards = modoTeste ? alunosTeste : alunosReais.alunosComGenero;
   const presentesIds = useMemo(
@@ -70,18 +58,6 @@ export function RodizioFutsal() {
   );
   const hojeLocal = new Date().toLocaleDateString('sv-SE');
   const chaveCards = `${modoTeste ? 'TESTE' : turmaKey}:${genero ?? 'todos'}:${hojeLocal}`;
-  const carregandoAlunos = modoTeste ? false : alunosReais.loading;
-  const chamadaCarregada = modoTeste ? true : alunosReais.chamadaCarregada;
-  const rodizio = modoTeste ? rodizioTeste : rodizioReal;
-
-  const handleIniciar = async (modalidade: string, limitePermanencia: number | null, times: NovoTimeRodizio[]) => {
-    setCriandoSessao(true);
-    try {
-      await rodizio.criarSessao(modalidade, limitePermanencia, times);
-    } finally {
-      setCriandoSessao(false);
-    }
-  };
 
   return (
     <div className="flex flex-col gap-4 pb-32 font-sans">
@@ -92,7 +68,7 @@ export function RodizioFutsal() {
       </div>
 
       <div className="flex gap-1.5 bg-gray-100 p-1 rounded-2xl">
-        {([['em_aula', 'Em Aula'], ['cards', 'Cards'], ['historico', 'Histórico']] as [Aba, string][]).map(([valor, label]) => (
+        {([['em_aula', 'Em Aula'], ['historico', 'Histórico']] as [Aba, string][]).map(([valor, label]) => (
           <button key={valor} onClick={() => setAba(valor)}
             className={cn("flex-1 py-2 rounded-xl text-sm font-bold transition-all",
               aba === valor ? "bg-white text-primary shadow-sm" : "text-gray-500")}>
@@ -140,48 +116,12 @@ export function RodizioFutsal() {
 
           {!modoTeste && turmasArray.length === 0 ? (
             <div className="text-center text-gray-500 py-10 font-medium">Selecione ao menos uma turma para começar.</div>
-          ) : aba === 'cards' ? (
+          ) : (
             <RodizioCards
               chave={chaveCards}
               alunos={alunosDosCards}
               presentesIds={presentesIds}
               loading={modoTeste ? false : alunosReais.loading}
-            />
-          ) : rodizio.loading ? (
-            <div className="flex gap-2 items-center justify-center p-8 text-gray-500">
-              <Loader2 className="w-5 h-5 animate-spin" />
-              <span>Verificando rodízio em andamento...</span>
-            </div>
-          ) : rodizio.erroCarregamento ? (
-            <div className="flex flex-col items-center gap-3 text-center bg-error-container/20 border border-error/20 rounded-2xl p-6">
-              <span className="text-sm font-semibold text-error">{rodizio.erroCarregamento}</span>
-              <button
-                onClick={() => rodizio.recarregar()}
-                className="px-4 py-2 rounded-xl bg-white border border-error/30 text-error text-sm font-bold hover:bg-error-container/30 transition-colors"
-              >
-                Tentar novamente
-              </button>
-            </div>
-          ) : rodizio.sessaoCompleta ? (
-            <RodizioControle
-              sessaoCompleta={rodizio.sessaoCompleta}
-              times={rodizio.times}
-              jogos={rodizio.jogos}
-              jogadores={rodizio.jogadores}
-              filaAtual={rodizio.filaAtual}
-              estatisticas={rodizio.estatisticas}
-              alunos={alunos}
-              onRegistrarResultado={rodizio.registrarResultado}
-              onAdicionarTime={rodizio.adicionarTime}
-              onFinalizar={rodizio.finalizarSessao}
-            />
-          ) : (
-            <RodizioSetup
-              alunos={alunos}
-              loading={carregandoAlunos}
-              chamadaCarregada={chamadaCarregada}
-              criando={criandoSessao}
-              onIniciar={handleIniciar}
             />
           )}
         </>

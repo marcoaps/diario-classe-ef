@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Check, Crown, Flag, Loader2, Minus, Plus, RotateCcw, Trash2, Undo2, Users, X } from 'lucide-react';
+import { Check, ClipboardList, Crown, Flag, Loader2, Minus, Plus, RotateCcw, Trash2, Undo2, Users, X } from 'lucide-react';
 import { cn } from '../../AppLayout';
 import type { AlunoSupabase } from '../../../domain/useAlunosPresentesHoje';
 import { useCardsRodizio } from '../../../domain/useCardsRodizio';
+import { categoriaDaTurma } from '../../../domain/rodizioFutsalLogica';
 import { campeaoAtual, filaDeEspera, mediaDoTime, nomeDoCapitao, normalizarPlacar, pedePenaltis, proximosConfrontos, resultadoDoJogo, resumoEquilibrio, resumoJogos, totalDoTime, type Confronto, type JogadorCard, type JogoRealizado, type RegraConfronto, type TimeCard } from '../../../domain/rodizioCardsLogica';
+import { RodizioSumulaCards } from './RodizioSumulaCards';
 
 interface Props {
   /** Onde guardar (turmas + gênero + dia). Trocou a chave, troca o conjunto de cards. */
@@ -111,6 +113,7 @@ interface PropsPainelConfrontos {
   realizados: JogoRealizado[];
   onRegistrar: (aId: string, bId: string, golsA: string, golsB: string, penaltisVencedorId?: string | null) => void;
   onEditarPlacar: (numero: number, golsA: string, golsB: string, penaltisVencedorId?: string | null) => void;
+  onAbrirSumula: () => void;
   /** Com 3 times (Vencedor continua) o empate é decidido nos pênaltis. */
   penaltisNoEmpate: boolean;
   onTrocar: (aId: string, bId: string) => void;
@@ -241,7 +244,7 @@ const ItemJogoRealizado: React.FC<{
 // Jogo atual, próximos jogos e jogos já feitos. O app sugere sempre os dois times que jogaram
 // MENOS (sem repetir confronto nem colocar quem acabou de jogar); o professor pode trocar à mão.
 // O placar é opcional: em branco, o jogo é registrado sem resultado.
-const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, realizados, onRegistrar, onEditarPlacar, penaltisNoEmpate, onTrocar, onAutomatico, regra, onRegra, fila, campeao }) => {
+const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, realizados, onRegistrar, onEditarPlacar, onAbrirSumula, penaltisNoEmpate, onTrocar, onAutomatico, regra, onRegra, fila, campeao }) => {
   const [trocando, setTrocando] = useState(false);
   const [golsA, setGolsA] = useState('');
   const [golsB, setGolsB] = useState('');
@@ -379,11 +382,16 @@ const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, re
         {esperando.length > 0 && <> · Esperando: {esperando.map(t => t.nome).join(', ')}</>}
       </div>
 
+      <button type="button" onClick={onAbrirSumula}
+        className="h-11 rounded-xl bg-primary text-white font-bold text-sm active:scale-95 flex items-center justify-center gap-2">
+        <ClipboardList className="w-4 h-4" /> Abrir súmula do jogo
+      </button>
+
       <div className="flex flex-wrap gap-2">
         <button type="button" data-testid="registrar-jogo" disabled={precisaPenaltis && !penaltis}
           onClick={() => onRegistrar(atual.aId, atual.bId, golsA, golsB, empatou && penaltis ? penaltis : null)}
-          className="flex-1 min-w-[180px] h-11 rounded-xl bg-primary text-white font-bold text-sm active:scale-95 disabled:opacity-40 flex items-center justify-center gap-2">
-          <Check className="w-4 h-4" /> Registrar jogo
+          className="flex-1 min-w-[180px] h-11 rounded-xl bg-white border border-gray-200 text-on-surface font-bold text-sm active:scale-95 disabled:opacity-40 flex items-center justify-center gap-2">
+          <Check className="w-4 h-4" /> Registrar jogo (placar na mão)
         </button>
         <button type="button" onClick={() => setTrocando(v => !v)}
           className="h-11 px-3 rounded-xl bg-white border border-gray-200 text-xs font-bold text-gray-600 active:scale-95">
@@ -391,7 +399,7 @@ const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, re
         </button>
       </div>
       <p className="text-[11px] text-gray-400 -mt-1">
-        "Registrar jogo" soma 1 jogo para os dois times e 1 vez para todos os jogadores deles — não precisa apertar "Time jogou" nos cards.
+        A súmula soma 1 jogo e 1 vez pra cada time sozinha ao encerrar; "Registrar jogo" faz o mesmo com o placar digitado acima — nenhum dos dois precisa de "Time jogou" nos cards.
       </p>
 
       {trocando && (
@@ -466,6 +474,7 @@ const PainelConfrontos: React.FC<PropsPainelConfrontos> = ({ times, proximos, re
 export function RodizioCards({ chave, alunos, presentesIds, loading }: Props) {
   const cards = useCardsRodizio(chave);
   const [soPresentes, setSoPresentes] = useState(false);
+  const [sumulaAberta, setSumulaAberta] = useState(false);
   const temChamada = !!presentesIds && presentesIds.size > 0;
 
   const lista = useMemo(
@@ -480,6 +489,18 @@ export function RodizioCards({ chave, alunos, presentesIds, loading }: Props) {
   const fila = useMemo(() => (proximos[0] ? filaDeEspera(cards.estado, proximos[0]) : []), [cards.estado, proximos]);
   const campeao = useMemo(() => campeaoAtual(cards.estado), [cards.estado]);
   const modoVencedor = cards.regra.modo === 'vencedor-fica';
+
+  const atual = proximos[0];
+  const timeAtualA = atual ? cards.times.find(t => t.id === atual.aId) : undefined;
+  const timeAtualB = atual ? cards.times.find(t => t.id === atual.bId) : undefined;
+  const jogoIdAtual = atual ? `${chave}:${atual.numero}` : '';
+  const categoria = useMemo(() => categoriaDaTurma(Array.from(new Set(alunos.map(a => a.turma_id))).join('+')), [alunos]);
+
+  const handleEncerrarSumula = async (golsA: number, golsB: number) => {
+    if (!atual) return;
+    cards.registrarJogo(atual.aId, atual.bId, golsA, golsB);
+    setSumulaAberta(false);
+  };
 
   const situacaoDe = (alunoId: string): Situacao =>
     resumo.prioridade.has(alunoId) ? 'prioridade' : resumo.adiantados.has(alunoId) ? 'adiantado' : 'normal';
@@ -555,6 +576,7 @@ export function RodizioCards({ chave, alunos, presentesIds, loading }: Props) {
           realizados={cards.jogosRealizados}
           onRegistrar={cards.registrarJogo}
           onEditarPlacar={cards.editarPlacar}
+          onAbrirSumula={() => setSumulaAberta(true)}
           penaltisNoEmpate={pedePenaltis(cards.estado)}
           onTrocar={cards.definirConfrontoManual}
           onAutomatico={cards.limparConfrontoManual}
@@ -707,6 +729,17 @@ export function RodizioCards({ chave, alunos, presentesIds, loading }: Props) {
             </div>
           )}
         </>
+      )}
+
+      {sumulaAberta && timeAtualA && timeAtualB && (
+        <RodizioSumulaCards
+          jogoId={jogoIdAtual}
+          categoria={categoria}
+          timeA={timeAtualA}
+          timeB={timeAtualB}
+          onEncerrar={handleEncerrarSumula}
+          onFechar={() => setSumulaAberta(false)}
+        />
       )}
     </div>
   );
