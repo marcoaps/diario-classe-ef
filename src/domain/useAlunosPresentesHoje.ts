@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../data/supabase';
+import { buscarChavesTransferidos, chaveTurmaNomeSemAcento } from './situacaoAluno';
 
 export interface AlunoSupabase {
   id: string;
@@ -30,16 +31,22 @@ export function useAlunosPresentesHoje(turmasArray: string[], genero: 'M' | 'F' 
     let mounted = true;
     setLoading(true);
     setChamadaCarregada(false);
-    supabase
-      .from('alunos')
-      .select('id, nome, turma_id, numero_chamada, sexo')
-      .in('turma_id', turmasArray)
-      .order('turma_id', { ascending: true })
-      .order('numero_chamada', { ascending: true, nullsFirst: false })
-      .then(async ({ data, error }) => {
+    Promise.all([
+      supabase
+        .from('alunos')
+        .select('id, nome, turma_id, numero_chamada, sexo')
+        .in('turma_id', turmasArray)
+        .order('turma_id', { ascending: true })
+        .order('numero_chamada', { ascending: true, nullsFirst: false }),
+      // Transferidos/remanejados (situação na tabela notas) não entram na lista
+      // — mesma regra da inscrição do Interclasses (ver domain/situacaoAluno.ts).
+      buscarChavesTransferidos(turmasArray).catch(() => new Set<string>()),
+    ])
+      .then(async ([{ data, error }, transferidos]) => {
         if (!mounted) return;
         if (error) console.error('Erro ao buscar alunos:', error);
-        const lista = (data || []) as AlunoSupabase[];
+        const lista = ((data || []) as AlunoSupabase[])
+          .filter(a => !transferidos.has(chaveTurmaNomeSemAcento(a.turma_id, a.nome)));
         setAlunosBrutos(lista);
 
         const hoje = new Date().toISOString().slice(0, 10);
