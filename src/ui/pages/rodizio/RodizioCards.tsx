@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ClipboardList, Crown, Flag, Loader2, Minus, Plus, RotateCcw, Trash2, Undo2, Users, X } from 'lucide-react';
 import { cn } from '../../AppLayout';
 import type { AlunoSupabase } from '../../../domain/useAlunosPresentesHoje';
@@ -103,6 +103,72 @@ const LinhaJogador: React.FC<PropsLinhaJogador> = ({ jogador, ehCapitao, situaca
         )}
       </div>
       <ContadorVezes jogador={jogador} onDefinir={onDefinir} onAjustar={onAjustar} />
+    </div>
+  );
+};
+
+interface PropsAdicionarJogadores {
+  /** Controlado pelo pai: qual time está com a lista aberta agora (null = nenhum). */
+  aberto: boolean;
+  disponiveis: AlunoSupabase[];
+  onAbrir: () => void;
+  onFechar: () => void;
+  onAdicionar: (alunos: { id: string; nome: string }[]) => void;
+}
+
+// Marca vários alunos de uma vez e adiciona todos no time com um toque só — pensado pra logo
+// depois de escolher o capitão: "e o resto do time?". Fica aberto até confirmar ou cancelar.
+const AdicionarJogadores: React.FC<PropsAdicionarJogadores> = ({ aberto, disponiveis, onAbrir, onFechar, onAdicionar }) => {
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+
+  useEffect(() => { if (!aberto) setSelecionados(new Set()); }, [aberto]);
+
+  if (!aberto) {
+    return (
+      <button type="button" onClick={onAbrir}
+        className="w-full bg-gray-50 border border-dashed border-gray-300 rounded-xl px-3 py-1.5 text-xs text-gray-500 outline-none focus:border-primary">
+        + Adicionar jogadores
+      </button>
+    );
+  }
+
+  const toggle = (id: string) => setSelecionados(prev => {
+    const novo = new Set(prev);
+    if (novo.has(id)) novo.delete(id); else novo.add(id);
+    return novo;
+  });
+
+  const confirmar = () => {
+    const alunos = disponiveis.filter(a => selecionados.has(a.id)).map(a => ({ id: a.id, nome: a.nome }));
+    if (alunos.length > 0) onAdicionar(alunos);
+    onFechar();
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5 bg-gray-50 border border-dashed border-gray-300 rounded-xl p-2.5">
+      <div className="text-[11px] font-semibold text-gray-500">Marque os jogadores deste time:</div>
+      {disponiveis.length === 0 ? (
+        <p className="text-[11px] text-gray-400 py-1">Nenhum aluno disponível — todos já estão em algum time.</p>
+      ) : (
+        <div className="flex flex-col gap-1 max-h-52 overflow-y-auto pr-1">
+          {disponiveis.map(a => (
+            <label key={a.id} className="flex items-center gap-2 text-xs text-gray-700 py-0.5">
+              <input type="checkbox" checked={selecionados.has(a.id)} onChange={() => toggle(a.id)} className="accent-primary shrink-0" />
+              <span className="truncate">{rotuloAluno(a)}</span>
+            </label>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2 pt-0.5">
+        <button type="button" onClick={confirmar} disabled={selecionados.size === 0}
+          className="flex-1 h-9 rounded-lg bg-primary text-white text-xs font-bold active:scale-95 disabled:opacity-40">
+          Adicionar {selecionados.size > 0 ? `${selecionados.size} jogador${selecionados.size === 1 ? '' : 'es'}` : 'jogadores'}
+        </button>
+        <button type="button" onClick={onFechar}
+          className="h-9 px-3 rounded-lg bg-white border border-gray-200 text-xs font-bold text-gray-600 active:scale-95">
+          Cancelar
+        </button>
+      </div>
     </div>
   );
 };
@@ -475,7 +541,25 @@ export function RodizioCards({ chave, alunos, presentesIds, loading }: Props) {
   const cards = useCardsRodizio(chave);
   const [soPresentes, setSoPresentes] = useState(false);
   const [sumulaAberta, setSumulaAberta] = useState(false);
+  const [timeAbertoParaJogadores, setTimeAbertoParaJogadores] = useState<string | null>(null);
   const temChamada = !!presentesIds && presentesIds.size > 0;
+
+  // Time novo (capitão recém-escolhido): abre direto a lista de jogadores,
+  // pra fluir "escolheu o capitão → agora o resto do time" sem precisar achar
+  // o botão lá embaixo do card. Começa com os ids já carregados (do dia),
+  // pra não abrir sozinho um card que já existia antes de abrir a tela.
+  const idsDosTimesRef = useRef<Set<string>>(new Set(cards.times.map(t => t.id)));
+  // Trocou a chave (outra turma/gênero/dia): os cards trocam junto — não é um "time novo".
+  useEffect(() => {
+    idsDosTimesRef.current = new Set(cards.times.map(t => t.id));
+    setTimeAbertoParaJogadores(null);
+  }, [chave]);
+  useEffect(() => {
+    const idsAtuais = new Set(cards.times.map(t => t.id));
+    const novo = cards.times.find(t => !idsDosTimesRef.current.has(t.id));
+    idsDosTimesRef.current = idsAtuais;
+    if (novo) setTimeAbertoParaJogadores(novo.id);
+  }, [cards.times]);
 
   const lista = useMemo(
     () => (soPresentes && presentesIds ? alunos.filter(a => presentesIds.has(a.id)) : alunos),
@@ -706,18 +790,13 @@ export function RodizioCards({ chave, alunos, presentesIds, loading }: Props) {
                   ))}
                 </div>
 
-                <select
-                  value=""
-                  onChange={e => {
-                    const aluno = alunos.find(a => a.id === e.target.value);
-                    if (aluno) cards.adicionarJogador(time.id, { id: aluno.id, nome: aluno.nome });
-                  }}
-                  aria-label={`Adicionar jogador ao ${time.nome}`}
-                  className="w-full bg-gray-50 border border-dashed border-gray-300 rounded-xl px-3 py-1.5 text-xs text-gray-500 outline-none focus:border-primary"
-                >
-                  <option value="" disabled>+ Adicionar jogador</option>
-                  {disponiveis.map(a => <option key={a.id} value={a.id}>{rotuloAluno(a)}</option>)}
-                </select>
+                <AdicionarJogadores
+                  aberto={timeAbertoParaJogadores === time.id}
+                  disponiveis={disponiveis}
+                  onAbrir={() => setTimeAbertoParaJogadores(time.id)}
+                  onFechar={() => setTimeAbertoParaJogadores(prev => (prev === time.id ? null : prev))}
+                  onAdicionar={alunosEscolhidos => cards.adicionarJogadores(time.id, alunosEscolhidos)}
+                />
               </div>
             ))}
           </div>

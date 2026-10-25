@@ -143,6 +143,17 @@ export function adicionarJogador(times: TimeCard[], timeId: string, aluno: { id:
   return times.map(t => (t.id !== timeId ? t : { ...t, jogadores: [...t.jogadores, { alunoId: aluno.id, nome: aluno.nome, vezes: 0 }] }));
 }
 
+/** Monta o time de uma vez (ex.: capitão + 5 jogadores), num só passo de "desfazer". */
+export function adicionarJogadores(times: TimeCard[], timeId: string, alunos: { id: string; nome: string }[]): TimeCard[] {
+  const jaEstao = new Set(todosOsJogadores(times).map(j => j.alunoId));
+  const novos = alunos.filter(a => !jaEstao.has(a.id));
+  if (novos.length === 0) return times;
+  return times.map(t => (t.id !== timeId ? t : {
+    ...t,
+    jogadores: [...t.jogadores, ...novos.map(a => ({ alunoId: a.id, nome: a.nome, vezes: 0 }))],
+  }));
+}
+
 export function removerJogador(times: TimeCard[], timeId: string, alunoId: string): TimeCard[] {
   return times.map(t => (t.id !== timeId || t.capitaoAlunoId === alunoId ? t : { ...t, jogadores: t.jogadores.filter(j => j.alunoId !== alunoId) }));
 }

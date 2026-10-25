@@ -79,6 +79,7 @@ export function useCardsRodizio(chave: string) {
     // Renomear a cada tecla não entra no "desfazer".
     renomearTime: (timeId: string, nome: string) => aplicar(t => t.map(x => (x.id === timeId ? { ...x, nome } : x)), false),
     adicionarJogador: (timeId: string, aluno: { id: string; nome: string }) => aplicar(t => L.adicionarJogador(t, timeId, aluno)),
+    adicionarJogadores: (timeId: string, alunos: { id: string; nome: string }[]) => aplicar(t => L.adicionarJogadores(t, timeId, alunos)),
     removerJogador: (timeId: string, alunoId: string) => aplicar(t => L.removerJogador(t, timeId, alunoId)),
     definirVezes: (timeId: string, alunoId: string, vezes: number) => aplicar(t => L.definirVezes(t, timeId, alunoId, vezes)),
     ajustarVezes: (timeId: string, alunoId: string, delta: number) => aplicar(t => L.ajustarVezes(t, timeId, alunoId, delta)),
