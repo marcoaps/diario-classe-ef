@@ -41,6 +41,7 @@ export function RodizioSumula({ jogoId, categoria, equipeA, equipeB, jogadores, 
         onEncerrar={onEncerrar}
         onFechar={onFechar}
         armazenamento={armazenamentoRodizio}
+        duracaoMinutos={4}
       />
     </ErroSumula>
   );

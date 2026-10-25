@@ -39,6 +39,7 @@ export function RodizioSumulaCards({ jogoId, categoria, timeA, timeB, onEncerrar
         onEncerrar={onEncerrar}
         onFechar={onFechar}
         armazenamento={armazenamentoCards}
+        duracaoMinutos={4}
       />
     </ErroSumula>
   );

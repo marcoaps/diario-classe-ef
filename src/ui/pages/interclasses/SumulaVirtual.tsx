@@ -45,6 +45,9 @@ interface Props {
   onFechar: () => void;
   // Por padrão, o armazenamento do Interclasses — o Rodízio injeta o seu.
   armazenamento?: ArmazenamentoSumula;
+  // Por padrão, a duração vem de `categoria` (ver minutosPorTempo) — pensada
+  // pro Interclasses. O Rodízio/Cards, numa aula normal, passa um valor fixo.
+  duracaoMinutos?: number;
 }
 
 const ACOES: { tipo: TipoEvento; rotulo: string; emoji: string; cor: string }[] = [
@@ -55,8 +58,9 @@ const ACOES: { tipo: TipoEvento; rotulo: string; emoji: string; cor: string }[] 
   { tipo: 'gol_contra', rotulo: 'Gol contra', emoji: '↩️', cor: 'bg-gray-200 text-gray-800' },
 ];
 
-export function SumulaVirtual({ jogoId, equipeA, equipeB, fase, categoria, eliminatorio, jogado, inscricoes, onEncerrar, onFechar, armazenamento = armazenamentoInterclasses }: Props) {
+export function SumulaVirtual({ jogoId, equipeA, equipeB, fase, categoria, eliminatorio, jogado, inscricoes, onEncerrar, onFechar, armazenamento = armazenamentoInterclasses, duracaoMinutos }: Props) {
   const arm = armazenamento;
+  const duracao = duracaoMinutos ?? minutosPorTempo(categoria);
   const [s, setS] = useState<Sumula | null>(null);
   const [, forcar] = useState(0);
   const [alvo, setAlvo] = useState<{ lado: Lado; camisa: number; nome: string } | null>(null);
@@ -122,7 +126,7 @@ export function SumulaVirtual({ jogoId, equipeA, equipeB, fase, categoria, elimi
   const p = placar(s.eventos);
   const periodo = s.relogio.periodo;
   const seg = segundosDoRelogio(s.relogio);
-  const limiteSeg = minutosPorTempo(categoria) * 60;
+  const limiteSeg = duracao * 60;
   const rodando = !!s.relogio.iniciadoEm;
   const nomePeriodo = PERIODOS.find(x => x.id === periodo)!.rotulo;
 
@@ -266,7 +270,7 @@ export function SumulaVirtual({ jogoId, equipeA, equipeB, fase, categoria, elimi
             </>
           )}
         </div>
-        <div className="text-center text-[10px] text-gray-400 mt-0.5">{nomePeriodo} · previsto {minutosPorTempo(categoria)} min</div>
+        <div className="text-center text-[10px] text-gray-400 mt-0.5">{nomePeriodo} · previsto {duracao} min</div>
         {aviso && <div className="mt-1.5 rounded-lg bg-primary text-white text-xs font-bold px-3 py-2 text-center" role="status">{aviso}</div>}
       </div>
 
