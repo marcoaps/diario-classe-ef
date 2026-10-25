@@ -1,10 +1,18 @@
 import React, { useMemo, useState } from 'react';
-import { Crown, Flag, Loader2, CheckCircle2, Users, PartyPopper } from 'lucide-react';
+import { Crown, Flag, Loader2, CheckCircle2, Users, PartyPopper, ClipboardList } from 'lucide-react';
 import type { RodizioSessaoCompleta, RodizioJogador } from '../../../data/supabase';
 import type { AlunoSupabase } from '../../../domain/useAlunosPresentesHoje';
 import { calcularParticipacaoAlunos, todosTimesOriginaisJaJogaram, type TimeRodizio, type JogoRodizio, type EstatisticasTime } from '../../../domain/rodizioFutsalLogica';
 import { TabelaJogos, TabelaEstatisticas, TabelaParticipacao, NomeTime } from './RodizioTabelas';
 import { RodizioAdicionarTime } from './RodizioAdicionarTime';
+import { RodizioSumula } from './RodizioSumula';
+
+// "8A", "7B+7C" etc → "7º/8º ano" (só pra calibrar a duração do período da
+// súmula, ver domain/sumulaFutsal.ts#minutosPorTempo; não precisa ser exato).
+function categoriaDaTurma(turmaId: string): string {
+  const series = Array.from(new Set(turmaId.match(/\d/g) ?? [])).sort();
+  return series.length > 0 ? `${series.join('º/')}º ano` : turmaId;
+}
 
 interface Props {
   sessaoCompleta: RodizioSessaoCompleta;
@@ -25,6 +33,8 @@ export function RodizioControle({
   const [registrando, setRegistrando] = useState(false);
   const [finalizando, setFinalizando] = useState(false);
   const [mostrarDetalhes, setMostrarDetalhes] = useState(false);
+  const [sumulaAberta, setSumulaAberta] = useState(false);
+  const [mostrarRegistroRapido, setMostrarRegistroRapido] = useState(false);
 
   const participacao = useMemo(
     () => calcularParticipacaoAlunos(alunos, jogadores, times, estatisticas),
@@ -47,6 +57,23 @@ export function RodizioControle({
   const perdedorUltimoJogo = ultimoJogo
     ? (ultimoJogo.vencedorId === ultimoJogo.equipeAId ? ultimoJogo.equipeBId : ultimoJogo.equipeAId)
     : null;
+
+  // Chave estável enquanto esse confronto não vira um RodizioJogo registrado
+  // — nada muda em `jogos` até o resultado ser lançado, então a súmula pode
+  // ser fechada e reaberta (ou o app atualizado) sem perder o que foi anotado.
+  const jogoAtualId = `${sessaoCompleta.sessao.id}:${jogos.length + 1}`;
+  const categoria = useMemo(() => categoriaDaTurma(sessaoCompleta.sessao.turma_id), [sessaoCompleta.sessao.turma_id]);
+  const timeA = buscarTime(equipeAId);
+  const timeB = buscarTime(equipeBId);
+
+  // Vai direto por onRegistrarResultado (não por handleResultado): se der erro,
+  // precisa subir para a súmula avisar e continuar aberta — handleResultado
+  // engole o erro num alert() próprio, pensado só pro registro rápido abaixo.
+  const handleEncerrarSumula = async (golsA: number, golsB: number) => {
+    const vencedorId = golsA >= golsB ? equipeAId : equipeBId;
+    await onRegistrarResultado(vencedorId);
+    setSumulaAberta(false);
+  };
 
   const handleResultado = async (vencedorId: string) => {
     if (registrando) return;
@@ -98,24 +125,40 @@ export function RodizioControle({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <button
-              onClick={() => handleResultado(equipeAId)}
-              disabled={registrando}
-              className="h-20 rounded-2xl bg-secondary-container text-on-secondary-container font-bold text-base shadow-sm hover:brightness-95 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {registrando ? <Loader2 className="w-5 h-5 animate-spin" /> : <Flag className="w-5 h-5" />}
-              {nome(equipeAId).toUpperCase()} VENCEU
-            </button>
-            <button
-              onClick={() => handleResultado(equipeBId)}
-              disabled={registrando}
-              className="h-20 rounded-2xl bg-tertiary-container text-on-tertiary-container font-bold text-base shadow-sm hover:brightness-95 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {registrando ? <Loader2 className="w-5 h-5 animate-spin" /> : <Flag className="w-5 h-5" />}
-              {nome(equipeBId).toUpperCase()} VENCEU
-            </button>
-          </div>
+          <button
+            onClick={() => setSumulaAberta(true)}
+            className="h-16 rounded-2xl bg-primary text-white font-bold text-base shadow-sm hover:brightness-95 active:scale-95 transition-all flex items-center justify-center gap-2"
+          >
+            <ClipboardList className="w-5 h-5" /> Abrir súmula do jogo
+          </button>
+
+          <button
+            onClick={() => setMostrarRegistroRapido(prev => !prev)}
+            className="text-xs font-semibold text-gray-500 underline underline-offset-2 self-center"
+          >
+            {mostrarRegistroRapido ? 'Ocultar registro rápido' : 'Prefere só registrar o vencedor, sem súmula?'}
+          </button>
+
+          {mostrarRegistroRapido && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                onClick={() => handleResultado(equipeAId)}
+                disabled={registrando}
+                className="h-20 rounded-2xl bg-secondary-container text-on-secondary-container font-bold text-base shadow-sm hover:brightness-95 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {registrando ? <Loader2 className="w-5 h-5 animate-spin" /> : <Flag className="w-5 h-5" />}
+                {nome(equipeAId).toUpperCase()} VENCEU
+              </button>
+              <button
+                onClick={() => handleResultado(equipeBId)}
+                disabled={registrando}
+                className="h-20 rounded-2xl bg-tertiary-container text-on-tertiary-container font-bold text-base shadow-sm hover:brightness-95 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {registrando ? <Loader2 className="w-5 h-5 animate-spin" /> : <Flag className="w-5 h-5" />}
+                {nome(equipeBId).toUpperCase()} VENCEU
+              </button>
+            </div>
+          )}
 
           {ultimoJogo && (
             <div className="flex items-center gap-2 text-sm text-on-secondary-container bg-secondary-container/30 border border-secondary/20 rounded-xl px-3 py-2.5">
@@ -206,6 +249,18 @@ export function RodizioControle({
         {finalizando ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
         Finalizar Rodízio
       </button>
+
+      {sumulaAberta && timeA && timeB && (
+        <RodizioSumula
+          jogoId={jogoAtualId}
+          categoria={categoria}
+          equipeA={timeA}
+          equipeB={timeB}
+          jogadores={jogadores}
+          onEncerrar={handleEncerrarSumula}
+          onFechar={() => setSumulaAberta(false)}
+        />
+      )}
     </div>
   );
 }

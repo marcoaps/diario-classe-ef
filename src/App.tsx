@@ -50,7 +50,6 @@ const InscricaoAlunosPublico = lazy(() => import('./ui/pages/InscricaoAlunosPubl
 const SumulaJanela = lazy(() => import('./ui/pages/interclasses/SumulaJanela').then(m => ({ default: m.SumulaJanela })));
 const ConfrontosPublico = lazy(() => import('./ui/pages/interclasses/ConfrontosPublico').then(m => ({ default: m.ConfrontosPublico })));
 const InscricaoTime = lazy(() => import('./ui/pages/InscricaoTime').then(m => ({ default: m.InscricaoTime })));
-const TimesFutsal = lazy(() => import('./ui/pages/TimesFutsal').then(m => ({ default: m.TimesFutsal })));
 const RodizioFutsal = lazy(() => import('./ui/pages/rodizio/RodizioFutsal').then(m => ({ default: m.RodizioFutsal })));
 const AgendaHoje = lazy(() => import('./ui/pages/AgendaHoje').then(m => ({ default: m.AgendaHoje })));
 const AlunosProva = lazy(() => import('./ui/pages/AlunosProva').then(m => ({ default: m.AlunosProva })));
@@ -123,7 +122,6 @@ export default function App() {
           <Route path="/rendimento" element={<RendimentoBimestre />} />
           <Route path="/torneio" element={<InterclassesIOP />} />
           <Route path="/interclasses/sumula/:jogoId" element={<SumulaJanela />} />
-          <Route path="/futsal" element={<TimesFutsal />} />
           <Route path="/rodizio" element={<RodizioFutsal />} />
 
           {/* Modulo Avaliacoes com QR Code */}

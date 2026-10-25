@@ -3,11 +3,12 @@ import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import {
   Users, CheckSquare, GraduationCap, CloudOff, Cloud,
   CalendarSearch, BarChart3, QrCode, ClipboardList, CalendarDays,
-  Sparkles, MoreHorizontal, X, BookOpen, Trophy, ClipboardCheck, Goal, NotebookPen, Crown, UserCheck, HeartHandshake
+  Sparkles, MoreHorizontal, X, BookOpen, Trophy, ClipboardCheck, NotebookPen, Crown, UserCheck, HeartHandshake
 } from 'lucide-react';
 import { useStore } from '../store';
 import { aoMudarFila, listarFila, sincronizarFila } from '../data/filaChamada';
 import { sincronizarSumulas } from '../data/filaSumula';
+import { sincronizarSumulas as sincronizarSumulasRodizio } from '../data/filaSumulaRodizio';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -17,7 +18,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-const MAIS_PATHS = ['/ia', '/avaliacoes', '/alunos', '/diario-aulas', '/torneio', '/trabalhos', '/futsal', '/rodizio', '/prova-alunos', '/alunos-especiais'];
+const MAIS_PATHS = ['/ia', '/avaliacoes', '/alunos', '/diario-aulas', '/torneio', '/trabalhos', '/rodizio', '/prova-alunos', '/alunos-especiais'];
 
 function useOnline() {
   const [online, setOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine !== false);
@@ -36,7 +37,7 @@ function useFilaPendente(online: boolean) {
     atualizar();
     return aoMudarFila(atualizar);
   }, []);
-  useEffect(() => { if (online) { sincronizarFila(); sincronizarSumulas(); } }, [online]);
+  useEffect(() => { if (online) { sincronizarFila(); sincronizarSumulas(); sincronizarSumulasRodizio(); } }, [online]);
   return pendentes;
 }
 
@@ -154,12 +155,6 @@ export function AppLayout() {
             to="/trabalhos"
             icon={<ClipboardCheck className="w-5 h-5" />}
             label="Trabalhos"
-            onClick={() => setMaisAberto(false)}
-          />
-          <PopupItem
-            to="/futsal"
-            icon={<Goal className="w-5 h-5" />}
-            label="Times de Futsal"
             onClick={() => setMaisAberto(false)}
           />
           <PopupItem

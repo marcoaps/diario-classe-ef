@@ -2,16 +2,34 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Undo2, Play, Pause, Cloud, CloudOff } from 'lucide-react';
 import { cn } from '../../AppLayout';
 import { corDaEquipe } from './Confrontos';
-import type { InscricaoInterclasses } from '../../../domain/interclasses';
 import {
   PERIODOS, REGRAS_SUMULA, sumulaVazia, segundosDoRelogio, formatarTempo, placar, faltasNoPeriodo, temposNoPeriodo,
   cartoesDoJogador, golsDoJogador, adicionarEvento, desfazerUltimo, removerEvento, iniciarRelogio, pausarRelogio,
   mudarPeriodo, ajustarRelogio, minutosPorTempo, fecharPlacar, nomeDoTipo, anotarCobranca, desfazerCobranca, convertidos, vencedorPenaltis,
   type Sumula, type Lado, type TipoEvento, type Periodo,
 } from '../../../domain/sumulaFutsal';
-import {
-  lerSumulaLocal, lerSumulaRemota, salvarSumulaLocal, sincronizarSumulas, totalSumulasPendentes, aoMudarSumulas,
-} from '../../../data/filaSumula';
+import * as armazenamentoInterclasses from '../../../data/filaSumula';
+
+// Só os campos que a súmula realmente usa — qualquer inscrição (Interclasses,
+// ou a escalação montada na hora pelo Rodízio) serve, desde que tenha isso.
+export interface JogadorSumula {
+  id: string;
+  nome_time: string;
+  numero_camisa: number;
+  nome_completo: string;
+}
+
+// Permite trocar onde a súmula é salva/sincronizada (Interclasses usa sua
+// tabela de jogos já existentes; o Rodízio usa a própria, ver
+// data/filaSumulaRodizio.ts) sem duplicar toda a tela.
+export interface ArmazenamentoSumula {
+  lerSumulaLocal(jogoId: string): Promise<Sumula | null>;
+  lerSumulaRemota(jogoId: string): Promise<Sumula | null>;
+  salvarSumulaLocal(s: Sumula): Promise<void>;
+  sincronizarSumulas(): Promise<{ enviadas: number; restantes: number; erro?: string }>;
+  totalSumulasPendentes(): Promise<number>;
+  aoMudarSumulas(cb: () => void): () => void;
+}
 
 interface Props {
   jogoId: string;
@@ -21,10 +39,12 @@ interface Props {
   categoria: string; // ex.: "8º ano · Masculino" — define o tempo de cada período
   eliminatorio: boolean;
   jogado: boolean;
-  inscricoes: InscricaoInterclasses[];
+  inscricoes: JogadorSumula[];
   // Lança o placar pelo fluxo normal do Confrontos (chave, campeão, etc.).
   onEncerrar: (golsA: number, golsB: number) => Promise<void>;
   onFechar: () => void;
+  // Por padrão, o armazenamento do Interclasses — o Rodízio injeta o seu.
+  armazenamento?: ArmazenamentoSumula;
 }
 
 const ACOES: { tipo: TipoEvento; rotulo: string; emoji: string; cor: string }[] = [
@@ -35,7 +55,8 @@ const ACOES: { tipo: TipoEvento; rotulo: string; emoji: string; cor: string }[] 
   { tipo: 'gol_contra', rotulo: 'Gol contra', emoji: '↩️', cor: 'bg-gray-200 text-gray-800' },
 ];
 
-export function SumulaVirtual({ jogoId, equipeA, equipeB, fase, categoria, eliminatorio, jogado, inscricoes, onEncerrar, onFechar }: Props) {
+export function SumulaVirtual({ jogoId, equipeA, equipeB, fase, categoria, eliminatorio, jogado, inscricoes, onEncerrar, onFechar, armazenamento = armazenamentoInterclasses }: Props) {
+  const arm = armazenamento;
   const [s, setS] = useState<Sumula | null>(null);
   const [, forcar] = useState(0);
   const [alvo, setAlvo] = useState<{ lado: Lado; camisa: number; nome: string } | null>(null);
@@ -57,14 +78,14 @@ export function SumulaVirtual({ jogoId, equipeA, equipeB, fase, categoria, elimi
   useEffect(() => {
     let vivo = true;
     (async () => {
-      const local = await lerSumulaLocal(jogoId);
+      const local = await arm.lerSumulaLocal(jogoId);
       if (!vivo) return;
       // Abre na hora (nunca espera a rede); a cópia do banco só é adotada se este
       // aparelho nunca viu o jogo e ninguém anotou nada nesse meio-tempo.
       setS(local ?? sumulaVazia(jogoId));
       carregado.current = true;
       if (!local && navigator.onLine !== false) {
-        const remota = await lerSumulaRemota(jogoId).catch(() => null);
+        const remota = await arm.lerSumulaRemota(jogoId).catch(() => null);
         if (vivo && remota) setS(atual => (atual && atual.eventos.length === 0 && !atual.relogio.iniciadoEm ? remota : atual));
       }
     })();
@@ -74,13 +95,13 @@ export function SumulaVirtual({ jogoId, equipeA, equipeB, fase, categoria, elimi
   // Todo estado novo vai pro aparelho e, havendo rede + login, pro banco.
   useEffect(() => {
     if (!s || !carregado.current) return;
-    salvarSumulaLocal(s).then(() => { if (navigator.onLine !== false) sincronizarSumulas(); });
+    arm.salvarSumulaLocal(s).then(() => { if (navigator.onLine !== false) arm.sincronizarSumulas(); });
   }, [s]);
 
   useEffect(() => {
-    const atualizar = () => { totalSumulasPendentes().then(setPend); };
+    const atualizar = () => { arm.totalSumulasPendentes().then(setPend); };
     atualizar();
-    return aoMudarSumulas(atualizar);
+    return arm.aoMudarSumulas(atualizar);
   }, []);
 
   // Relógio: só redesenha a cada 250 ms; o tempo vem da diferença de Date.now().
