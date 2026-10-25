@@ -1158,3 +1158,19 @@ export async function buscarHistoricoSessoesRodizio(filtros: {
   if (error) throw error;
   return data || [];
 }
+
+// Apaga uma sessão do histórico (times, jogadores, jogos e súmulas somem
+// junto, por "on delete cascade" — ver sql/rodizio_futsal_setup.sql).
+export async function apagarSessaoRodizio(sessaoId: string): Promise<void> {
+  const { error } = await supabase.from('rodizio_sessoes').delete().eq('id', sessaoId);
+  if (error) throw error;
+}
+
+// Apaga todo o histórico (só sessões já finalizadas — nunca mexe numa
+// sessão em andamento), opcionalmente só de uma turma.
+export async function apagarHistoricoRodizio(filtros: { turmaId?: string } = {}): Promise<void> {
+  let query = supabase.from('rodizio_sessoes').delete().eq('status', 'finalizada');
+  if (filtros.turmaId) query = query.eq('turma_id', filtros.turmaId);
+  const { error } = await query;
+  if (error) throw error;
+}

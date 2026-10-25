@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Loader2, CalendarDays, ChevronDown, ChevronUp } from 'lucide-react';
+import { Loader2, CalendarDays, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import {
-  buscarHistoricoSessoesRodizio, buscarSessaoCompleta,
+  buscarHistoricoSessoesRodizio, buscarSessaoCompleta, apagarSessaoRodizio, apagarHistoricoRodizio,
   type RodizioSessao, type RodizioSessaoCompleta,
 } from '../../../data/supabase';
 import { TURMAS_EF } from '../../../domain/turmasEf';
@@ -16,6 +16,8 @@ export function RodizioHistorico() {
   const [expandidoId, setExpandidoId] = useState<string | null>(null);
   const [detalhes, setDetalhes] = useState<Record<string, RodizioSessaoCompleta>>({});
   const [carregandoDetalhe, setCarregandoDetalhe] = useState<string | null>(null);
+  const [apagandoId, setApagandoId] = useState<string | null>(null);
+  const [apagandoTudo, setApagandoTudo] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -46,6 +48,39 @@ export function RodizioHistorico() {
     }
   };
 
+  const apagarUma = async (s: RodizioSessao) => {
+    if (!window.confirm(`Apagar o rodízio de ${s.turma_id} do dia ${new Date(s.data + 'T00:00:00').toLocaleDateString('pt-BR')}? Não tem como desfazer.`)) return;
+    setApagandoId(s.id);
+    try {
+      await apagarSessaoRodizio(s.id);
+      setSessoes(prev => prev.filter(x => x.id !== s.id));
+      if (expandidoId === s.id) setExpandidoId(null);
+      setDetalhes(prev => { const { [s.id]: _removido, ...resto } = prev; return resto; });
+    } catch (e) {
+      console.error(e);
+      alert('Não foi possível apagar. Verifique sua conexão e tente novamente.');
+    } finally {
+      setApagandoId(null);
+    }
+  };
+
+  const apagarTudo = async () => {
+    const alvo = turmaFiltro === 'ALL' ? 'todas as turmas' : turmaFiltro;
+    if (!window.confirm(`Apagar TODO o histórico de ${alvo} (${sessoes.length} rodízio${sessoes.length !== 1 ? 's' : ''})? Não tem como desfazer.`)) return;
+    setApagandoTudo(true);
+    try {
+      await apagarHistoricoRodizio(turmaFiltro === 'ALL' ? {} : { turmaId: turmaFiltro });
+      setSessoes([]);
+      setExpandidoId(null);
+      setDetalhes({});
+    } catch (e) {
+      console.error(e);
+      alert('Não foi possível apagar o histórico. Verifique sua conexão e tente novamente.');
+    } finally {
+      setApagandoTudo(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
@@ -70,57 +105,78 @@ export function RodizioHistorico() {
           Nenhum rodízio finalizado ainda.
         </div>
       ) : (
-        <div className="flex flex-col gap-2.5">
-          {sessoes.map(s => {
-            const expandido = expandidoId === s.id;
-            const detalhe = detalhes[s.id];
-            return (
-              <div key={s.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <button
-                  onClick={() => alternarExpandido(s.id)}
-                  className="w-full flex items-center justify-between gap-2 p-4 text-left hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <CalendarDays className="w-4 h-4 text-gray-400 shrink-0" />
-                    <div className="min-w-0">
-                      <div className="font-bold text-sm text-on-surface truncate">
-                        {s.turma_id} · {s.modalidade}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {new Date(s.data + 'T00:00:00').toLocaleDateString('pt-BR')} · {LABEL_MODO_RODIZIO[s.modo] ?? s.modo}
-                      </div>
-                    </div>
-                  </div>
-                  {expandido ? <ChevronUp className="w-4 h-4 text-gray-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />}
-                </button>
+        <>
+          <button
+            onClick={apagarTudo}
+            disabled={apagandoTudo}
+            className="flex items-center justify-center gap-1.5 h-10 rounded-xl bg-white border border-gray-200 text-error text-xs font-bold self-start px-3 hover:bg-error-container/20 active:scale-95 transition-all disabled:opacity-50"
+          >
+            {apagandoTudo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+            Apagar {turmaFiltro === 'ALL' ? 'todo o histórico' : `histórico de ${turmaFiltro}`}
+          </button>
 
-                {expandido && (
-                  <div className="p-4 border-t border-gray-100 flex flex-col gap-3">
-                    {carregandoDetalhe === s.id ? (
-                      <div className="flex gap-2 items-center justify-center py-4 text-gray-500">
-                        <Loader2 className="w-4 h-4 animate-spin" /> Carregando detalhes...
+          <div className="flex flex-col gap-2.5">
+            {sessoes.map(s => {
+              const expandido = expandidoId === s.id;
+              const detalhe = detalhes[s.id];
+              return (
+                <div key={s.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                  <div className="w-full flex items-center gap-2 p-4">
+                    <button
+                      onClick={() => alternarExpandido(s.id)}
+                      className="flex-1 min-w-0 flex items-center gap-2 text-left"
+                    >
+                      <CalendarDays className="w-4 h-4 text-gray-400 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="font-bold text-sm text-on-surface truncate">
+                          {s.turma_id} · {s.modalidade}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          {new Date(s.data + 'T00:00:00').toLocaleDateString('pt-BR')} · {LABEL_MODO_RODIZIO[s.modo] ?? s.modo}
+                        </div>
                       </div>
-                    ) : detalhe ? (
-                      <>
-                        <div>
-                          <div className="text-xs font-semibold text-gray-500 mb-2">Jogos</div>
-                          <TabelaJogos times={detalhe.times.map(paraTimeRodizio)} jogos={detalhe.jogos.map(paraJogoRodizio)} />
-                        </div>
-                        <div>
-                          <div className="text-xs font-semibold text-gray-500 mb-2">Estatísticas finais</div>
-                          <TabelaEstatisticas
-                            times={detalhe.times.map(paraTimeRodizio)}
-                            estatisticas={calcularEstatisticas(detalhe.times.map(paraTimeRodizio), detalhe.jogos.map(paraJogoRodizio))}
-                          />
-                        </div>
-                      </>
-                    ) : null}
+                    </button>
+                    <button
+                      onClick={() => apagarUma(s)}
+                      disabled={apagandoId === s.id}
+                      aria-label={`Apagar o rodízio de ${s.turma_id} do dia ${s.data}`}
+                      className="p-1.5 rounded-full text-gray-300 hover:text-error hover:bg-error-container/20 shrink-0 disabled:opacity-50"
+                    >
+                      {apagandoId === s.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                    </button>
+                    <button onClick={() => alternarExpandido(s.id)} className="shrink-0 text-gray-400">
+                      {expandido ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </button>
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+
+                  {expandido && (
+                    <div className="p-4 border-t border-gray-100 flex flex-col gap-3">
+                      {carregandoDetalhe === s.id ? (
+                        <div className="flex gap-2 items-center justify-center py-4 text-gray-500">
+                          <Loader2 className="w-4 h-4 animate-spin" /> Carregando detalhes...
+                        </div>
+                      ) : detalhe ? (
+                        <>
+                          <div>
+                            <div className="text-xs font-semibold text-gray-500 mb-2">Jogos</div>
+                            <TabelaJogos times={detalhe.times.map(paraTimeRodizio)} jogos={detalhe.jogos.map(paraJogoRodizio)} />
+                          </div>
+                          <div>
+                            <div className="text-xs font-semibold text-gray-500 mb-2">Estatísticas finais</div>
+                            <TabelaEstatisticas
+                              times={detalhe.times.map(paraTimeRodizio)}
+                              estatisticas={calcularEstatisticas(detalhe.times.map(paraTimeRodizio), detalhe.jogos.map(paraJogoRodizio))}
+                            />
+                          </div>
+                        </>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );
