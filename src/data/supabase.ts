@@ -462,66 +462,6 @@ export async function buscarTrabalhosHistorico(filtros: {
 }
 
 // ------------------------------------------------------------
-// Times de Futsal
-// ------------------------------------------------------------
-
-// Salva a escalação do dia (substitui a escalação anterior da mesma turma/data)
-export async function salvarEscalacaoFutsal(
-  turmaId: string,
-  times: {
-    numero: number;
-    nome: string;
-    jogadores: { aluno_id: string; aluno_nome: string; posicao: 'goleiro' | 'linha' }[];
-  }[]
-) {
-  const data = new Date().toISOString().slice(0, 10);
-
-  const { error: delError } = await supabase
-    .from('futsal_escalacoes')
-    .delete()
-    .eq('turma_id', turmaId)
-    .eq('data', data);
-  if (delError) throw delError;
-
-  // Um time sem jogador nenhum ainda vira uma linha "placeholder" (aluno_id
-  // null) — só pra registrar que o time existe (número + nome), já que a
-  // tabela é "uma linha por jogador" e não tem uma tabela própria de times.
-  const rows = times.flatMap(t =>
-    t.jogadores.length > 0
-      ? t.jogadores.map(j => ({
-          turma_id: turmaId,
-          data,
-          time_numero: t.numero,
-          time_nome: t.nome,
-          aluno_id: j.aluno_id,
-          aluno_nome: j.aluno_nome,
-          posicao: j.posicao,
-        }))
-      : [{
-          turma_id: turmaId,
-          data,
-          time_numero: t.numero,
-          time_nome: t.nome,
-          aluno_id: null,
-          aluno_nome: null,
-          posicao: null,
-        }]
-  );
-  if (rows.length === 0) return;
-
-  const { error } = await supabase.from('futsal_escalacoes').insert(rows);
-  if (error) throw error;
-}
-
-export async function buscarEscalacaoFutsal(turmaId: string, data?: string) {
-  let query = supabase.from('futsal_escalacoes').select('*').eq('turma_id', turmaId);
-  query = data ? query.eq('data', data) : query.order('data', { ascending: false });
-  const { data: rows, error } = await query;
-  if (error) throw error;
-  return rows || [];
-}
-
-// ------------------------------------------------------------
 // Interclasses IOP — inscrição individual de alunos por equipe
 // ------------------------------------------------------------
 
