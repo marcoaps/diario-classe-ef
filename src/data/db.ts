@@ -43,6 +43,25 @@ export async function initDb() {
       await dbItems.classRooms.setItem(cr.id, cr);
     }
   }
+
+  // Turmas acrescentadas depois do cadastro inicial: o seed acima só roda com
+  // o banco local vazio, então aqui garantimos (sem duplicar) que existam.
+  const turmasExtras = ['6ºA', '6ºB'];
+  const existentes = new Set<string>();
+  await dbItems.classRooms.iterate((cr: ClassRoom) => { existentes.add(cr.name); });
+  const faltando = turmasExtras.filter(n => !existentes.has(n));
+  if (faltando.length > 0) {
+    let escola: School | undefined;
+    await dbItems.schools.iterate((s: School) => { escola ??= s; });
+    let turno: Shift | undefined;
+    await dbItems.shifts.iterate((s: Shift) => { if (!turno || s.name === 'Manhã') turno = s; });
+    if (escola && turno) {
+      for (const name of faltando) {
+        const cr: ClassRoom = { id: uuidv4(), schoolId: escola.id, shiftId: turno.id, name };
+        await dbItems.classRooms.setItem(cr.id, cr);
+      }
+    }
+  }
 }
 
 export async function getAll<T>(instance: LocalForage): Promise<T[]> {
