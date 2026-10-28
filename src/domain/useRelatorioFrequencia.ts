@@ -58,14 +58,15 @@ export function getPeriodoBimestre(bimestre: Bimestre, ano?: number) {
 const LIMITES_BIMESTRE_2026: { bimestre: Bimestre; fim: string }[] = [
   { bimestre: 1, fim: '2026-04-12' }, // avaliações 1º bim (4 a 8/04) + retorno às aulas (13/04)
   { bimestre: 2, fim: '2026-07-19' }, // avaliações 2º bim (3 a 10/07) + término do 1º semestre (17/07)
-  { bimestre: 3, fim: '2026-10-31' }, // início do 2º semestre (03/08) + avaliações 3º bim (5 a 9/10)
+  { bimestre: 3, fim: '2026-10-11' }, // início do 2º semestre (03/08) + avaliações 3º bim (5 a 9/10); 4º bim começa em 12/10
   { bimestre: 4, fim: '2026-12-23' }, // avaliações 4º bim (7 a 11/12) + término do ano letivo (23/12)
 ];
 
 // Bimestre vigente na data informada (hoje, por padrão), para pré-selecionar
 // o bimestre correto ao abrir uma tela em vez de sempre cair no 1º.
 export function bimestreAtual(data: Date = new Date()): Bimestre {
-  const iso = data.toISOString().slice(0, 10);
+  // Data local (toISOString usa UTC e viraria o dia à noite no fuso do Brasil).
+  const iso = `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`;
   for (const { bimestre, fim } of LIMITES_BIMESTRE_2026) {
     if (iso <= fim) return bimestre;
   }

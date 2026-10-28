@@ -5,7 +5,7 @@ import {
   Loader2, ShieldAlert, X, Trophy, CheckCircle2, XCircle, Brain,
 } from 'lucide-react';
 import { usePortalAluno, type ProvaPortal } from '../../domain/usePortalAluno';
-import type { Bimestre } from '../../domain/useRelatorioFrequencia';
+import { bimestreAtual, type Bimestre } from '../../domain/useRelatorioFrequencia';
 
 type Aba = 'inicio' | 'notas' | 'frequencia' | 'provas';
 
@@ -16,8 +16,8 @@ export function PortalAluno() {
   const { token } = useParams<{ token: string }>();
   const { aluno, notas, frequencia, provas, resumo, loading, error } = usePortalAluno(token);
   const [aba, setAba] = useState<Aba>('inicio');
-  const [bimestreNotas, setBimestreNotas] = useState<Bimestre>(1);
-  const [bimestreFreq, setBimestreFreq] = useState<Bimestre>(1);
+  const [bimestreNotas, setBimestreNotas] = useState<Bimestre>(() => bimestreAtual());
+  const [bimestreFreq, setBimestreFreq] = useState<Bimestre>(() => bimestreAtual());
   const [provaAberta, setProvaAberta] = useState<ProvaPortal | null>(null);
 
   if (loading) {

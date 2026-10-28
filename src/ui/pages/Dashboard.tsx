@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useState, useMemo } from 'react';
 import { useStore } from '../../store';
 import { MIN_PASSING_GRADE, MAX_ABSENCES_TOTAL, ClassRoom, Student } from '../../domain/types';
+import { bimestreAtual as bimestreVigente } from '../../domain/useRelatorioFrequencia';
 import { AgendaDia } from './AgendaDia';
 import { ChevronRight, UserX, Users, Download, Upload, Loader2, X, CheckSquare, BarChart3, CalendarSearch, Edit, Trash2, Star, ChevronDown, GraduationCap, ChevronUp, Share2, Copy, CheckCircle, ClipboardCheck, CaseSensitive, UserCheck } from 'lucide-react';
 import { cn } from '../AppLayout';
@@ -475,13 +476,7 @@ export function Dashboard() {
     }
   };
 
-  const bimestreAtual = () => {
-    const mes = new Date().getMonth() + 1;
-    if (mes <= 4) return 1;
-    if (mes <= 7) return 2;
-    if (mes <= 10) return 3;
-    return 4;
-  };
+  const bimestreAtual = () => bimestreVigente();
 
   const handleMarcarSituacao = async (aluno: Student) => {
     if (!classToConfirm) return;
