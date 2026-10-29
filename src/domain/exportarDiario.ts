@@ -23,8 +23,8 @@ const FERIADOS_2026 = new Set([
 const PERIODOS_BIMESTRE: Record<Bimestre, { inicio: string; fim: string }> = {
   1: { inicio: '2026-02-02', fim: '2026-04-30' },
   2: { inicio: '2026-05-01', fim: '2026-07-15' },
-  3: { inicio: '2026-07-20', fim: '2026-09-30' },
-  4: { inicio: '2026-10-01', fim: '2026-12-20' },
+  3: { inicio: '2026-07-20', fim: '2026-10-11' },
+  4: { inicio: '2026-10-12', fim: '2026-12-20' },
 };
 
 function isDiaUtil(data: Date): boolean {

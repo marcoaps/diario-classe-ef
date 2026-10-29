@@ -47,8 +47,8 @@ export function getPeriodoBimestre(bimestre: Bimestre, ano?: number) {
   switch (bimestre) {
     case 1: return { inicio: `${y}-02-01`, fim: `${y}-04-30` };
     case 2: return { inicio: `${y}-05-01`, fim: `${y}-07-15` };
-    case 3: return { inicio: `${y}-07-16`, fim: `${y}-09-30` };
-    case 4: return { inicio: `${y}-10-01`, fim: `${y}-12-20` };
+    case 3: return { inicio: `${y}-07-16`, fim: `${y}-10-11` };
+    case 4: return { inicio: `${y}-10-12`, fim: `${y}-12-20` };
   }
 }
 
