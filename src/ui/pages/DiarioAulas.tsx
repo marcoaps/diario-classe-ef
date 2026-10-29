@@ -75,15 +75,18 @@ function chaveParaBR(chave: string): string {
   return `${dia}/${mes}/${ano}`;
 }
 
-function gerarDatas(diaSemana: number): DiaTipo[] {
+// `comChamada`: datas que já têm chamada lançada. Se houve chamada, o dia teve
+// aula de fato, então vale mais que o calendário fixo de feriado/planejamento.
+function gerarDatas(diaSemana: number, comChamada?: Set<string>): DiaTipo[] {
   const resultado: DiaTipo[] = [];
   const d = new Date(2026, 0, 1);
   const fim = new Date(2026, 11, 16);
   while (d <= fim) {
     if (d.getDay() === diaSemana && !emRecessoOuFerias(d)) {
       const chave = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-      const feriado = FERIADOS[chave] || null;
-      const ehPlanj = PLANEJAMENTOS.has(chave);
+      const teveChamada = comChamada?.has(chave) ?? false;
+      const feriado = teveChamada ? null : (FERIADOS[chave] || null);
+      const ehPlanj = !teveChamada && PLANEJAMENTOS.has(chave);
       // Excluir dias de planejamento — não são aulas com alunos
       if (!ehPlanj) {
         resultado.push({
@@ -136,8 +139,6 @@ const MESES_PT: Record<number,string> = {
 // ─── Gerador do Excel ─────────────────────────────────────────────────────────
 async function gerarExcel(diaNome: DiaKey): Promise<void> {
   const cfg = GRUPOS[diaNome];
-  const datas = gerarDatas(cfg.diaSemana);
-
   // Buscar alunos de todas as turmas
   // Buscar alunos E frequências de todas as turmas
   const alunosPorTurma: Record<string, { id: string; nome: string }[]> = {};
@@ -190,6 +191,14 @@ async function gerarExcel(diaNome: DiaKey): Promise<void> {
     }
     transferidosPorTurma[turma] = transfMap;
   }
+
+  const datasComChamada = new Set<string>();
+  for (const mapa of Object.values(frequenciasPorTurma)) {
+    for (const porData of Object.values(mapa)) {
+      for (const k of Object.keys(porData)) datasComChamada.add(k);
+    }
+  }
+  const datas = gerarDatas(cfg.diaSemana, datasComChamada);
 
   // Buscar conteúdo das aulas (tema/título por data) de todas as turmas
   const conteudosPorTurmaExcel: Record<string, { data: string; tema: string; titulo: string }[]> = {};
