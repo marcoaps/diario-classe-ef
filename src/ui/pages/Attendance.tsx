@@ -457,20 +457,34 @@ export function Attendance() {
       {/* Seletor de turma — troca rápida sem depender do dia da semana nem
           precisar voltar ao Dashboard */}
       <div className="px-4 pt-3 pb-0 bg-background/90">
-        <div id="chips-turmas" className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 [scrollbar-width:none]">
-          {uniqueClassRooms.map(cr => (
-            <button
-              key={cr.id}
-              data-turma-id={cr.id}
-              onClick={() => setSelectedClassId(cr.id)}
-              className={cn(
-                'shrink-0 h-11 px-4 rounded-xl text-sm font-extrabold transition-all active:scale-95',
-                selectedClassId === cr.id ? 'bg-[#0B6B3A] text-white' : 'bg-surface-container text-on-surface'
-              )}
-            >
-              {cr.name}
-            </button>
-          ))}
+        <div
+          id="chips-turmas"
+          className="flex items-center gap-2 overflow-x-auto py-2 -mx-4 px-4 [scrollbar-width:none]"
+          style={{ WebkitMaskImage: 'linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 28px), transparent 100%)', maskImage: 'linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 28px), transparent 100%)' }}
+        >
+          {uniqueClassRooms.map((cr, i) => {
+            const ativo = selectedClassId === cr.id;
+            const novaSerie = i > 0 && cr.name.charAt(0) !== uniqueClassRooms[i - 1].name.charAt(0);
+            return (
+              <React.Fragment key={cr.id}>
+                {novaSerie && <span aria-hidden="true" className="shrink-0 w-px h-6 bg-[#D3DCD7] mx-1" />}
+                <button
+                  data-turma-id={cr.id}
+                  onClick={() => setSelectedClassId(cr.id)}
+                  aria-pressed={ativo}
+                  className={cn(
+                    'relative shrink-0 min-w-[58px] h-11 px-3.5 rounded-[14px] text-sm tracking-tight transition-all duration-150 active:scale-95',
+                    ativo
+                      ? 'text-white font-extrabold bg-gradient-to-b from-[#0F7F45] to-[#0B5A31] shadow-[0_6px_14px_rgba(11,107,58,0.35)] ring-1 ring-[#0B4F2E]'
+                      : 'text-on-surface font-bold bg-white border border-outline-variant shadow-[0_1px_2px_rgba(16,35,26,0.06)] hover:border-[#B7DCC6]'
+                  )}
+                >
+                  {cr.name}
+                  {ativo && <span aria-hidden="true" className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#F2B632] ring-2 ring-background" />}
+                </button>
+              </React.Fragment>
+            );
+          })}
         </div>
       </div>
 
