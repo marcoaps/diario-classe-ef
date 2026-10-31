@@ -570,59 +570,110 @@ export function GradeReport() {
   const BAR_W = 30;
   const GAP = 10;
 
+  // Resumo da turma (só alunos ativos com nota)
+  const ativosNotas = alunos.filter(a => !/transferi|remanej/.test(a.situacao?.toLowerCase() ?? ''));
+  const comNota = ativosNotas.filter(a => a.nota !== null);
+  const mediaTurma = comNota.length ? comNota.reduce((s, a) => s + (a.nota as number), 0) / comNota.length : null;
+  const aprovados = comNota.filter(a => (a.nota as number) >= 5).length;
+  const transferidosTotal = alunos.length - ativosNotas.length;
+  const serieAtual = turma.charAt(0);
+  const series = Array.from(new Set(TURMAS.map(t => t.charAt(0))));
+
+  // Cor da nota por faixa (verde ≥ 9, dourado 5–8,9, laranja 3–4,9, vermelho < 3)
+  const notaChip = (nota: number | null) => {
+    if (nota === null) return "text-on-surface-variant bg-[#EEF2EF]";
+    if (nota >= 10) return "text-white bg-[#0B6B3A]";
+    if (nota >= 9) return "text-[#0B6B3A] bg-[#E3F2EA]";
+    if (nota >= 5) return "text-[#9A6A00] bg-[#FDF3DC]";
+    if (nota >= 3) return "text-[#B45309] bg-[#FFEDD5]";
+    return "text-[#B42318] bg-[#FDECEA]";
+  };
+
   return (
     <div className="flex flex-col h-full bg-background relative" id="report-content">
-      <div className="p-4 border-b border-gray-200 sticky top-0 bg-background/90 backdrop-blur-md z-10 shadow-sm print:hidden">
-        <h2 className="text-2xl font-bold tracking-tight mb-3 text-primary-dark">Notas</h2>
+      <div className="p-4 pt-3 border-b border-outline-variant sticky top-0 bg-background/90 backdrop-blur-md z-10 print:hidden">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-xl font-extrabold tracking-tight text-on-surface">Notas</h2>
+          {view === "notas" && alunos.length > 0 && saved && (
+            <span className="text-[11px] font-extrabold text-[#0B6B3A] bg-[#E3F2EA] px-2.5 py-1.5 rounded-full">✓ Salvo</span>
+          )}
+        </div>
 
-        <div className="flex gap-1 w-full p-1 bg-gray-200/50 rounded-xl border border-gray-200 mb-3">
-          {[["notas", "Notas"], ["desempenho", "Desempenho"], ["grafico", "Grafico"]].map(([v, l]) => (
+        <div className="flex w-full p-1 bg-surface-container rounded-2xl mb-3">
+          {[["notas", "Notas"], ["desempenho", "Desempenho"], ["grafico", "Gráfico"]].map(([v, l]) => (
             <button key={v} onClick={() => setView(v as any)}
-              className={cn("flex-1 py-2 text-center rounded-lg text-sm font-semibold transition-all",
-                view === v ? "bg-white text-primary ring-1 ring-gray-200" : "bg-transparent text-gray-500")}>
+              className={cn("flex-1 h-10 text-center rounded-[10px] text-[13px] transition-all",
+                view === v ? "bg-white text-primary font-extrabold shadow-sm" : "bg-transparent text-on-surface-variant font-semibold")}>
               {l}
             </button>
           ))}
         </div>
 
         {view !== "grafico" && (
-          <div className="mb-3">
-            <label className="text-xs font-semibold text-gray-500 mb-1 block">TURMA</label>
-            <div className="grid grid-cols-9 gap-1">
-              {TURMAS.map(t => (
+          <div className="mb-3 flex flex-col gap-1.5">
+            <span className="text-[11px] font-extrabold tracking-[0.08em] text-on-surface-variant">{serieAtual}º ANO</span>
+            <div className="flex gap-1.5">
+              {TURMAS.filter(t => t.charAt(0) === serieAtual).map(t => (
                 <button key={t} onClick={() => setTurma(t)}
-                  className={cn("py-1 rounded-lg text-xs font-bold transition-all",
-                    turma === t ? "bg-primary text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200")}>
+                  className={cn("flex-1 py-2.5 rounded-[10px] text-[13px] transition-all",
+                    turma === t ? "bg-[#0B6B3A] text-white font-extrabold" : "bg-surface-container text-on-surface font-bold")}>
                   {t}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-1.5">
+              {series.map(s => (
+                <button key={s} onClick={() => { if (s !== serieAtual) setTurma(TURMAS.find(t => t.charAt(0) === s)!); }}
+                  className={cn("px-2.5 py-1.5 rounded-full text-xs font-bold border transition-all",
+                    serieAtual === s ? "border-[#0B6B3A] text-[#0B6B3A] bg-[#E3F2EA]" : "border-[#D3DCD7] text-on-surface-variant")}>
+                  {s}º
                 </button>
               ))}
             </div>
           </div>
         )}
 
-        <div className="flex gap-2 w-full p-1 bg-gray-200/50 rounded-xl border border-gray-200 mb-3">
+        <div className="flex p-[3px] h-11 bg-surface-container rounded-xl">
           {[1, 2, 3, 4].map(b => (
             <button key={b} onClick={() => setBimestre(b as any)}
-              className={cn("flex-1 py-2 text-center rounded-lg text-sm font-semibold transition-all",
-                bimestre === b ? "bg-white text-primary ring-1 ring-gray-200" : "bg-transparent text-gray-500")}>
-              {b}o Bim
+              className={cn("flex-1 text-center rounded-[9px] text-[13px] transition-all",
+                bimestre === b ? "bg-[#0B6B3A] text-white font-extrabold" : "bg-transparent text-on-surface-variant font-bold")}>
+              {b}º Bim
             </button>
           ))}
         </div>
+      </div>
 
-        {view === "notas" && (
+      {view === "notas" && (
+        <div className="mx-4 mt-3.5 bg-[#0B4F2E] text-white rounded-[20px] p-4 flex flex-col gap-3.5 print:hidden">
+          {alunos.length > 0 && (
+            <div className="flex gap-2.5">
+              <div className="flex-1">
+                <p className="text-xs text-[#B9D9C7]">Média da turma</p>
+                <p className="text-[30px] font-extrabold tracking-tight leading-tight">{mediaTurma !== null ? mediaTurma.toFixed(1).replace(".", ",") : "—"}</p>
+              </div>
+              <div className="flex-1">
+                <p className="text-xs text-[#B9D9C7]">Aprovados</p>
+                <p className="text-[30px] font-extrabold tracking-tight leading-tight text-[#F2B632]">{aprovados}<span className="text-base text-[#B9D9C7]">/{comNota.length}</span></p>
+              </div>
+              <div className="flex-1">
+                <p className="text-xs text-[#B9D9C7]">Transferidos</p>
+                <p className="text-[30px] font-extrabold tracking-tight leading-tight">{transferidosTotal}</p>
+              </div>
+            </div>
+          )}
           <div className="flex gap-2">
             <button onClick={() => setShowImport(true)}
-              className="flex-1 py-3 bg-primary text-white rounded-xl font-bold shadow-md hover:bg-primary-dark transition-all flex items-center justify-center gap-2">
-              <Upload className="w-4 h-4" /> Carregar PDF
+              className="flex-1 h-[46px] bg-[#F2B632] text-[#2B1F00] rounded-[13px] text-sm font-extrabold active:scale-95 transition-all flex items-center justify-center gap-2">
+              <Upload className="w-[18px] h-[18px]" /> Carregar PDF
             </button>
             <button onClick={() => { setShowExcel(true); setExcelTurmas([]); setExcelMsg(null); }}
-              className="py-3 px-4 bg-white text-primary border border-primary rounded-xl font-bold hover:bg-gray-50 transition-all flex items-center justify-center gap-2">
+              className="h-[46px] px-3.5 border border-white/35 text-white rounded-[13px] text-[13px] font-bold active:scale-95 transition-all flex items-center justify-center gap-1.5">
               <FileDown className="w-4 h-4" /> Excel
             </button>
             {alunos.length > 0 && !saved && (
               <button onClick={handleSalvar} disabled={isSaving}
-                className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold shadow-md hover:bg-green-700 transition-all flex items-center justify-center gap-2">
+                className="h-[46px] px-3.5 bg-white text-[#0B4F2E] rounded-[13px] text-[13px] font-extrabold active:scale-95 transition-all flex items-center justify-center gap-1.5">
                 <Save className="w-4 h-4" /> {isSaving ? "Salvando..." : "Salvar"}
               </button>
             )}
@@ -630,14 +681,15 @@ export function GradeReport() {
               <button
                 onClick={gerarPdfSimaed}
                 disabled={gerandoPdf}
-                className="py-3 px-4 bg-gray-700 text-white rounded-xl font-bold hover:bg-gray-800 transition-all flex items-center gap-1 disabled:opacity-50"
+                aria-label="Baixar PDF das notas"
+                className="w-[46px] h-[46px] border border-white/35 text-white rounded-[13px] active:scale-95 transition-all flex items-center justify-center disabled:opacity-50"
               >
-                {gerandoPdf ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileDown className="w-5 h-5" />}
+                {gerandoPdf ? <Loader2 className="w-[18px] h-[18px] animate-spin" /> : <FileDown className="w-[18px] h-[18px]" />}
               </button>
             )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="p-4 pb-20">
         {isLoading ? (
@@ -645,43 +697,40 @@ export function GradeReport() {
         ) : view === "notas" ? (
           alunos.length > 0 ? (
             <>
-              {saved && <div className="mb-2 text-xs text-center text-green-600 font-semibold">Dados salvos</div>}
               {syncMsg && <div className="mb-2 text-xs text-center text-blue-600 font-semibold">{syncMsg}</div>}
-              <div className="bg-surface rounded-3xl border border-gray-200 overflow-hidden shadow-sm">
+              <div className="bg-white rounded-[20px] border border-outline-variant overflow-hidden">
                 {/* Header da lista */}
-                <div className="flex items-center px-3 py-2 bg-gray-100 border-b border-gray-200">
-                  <span className="font-mono text-gray-400 text-xs w-5 shrink-0">N</span>
-                  <span className="font-bold text-gray-600 text-xs flex-1 ml-2">Nome</span>
-                  <span className="font-bold text-gray-600 text-xs w-10 text-center">Nota</span>
-                  <span className="font-bold text-gray-600 text-xs w-10 text-center">Faltas</span>
-                  <span className="font-bold text-gray-600 text-xs w-24 text-right">Situacao</span>
+                <div className="flex items-center px-3.5 py-2.5 bg-[#F6F8F7] border-b border-surface-container text-[11px] font-extrabold tracking-[0.06em] text-on-surface-variant">
+                  <span className="w-6 shrink-0">Nº</span>
+                  <span className="flex-1">ALUNO</span>
+                  <span className="w-12 text-center">FALTAS</span>
+                  <span className="w-16 text-right">NOTA</span>
                 </div>
-                <div className="flex flex-col divide-y divide-gray-100">
+                <div className="flex flex-col divide-y divide-surface-container">
                   {alunos.map(aluno => {
                     const transferido = /transferi|remanej/.test(aluno.situacao?.toLowerCase() ?? '');
                     const status = !transferido && aluno.nota !== null ? getStatus(aluno.nota!) : null;
                     return (
-                      <div key={aluno.nome} className="p-2 pl-3 flex items-center justify-between hover:bg-gray-50/50 transition-colors gap-1">
-                        <span className="font-mono text-gray-400 text-xs w-5 shrink-0">{aluno.num}</span>
-                        <span className={cn("font-semibold text-xs flex-1 truncate ml-1", transferido ? "text-gray-400 line-through" : "text-textPrimary")}>{formatarNome(aluno.nome)}</span>
-                        <span className={cn("font-bold text-sm w-10 text-center shrink-0", transferido ? "text-red-500" : "text-blue-600")}>
-                          {transferido ? situacaoAbrev(aluno.situacao) : fmtNota(aluno.nota)}
+                      <div key={aluno.nome} className="px-3.5 py-3 flex items-center gap-1">
+                        <span className="text-xs text-on-surface-variant w-6 shrink-0">{aluno.num}</span>
+                        <span className="flex-1 min-w-0 flex flex-col">
+                          <span className={cn("text-sm font-bold truncate", transferido ? "text-on-surface-variant line-through" : "text-on-surface")}>{formatarNome(aluno.nome)}</span>
+                          {transferido ? (
+                            <span className="text-[11px] text-[#B42318] font-semibold">{situacaoAbrev(aluno.situacao)}{aluno.data_situacao ? ` · ${aluno.data_situacao}` : ''}</span>
+                          ) : status ? (
+                            <span className="text-[11px] text-on-surface-variant">{status.text}</span>
+                          ) : null}
                         </span>
-                        <span className="text-xs text-gray-500 w-10 text-center shrink-0">
+                        <span className="w-12 text-center text-[13px] text-on-surface-variant shrink-0">
                           {transferido ? '-' : (aluno.faltas ?? 0)}
                         </span>
-                        <div className="w-24 text-right shrink-0">
+                        <span className="w-16 flex justify-end shrink-0">
                           {transferido ? (
-                            <div>
-                              <span className="text-xs font-bold text-red-500 block leading-tight">{situacaoAbrev(aluno.situacao)}</span>
-                              {aluno.data_situacao && (
-                                <span className="text-xs text-red-400 block leading-tight">{aluno.data_situacao}</span>
-                              )}
-                            </div>
+                            <span className="text-[11px] font-extrabold text-on-surface-variant bg-[#E7ECE9] px-2 py-1.5 rounded-lg">{situacaoAbrev(aluno.situacao)}</span>
                           ) : (
-                            status && <span className={cn("text-xs font-bold", status.color)}>{status.text}</span>
+                            <span className={cn("text-sm font-extrabold px-2.5 py-1.5 rounded-lg", notaChip(aluno.nota))}>{fmtNota(aluno.nota)}</span>
                           )}
-                        </div>
+                        </span>
                       </div>
                     );
                   })}
