@@ -3,7 +3,7 @@ import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import {
   Users, CheckSquare, GraduationCap, CloudOff, Cloud,
   CalendarSearch, BarChart3, QrCode, ClipboardList, CalendarDays,
-  Sparkles, MoreHorizontal, X, BookOpen, Trophy, ClipboardCheck, NotebookPen, Crown, UserCheck, HeartHandshake
+  Sparkles, MoreHorizontal, X, BookOpen, ClipboardCheck, NotebookPen, Crown, UserCheck, HeartHandshake
 } from 'lucide-react';
 import { useStore } from '../store';
 import { aoMudarFila, listarFila, sincronizarFila } from '../data/filaChamada';
@@ -143,12 +143,6 @@ export function AppLayout() {
             to="/alunos"
             icon={<QrCode className="w-5 h-5" />}
             label="Alunos / QR"
-            onClick={() => setMaisAberto(false)}
-          />
-          <PopupItem
-            to="/torneio"
-            icon={<Trophy className="w-5 h-5" />}
-            label="Interclasses IOP"
             onClick={() => setMaisAberto(false)}
           />
           <PopupItem
