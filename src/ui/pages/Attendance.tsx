@@ -412,6 +412,14 @@ export function Attendance() {
     }
   };
 
+  // Mantém o botão da turma escolhida visível na fileira de turmas
+  useEffect(() => {
+    if (!selectedClassId) return;
+    document
+      .querySelector(`#chips-turmas [data-turma-id="${selectedClassId}"]`)
+      ?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  }, [selectedClassId]);
+
   // Resumo da barra fixa (só alunos ativos; transferidos/remanejados ficam de fora)
   const ativos = alunos.filter(a => !transferidos.has(a.id));
   const totalPresentes = ativos.filter(a => records[a.id]?.presente === true).length;
@@ -431,7 +439,7 @@ export function Attendance() {
               : 'text-on-surface-variant font-semibold'
           )}
         >
-          Chamada
+          Chamada{turmaAtual?.name ? ` ${turmaAtual.name}` : ''}
         </button>
         <button
           onClick={() => setAbaAtiva('conteudo')}
@@ -448,18 +456,22 @@ export function Attendance() {
 
       {/* Seletor de turma — troca rápida sem depender do dia da semana nem
           precisar voltar ao Dashboard */}
-      <div className="p-4 pb-0 bg-background/90">
-        <label className="text-xs font-semibold text-gray-500 mb-1 block">Turma</label>
-        <select
-          value={selectedClassId ?? ''}
-          onChange={e => setSelectedClassId(e.target.value || null)}
-          className="w-full bg-surface border border-gray-300 rounded-xl p-3 text-textPrimary text-base font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-        >
-          <option value="" disabled>Selecione uma turma...</option>
+      <div className="px-4 pt-3 pb-0 bg-background/90">
+        <div id="chips-turmas" className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 [scrollbar-width:none]">
           {uniqueClassRooms.map(cr => (
-            <option key={cr.id} value={cr.id}>{cr.name}</option>
+            <button
+              key={cr.id}
+              data-turma-id={cr.id}
+              onClick={() => setSelectedClassId(cr.id)}
+              className={cn(
+                'shrink-0 h-11 px-4 rounded-xl text-sm font-extrabold transition-all active:scale-95',
+                selectedClassId === cr.id ? 'bg-[#0B6B3A] text-white' : 'bg-surface-container text-on-surface'
+              )}
+            >
+              {cr.name}
+            </button>
           ))}
-        </select>
+        </div>
       </div>
 
       {/* Aba Chamada */}
