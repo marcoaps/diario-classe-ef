@@ -50,6 +50,11 @@ const MENU_ITEMS = [
   { Icon: Trash2,         title: 'Reset Histórico',  sub: 'Apagar registros',     color: '#dc2626', bg: '#fef2f2', action: 'route',  value: '/reset',      destaque: false },
 ] as const;
 
+// Redesign: 4 ações mais usadas em blocos grandes; o resto vira lista; Reset fica isolado.
+const porTitulo = (...titulos: string[]) => titulos.map(t => MENU_ITEMS.find(m => m.title === t)!);
+const ACESSO_RAPIDO = porTitulo('Fazer Chamada', 'Notas Bimestrais', 'Relatórios', 'Histórico');
+const GERENCIAR = porTitulo('Trabalhos', 'Importar Lista', 'Editar Turma', 'Marcar Gênero', 'Corrigir Nomes');
+
 export function Dashboard() {
   const navigate = useNavigate();
   const { classRooms, students, setStudents, selectedClassId, setSelectedClassId, recentClassIds, loading } = useStore();
@@ -527,25 +532,36 @@ export function Dashboard() {
   return (
     <div className="flex flex-col gap-4 pb-28 min-h-screen" style={{ background: 'linear-gradient(180deg, #EAFBF3 0%, #EEF9F3 220px, #F4FBF7 100%)' }}>
 
-      {/* Header branco com logo */}
-      <div className="bg-white border-b-4 border-[#0B7A3D] px-4 pt-4 pb-3">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-14 h-14 rounded-full border-2 border-[#0B7A3D] overflow-hidden shrink-0 bg-[#E3F8EC] flex items-center justify-center">
+      {/* Cabeçalho verde com saudação, data e números-chave */}
+      <div className="bg-[#0B4F2E] text-white px-5 pt-5 pb-6 rounded-b-[28px] flex flex-col gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-full border-2 border-[#F2B632] overflow-hidden shrink-0 bg-white flex items-center justify-center">
             <img src={LOGO_IOP} alt="IOP" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-black text-sm text-[#0B2E1B] leading-tight">Instituto Odilon Pratagi</p>
-            <p className="text-xs text-gray-500">Escola Estadual · Brasiléia - AC</p>
-            <p className="text-lg font-black text-gray-900 mt-0.5">Olá, Professor! 👋</p>
+            <p className="font-bold text-[13px] leading-tight">Instituto Odilon Pratagi</p>
+            <p className="text-xs text-[#B9D9C7]">Escola Estadual · Brasiléia – AC</p>
           </div>
         </div>
+        <div>
+          <p className="text-[13px] text-[#B9D9C7] capitalize">
+            {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })} · {bimestreVigente()}º bimestre
+          </p>
+          <h1 className="text-[28px] font-extrabold tracking-tight leading-tight">Olá, Professor!</h1>
+        </div>
         <div className="flex gap-2">
-          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E3F8EC] border border-[#BEEBD1] text-[#0B7A3D] text-xs font-bold">
-            📚 {totalStudents} alunos
-          </span>
-          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E3F8EC] border border-[#BEEBD1] text-[#0B7A3D] text-xs font-bold">
-             {sortedClassRooms.length} turmas
-          </span>
+          <div className="flex-1 bg-white/10 rounded-2xl px-3 py-2.5">
+            <p className="text-xl font-extrabold leading-none">{totalStudents}</p>
+            <p className="text-[11px] text-[#B9D9C7] mt-1">alunos</p>
+          </div>
+          <div className="flex-1 bg-white/10 rounded-2xl px-3 py-2.5">
+            <p className="text-xl font-extrabold leading-none">{sortedClassRooms.length}</p>
+            <p className="text-[11px] text-[#B9D9C7] mt-1">turmas</p>
+          </div>
+          <div className="flex-1 bg-white/10 rounded-2xl px-3 py-2.5">
+            <p className="text-xl font-extrabold leading-none text-[#F2B632]">{bimestreVigente()}º</p>
+            <p className="text-[11px] text-[#B9D9C7] mt-1">bimestre</p>
+          </div>
         </div>
       </div>
 
@@ -587,29 +603,30 @@ export function Dashboard() {
         </button>
 
         <AgendaDia onTurmaClick={(t) => { const cr = sortedClassRooms.find((x) => x.name.replace(/[^0-9A-Za-z]/g,'').toUpperCase() === t); if (cr) { setSelectedClassId(cr.id); navigate('/attendance'); } }} />
-        {/* Grid de botões */}
-        <div className="grid grid-cols-2 gap-3">
-          {MENU_ITEMS.map((item) => {
-            const isCorrigirNomes = item.action === 'corrigirNomes';
-            return (
+        {/* Acesso rápido: 4 ações mais usadas em blocos grandes */}
+        <p className="text-xs font-extrabold tracking-[0.08em] text-on-surface-variant -mb-2">ACESSO RÁPIDO</p>
+        <div className="grid grid-cols-2 gap-2.5">
+          {ACESSO_RAPIDO.map((item, i) => (
             <button
               key={item.title}
               onClick={() => handleMenuClick(item.action, item.value)}
-              disabled={isCorrigirNomes && corrigindoNomes}
-              className="flex items-center gap-3 p-3.5 rounded-2xl bg-white border border-[#EAF7EF] shadow-sm hover:shadow-md active:scale-95 transition-all text-left disabled:opacity-50 disabled:active:scale-100"
+              className={cn(
+                "flex flex-col justify-between gap-5 p-4 min-h-[120px] rounded-[20px] text-left active:scale-95 transition-all",
+                i === 0 ? "bg-[#0B6B3A] text-white" : "bg-white border border-outline-variant text-on-surface"
+              )}
             >
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: item.bg }}>
-                {isCorrigirNomes && corrigindoNomes
-                  ? <Loader2 className="w-5 h-5 animate-spin" style={{ color: item.color }} />
-                  : <item.Icon className="w-5 h-5" style={{ color: item.color }} />}
-              </div>
-              <div className="min-w-0">
-                <p className="font-bold text-gray-900 text-sm leading-tight">{item.title}</p>
-                <p className="text-gray-400 text-xs mt-0.5 leading-tight">{isCorrigirNomes && corrigindoNomes ? 'Verificando...' : item.sub}</p>
-              </div>
+              <span
+                className="w-10 h-10 rounded-xl flex items-center justify-center"
+                style={i === 0 ? { background: 'rgba(255,255,255,0.15)' } : { background: item.bg, color: item.color }}
+              >
+                <item.Icon className="w-[22px] h-[22px]" />
+              </span>
+              <span className="flex flex-col gap-0.5">
+                <span className="text-[15px] font-extrabold leading-tight">{item.title}</span>
+                <span className={cn("text-xs", i === 0 ? "text-[#B9D9C7]" : "text-on-surface-variant")}>{item.sub}</span>
+              </span>
             </button>
-            );
-          })}
+          ))}
         </div>
 
         {/* Últimas Turmas Acessadas — pra voltar rápido quando o professor
@@ -753,6 +770,39 @@ export function Dashboard() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Gerenciar turmas (lista) + Reset isolado no fim, longe do toque acidental */}
+      <div className="px-4 flex flex-col gap-3">
+        <p className="text-xs font-extrabold tracking-[0.08em] text-on-surface-variant">GERENCIAR TURMAS</p>
+        <div className="bg-white rounded-[20px] border border-outline-variant flex flex-col overflow-hidden">
+          {GERENCIAR.map((item, i) => {
+            const isCorrigirNomes = item.action === 'corrigirNomes';
+            return (
+              <button
+                key={item.title}
+                onClick={() => handleMenuClick(item.action, item.value)}
+                disabled={isCorrigirNomes && corrigindoNomes}
+                className={cn(
+                  "flex items-center gap-3 px-4 py-3.5 text-left active:bg-surface-container transition-colors disabled:opacity-50",
+                  i > 0 && "border-t border-surface-container"
+                )}
+              >
+                {isCorrigirNomes && corrigindoNomes
+                  ? <Loader2 className="w-5 h-5 animate-spin text-[#0B6B3A]" />
+                  : <item.Icon className="w-5 h-5 text-[#0B6B3A]" />}
+                <span className="flex-1 text-sm font-semibold text-on-surface">{item.title}</span>
+                <span className="text-xs text-on-surface-variant">{isCorrigirNomes && corrigindoNomes ? 'Verificando...' : item.sub}</span>
+              </button>
+            );
+          })}
+        </div>
+        <button
+          onClick={() => navigate('/reset')}
+          className="self-center h-11 px-3 flex items-center gap-1.5 text-[13px] font-bold text-[#B42318]"
+        >
+          <Trash2 className="w-4 h-4" /> Reset Histórico
+        </button>
       </div>
 
       {/* Modal: Compartilhar Portal */}

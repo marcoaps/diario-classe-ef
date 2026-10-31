@@ -1,7 +1,7 @@
 ﻿import React, { useEffect, useState } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import {
-  Users, CheckSquare, GraduationCap, CloudOff, Cloud,
+  Home, CheckSquare, GraduationCap, CloudOff, Cloud,
   CalendarSearch, BarChart3, QrCode, ClipboardList, CalendarDays,
   Sparkles, MoreHorizontal, X, BookOpen, ClipboardCheck, NotebookPen, Crown, UserCheck, HeartHandshake
 } from 'lucide-react';
@@ -18,7 +18,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-const MAIS_PATHS = ['/ia', '/avaliacoes', '/alunos', '/diario-aulas', '/torneio', '/trabalhos', '/rodizio', '/prova-alunos', '/alunos-especiais'];
+const MAIS_PATHS = ['/history', '/ia', '/avaliacoes', '/alunos', '/diario-aulas', '/torneio', '/trabalhos', '/rodizio', '/prova-alunos', '/alunos-especiais'];
 
 function useOnline() {
   const [online, setOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine !== false);
@@ -116,6 +116,12 @@ export function AppLayout() {
             </button>
           </div>
           <PopupItem
+            to="/history"
+            icon={<CalendarSearch className="w-5 h-5" />}
+            label="Hist&#243;rico de Chamadas"
+            onClick={() => setMaisAberto(false)}
+          />
+          <PopupItem
             to="/diario-aulas"
             icon={<BookOpen className="w-5 h-5" />}
             label="Di&#225;rio de Aulas"
@@ -174,21 +180,20 @@ export function AppLayout() {
 
       {/* Bottom Nav */}
       <nav className="fixed bottom-0 left-0 right-0 h-16 bg-surface border-t border-outline-variant shadow-lg flex items-center justify-around px-2 z-50 rounded-t-xl">
-        <NavItem to="/" icon={<Users />} label="Turmas" />
+        <NavItem to="/" icon={<Home />} label="In&#237;cio" />
         <NavItem to="/attendance" icon={<CheckSquare />} label="Chamada" />
-        <NavItem to="/history" icon={<CalendarSearch />} label="Hist&#243;rico" />
-        <NavItem to="/report" icon={<BarChart3 />} label="Relat&#243;rios" />
         <NavItem to="/grades" icon={<GraduationCap />} label="Notas" />
+        <NavItem to="/report" icon={<BarChart3 />} label="Relat&#243;rios" />
         <button
           onClick={() => setMaisAberto(prev => !prev)}
           className={cn(
-            "flex flex-col items-center justify-center w-full h-full gap-1 text-[12px] font-medium transition-all duration-150 rounded-lg",
-            (maisAtivo || maisAberto)
-              ? "bg-secondary-container text-on-secondary-container font-bold"
-              : "text-on-surface-variant hover:bg-surface-container-highest"
+            "flex flex-col items-center justify-center w-full h-full gap-0.5 text-[11px] transition-all duration-150",
+            (maisAtivo || maisAberto) ? "text-primary font-extrabold" : "text-on-surface-variant font-semibold"
           )}
         >
-          <MoreHorizontal className="w-6 h-6" />
+          <span className={cn("w-14 h-[30px] rounded-full flex items-center justify-center", (maisAtivo || maisAberto) && "bg-secondary-container")}>
+            <MoreHorizontal className="w-5 h-5" />
+          </span>
           <span>Mais</span>
         </button>
       </nav>
@@ -202,14 +207,18 @@ function NavItem({ to, icon, label }: { to: string; icon: React.ReactNode; label
       to={to}
       end={to === '/'}
       className={({ isActive }) => cn(
-        "flex flex-col items-center justify-center w-full h-full gap-1 text-[12px] font-medium transition-all duration-150 rounded-lg",
-        isActive
-          ? "bg-secondary-container text-on-secondary-container font-bold"
-          : "text-on-surface-variant dark:text-outline hover:bg-surface-container-highest"
+        "flex flex-col items-center justify-center w-full h-full gap-0.5 text-[11px] transition-all duration-150",
+        isActive ? "text-primary font-extrabold" : "text-on-surface-variant font-semibold"
       )}
     >
-      {React.cloneElement(icon as React.ReactElement, { className: 'w-6 h-6' })}
-      <span>{label}</span>
+      {({ isActive }) => (
+        <>
+          <span className={cn("w-14 h-[30px] rounded-full flex items-center justify-center", isActive && "bg-secondary-container")}>
+            {React.cloneElement(icon as React.ReactElement, { className: 'w-5 h-5' })}
+          </span>
+          <span>{label}</span>
+        </>
+      )}
     </NavLink>
   );
 }
