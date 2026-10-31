@@ -2,7 +2,7 @@
 import { useStore } from '../../store';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../data/supabase';
-import { Loader2, BarChart3, AlertTriangle, FileSpreadsheet, FileText, ShieldCheck, Users, Percent, Award, Trash2, Calendar, X, BookOpen, ClipboardList } from 'lucide-react';
+import { Loader2, BarChart3, AlertTriangle, FileSpreadsheet, FileText, ShieldCheck, Users, Percent, Award, Trash2, Calendar, X, BookOpen, ClipboardList, Download, ChevronDown } from 'lucide-react';
 import { cn } from '../AppLayout';
 import { useRelatorioFrequencia, type Bimestre, PONTOS_MAXIMOS, getPeriodoBimestre, bimestreAtual } from '../../domain/useRelatorioFrequencia';
 import { exportarExcel, exportarPDF } from '../../domain/exportarFrequencia';
@@ -32,6 +32,7 @@ function formatarNome(nome: string): string {
 export function AttendanceReport() {
   const { classRooms } = useStore();
   const [deleting, setDeleting] = useState(false);
+  const [menuExportar, setMenuExportar] = useState(false);
   const [dataFiltro, setDataFiltro] = useState<string>('');
   const [exportandoDiario, setExportandoDiario] = useState(false);
   const [exportandoDiarioOficial, setExportandoDiarioOficial] = useState(false);
@@ -242,35 +243,45 @@ export function AttendanceReport() {
   }
 
   return (
-    <div className="flex flex-col gap-6 font-sans animate-in fade-in pb-8 bg-[#f5f7fb] p-4 md:p-6 md:relative md:left-1/2 md:-translate-x-1/2 md:w-[min(1100px,96vw)]">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h2 className="text-2xl font-bold tracking-tight text-gray-900 flex items-center gap-2">
-          <BarChart3 className="w-6 h-6 text-primary" />
-          Relatório de Frequência
-        </h2>
-        <div className="flex items-center gap-2 flex-wrap">
-          <button type="button" onClick={handleExcel} disabled={loading || alunos.length === 0} className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 transition-all disabled:opacity-50 shadow-sm"><FileSpreadsheet className="w-4 h-4" /> Nota {bimestre}BIM-{new Date().getFullYear()}</button>
-          <button type="button" onClick={handlePDF} disabled={loading || alunos.length === 0} className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-rose-600 text-white hover:bg-rose-700 active:scale-95 transition-all disabled:opacity-50 shadow-sm"><FileText className="w-4 h-4" /> PDF</button>
-          <button type="button" onClick={handleDiario} disabled={loading || exportandoDiario || alunos.length === 0} className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-blue-700 text-white hover:bg-blue-800 active:scale-95 transition-all disabled:opacity-50 shadow-sm">
-            {exportandoDiario ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
-            {exportandoDiario ? 'Gerando...' : 'Diário'}
-          </button>
-          <button type="button" onClick={handleDiarioOficial} disabled={loading || exportandoDiarioOficial || alunos.length === 0} className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-indigo-700 text-white hover:bg-indigo-800 active:scale-95 transition-all disabled:opacity-50 shadow-sm">
-            {exportandoDiarioOficial ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
-            {exportandoDiarioOficial ? 'Gerando...' : 'Oficial'}
-          </button>
-          <button type="button" onClick={handleExcluir} disabled={loading || deleting || alunos.length === 0} className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-gray-800 text-white hover:bg-gray-900 active:scale-95 transition-all disabled:opacity-50 shadow-sm">
-            {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-            {deleting ? 'Excluindo...' : 'Limpar'}
-          </button>
-          <button type="button" onClick={calcularESalvarNotasEf} disabled={loading || calculandoNota || alunos.length === 0} className="flex items-center gap-2 py-2 px-3 rounded-lg font-semibold text-xs bg-violet-600 text-white hover:bg-violet-700 active:scale-95 transition-all disabled:opacity-50 shadow-sm">
-            {calculandoNota ? <Loader2 className="w-4 h-4 animate-spin" /> : <span className="text-sm">📊</span>}
-            {calculandoNota ? 'Calculando...' : notasCalculadas ? '✅ Notas salvas!' : 'Nota EF'}
-          </button>
-        </div>
+    <div className="flex flex-col gap-4 font-sans animate-in fade-in pb-8 bg-background p-4 md:p-6 md:relative md:left-1/2 md:-translate-x-1/2 md:w-[min(1100px,96vw)]">
+      <div className="flex items-center justify-between gap-3 relative">
+        <h2 className="text-xl font-extrabold tracking-tight text-on-surface">Frequência</h2>
+        <button
+          type="button"
+          onClick={() => setMenuExportar(m => !m)}
+          className="h-11 px-4 rounded-[14px] bg-[#0B6B3A] text-white text-[13px] font-extrabold flex items-center gap-1.5 active:scale-95 transition-all"
+        >
+          <Download className="w-4 h-4" /> Exportar <ChevronDown className="w-4 h-4" />
+        </button>
+        {menuExportar && (
+          <>
+            <div className="fixed inset-0 z-30" onClick={() => setMenuExportar(false)} />
+            <div className="absolute right-0 top-12 z-40 w-64 bg-white rounded-2xl border border-outline-variant shadow-xl overflow-hidden flex flex-col">
+              <button type="button" onClick={() => { setMenuExportar(false); handleExcel(); }} disabled={loading || alunos.length === 0} className="flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left active:bg-surface-container disabled:opacity-50"><FileSpreadsheet className="w-4 h-4 text-[#0B6B3A]" /> Nota {bimestre}BIM-{new Date().getFullYear()} (Excel)</button>
+              <button type="button" onClick={() => { setMenuExportar(false); handlePDF(); }} disabled={loading || alunos.length === 0} className="flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left border-t border-surface-container active:bg-surface-container disabled:opacity-50"><FileText className="w-4 h-4 text-[#0B6B3A]" /> PDF</button>
+              <button type="button" onClick={() => { setMenuExportar(false); handleDiario(); }} disabled={loading || exportandoDiario || alunos.length === 0} className="flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left border-t border-surface-container active:bg-surface-container disabled:opacity-50">
+                {exportandoDiario ? <Loader2 className="w-4 h-4 animate-spin text-[#0B6B3A]" /> : <BookOpen className="w-4 h-4 text-[#0B6B3A]" />}
+                {exportandoDiario ? 'Gerando...' : 'Diário'}
+              </button>
+              <button type="button" onClick={() => { setMenuExportar(false); handleDiarioOficial(); }} disabled={loading || exportandoDiarioOficial || alunos.length === 0} className="flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left border-t border-surface-container active:bg-surface-container disabled:opacity-50">
+                {exportandoDiarioOficial ? <Loader2 className="w-4 h-4 animate-spin text-[#0B6B3A]" /> : <FileSpreadsheet className="w-4 h-4 text-[#0B6B3A]" />}
+                {exportandoDiarioOficial ? 'Gerando...' : 'Diário oficial'}
+              </button>
+              <button type="button" onClick={() => { setMenuExportar(false); calcularESalvarNotasEf(); }} disabled={loading || calculandoNota || alunos.length === 0} className="flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left border-t border-surface-container active:bg-surface-container disabled:opacity-50">
+                {calculandoNota ? <Loader2 className="w-4 h-4 animate-spin text-[#0B6B3A]" /> : <BarChart3 className="w-4 h-4 text-[#0B6B3A]" />}
+                {calculandoNota ? 'Calculando...' : 'Calcular e salvar Nota EF'}
+              </button>
+              <button type="button" onClick={() => { setMenuExportar(false); handleExcluir(); }} disabled={loading || deleting || alunos.length === 0} className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-left text-[#B42318] border-t border-surface-container active:bg-[#FDECEA] disabled:opacity-50">
+                {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                {deleting ? 'Excluindo...' : 'Limpar frequência'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
+      {notasCalculadas && <p className="text-xs font-bold text-[#0B6B3A] bg-[#E3F2EA] rounded-xl px-3 py-2">Notas salvas!</p>}
 
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5">
+      <div className="bg-white rounded-[18px] border border-outline-variant p-4">
         <div className="grid md:grid-cols-3 gap-4">
           <div>
             <label className="text-xs font-semibold text-gray-500 mb-1 block">Turma</label>
@@ -281,12 +292,12 @@ export function AttendanceReport() {
           </div>
           <div className="md:col-span-2">
             <label className="text-xs font-semibold text-gray-500 mb-1 block">Bimestre</label>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="flex bg-surface-container rounded-xl p-[3px] h-11">
               {BIMESTRES.map((b) => (
                 <button key={b} type="button" onClick={() => setBimestre(b)}
-                  className={cn('py-2 rounded-xl text-sm font-bold border transition-all active:scale-95',
-                    bimestre === b ? 'bg-primary text-white border-primary shadow-sm' : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100')}>
-                  {b}º Bim
+                  className={cn('flex-1 rounded-[9px] text-[13px] transition-all',
+                    bimestre === b ? 'bg-[#0B6B3A] text-white font-extrabold' : 'text-on-surface-variant font-bold')}>
+                  {b}º
                 </button>
               ))}
             </div>
@@ -360,17 +371,17 @@ export function AttendanceReport() {
           </div>
 
           {emRisco.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-3xl p-4 md:p-5">
+            <div className="bg-[#FFF5F4] border border-[#F1C7C2] rounded-[18px] p-4">
               <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5 text-amber-600" />
-                  <h3 className="font-bold text-amber-900 text-sm">Alunos em risco ({emRisco.length})</h3>
+                <div className="flex items-center gap-2.5">
+                  <span className="w-9 h-9 rounded-[10px] bg-[#C2352B] text-white flex items-center justify-center"><AlertTriangle className="w-[18px] h-[18px]" /></span>
+                  <h3 className="font-extrabold text-[#7A1A12] text-[15px]">{emRisco.length} alunos em risco</h3>
                 </div>
                 {alunosCriticos.length > 0 && (
                   <button
                     onClick={() => { setShowGabarito(g => !g); setGabaritoInput({...GABARITO_INICIAL}); setTemaProva(''); }}
                     disabled={criandoAvaliacao}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 text-white rounded-xl text-xs font-bold disabled:opacity-60"
+                    className="flex items-center gap-1.5 px-3 h-11 bg-[#C2352B] text-white rounded-xl text-xs font-extrabold disabled:opacity-60"
                   >
                     <ClipboardList className="w-3.5 h-3.5" />
                     {criandoAvaliacao ? 'Criando...' : `Criar prova (${alunosCriticos.length} críticos)`}
@@ -380,8 +391,8 @@ export function AttendanceReport() {
               <div className="flex flex-wrap gap-2">
                 {emRisco.map((a) => (
                   <span key={a.id}
-                    className={cn('inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border',
-                      a.percentual === 0 && a.registros_total > 0 ? 'bg-red-100 text-red-800 border-red-200' : 'bg-amber-100 text-amber-800 border-amber-200')}
+                    className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border bg-white',
+                      a.percentual === 0 && a.registros_total > 0 ? 'text-[#7A1A12] border-[#F1C7C2]' : 'text-amber-800 border-amber-200')}
                     title={`${a.percentual}% de presença`}>
                     {a.numero_chamada ? `${a.numero_chamada} ` : ''}{formatarNome(a.nome)}
                     <span className="font-mono opacity-80">{a.percentual.toFixed(0)}%</span>
@@ -498,23 +509,19 @@ export function AttendanceReport() {
             {alunos.map((a) => {
               const notaTrabalho = notasTrabalhosPorAluno[a.id] ?? 0;
               return (
-              <div key={a.id} className={cn('p-4 rounded-2xl shadow-sm border flex flex-col gap-3',
-                a.percentual === 0 && a.registros_total > 0 ? 'bg-red-50 border-red-200'
-                : a.em_risco || a.critico ? 'bg-amber-50 border-amber-200'
-                : 'bg-white border-gray-100')}>
-                <div className="flex justify-between items-start gap-2">
-                  <span className="font-bold text-gray-900 text-sm">{a.numero_chamada ? `${a.numero_chamada} - ` : ''}{formatarNome(a.nome)}</span>
+              <div key={a.id} className="p-3.5 rounded-2xl border border-outline-variant bg-white flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-on-surface-variant w-5 shrink-0">{a.numero_chamada || ''}</span>
+                  <span className="flex-1 min-w-0 font-bold text-sm text-on-surface">{formatarNome(a.nome)}</span>
                   <BadgeSituacao aluno={a} />
                 </div>
-                <div className="flex justify-between text-xs font-medium text-gray-600">
-                  <span>Aulas: {a.registros_total}</span>
-                  <span className="text-rose-600 font-semibold">Faltas: {a.ausentes}</span>
-                  <span className="text-gray-900 font-bold">{a.pontos.toFixed(1).replace('.', ',')} pts freq.</span>
-                </div>
-                <BarraProgresso percentual={a.percentual} critico={a.critico} emRisco={a.em_risco} />
-                <div className="flex justify-between items-center pt-2 border-t border-gray-100 text-xs font-medium text-gray-600">
-                  <span>Nota Trabalho: <span className="font-bold text-gray-900">{notaTrabalho > 0 ? notaTrabalho.toFixed(1).replace('.', ',') : '—'}</span></span>
-                  <span className="font-bold text-violet-700 text-sm">Nota EF: {notaTotal(a.pontos, notaTrabalho, false).toFixed(1).replace('.', ',')}</span>
+                <div className="pl-7"><BarraProgresso percentual={a.percentual} critico={a.critico} emRisco={a.em_risco} /></div>
+                <div className="pl-7 flex flex-wrap gap-x-3.5 gap-y-1 text-xs text-on-surface-variant">
+                  <span>{a.registros_total} aulas</span>
+                  <span className={a.ausentes > 0 ? 'text-[#B42318] font-bold' : ''}>{a.ausentes} {a.ausentes === 1 ? 'falta' : 'faltas'}</span>
+                  <span>{a.pontos.toFixed(1).replace('.', ',')} pts freq.</span>
+                  <span>Trabalho <strong className="text-on-surface">{notaTrabalho > 0 ? notaTrabalho.toFixed(1).replace('.', ',') : '—'}</strong></span>
+                  <span>Nota EF <strong className="text-on-surface">{notaTotal(a.pontos, notaTrabalho, false).toFixed(1).replace('.', ',')}</strong></span>
                 </div>
               </div>
               );
@@ -532,31 +539,32 @@ function formatarBR(iso: string) {
 }
 
 function ResumoCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: React.ReactNode; tone: 'neutral' | 'primary' | 'success' | 'warning' | 'danger' }) {
-  const tones = { neutral: 'text-gray-700', primary: 'text-primary', success: 'text-emerald-600', warning: 'text-amber-600', danger: 'text-rose-600' };
+  const tones = { neutral: 'text-on-surface', primary: 'text-[#0B6B3A]', success: 'text-[#0B6B3A]', warning: 'text-amber-600', danger: 'text-[#B42318]' };
   return (
-    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-      <div className={cn('flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide', tones[tone])}>{icon}{label}</div>
-      <p className={cn('text-2xl font-bold mt-1', tones[tone])}>{value}</p>
+    <div className="bg-white p-3.5 rounded-[18px] border border-outline-variant">
+      <div className="flex items-center gap-1.5 text-xs font-bold text-on-surface-variant">{icon}{label}</div>
+      <p className={cn('text-[28px] leading-tight font-extrabold tracking-tight mt-1', tones[tone])}>{value}</p>
     </div>
   );
 }
 
 function BarraProgresso({ percentual, critico, emRisco }: { percentual: number; critico: boolean; emRisco: boolean }) {
-  const cor = critico ? 'bg-rose-500' : emRisco ? 'bg-amber-500' : 'bg-emerald-500';
-  const fundo = critico ? 'bg-rose-100' : emRisco ? 'bg-amber-100' : 'bg-emerald-100';
+  const cor = critico ? 'bg-[#C2352B]' : emRisco ? 'bg-amber-500' : 'bg-[#0B6B3A]';
+  const fundo = critico ? 'bg-[#FBE1DE]' : emRisco ? 'bg-amber-100' : 'bg-[#E3F2EA]';
+  const txt = critico ? 'text-[#B42318]' : emRisco ? 'text-amber-700' : 'text-[#0B6B3A]';
   return (
-    <div className="flex items-center gap-2">
-      <div className={cn('flex-1 h-2.5 rounded-full overflow-hidden', fundo)}>
+    <div className="flex items-center gap-2.5">
+      <div className={cn('flex-1 h-1.5 rounded-full overflow-hidden', fundo)}>
         <div className={cn('h-full transition-all', cor)} style={{ width: `${Math.max(0, Math.min(100, percentual))}%` }} />
       </div>
-      <span className="text-xs font-bold text-gray-700 w-12 text-right">{percentual.toFixed(1).replace('.', ',')}%</span>
+      <span className={cn('text-xs font-bold w-12 text-right', txt)}>{percentual.toFixed(1).replace('.', ',')}%</span>
     </div>
   );
 }
 
 function BadgeSituacao({ aluno }: { aluno: { critico: boolean; em_risco: boolean; registros_total: number; percentual: number } }) {
-  if (aluno.registros_total === 0) return <span className="px-2 py-1 rounded-full text-[10px] font-bold text-gray-600 bg-gray-200">Sem dados</span>;
-  if (aluno.percentual === 0) return <span className="px-2 py-1 rounded-full text-[10px] font-bold text-white bg-rose-500">Crítico</span>;
-  if (aluno.em_risco || aluno.critico) return <span className="px-2 py-1 rounded-full text-[10px] font-bold text-white bg-amber-500">Em risco</span>;
-  return <span className="px-2 py-1 rounded-full text-[10px] font-bold text-white bg-emerald-500">OK</span>;
+  if (aluno.registros_total === 0) return <span className="px-2 py-[3px] rounded-md text-[11px] font-extrabold text-on-surface-variant bg-[#E7ECE9]">Sem dados</span>;
+  if (aluno.percentual === 0) return <span className="px-2 py-[3px] rounded-md text-[11px] font-extrabold text-white bg-[#C2352B]">Crítico</span>;
+  if (aluno.em_risco || aluno.critico) return <span className="px-2 py-[3px] rounded-md text-[11px] font-extrabold text-white bg-amber-500">Em risco</span>;
+  return <span className="px-2 py-[3px] rounded-md text-[11px] font-extrabold text-[#0B6B3A] bg-[#E3F2EA]">OK</span>;
 }
