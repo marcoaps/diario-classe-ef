@@ -412,17 +412,23 @@ export function Attendance() {
     }
   };
 
+  // Resumo da barra fixa (só alunos ativos; transferidos/remanejados ficam de fora)
+  const ativos = alunos.filter(a => !transferidos.has(a.id));
+  const totalPresentes = ativos.filter(a => records[a.id]?.presente === true).length;
+  const totalFaltas = ativos.length - totalPresentes;
+  const totalTransf = alunos.length - ativos.length;
+
   return (
     <div className="flex flex-col h-full bg-background relative">
       {/* Abas */}
-      <div className="flex border-b border-gray-200 bg-white sticky top-0 z-10">
+      <div className="flex bg-surface-container rounded-2xl p-1 mt-3 sticky top-0 z-10">
         <button
           onClick={() => setAbaAtiva('chamada')}
           className={cn(
-            'flex-1 py-3 text-sm font-semibold transition-all border-b-2',
+            'flex-1 h-10 text-[13px] rounded-[10px] transition-all',
             abaAtiva === 'chamada'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
+              ? 'bg-white text-primary font-extrabold shadow-sm'
+              : 'text-on-surface-variant font-semibold'
           )}
         >
           Chamada
@@ -430,10 +436,10 @@ export function Attendance() {
         <button
           onClick={() => setAbaAtiva('conteudo')}
           className={cn(
-            'flex-1 py-3 text-sm font-semibold transition-all border-b-2',
+            'flex-1 h-10 text-[13px] rounded-[10px] transition-all',
             abaAtiva === 'conteudo'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
+              ? 'bg-white text-primary font-extrabold shadow-sm'
+              : 'text-on-surface-variant font-semibold'
           )}
         >
           Conteudo
@@ -459,8 +465,8 @@ export function Attendance() {
       {/* Aba Chamada */}
       {abaAtiva === 'chamada' && (
         <>
-          <div className="p-4 border-b border-gray-200 bg-background/90 backdrop-blur-md shadow-sm">
-            <h2 className="text-2xl font-bold tracking-tight mb-3 text-primary-dark">Chamada Expressa</h2>
+          <div className="p-4 pt-3 border-b border-outline-variant bg-background/90 backdrop-blur-md">
+            <h2 className="text-xl font-extrabold tracking-tight mb-3 text-on-surface">Chamada Expressa</h2>
             <div className="flex gap-2 items-center">
               <input
                 type="date"
@@ -469,7 +475,7 @@ export function Attendance() {
                 className="bg-surface border border-gray-300 rounded-xl p-3 text-textPrimary text-base font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all flex-1"
               />
             </div>
-            <label className="flex items-center gap-2 mt-3 px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 cursor-pointer">
+            <label className="flex items-center gap-2 mt-3 px-3 py-3 rounded-[14px] bg-white border border-outline-variant cursor-pointer">
               <input
                 type="checkbox"
                 checked={semQuadra}
@@ -484,16 +490,16 @@ export function Attendance() {
               <button
                 onClick={() => handleMarcarTodos(true)}
                 disabled={loading || alunos.length === 0}
-                className="flex-1 h-11 rounded-xl font-bold text-sm bg-teal-600 text-white border border-teal-700 hover:bg-teal-700 active:scale-95 transition-all disabled:opacity-50"
+                className="flex-1 h-11 rounded-xl font-extrabold text-[13px] bg-[#E3F2EA] text-[#0B6B3A] border border-[#B7DCC6] active:scale-95 transition-all disabled:opacity-50"
               >
-                Marcar Todos Presentes
+                Todos presentes
               </button>
               <button
                 onClick={() => handleMarcarTodos(false)}
                 disabled={loading || alunos.length === 0}
-                className="flex-1 h-11 rounded-xl font-bold text-sm bg-red-600 text-white border border-red-700 hover:bg-red-700 active:scale-95 transition-all disabled:opacity-50"
+                className="flex-1 h-11 rounded-xl font-extrabold text-[13px] bg-[#FDECEA] text-[#B42318] border border-[#F1C7C2] active:scale-95 transition-all disabled:opacity-50"
               >
-                Marcar Todas Faltas
+                Todos faltaram
               </button>
             </div>
             <div className={cn("flex gap-2 items-center mt-2", semQuadra && "opacity-40 pointer-events-none")}>
@@ -536,7 +542,7 @@ export function Attendance() {
                   return (
                     <div
                       key={aluno.id}
-                      className="p-3 rounded-xl border border-gray-200 flex items-center justify-between opacity-40 bg-gray-50"
+                      className="p-3 rounded-2xl border border-dashed border-[#D3DCD7] flex items-center justify-between opacity-60"
                     >
                       <span className="font-semibold text-base text-gray-400 line-through">
                         {aluno.numero_chamada ? <span className="font-mono mr-2 text-sm">{aluno.numero_chamada}</span> : null}
@@ -555,33 +561,43 @@ export function Attendance() {
                   <div
                     key={aluno.id}
                     className={cn(
-                      "rounded-xl border shadow-sm overflow-hidden",
-                      isPresent ? "border-teal-500/30 ring-1 ring-teal-200" : "border-red-500/30 ring-1 ring-red-200"
+                      "rounded-2xl border overflow-hidden",
+                      isPresent ? "border-outline-variant bg-white" : "border-[#F1C7C2] bg-[#FFF5F4]"
                     )}
                   >
-                    <button
-                      onClick={() => handleToggle(aluno.id)}
-                      className="w-full p-3 bg-white transition-all flex items-center justify-between active:scale-[0.98]"
-                    >
-                      <span className={cn("font-semibold text-base transition-colors flex items-center gap-2", isPresent ? "text-teal-800" : "text-red-800")}>
-                        {aluno.numero_chamada ? <span className="font-mono text-gray-500 mr-2 text-sm">{aluno.numero_chamada}</span> : null}
+                    <div className="w-full p-3 flex items-center gap-2.5">
+                      <span className={cn("w-7 text-center text-xs font-bold shrink-0", isPresent ? "text-on-surface-variant" : "text-[#B42318]")}>
+                        {aluno.numero_chamada || ''}
+                      </span>
+                      <span className={cn("flex-1 min-w-0 font-bold text-sm leading-snug", isPresent ? "text-on-surface" : "text-[#7A1A12]")}>
                         {aluno.nome}
                         {isEspecial && (
                           <span
                             title={especiais.get(aluno.id) || 'AEE — sem CID/diagnóstico registrado'}
-                            className="ml-1 px-1.5 py-0.5 rounded-md bg-purple-100 text-purple-700 text-[10px] font-bold border border-purple-300"
+                            className="ml-1.5 px-1.5 py-0.5 rounded-md bg-[#F0E9FC] text-[#6D3FC0] text-[10px] font-extrabold align-[2px]"
                           >
                             AEE
                           </span>
                         )}
                       </span>
-                      <div className={cn(
-                        "w-10 h-10 rounded-lg flex justify-center items-center font-bold text-lg shadow-sm border",
-                        isPresent ? "bg-teal-600 text-white border-teal-700" : "bg-red-600 text-white border-red-700"
-                      )}>
-                        {isPresent ? "P" : "F"}
+                      {/* P/F: dois botões grandes; só alterna se o estado for diferente */}
+                      <div className={cn("flex rounded-xl p-[3px] shrink-0", isPresent ? "bg-surface-container" : "bg-white")}>
+                        <button
+                          aria-label="Presente"
+                          onClick={() => { if (!isPresent) handleToggle(aluno.id); }}
+                          className={cn("w-11 h-[38px] rounded-[9px] text-sm font-extrabold transition-all", isPresent ? "bg-[#0B6B3A] text-white" : "text-on-surface-variant")}
+                        >
+                          P
+                        </button>
+                        <button
+                          aria-label="Falta"
+                          onClick={() => { if (isPresent) handleToggle(aluno.id); }}
+                          className={cn("w-11 h-[38px] rounded-[9px] text-sm font-extrabold transition-all", !isPresent ? "bg-[#C2352B] text-white" : "text-on-surface-variant")}
+                        >
+                          F
+                        </button>
                       </div>
-                    </button>
+                    </div>
                     {isPresent && semQuadra && (
                       <div className="px-3 pb-3 pt-1 bg-white">
                         <span className="text-[11px] text-gray-400 italic">Sem atividade de quadra — vale a frequência padrão (0,5)</span>
@@ -646,22 +662,29 @@ export function Attendance() {
             )}
           </div>
 
-          <div className="fixed bottom-20 left-4 right-4 max-w-md mx-auto z-20 flex gap-2">
+          <div className="fixed bottom-20 left-3 right-3 max-w-md mx-auto z-20 flex items-center gap-3 bg-[#10231A] text-white rounded-[22px] py-3 pl-4 pr-3 shadow-[0_12px_30px_rgba(16,35,26,0.30)]">
+            <div className="flex-1 min-w-0">
+              <p className="text-[15px] font-extrabold leading-tight">
+                <span className="text-[#7FD3A3]">{totalPresentes} presentes</span> · <span className="text-[#FF9A8F]">{totalFaltas} {totalFaltas === 1 ? 'falta' : 'faltas'}</span>
+              </p>
+              <p className="text-xs text-[#A9BBB1]">{totalTransf > 0 ? `${totalTransf} transferido(s) · ` : ''}{turmaAtual?.name || turmaNorm}</p>
+            </div>
             <button
               onClick={handleLimparChamadaDoDia}
               disabled={saving || loading || alunos.length === 0}
               title="Apagar a chamada já registrada desta turma neste dia"
-              className="h-14 px-4 bg-white border border-gray-200 text-error rounded-2xl shadow-sm flex items-center justify-center hover:bg-error-container/20 active:scale-95 transition-all disabled:opacity-50"
+              aria-label="Apagar chamada do dia"
+              className="w-11 h-12 rounded-[14px] bg-white/10 text-[#FF9A8F] flex items-center justify-center active:scale-95 transition-all disabled:opacity-50"
             >
               <Trash2 className="w-5 h-5" />
             </button>
             <button
               onClick={handleSave}
               disabled={saving || loading || alunos.length === 0}
-              className="flex-1 h-14 bg-primary text-white font-bold text-lg rounded-2xl shadow-[0_8px_16px_rgba(11,122,61,0.25)] flex items-center justify-center gap-2 hover:bg-primary-dark active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100"
+              className="h-12 px-4 rounded-[14px] bg-[#F2B632] text-[#2B1F00] text-sm font-extrabold flex items-center gap-2 active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100"
             >
-              {saving ? <Loader2 className="w-6 h-6 animate-spin" /> : <Save className="w-6 h-6" />}
-              {saving ? 'Salvando...' : 'Registrar Chamada'}
+              {saving ? <Loader2 className="w-[18px] h-[18px] animate-spin" /> : <Save className="w-[18px] h-[18px]" />}
+              {saving ? 'Salvando...' : 'Registrar'}
             </button>
           </div>
         </>
