@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useStore } from '../../store';
 import { cn } from '../AppLayout';
-import { Save, Loader2, X, Trash2 } from 'lucide-react';
+import { Save, Loader2, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '../../data/supabase';
 import { ConteudoAulas } from './ConteudoAulas';
@@ -386,32 +386,6 @@ export function Attendance() {
     }
   };
 
-  // Apaga do banco a chamada já registrada dessa turma nesse dia (ex: chamada
-  // feita só de teste) — só mexe nos registros de frequência dos alunos desta
-  // turma nesta data, nenhuma outra turma/dia é afetada.
-  const handleLimparChamadaDoDia = async () => {
-    if (!turmaNorm || alunos.length === 0) return;
-    if (!window.confirm(`Apagar a chamada de ${turmaAtual?.name || turmaNorm} do dia ${date}? Essa ação não pode ser desfeita.`)) return;
-    setSaving(true);
-    try {
-      const ids = alunos.map(a => a.id);
-      const { error } = await supabase.from('frequencia').delete().in('aluno_id', ids).eq('data', date);
-      if (error) throw error;
-      await descartarChamadaPendente(turmaNorm, date);
-
-      const vazios: Record<string, RegistroChamada> = {};
-      alunos.forEach(a => { vazios[a.id] = registroVazio(false, false); });
-      setRecords(vazios);
-      setSemQuadra(false);
-      alert('Chamada apagada.');
-    } catch (err) {
-      alert('Erro ao apagar a chamada. Tente novamente.');
-      console.error(err);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   // Mantém o botão da turma escolhida visível na fileira de turmas
   useEffect(() => {
     if (!selectedClassId) return;
@@ -695,15 +669,6 @@ export function Attendance() {
               </p>
               <p className="text-xs text-[#A9BBB1]">{totalTransf > 0 ? `${totalTransf} transferido(s) · ` : ''}{turmaAtual?.name || turmaNorm}</p>
             </div>
-            <button
-              onClick={handleLimparChamadaDoDia}
-              disabled={saving || loading || alunos.length === 0}
-              title="Apagar a chamada já registrada desta turma neste dia"
-              aria-label="Apagar chamada do dia"
-              className="w-11 h-12 rounded-[14px] bg-white/10 text-[#FF9A8F] flex items-center justify-center active:scale-95 transition-all disabled:opacity-50"
-            >
-              <Trash2 className="w-5 h-5" />
-            </button>
             <button
               onClick={handleSave}
               disabled={saving || loading || alunos.length === 0}
