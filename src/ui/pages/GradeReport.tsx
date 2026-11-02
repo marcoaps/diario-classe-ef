@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { cn } from "../AppLayout";
-import { X, FileDown, Save, Upload, Loader2 } from "lucide-react";
+import { X, FileDown, Save, Upload, Loader2, Check } from "lucide-react";
 import { salvarNotas, buscarNotas, sincronizarNomesAlunos, supabase } from "../../data/supabase";
 import { buscarRemanejados, ehTransferenciaErroneaDeImportacao, chaveNomeSituacao, chavesCanonicasDeNomesCompativeis } from "../../domain/situacaoAluno";
 import { bimestreAtual } from "../../domain/useRelatorioFrequencia";
@@ -355,10 +355,10 @@ export function GradeReport() {
   };
 
   const getBarColor = (media: number) => {
-    if (media >= 7) return "#16a34a";
-    if (media >= 5) return "#2563eb";
-    if (media >= 3) return "#d97706";
-    return "#dc2626";
+    if (media >= 7) return "#0B6B3A";
+    if (media >= 5) return "#D9A21B";
+    if (media >= 3) return "#E07B1A";
+    return "#C2352B";
   };
 
   // Gera PDF no layout do Simaed
@@ -589,13 +589,22 @@ export function GradeReport() {
     return "text-[#B42318] bg-[#FDECEA]";
   };
 
+  const faixas = [
+    { rot: '9 a 10', cor: '#4CC785', n: comNota.filter(a => (a.nota as number) >= 9).length },
+    { rot: '5 a 8,9', cor: '#F2B632', n: comNota.filter(a => (a.nota as number) >= 5 && (a.nota as number) < 9).length },
+    { rot: '3 a 4,9', cor: '#F08A3C', n: comNota.filter(a => (a.nota as number) >= 3 && (a.nota as number) < 5).length },
+    { rot: 'abaixo de 3', cor: '#F1695D', n: comNota.filter(a => (a.nota as number) < 3).length },
+  ];
+
   return (
     <div className="flex flex-col h-full bg-background relative" id="report-content">
-      <div className="p-4 pt-3 border-b border-outline-variant sticky top-0 bg-background/90 backdrop-blur-md z-10 print:hidden">
+      <div className="px-4 pt-3 pb-3 print:hidden">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-xl font-extrabold tracking-tight text-on-surface">Notas</h2>
           {view === "notas" && alunos.length > 0 && saved && (
-            <span className="text-[11px] font-extrabold text-[#0B6B3A] bg-[#E3F2EA] px-2.5 py-1.5 rounded-full">✓ Salvo</span>
+            <span className="flex items-center gap-1 text-[11px] font-extrabold text-[#0B6B3A] bg-[#E3F2EA] px-2.5 py-1.5 rounded-full">
+              <Check className="w-3.5 h-3.5" aria-hidden /> Salvo
+            </span>
           )}
         </div>
 
@@ -610,23 +619,26 @@ export function GradeReport() {
         </div>
 
         {view !== "grafico" && (
-          <div className="mb-3 flex flex-col gap-1.5">
-            <span className="text-[11px] font-extrabold tracking-[0.08em] text-on-surface-variant">{serieAtual}º ANO</span>
-            <div className="flex gap-1.5">
-              {TURMAS.filter(t => t.charAt(0) === serieAtual).map(t => (
-                <button key={t} onClick={() => setTurma(t)}
-                  className={cn("flex-1 py-2.5 rounded-[10px] text-[13px] transition-all",
-                    turma === t ? "bg-[#0B6B3A] text-white font-extrabold" : "bg-surface-container text-on-surface font-bold")}>
-                  {t}
+          <div className="mb-3 flex flex-col gap-2">
+            <div className="flex gap-1.5" role="group" aria-label="Série">
+              {series.map(s => (
+                <button key={s} onClick={() => { if (s !== serieAtual) setTurma(TURMAS.find(t => t.charAt(0) === s)!); }}
+                  aria-pressed={serieAtual === s}
+                  className={cn("flex-1 h-9 rounded-full text-[13px] border transition-all",
+                    serieAtual === s ? "border-[#0B6B3A] text-[#0B6B3A] bg-[#E3F2EA] font-extrabold" : "border-[#D3DCD7] bg-white text-on-surface-variant font-bold")}>
+                  {s}º ano
                 </button>
               ))}
             </div>
-            <div className="flex gap-1.5">
-              {series.map(s => (
-                <button key={s} onClick={() => { if (s !== serieAtual) setTurma(TURMAS.find(t => t.charAt(0) === s)!); }}
-                  className={cn("px-2.5 py-1.5 rounded-full text-xs font-bold border transition-all",
-                    serieAtual === s ? "border-[#0B6B3A] text-[#0B6B3A] bg-[#E3F2EA]" : "border-[#D3DCD7] text-on-surface-variant")}>
-                  {s}º
+            <div className="flex gap-1.5" role="group" aria-label="Turma">
+              {TURMAS.filter(t => t.charAt(0) === serieAtual).map(t => (
+                <button key={t} onClick={() => setTurma(t)}
+                  aria-pressed={turma === t}
+                  className={cn("flex-1 h-11 rounded-xl text-[14px] tracking-tight transition-all active:scale-95",
+                    turma === t
+                      ? "bg-gradient-to-b from-[#0F7F45] to-[#0B5A31] text-white font-extrabold shadow-[0_6px_14px_rgba(11,107,58,0.3)]"
+                      : "bg-white border border-[#DCEBE2] text-on-surface font-bold")}>
+                  {t}
                 </button>
               ))}
             </div>
@@ -660,6 +672,25 @@ export function GradeReport() {
                 <p className="text-xs text-[#B9D9C7]">Transferidos</p>
                 <p className="text-[30px] font-extrabold tracking-tight leading-tight">{transferidosTotal}</p>
               </div>
+            </div>
+          )}
+          {comNota.length > 0 && (
+            <div>
+              <div
+                className="flex h-2 rounded-full overflow-hidden bg-white/10"
+                role="img"
+                aria-label={`Distribuição das notas: ${faixas.filter(f => f.n > 0).map(f => `${f.n} de ${f.rot}`).join(', ')}`}
+              >
+                {faixas.map(f => f.n > 0 && <span key={f.rot} style={{ width: `${(f.n / comNota.length) * 100}%`, background: f.cor }} />)}
+              </div>
+              <p className="mt-2 flex flex-wrap gap-x-3.5 gap-y-1 text-xs text-[#BFE3CD] tabular-nums">
+                {faixas.map(f => f.n > 0 && (
+                  <span key={f.rot} className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full" style={{ background: f.cor }} aria-hidden="true" />
+                    {f.rot} <b className="text-white font-extrabold">{f.n}</b>
+                  </span>
+                ))}
+              </p>
             </div>
           )}
           <div className="flex gap-2">
@@ -698,9 +729,9 @@ export function GradeReport() {
           alunos.length > 0 ? (
             <>
               {syncMsg && <div className="mb-2 text-xs text-center text-blue-600 font-semibold">{syncMsg}</div>}
-              <div className="bg-white rounded-[20px] border border-outline-variant overflow-hidden">
+              <div className="bg-white rounded-[20px] border border-[#DCEBE2] shadow-[0_1px_2px_rgba(5,59,32,0.05)]">
                 {/* Header da lista */}
-                <div className="flex items-center px-3.5 py-2.5 bg-[#F6F8F7] border-b border-surface-container text-[11px] font-extrabold tracking-[0.06em] text-on-surface-variant">
+                <div className="sticky top-0 z-[5] flex items-center px-3.5 py-2.5 bg-[#F1F6F3] rounded-t-[19px] border-b border-[#DCEBE2] text-[11px] font-extrabold tracking-[0.06em] text-on-surface-variant">
                   <span className="w-6 shrink-0">Nº</span>
                   <span className="flex-1">ALUNO</span>
                   <span className="w-12 text-center">FALTAS</span>
@@ -712,12 +743,12 @@ export function GradeReport() {
                     const status = !transferido && aluno.nota !== null ? getStatus(aluno.nota!) : null;
                     return (
                       <div key={aluno.nome} className="px-3.5 py-3 flex items-center gap-1">
-                        <span className="text-xs text-on-surface-variant w-6 shrink-0">{aluno.num}</span>
+                        <span className="text-xs text-on-surface-variant w-6 shrink-0 tabular-nums">{aluno.num}</span>
                         <span className="flex-1 min-w-0 flex flex-col">
-                          <span className={cn("text-sm font-bold truncate", transferido ? "text-on-surface-variant line-through" : "text-on-surface")}>{formatarNome(aluno.nome)}</span>
+                          <span className={cn("text-sm font-bold leading-snug", transferido ? "text-on-surface-variant line-through" : "text-on-surface")}>{formatarNome(aluno.nome)}</span>
                           {transferido ? (
                             <span className="text-[11px] text-[#B42318] font-semibold">{situacaoAbrev(aluno.situacao)}{aluno.data_situacao ? ` · ${aluno.data_situacao}` : ''}</span>
-                          ) : status ? (
+                          ) : status && status.text !== "Aprovado" ? (
                             <span className="text-[11px] text-on-surface-variant">{status.text}</span>
                           ) : null}
                         </span>
@@ -742,33 +773,32 @@ export function GradeReport() {
           )
         ) : view === "desempenho" ? (
           desempenho.length > 0 ? (
-            <div className="bg-surface rounded-3xl border border-gray-200 overflow-hidden shadow-sm">
+            <div className="bg-white rounded-[20px] border border-[#DCEBE2] overflow-hidden shadow-[0_1px_2px_rgba(5,59,32,0.05)]">
               <div className="overflow-x-auto">
-                <table className="w-full text-xs">
+                <table className="w-full text-[13px]">
                   <thead>
-                    <tr className="bg-gray-50 border-b border-gray-200">
-                      <th className="p-2 text-left font-bold text-gray-600">N</th>
-                      <th className="p-2 text-left font-bold text-gray-600">Nome</th>
-                      <th className="p-2 text-center font-bold text-gray-600">1B</th>
-                      <th className="p-2 text-center font-bold text-gray-600">2B</th>
-                      <th className="p-2 text-center font-bold text-gray-600">3B</th>
-                      <th className="p-2 text-center font-bold text-gray-600">4B</th>
-                      <th className="p-2 text-center font-bold text-gray-600">Med</th>
+                    <tr className="bg-[#F1F6F3] border-b border-[#DCEBE2]">
+                      <th className="px-2 py-2.5 text-left text-[11px] font-extrabold tracking-wide text-on-surface-variant">N</th>
+                      <th className="px-2 py-2.5 text-left text-[11px] font-extrabold tracking-wide text-on-surface-variant">Nome</th>
+                      <th className="px-1 py-2.5 text-center text-[11px] font-extrabold tracking-wide text-on-surface-variant">1B</th>
+                      <th className="px-1 py-2.5 text-center text-[11px] font-extrabold tracking-wide text-on-surface-variant">2B</th>
+                      <th className="px-1 py-2.5 text-center text-[11px] font-extrabold tracking-wide text-on-surface-variant">3B</th>
+                      <th className="px-1 py-2.5 text-center text-[11px] font-extrabold tracking-wide text-on-surface-variant">4B</th>
+                      <th className="px-1 py-2.5 text-center text-[11px] font-extrabold tracking-wide text-on-surface-variant">Med</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-[#EDF3EF]">
                     {desempenho.map(aluno => {
                       const media = aluno.media;
-                      const mediaColor = media === null ? "text-gray-400" : media >= 5 ? "text-green-600" : media >= 3 ? "text-yellow-600" : "text-red-600";
-                      return (
+                                            return (
                         <tr key={aluno.nome} className="hover:bg-gray-50/50">
-                          <td className="p-2 font-mono text-gray-400">{aluno.num}</td>
-                          <td className="p-2 font-semibold text-textPrimary max-w-[100px] truncate">{formatarNome(aluno.nome)}</td>
-                          <td className="p-2 text-center text-blue-600 font-bold">{fmtNota(aluno.b1)}</td>
-                          <td className="p-2 text-center text-blue-600 font-bold">{fmtNota(aluno.b2)}</td>
-                          <td className="p-2 text-center text-blue-600 font-bold">{fmtNota(aluno.b3)}</td>
-                          <td className="p-2 text-center text-blue-600 font-bold">{fmtNota(aluno.b4)}</td>
-                          <td className={cn("p-2 text-center font-bold", mediaColor)}>{fmtNota(media)}</td>
+                          <td className="px-2 py-2.5 text-on-surface-variant tabular-nums">{aluno.num}</td>
+                          <td className="px-2 py-2.5 font-bold text-on-surface max-w-[130px] leading-snug">{formatarNome(aluno.nome)}</td>
+                          <td className="px-1 py-2.5 text-center text-on-surface font-semibold tabular-nums">{fmtNota(aluno.b1)}</td>
+                          <td className="px-1 py-2.5 text-center text-on-surface font-semibold tabular-nums">{fmtNota(aluno.b2)}</td>
+                          <td className="px-1 py-2.5 text-center text-on-surface font-semibold tabular-nums">{fmtNota(aluno.b3)}</td>
+                          <td className="px-1 py-2.5 text-center text-on-surface font-semibold tabular-nums">{fmtNota(aluno.b4)}</td>
+                          <td className="px-1 py-2.5 text-center"><span className={cn("inline-block min-w-[40px] text-xs font-extrabold px-2 py-1 rounded-lg tabular-nums", notaChip(media))}>{fmtNota(media)}</span></td>
                         </tr>
                       );
                     })}
@@ -781,8 +811,8 @@ export function GradeReport() {
           )
         ) : (
           grafico.length > 0 ? (
-            <div className="bg-surface rounded-3xl border border-gray-200 p-4 shadow-sm">
-              <h3 className="text-sm font-bold text-gray-700 mb-4 text-center">Media por Turma -- {bimestre}o Bimestre</h3>
+            <div className="bg-white rounded-[20px] border border-[#DCEBE2] p-4 shadow-[0_1px_2px_rgba(5,59,32,0.05)]">
+              <h3 className="text-sm font-extrabold text-on-surface mb-4">Média por turma · {bimestre}º bimestre</h3>
               <div className="overflow-x-auto">
                 <svg width={grafico.length * (BAR_W + GAP) + 40} height={BAR_H + 40}>
                   {grafico.map((item, i) => {
@@ -791,11 +821,11 @@ export function GradeReport() {
                     const y = BAR_H - barH;
                     return (
                       <g key={item.turma}>
-                        <rect x={x} y={y} width={BAR_W} height={barH} fill={getBarColor(item.media)} rx={4} />
-                        <text x={x + BAR_W / 2} y={y - 4} textAnchor="middle" fontSize={9} fill="#374151" fontWeight="bold">
+                        <rect x={x} y={y} width={BAR_W} height={barH} fill={getBarColor(item.media)} rx={5} />
+                        <text x={x + BAR_W / 2} y={y - 4} textAnchor="middle" fontSize={10} fill="#10231A" fontWeight="bold">
                           {item.media.toFixed(1).replace(".", ",")}
                         </text>
-                        <text x={x + BAR_W / 2} y={BAR_H + 14} textAnchor="middle" fontSize={9} fill="#6b7280">
+                        <text x={x + BAR_W / 2} y={BAR_H + 14} textAnchor="middle" fontSize={10} fill="#5B6B63">
                           {item.turma}
                         </text>
                       </g>
@@ -803,11 +833,11 @@ export function GradeReport() {
                   })}
                 </svg>
               </div>
-              <div className="flex justify-center gap-4 mt-3 text-xs">
-                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-600 inline-block" /> 7,0</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-blue-600 inline-block" /> 5,0</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-amber-600 inline-block" /> 3,0</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-600 inline-block" /> 3,0</span>
+              <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3 text-xs text-on-surface-variant">
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#0B6B3A] inline-block" /> 7 ou mais</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#D9A21B] inline-block" /> 5 a 6,9</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#E07B1A] inline-block" /> 3 a 4,9</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#C2352B] inline-block" /> abaixo de 3</span>
               </div>
             </div>
           ) : (
