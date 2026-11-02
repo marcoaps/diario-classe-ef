@@ -4,7 +4,7 @@ import { buscarHistoricoFrequencia, buscarDatasComChamada } from '../../data/sup
 import { useStore } from '../../store';
 import { supabase } from '../../data/supabase';
 import { format } from 'date-fns';
-import { Loader2, Filter, CheckCircle2, XCircle, Trash2, Pencil, CalendarClock } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, Trash2, Pencil, CalendarClock, ChevronDown } from 'lucide-react';
 import { cn } from '../AppLayout';
 import { opcaoParticipacao, labelMotivoJustificativa } from '../../domain/frequenciaPontos';
 
@@ -124,180 +124,207 @@ export function AttendanceHistory() {
     }
   };
 
-  return (
-    <div className="flex flex-col gap-6 font-sans animate-in fade-in pb-24 bg-gray-50 min-h-screen">
-      <div className="bg-white border-b border-gray-100 p-6 md:px-8 space-y-4 shadow-sm">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <Filter className="w-5 h-5 text-teal-600" />
-            Histórico
-          </h2>
+  const dataExtenso = (() => {
+    const d = new Date(dataAtual + 'T00:00:00');
+    return isNaN(d.getTime()) ? '' : d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+  })();
 
-          {historico.length > 0 && (
-            <button
-              onClick={handleExcluir}
-              disabled={deleting}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-50 text-red-600 border border-red-200 text-sm font-bold hover:bg-red-100 active:scale-95 transition-all disabled:opacity-50"
-            >
-              {deleting
-                ? <Loader2 className="w-4 h-4 animate-spin" />
-                : <Trash2 className="w-4 h-4" />}
-              {deleting ? 'Excluindo...' : 'Excluir Chamada'}
-            </button>
-          )}
+  const cartao = 'bg-white rounded-[20px] border border-[#DCEBE2] shadow-[0_1px_2px_rgba(5,59,32,0.05)]';
+  const campoData = 'w-full h-11 bg-white border border-[#DCEBE2] rounded-xl px-3 text-sm font-bold text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all';
+
+  return (
+    <div className="flex flex-col gap-4 font-sans animate-in fade-in pb-24 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-xl font-extrabold tracking-tight leading-tight text-on-surface">Histórico</h2>
+          <p className="text-xs text-on-surface-variant mt-0.5 first-letter:uppercase">{dataExtenso}</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs font-semibold text-gray-500 mb-1 block">Data</label>
-            <input
-              type="date"
-              value={dataAtual}
-              onChange={(e) => setDataAtual(e.target.value)}
-              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-gray-500 mb-1 block">Turma</label>
-            <select
-              value={turmaId}
-              onChange={(e) => setTurmaId(e.target.value)}
-              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
-            >
-              <option value="ALL">Todas as Turmas</option>
-              {uniqueClassRooms.map(cr => (
-                <option key={cr.id} value={cr.name}>{cr.name}</option>
-              ))}
-            </select>
+        {historico.length > 0 && (
+          <button
+            onClick={handleExcluir}
+            disabled={deleting}
+            className="shrink-0 flex items-center gap-1.5 px-3 h-10 rounded-xl bg-[#FDECEA] text-[#B42318] border border-[#F1C7C2] text-[13px] font-extrabold active:scale-95 transition-all disabled:opacity-50"
+          >
+            {deleting
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <Trash2 className="w-4 h-4" aria-hidden />}
+            {deleting ? 'Excluindo...' : 'Excluir Chamada'}
+          </button>
+        )}
+      </div>
+
+      <div className={cn(cartao, 'p-4 flex flex-col gap-3')}>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-bold text-on-surface-variant">Data</span>
+          <input type="date" value={dataAtual} onChange={(e) => setDataAtual(e.target.value)} className={campoData} />
+        </label>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-bold text-on-surface-variant">Turma</span>
+          <div
+            className="flex items-center gap-2 overflow-x-auto py-1 -mx-4 px-4 [scrollbar-width:none]"
+            style={{ WebkitMaskImage: 'linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 28px), transparent 100%)', maskImage: 'linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 28px), transparent 100%)' }}
+            role="group"
+            aria-label="Turma"
+          >
+            {[{ id: 'ALL', name: 'ALL', rotulo: 'Todas' }, ...uniqueClassRooms.map((cr: any) => ({ id: cr.id, name: cr.name, rotulo: cr.name }))].map((cr, i, lista) => {
+              const ativo = turmaId === cr.name;
+              const novaSerie = i > 1 && cr.name.charAt(0) !== lista[i - 1].name.charAt(0);
+              return (
+                <React.Fragment key={cr.id}>
+                  {novaSerie && <span aria-hidden="true" className="shrink-0 w-px h-6 bg-[#D3DCD7] mx-1" />}
+                  <button
+                    onClick={() => setTurmaId(cr.name)}
+                    aria-pressed={ativo}
+                    className={cn(
+                      'shrink-0 min-w-[56px] h-11 px-3.5 rounded-[14px] text-sm tracking-tight transition-all duration-150 active:scale-95',
+                      ativo
+                        ? 'text-white font-extrabold bg-gradient-to-b from-[#0F7F45] to-[#0B5A31] shadow-[0_6px_14px_rgba(11,107,58,0.3)]'
+                        : 'text-on-surface font-bold bg-white border border-[#DCEBE2]'
+                    )}
+                  >
+                    {cr.rotulo}
+                  </button>
+                </React.Fragment>
+              );
+            })}
           </div>
         </div>
       </div>
 
       {turmaId !== 'ALL' && (
-        <div className="px-4 md:px-6">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
-              <p className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                <CalendarClock className="w-4 h-4 text-teal-600" />
-                {turmaId} — Chamadas registradas
-              </p>
-              <span className="text-xs font-bold text-gray-400">{datasFiltradas.length} {datasFiltradas.length === 1 ? 'data' : 'datas'}</span>
-            </div>
+        <section aria-label="Chamadas registradas" className={cn(cartao, 'overflow-hidden')}>
+          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-[#EDF3EF] bg-[#F1F6F3]">
+            <h3 className="text-sm font-extrabold text-on-surface flex items-center gap-2">
+              <CalendarClock className="w-4 h-4 text-[#0B6B3A]" aria-hidden />
+              {turmaId} · Chamadas registradas
+            </h3>
+            <span className="text-xs font-bold text-on-surface-variant tabular-nums">{datasFiltradas.length} {datasFiltradas.length === 1 ? 'data' : 'datas'}</span>
+          </div>
 
-            <div className="grid grid-cols-2 gap-3 p-4 border-b border-gray-100">
-              <div>
-                <label className="text-xs font-semibold text-gray-500 mb-1 block">Período — de</label>
-                <input
-                  type="date"
-                  value={filtroInicio}
-                  onChange={(e) => setFiltroInicio(e.target.value)}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-gray-500 mb-1 block">até</label>
-                <input
-                  type="date"
-                  value={filtroFim}
-                  onChange={(e) => setFiltroFim(e.target.value)}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
-                />
-              </div>
+          <details className="group px-4 py-3 border-b border-[#EDF3EF]" open={!!(filtroInicio || filtroFim)}>
+            <summary className="flex items-center justify-between text-[13px] font-bold text-on-surface-variant cursor-pointer list-none select-none [&::-webkit-details-marker]:hidden">
+              Filtrar por período
+              <ChevronDown className="w-4 h-4 transition-transform group-open:rotate-180" aria-hidden />
+            </summary>
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-bold text-on-surface-variant">De</span>
+                <input type="date" value={filtroInicio} onChange={(e) => setFiltroInicio(e.target.value)} className={campoData} />
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-bold text-on-surface-variant">Até</span>
+                <input type="date" value={filtroFim} onChange={(e) => setFiltroFim(e.target.value)} className={campoData} />
+              </label>
             </div>
+          </details>
 
-            {loadingDatas ? (
-              <div className="flex items-center justify-center gap-2 py-8 text-gray-500">
-                <Loader2 className="w-5 h-5 animate-spin" /> Carregando datas...
-              </div>
-            ) : datasFiltradas.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-8">Nenhuma chamada registrada para essa turma{filtroInicio || filtroFim ? ' no período selecionado' : ''}.</p>
-            ) : (
-              <div className="flex flex-col divide-y divide-gray-100">
-                {datasFiltradas.map(d => (
+          {loadingDatas ? (
+            <div className="flex items-center justify-center gap-2 py-8 text-on-surface-variant text-sm">
+              <Loader2 className="w-5 h-5 animate-spin text-primary" /> Carregando datas...
+            </div>
+          ) : datasFiltradas.length === 0 ? (
+            <p className="text-sm text-on-surface-variant text-center py-8 px-4">Nenhuma chamada registrada para essa turma{filtroInicio || filtroFim ? ' no período selecionado' : ''}.</p>
+          ) : (
+            <div className="flex flex-col divide-y divide-[#EDF3EF]">
+              {datasFiltradas.map(d => {
+                const total = d.presentes + d.faltas;
+                const dia = new Date(d.data + 'T00:00:00');
+                return (
                   <button
                     key={d.data}
                     onClick={() => handleEditarChamada(d.data)}
-                    className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+                    aria-label={`Editar chamada de ${format(dia, 'dd/MM/yyyy')}`}
+                    className="flex items-center gap-3 px-4 py-3 text-left active:bg-[#F1F8F4] transition-colors focus-visible:outline-none focus-visible:bg-[#F1F8F4]"
                   >
-                    <div>
-                      <p className="font-bold text-gray-900 text-sm">{format(new Date(d.data + 'T00:00:00'), 'dd/MM/yyyy')}</p>
-                      <p className="text-xs text-gray-400">{d.presentes} presente{d.presentes !== 1 ? 's' : ''} · {d.faltas} falta{d.faltas !== 1 ? 's' : ''} — chamada registrada</p>
-                    </div>
-                    <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-teal-50 text-teal-700 border border-teal-200 shrink-0">
-                      <Pencil className="w-3.5 h-3.5" /> Editar chamada
+                    <span className="flex-1 min-w-0">
+                      <span className="flex items-baseline gap-2">
+                        <span className="font-extrabold text-sm text-on-surface tabular-nums">{format(dia, 'dd/MM/yyyy')}</span>
+                        <span className="text-xs text-on-surface-variant">{dia.toLocaleDateString('pt-BR', { weekday: 'long' })}</span>
+                      </span>
+                      <span className="block mt-1.5 h-1.5 rounded-full bg-[#FBE1DE] overflow-hidden" aria-hidden="true">
+                        <span className="block h-full rounded-full bg-[#0B6B3A]" style={{ width: total ? `${(d.presentes / total) * 100}%` : '0%' }} />
+                      </span>
+                      <span className="block text-xs text-on-surface-variant mt-1 tabular-nums">{d.presentes} presente{d.presentes !== 1 ? 's' : ''} · {d.faltas} falta{d.faltas !== 1 ? 's' : ''}</span>
+                    </span>
+                    <span className="flex items-center gap-1.5 px-3 h-9 rounded-full text-xs font-extrabold bg-[#E3F2EA] text-[#0B6B3A] shrink-0">
+                      <Pencil className="w-3.5 h-3.5" aria-hidden /> Editar
                     </span>
                   </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
       )}
 
-      <div className="px-4 md:px-6 flex flex-col gap-6">
+      <div className="flex flex-col gap-4">
         {loading ? (
-          <div className="flex flex-col gap-2 items-center justify-center py-10 text-gray-500">
-            <Loader2 className="w-8 h-8 animate-spin text-teal-600" />
+          <div className="flex flex-col gap-2 items-center justify-center py-10 text-on-surface-variant">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
             <span className="text-sm font-medium">Analisando dados...</span>
           </div>
         ) : historico.length === 0 ? (
-          <div className="text-center text-gray-500 py-10 font-medium bg-white rounded-2xl border border-gray-100 shadow-sm">
+          <div className={cn(cartao, 'text-center text-on-surface-variant py-10 px-4 text-sm font-medium')}>
             Nenhum registro encontrado.
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-                <p className="text-xs font-semibold text-gray-400">Total Alunos</p>
-                <p className="text-2xl font-bold text-gray-900">{historico.length}</p>
+            <section aria-label="Resumo do dia" className="rounded-[22px] text-white p-4 flex flex-col gap-4" style={{ background: 'linear-gradient(135deg, #0F6B3C 0%, #08432A 100%)', boxShadow: '0 12px 24px -16px rgba(5,59,32,0.7)' }}>
+              <div className="flex items-end justify-between gap-4">
+                <div>
+                  <p className="text-xs text-[#BFE3CD]">Frequência média</p>
+                  <p className="text-[40px] leading-none font-extrabold tracking-[-0.03em] mt-1 tabular-nums">{avgFreq}%</p>
+                </div>
+                <dl className="flex gap-5 text-right tabular-nums">
+                  <div><dt className="text-xs text-[#BFE3CD]">Alunos</dt><dd className="text-xl font-extrabold leading-tight">{historico.length}</dd></div>
+                  <div><dt className="text-xs text-[#BFE3CD]">Presentes</dt><dd className="text-xl font-extrabold leading-tight">{totalP}</dd></div>
+                  <div><dt className="text-xs text-[#BFE3CD]">Faltas</dt><dd className="text-xl font-extrabold leading-tight text-[#FF9A8F]">{totalF}</dd></div>
+                </dl>
               </div>
-              <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-                <p className="text-xs font-semibold text-gray-400">Presentes</p>
-                <p className="text-2xl font-bold text-teal-600">{totalP}</p>
+              <div
+                className="flex h-2 rounded-full overflow-hidden bg-white/10"
+                role="img"
+                aria-label={`${totalP} presentes e ${totalF} faltas`}
+              >
+                {totalP > 0 && <span style={{ width: `${(totalP / (totalP + totalF)) * 100}%`, background: '#4CC785' }} />}
+                {totalF > 0 && <span style={{ width: `${(totalF / (totalP + totalF)) * 100}%`, background: '#F1695D' }} />}
               </div>
-              <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-                <p className="text-xs font-semibold text-gray-400">Faltas</p>
-                <p className="text-2xl font-bold text-red-600">{totalF}</p>
-              </div>
-              <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-                <p className="text-xs font-semibold text-gray-400">Freq. Média</p>
-                <p className="text-2xl font-bold text-teal-600">{avgFreq}%</p>
-              </div>
-            </div>
+            </section>
 
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className={cn(cartao, 'overflow-hidden')}>
               {historico.map((registro, idx) => {
                 const opcao = opcaoParticipacao(registro.participacao ?? null);
                 return (
                 <div
                   key={registro.id || idx}
-                  className="flex flex-col gap-1.5 p-4 border-b last:border-b-0 border-gray-100 hover:bg-gray-50 transition-colors"
+                  className="flex flex-col gap-1.5 px-4 py-3 border-t first:border-t-0 border-[#EDF3EF]"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="font-mono text-gray-400 text-sm w-8 shrink-0">{registro.numero_chamada}</span>
-                      <span className="font-semibold text-gray-900 truncate">{registro.nome}</span>
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="text-xs text-on-surface-variant w-6 shrink-0 tabular-nums">{registro.numero_chamada}</span>
+                      <span className="font-bold text-sm leading-snug text-on-surface">{registro.nome}</span>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {opcao && (
                         <span
                           title={`${opcao.sigla}: ${opcao.label}`}
-                          className={cn("px-2 py-1 rounded-lg font-bold text-xs border", opcao.corInativo)}
+                          className={cn("px-2 h-7 inline-flex items-center rounded-lg font-extrabold text-xs border", opcao.corInativo)}
                         >
                           {opcao.sigla}
                         </span>
                       )}
                       <div className={cn(
-                        "px-3 py-1.5 rounded-lg font-bold text-sm w-20 text-center flex items-center justify-center gap-1",
-                        registro.presente ? "bg-teal-50 text-teal-700" : "bg-red-50 text-red-700"
+                        "px-2.5 h-8 rounded-lg font-extrabold text-xs w-[72px] flex items-center justify-center gap-1",
+                        registro.presente ? "bg-[#E3F2EA] text-[#0B6B3A]" : "bg-[#FDECEA] text-[#B42318]"
                       )}>
-                        {registro.presente ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                        {registro.presente ? <CheckCircle2 className="w-4 h-4" aria-hidden /> : <XCircle className="w-4 h-4" aria-hidden />}
                         {registro.presente ? "Pres." : "Falta"}
                       </div>
                     </div>
                   </div>
                   {opcao?.valor === 'nao_participou_justificado' && (
-                    <p className="text-xs text-purple-700 bg-purple-50 border border-purple-200 rounded-lg px-2 py-1 ml-11">
+                    <p className="text-xs text-[#5B21B6] bg-[#F4F1FF] border border-[#E0D8FF] rounded-lg px-2 py-1 ml-[34px]">
                       NPJ — {labelMotivoJustificativa(registro.justificativa_motivo)}
                       {registro.justificativa_observacao ? `: ${registro.justificativa_observacao}` : ''}
                     </p>
