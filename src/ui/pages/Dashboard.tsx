@@ -3,7 +3,7 @@ import { useStore } from '../../store';
 import { MIN_PASSING_GRADE, MAX_ABSENCES_TOTAL, ClassRoom, Student } from '../../domain/types';
 import { bimestreAtual as bimestreVigente } from '../../domain/useRelatorioFrequencia';
 import { AgendaDia } from './AgendaDia';
-import { ChevronRight, UserX, Users, Download, Upload, Loader2, X, CheckSquare, BarChart3, CalendarSearch, Edit, Trash2, Star, ChevronDown, GraduationCap, ChevronUp, Share2, Copy, CheckCircle, ClipboardCheck, CaseSensitive, UserCheck } from 'lucide-react';
+import { ChevronRight, UserX, Users, Download, Upload, Loader2, X, CheckSquare, BarChart3, CalendarSearch, Edit, Trash2, Star, ChevronDown, GraduationCap, ChevronUp, Share2, Copy, CheckCircle, ClipboardCheck, CaseSensitive, UserCheck, ArrowUpRight } from 'lucide-react';
 import { cn } from '../AppLayout';
 import { buscarAlunos, salvarNotas, sincronizarNomesAlunos, supabase } from '../../data/supabase';
 import { formatarNome } from '../../utils/formatarNome';
@@ -524,50 +524,66 @@ export function Dashboard() {
     }
   };
 
+  // nº de alunos por turma no formato do AgendaDia ("6F")
+  const contagemPorTurma = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const cr of sortedClassRooms) {
+      const n = studentCounts[cr.id];
+      if (n) m[cr.name.replace(/[^0-9A-Za-z]/g, '').toUpperCase()] = n;
+    }
+    return m;
+  }, [sortedClassRooms, studentCounts]);
+
   const totalStudents = Object.values(studentCounts).reduce((acc: number, count: number) => acc + count, 0);
   const totalByYear = (year: number) => (groupedByYear.get(year) || []).reduce((acc, cr) => acc + (studentCounts[cr.id] || 0), 0);
 
   if (loading) return <div className="p-4 text-center mt-10">Carregando dados offline...</div>;
 
   return (
-    <div className="flex flex-col gap-4 pb-28 min-h-screen" style={{ background: 'linear-gradient(180deg, #EAFBF3 0%, #EEF9F3 220px, #F4FBF7 100%)' }}>
+    <div className="flex flex-col gap-5 pb-28 min-h-screen" style={{ background: 'linear-gradient(180deg, #E4F6EC 0%, #EEF9F3 260px, #F4FBF7 100%)' }}>
 
-      {/* Cabeçalho verde com saudação, data e números-chave */}
-      <div className="bg-[#0B4F2E] text-white px-5 pt-5 pb-6 rounded-b-[28px] flex flex-col gap-4">
-        <div className="flex items-center gap-3">
+      {/* Cabeçalho: verde-floresta com as linhas de uma quadra ao fundo */}
+      <header
+        className="relative overflow-hidden text-white px-5 pt-5 pb-16 rounded-b-[32px]"
+        style={{ background: 'radial-gradient(120% 90% at 92% -10%, #1E7F4C 0%, rgba(30,127,76,0) 58%), linear-gradient(165deg, #0E5C35 0%, #083D24 100%)' }}
+      >
+        <svg aria-hidden="true" className="absolute -right-12 -bottom-8 w-[330px] h-[230px] opacity-[0.11] pointer-events-none" viewBox="0 0 330 230" fill="none" stroke="#fff" strokeWidth="1.6">
+          <line x1="165" y1="-10" x2="165" y2="240" />
+          <circle cx="165" cy="115" r="54" />
+          <circle cx="165" cy="115" r="3.5" fill="#fff" />
+          <path d="M330 52 H268 A64 64 0 0 0 268 178 H330" />
+          <path d="M0 52 H62 A64 64 0 0 1 62 178 H0" />
+        </svg>
+
+        <div className="relative flex items-center gap-3">
           <div className="w-11 h-11 rounded-full border-2 border-[#F2B632] overflow-hidden shrink-0 bg-white flex items-center justify-center">
             <img src={LOGO_IOP} alt="IOP" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-bold text-[13px] leading-tight">Instituto Odilon Pratagi</p>
-            <p className="text-xs text-[#B9D9C7]">Escola Estadual · Brasiléia – AC</p>
+            <p className="font-extrabold text-[14px] leading-tight truncate">Instituto Odilon Pratagi</p>
+            <p className="text-xs text-[#BFE3CD] truncate">Escola Estadual · Brasiléia – AC</p>
           </div>
+          <span className="shrink-0 px-3 py-1.5 rounded-full bg-[#F2B632] text-[#3A2A00] text-xs font-extrabold tabular-nums">
+            {bimestreVigente()}º bimestre
+          </span>
         </div>
-        <div>
-          <p className="text-[13px] text-[#B9D9C7] capitalize">
-            {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })} · {bimestreVigente()}º bimestre
+
+        <div className="relative mt-6">
+          <p className="text-[13px] font-semibold text-[#BFE3CD] first-letter:uppercase">
+            {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
-          <h1 className="text-[28px] font-extrabold tracking-tight leading-tight">Olá, Professor!</h1>
+          <h1 className="text-[34px] font-extrabold tracking-[-0.035em] leading-[1.05] mt-0.5">Olá, Professor!</h1>
+          <p className="mt-3 flex items-center gap-3 text-sm text-[#BFE3CD] tabular-nums">
+            <span><b className="text-white font-extrabold text-base">{totalStudents}</b> alunos</span>
+            <span className="w-px h-4 bg-white/25" aria-hidden="true" />
+            <span><b className="text-white font-extrabold text-base">{sortedClassRooms.length}</b> turmas</span>
+          </p>
         </div>
-        <div className="flex gap-2">
-          <div className="flex-1 bg-white/10 rounded-2xl px-3 py-2.5">
-            <p className="text-xl font-extrabold leading-none">{totalStudents}</p>
-            <p className="text-[11px] text-[#B9D9C7] mt-1">alunos</p>
-          </div>
-          <div className="flex-1 bg-white/10 rounded-2xl px-3 py-2.5">
-            <p className="text-xl font-extrabold leading-none">{sortedClassRooms.length}</p>
-            <p className="text-[11px] text-[#B9D9C7] mt-1">turmas</p>
-          </div>
-          <div className="flex-1 bg-white/10 rounded-2xl px-3 py-2.5">
-            <p className="text-xl font-extrabold leading-none text-[#F2B632]">{bimestreVigente()}º</p>
-            <p className="text-[11px] text-[#B9D9C7] mt-1">bimestre</p>
-          </div>
-        </div>
-      </div>
+      </header>
 
-      <div className="px-4 flex flex-col gap-4">
+      <div className="px-4 flex flex-col gap-5 -mt-12 relative z-10">
 
-        {/* Botão Central do Aluno — destaque */}
+        {/* Botão Central do Aluno — oculto (mantido para uso futuro) */}
         <button
           onClick={() => navigate('/alunos')}
           className="w-full flex items-center gap-4 p-4 rounded-2xl text-left transition-all active:scale-95"
@@ -585,85 +601,115 @@ export function Dashboard() {
           </span>
         </button>
 
-        {/* Botão Compartilhar Portal */}
-        <button
-          onClick={() => setShowCompartilhar(true)}
-          className="w-full flex items-center gap-4 p-4 rounded-2xl text-left transition-all active:scale-95 bg-white border border-[#EAF7EF] shadow-sm hover:shadow-md"
-        >
-          <div className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0 bg-[#E3F8EC]">
-            <Share2 className="w-7 h-7 text-[#0B7A3D]" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-black text-gray-900 text-base">Compartilhar Portal</p>
-            <p className="text-gray-400 text-xs mt-0.5">Enviar link das provas pelo WhatsApp</p>
-          </div>
-          <span className="px-3 py-1.5 rounded-full text-xs font-black text-white shrink-0" style={{ background: '#0B7A3D' }}>
-            ENVIAR ↗
-          </span>
-        </button>
+        {/* Chamada de hoje: a tarefa principal, em destaque sobre o cabeçalho */}
+        <AgendaDia
+          contagens={contagemPorTurma}
+          onTurmaClick={(t) => { const cr = sortedClassRooms.find((x) => x.name.replace(/[^0-9A-Za-z]/g,'').toUpperCase() === t); if (cr) { setSelectedClassId(cr.id); navigate('/attendance'); } }}
+        />
 
-        <AgendaDia onTurmaClick={(t) => { const cr = sortedClassRooms.find((x) => x.name.replace(/[^0-9A-Za-z]/g,'').toUpperCase() === t); if (cr) { setSelectedClassId(cr.id); navigate('/attendance'); } }} />
-        {/* Acesso rápido: 4 ações mais usadas em blocos grandes */}
-        <p className="text-xs font-extrabold tracking-[0.08em] text-on-surface-variant -mb-2">ACESSO RÁPIDO</p>
-        <div className="grid grid-cols-2 gap-2.5">
-          {ACESSO_RAPIDO.map((item, i) => (
-            <button
-              key={item.title}
-              onClick={() => handleMenuClick(item.action, item.value)}
-              className={cn(
-                "flex flex-col justify-between gap-5 p-4 min-h-[120px] rounded-[20px] text-left active:scale-95 transition-all",
-                i === 0 ? "bg-[#0B6B3A] text-white" : "bg-white border border-outline-variant text-on-surface"
-              )}
-            >
-              <span
-                className="w-10 h-10 rounded-xl flex items-center justify-center"
-                style={i === 0 ? { background: 'rgba(255,255,255,0.15)' } : { background: item.bg, color: item.color }}
+        {/* Acesso rápido: uma ação principal larga + três atalhos */}
+        <section aria-label="Acesso rápido" className="flex flex-col gap-2.5">
+          <h2 className="text-[13px] font-extrabold text-[#5B6B63] px-1">Acesso rápido</h2>
+          <div className="grid grid-cols-3 gap-2.5">
+            {ACESSO_RAPIDO.map((item, i) => i === 0 ? (
+              <button
+                key={item.title}
+                onClick={() => handleMenuClick(item.action, item.value)}
+                className="col-span-3 relative overflow-hidden flex items-center gap-4 px-4 py-4 rounded-[22px] text-left text-white transition-transform duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0B7A3D]"
+                style={{ background: 'linear-gradient(135deg, #0F6B3C 0%, #08432A 100%)', boxShadow: '0 12px 24px -14px rgba(5,59,32,0.7)' }}
               >
-                <item.Icon className="w-[22px] h-[22px]" />
-              </span>
-              <span className="flex flex-col gap-0.5">
-                <span className="text-[15px] font-extrabold leading-tight">{item.title}</span>
-                <span className={cn("text-xs", i === 0 ? "text-[#B9D9C7]" : "text-on-surface-variant")}>{item.sub}</span>
-              </span>
-            </button>
-          ))}
-        </div>
+                <svg aria-hidden="true" className="absolute -right-6 -top-10 w-[190px] h-[190px] opacity-[0.12] pointer-events-none" viewBox="0 0 190 190" fill="none" stroke="#fff" strokeWidth="1.6">
+                  <circle cx="95" cy="95" r="62" /><circle cx="95" cy="95" r="3.5" fill="#fff" /><line x1="95" y1="0" x2="95" y2="190" />
+                </svg>
+                <span className="relative w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center shrink-0">
+                  <item.Icon className="w-6 h-6" aria-hidden />
+                </span>
+                <span className="relative flex-1 min-w-0">
+                  <span className="block text-[17px] font-extrabold leading-tight tracking-tight">{item.title}</span>
+                  <span className="block text-xs text-[#BFE3CD] mt-0.5">{item.sub}</span>
+                </span>
+                <span className="relative w-9 h-9 rounded-full bg-[#F2B632] text-[#3A2A00] flex items-center justify-center shrink-0">
+                  <ChevronRight className="w-5 h-5" aria-hidden />
+                </span>
+              </button>
+            ) : (
+              <button
+                key={item.title}
+                onClick={() => handleMenuClick(item.action, item.value)}
+                className="flex flex-col items-start justify-between gap-3 p-3.5 min-h-[112px] rounded-[20px] text-left bg-white border border-[#DCEBE2] shadow-[0_1px_2px_rgba(5,59,32,0.05)] transition-transform duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0B7A3D]"
+              >
+                <span className="w-10 h-10 rounded-xl bg-[#E3F8EC] text-[#0B6B3A] flex items-center justify-center">
+                  <item.Icon className="w-5 h-5" aria-hidden />
+                </span>
+                <span className="flex flex-col gap-0.5">
+                  <span className="text-[14px] font-extrabold leading-tight text-[#10231A]">{item.title}</span>
+                  <span className="text-xs leading-snug text-[#5B6B63]">{item.sub}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
 
         {/* Últimas Turmas Acessadas — pra voltar rápido quando o professor
             está corrigindo registros em várias turmas seguidas */}
         {recentClassRooms.length > 0 && (
-          <div className="bg-white rounded-2xl border border-[#EAF7EF] shadow-sm p-4">
-            <p className="text-xs font-black text-gray-500 uppercase tracking-wide mb-2">Últimas Turmas Acessadas</p>
+          <section aria-label="Últimas turmas acessadas" className="flex flex-col gap-2.5">
+            <h2 className="text-[13px] font-extrabold text-[#5B6B63] px-1">Últimas Turmas Acessadas</h2>
             <div className="flex flex-wrap gap-2">
-              {recentClassRooms.map(cr => (
-                <button
-                  key={cr.id}
-                  onClick={() => { setSelectedClassId(cr.id); navigate('/attendance'); }}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold bg-[#E3F8EC] text-[#0B7A3D] border border-[#BEEBD1] hover:bg-[#BEEBD1] active:scale-95 transition-all"
-                >
-                  <CheckSquare className="w-3.5 h-3.5" /> {cr.name}
-                </button>
-              ))}
+              {recentClassRooms.map(cr => {
+                const cor = (YEAR_COLORS[extractYear(cr.name)] || { dot: '#64748b' }).dot;
+                return (
+                  <button
+                    key={cr.id}
+                    onClick={() => { setSelectedClassId(cr.id); navigate('/attendance'); }}
+                    className="flex items-center gap-2 pl-3 pr-3.5 h-10 rounded-full text-sm font-extrabold bg-white text-[#10231A] border border-[#DCEBE2] shadow-[0_1px_2px_rgba(5,59,32,0.05)] active:scale-95 transition-transform duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B7A3D]"
+                  >
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ background: cor }} aria-hidden />
+                    {cr.name}
+                  </button>
+                );
+              })}
             </div>
-          </div>
+          </section>
         )}
+
+        {/* Compartilhar Portal: uso ocasional, por isso uma linha discreta */}
+        <button
+          onClick={() => setShowCompartilhar(true)}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-[20px] text-left bg-white border border-[#DCEBE2] shadow-[0_1px_2px_rgba(5,59,32,0.05)] transition-transform duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B7A3D]"
+        >
+          <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-[#E3F8EC]">
+            <Share2 className="w-5 h-5 text-[#0B6B3A]" aria-hidden />
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="block font-extrabold text-[#10231A] text-[15px] leading-tight">Compartilhar Portal</span>
+            <span className="block text-[#5B6B63] text-xs mt-0.5">Enviar link das provas pelo WhatsApp</span>
+          </span>
+          <span className="flex items-center gap-1 px-3 h-8 rounded-full text-xs font-extrabold text-white shrink-0 bg-[#0B6B3A]">
+            ENVIAR <ArrowUpRight className="w-3.5 h-3.5" aria-hidden />
+          </span>
+        </button>
 
         {/* Bloco Turmas colapsável */}
         <div id="turmas-list" className="scroll-mt-20">
           <button
             onClick={() => setShowTurmas(prev => !prev)}
-            className="w-full flex items-center justify-between px-4 py-3 bg-white rounded-2xl border border-[#EAF7EF] shadow-sm hover:bg-[#F5FCF8] transition-colors"
+            className="w-full flex items-center justify-between gap-2 px-4 py-3 bg-white rounded-[20px] border border-[#DCEBE2] shadow-[0_1px_2px_rgba(5,59,32,0.05)] hover:bg-[#F5FCF8] transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B7A3D]"
           >
-            <div className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-[#0B7A3D]" />
-              <span className="text-base font-black text-gray-900">Turmas e Alunos</span>
-              <span className="px-2 py-0.5 rounded-full bg-[#E3F8EC] text-[#0B7A3D] text-xs font-bold border border-[#BEEBD1]">{totalStudents}</span>
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="w-10 h-10 rounded-xl bg-[#E3F8EC] flex items-center justify-center shrink-0">
+                <Users className="w-5 h-5 text-[#0B6B3A]" aria-hidden />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[15px] font-extrabold leading-tight text-[#10231A] whitespace-nowrap">Turmas e Alunos</span>
+                <span className="block text-xs mt-0.5 text-[#5B6B63] tabular-nums">{totalStudents} alunos</span>
+              </span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 shrink-0">
               <button
                 onClick={(e) => { e.stopPropagation(); setShowImportModal(true); }}
-                className="flex items-center gap-1 px-2.5 py-1 font-bold rounded-lg text-xs transition-colors border"
-                style={{ background: '#FBF1E7', color: '#B4713A', borderColor: '#F0DAC0' }}
+                className="flex items-center gap-1 px-2.5 h-8 font-bold rounded-full text-xs transition-colors border"
+                style={{ background: '#FBF1E7', color: '#8F5524', borderColor: '#F0DAC0' }}
               >
                 <Download className="w-3.5 h-3.5" /> Importar
               </button>
@@ -774,8 +820,8 @@ export function Dashboard() {
 
       {/* Gerenciar turmas (lista) + Reset isolado no fim, longe do toque acidental */}
       <div className="px-4 flex flex-col gap-3">
-        <p className="text-xs font-extrabold tracking-[0.08em] text-on-surface-variant">GERENCIAR TURMAS</p>
-        <div className="bg-white rounded-[20px] border border-outline-variant flex flex-col overflow-hidden">
+        <h2 className="text-[13px] font-extrabold text-[#5B6B63] px-1 -mb-1">Gerenciar turmas</h2>
+        <div className="bg-white rounded-[20px] border border-[#DCEBE2] shadow-[0_1px_2px_rgba(5,59,32,0.05)] flex flex-col overflow-hidden">
           {GERENCIAR.map((item, i) => {
             const isCorrigirNomes = item.action === 'corrigirNomes';
             return (
@@ -784,15 +830,17 @@ export function Dashboard() {
                 onClick={() => handleMenuClick(item.action, item.value)}
                 disabled={isCorrigirNomes && corrigindoNomes}
                 className={cn(
-                  "flex items-center gap-3 px-4 py-3.5 text-left active:bg-surface-container transition-colors disabled:opacity-50",
-                  i > 0 && "border-t border-surface-container"
+                  "flex items-center gap-3 px-4 py-3 text-left active:bg-[#F1F8F4] transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:bg-[#F1F8F4]",
+                  i > 0 && "border-t border-[#EDF3EF]"
                 )}
               >
-                {isCorrigirNomes && corrigindoNomes
-                  ? <Loader2 className="w-5 h-5 animate-spin text-[#0B6B3A]" />
-                  : <item.Icon className="w-5 h-5 text-[#0B6B3A]" />}
-                <span className="flex-1 text-sm font-semibold text-on-surface">{item.title}</span>
-                <span className="text-xs text-on-surface-variant">{isCorrigirNomes && corrigindoNomes ? 'Verificando...' : item.sub}</span>
+                <span className="w-9 h-9 rounded-xl bg-[#E3F8EC] flex items-center justify-center shrink-0">
+                  {isCorrigirNomes && corrigindoNomes
+                    ? <Loader2 className="w-[18px] h-[18px] animate-spin text-[#0B6B3A]" />
+                    : <item.Icon className="w-[18px] h-[18px] text-[#0B6B3A]" aria-hidden />}
+                </span>
+                <span className="flex-1 text-sm font-bold text-[#10231A]">{item.title}</span>
+                <span className="text-xs text-[#5B6B63]">{isCorrigirNomes && corrigindoNomes ? 'Verificando...' : item.sub}</span>
               </button>
             );
           })}

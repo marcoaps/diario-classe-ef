@@ -29,3 +29,6 @@
 }
 @media print { #report-content .divide-y > div { padding-top: 1px !important; padding-bottom: 1px !important; } #report-content { font-size: 9px !important; } }
 @media print { header img { width: 64px !important; height: 64px !important; } }
+
+/* Seleção de texto na cor do app (em vez do azul do navegador) */
+::selection { background: #BEEBD1; color: #053B20; }
