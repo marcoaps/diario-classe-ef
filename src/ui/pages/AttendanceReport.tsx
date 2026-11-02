@@ -43,6 +43,7 @@ export function AttendanceReport() {
   const [nomesAEE, setNomesAEE] = useState<Set<string>>(new Set());
   const [nomesTransferidos, setNomesTransferidos] = useState<Set<string>>(new Set());
   const [showGabarito, setShowGabarito] = useState(false);
+  const [riscoAberto, setRiscoAberto] = useState(false);
   const [temaProva, setTemaProva] = useState('');
   const [gabaritoInput, setGabaritoInput] = useState<Record<string, string>>({...GABARITO_INICIAL});
   const navigate = useNavigate();
@@ -242,6 +243,9 @@ export function AttendanceReport() {
     }
   }
 
+  const serieAtual = turmaId.charAt(0);
+  const series = Array.from(new Set(uniqueClassRooms.map((cr: any) => cr.name.charAt(0))));
+
   return (
     <div className="flex flex-col gap-4 font-sans animate-in fade-in pb-8 bg-background p-4 md:p-6 md:relative md:left-1/2 md:-translate-x-1/2 md:w-[min(1100px,96vw)]">
       <div className="flex items-center justify-between gap-3 relative">
@@ -281,53 +285,64 @@ export function AttendanceReport() {
       </div>
       {notasCalculadas && <p className="text-xs font-bold text-[#0B6B3A] bg-[#E3F2EA] rounded-xl px-3 py-2">Notas salvas!</p>}
 
-      <div className="bg-white rounded-[18px] border border-outline-variant p-4">
-        <div className="grid md:grid-cols-3 gap-4">
-          <div>
-            <label className="text-xs font-semibold text-gray-500 mb-1 block">Turma</label>
-            <select value={turmaId} onChange={(e) => setTurmaId(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none">
-              {uniqueClassRooms.length === 0 ? <option value="">Nenhuma turma</option> : null}
-              {uniqueClassRooms.map((cr: any) => <option key={cr.id} value={cr.name}>{cr.name}</option>)}
-            </select>
-          </div>
-          <div className="md:col-span-2">
-            <label className="text-xs font-semibold text-gray-500 mb-1 block">Bimestre</label>
-            <div className="flex bg-surface-container rounded-xl p-[3px] h-11">
-              {BIMESTRES.map((b) => (
-                <button key={b} type="button" onClick={() => setBimestre(b)}
-                  className={cn('flex-1 rounded-[9px] text-[13px] transition-all',
-                    bimestre === b ? 'bg-[#0B6B3A] text-white font-extrabold' : 'text-on-surface-variant font-bold')}>
-                  {b}º
+      <div className="bg-white rounded-[20px] border border-[#DCEBE2] shadow-[0_1px_2px_rgba(5,59,32,0.05)] p-4 flex flex-col gap-3">
+        {uniqueClassRooms.length === 0 ? (
+          <p className="text-sm text-on-surface-variant">Nenhuma turma</p>
+        ) : (
+          <>
+            <div className="flex gap-1.5" role="group" aria-label="Série">
+              {series.map((sr: string) => (
+                <button key={sr} type="button" aria-pressed={serieAtual === sr}
+                  onClick={() => { if (sr !== serieAtual) { const primeira: any = uniqueClassRooms.find((cr: any) => cr.name.charAt(0) === sr); if (primeira) setTurmaId(primeira.name); } }}
+                  className={cn('flex-1 h-9 rounded-full text-[13px] border transition-all',
+                    serieAtual === sr ? 'border-[#0B6B3A] text-[#0B6B3A] bg-[#E3F2EA] font-extrabold' : 'border-[#D3DCD7] bg-white text-on-surface-variant font-bold')}>
+                  {sr}º ano
                 </button>
               ))}
             </div>
-          </div>
-        </div>
-        <div className="mt-4 pt-4 border-t border-gray-100">
-          <div className="flex items-center gap-3">
-            <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
-            <div className="flex-1">
-              <label className="text-xs font-semibold text-gray-500 block mb-1">
-                Filtrar por data específica <span className="text-gray-400 font-normal">(opcional – não afeta o Diário)</span>
-              </label>
-              <div className="flex items-center gap-2">
-                <input type="date" value={dataFiltro} onChange={(e) => setDataFiltro(e.target.value)} className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none" />
-                {dataFiltro && (
-                  <button onClick={() => setDataFiltro('')} className="flex items-center gap-1 px-3 py-2 rounded-xl bg-red-50 text-red-600 text-xs font-bold hover:bg-red-100 border border-red-200">
-                    <X className="w-3.5 h-3.5" /> Limpar filtro
-                  </button>
-                )}
-              </div>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Turma">
+              {uniqueClassRooms.filter((cr: any) => cr.name.charAt(0) === serieAtual).map((cr: any) => (
+                <button key={cr.id} type="button" aria-pressed={turmaId === cr.name} onClick={() => setTurmaId(cr.name)}
+                  className={cn('flex-1 min-w-[56px] h-11 rounded-xl text-[14px] tracking-tight transition-all active:scale-95',
+                    turmaId === cr.name
+                      ? 'bg-gradient-to-b from-[#0F7F45] to-[#0B5A31] text-white font-extrabold shadow-[0_6px_14px_rgba(11,107,58,0.3)]'
+                      : 'bg-white border border-[#DCEBE2] text-on-surface font-bold')}>
+                  {cr.name}
+                </button>
+              ))}
             </div>
+          </>
+        )}
+        <div className="flex bg-surface-container rounded-xl p-[3px] h-11">
+          {BIMESTRES.map((b) => (
+            <button key={b} type="button" onClick={() => setBimestre(b)}
+              className={cn('flex-1 rounded-[9px] text-[13px] transition-all',
+                bimestre === b ? 'bg-[#0B6B3A] text-white font-extrabold' : 'text-on-surface-variant font-bold')}>
+              {b}º Bim
+            </button>
+          ))}
+        </div>
+        <details className="group border-t border-[#EDF3EF] pt-3" open={!!dataFiltro}>
+          <summary className="flex items-center gap-2 text-[13px] font-bold text-on-surface-variant cursor-pointer list-none select-none [&::-webkit-details-marker]:hidden">
+            <Calendar className="w-4 h-4 shrink-0" aria-hidden />
+            <span className="flex-1">Filtrar por data específica <span className="font-normal">(opcional, não afeta o Diário)</span></span>
+            <ChevronDown className="w-4 h-4 transition-transform group-open:rotate-180" aria-hidden />
+          </summary>
+          <div className="flex items-center gap-2 mt-3">
+            <input type="date" value={dataFiltro} onChange={(e) => setDataFiltro(e.target.value)} className="h-11 bg-white border border-[#DCEBE2] rounded-xl px-3 text-sm font-bold text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none" />
+            {dataFiltro && (
+              <button onClick={() => setDataFiltro('')} className="flex items-center gap-1 px-3 h-11 rounded-xl bg-[#FDECEA] text-[#B42318] text-xs font-extrabold border border-[#F1C7C2] active:scale-95 transition-all">
+                <X className="w-3.5 h-3.5" /> Limpar filtro
+              </button>
+            )}
           </div>
           {dataFiltro && (
-            <div className="mt-2 flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2">
-              <Calendar className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-              <p className="text-xs text-blue-700 font-medium">Mostrando apenas a chamada do dia <strong>{formatarBR(dataFiltro)}</strong></p>
-            </div>
+            <p className="mt-2 flex items-center gap-2 bg-[#E3F2EA] rounded-xl px-3 py-2 text-xs text-[#0B6B3A] font-semibold">
+              <Calendar className="w-3.5 h-3.5 shrink-0" aria-hidden /> Mostrando apenas a chamada do dia <strong>{formatarBR(dataFiltro)}</strong>
+            </p>
           )}
-        </div>
-        <p className="text-[11px] text-gray-400 mt-3">
+        </details>
+        <p className="text-xs text-on-surface-variant tabular-nums">
           {dataFiltro ? `Data: ${formatarBR(dataFiltro)}` : `Período: ${formatarBR(periodo.inicio)} a ${formatarBR(periodo.fim)} • ${PONTOS_MAXIMOS} aulas • ${PONTOS_MAXIMOS * 0.5} pts máx`}
         </p>
       </div>
@@ -343,32 +358,31 @@ export function AttendanceReport() {
         <div className="text-center text-gray-500 py-10 font-medium bg-white rounded-2xl border border-gray-100 shadow-sm">Nenhum aluno encontrado para essa turma.</div>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <ResumoCard icon={<Users className="w-4 h-4" />} label="Alunos" value={resumo.total_alunos} tone="neutral" />
-            <ResumoCard icon={<Percent className="w-4 h-4" />} label="Freq. média" value={`${resumo.media_percentual}%`} tone="primary" />
-            <ResumoCard icon={<Award className="w-4 h-4" />} label="Pontos médios" value={resumo.media_pontos} tone="primary" />
-            <ResumoCard icon={<ShieldCheck className="w-4 h-4" />} label="OK" value={resumo.total_ok} tone="success" />
-            <ResumoCard icon={<AlertTriangle className="w-4 h-4" />} label="Em risco / Crítico" value={`${resumo.total_em_risco} / ${resumo.total_criticos}`} tone={resumo.total_criticos > 0 ? 'danger' : 'warning'} />
-          </div>
-
-          {/* Contadores por nível de participação — nunca mistura AUS com NP/NPJ */}
-          <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-            {[
-              { sigla: 'PI', label: 'Participação Integral', valor: resumo.total_pi, cor: 'bg-teal-50 text-teal-700 border-teal-200' },
-              { sigla: 'PP', label: 'Participação Parcial', valor: resumo.total_pp, cor: 'bg-amber-50 text-amber-700 border-amber-200' },
-              { sigla: 'NP', label: 'Não Participou', valor: resumo.total_np, cor: 'bg-red-50 text-red-700 border-red-200',
-                sub: resumo.total_np > 0 ? `${resumo.total_np - resumo.total_np_com_trabalho} sem trabalho` : undefined },
-              { sigla: 'PA', label: 'Participação Adaptada', valor: resumo.total_pa, cor: 'bg-blue-50 text-blue-700 border-blue-200' },
-              { sigla: 'NPJ', label: 'Não Participou — Justificado', valor: resumo.total_npj, cor: 'bg-purple-50 text-purple-700 border-purple-200' },
-              { sigla: 'AUS', label: 'Ausente', valor: resumo.total_aus, cor: 'bg-gray-100 text-gray-600 border-gray-200' },
-            ].map(item => (
-              <div key={item.sigla} title={item.label} className={cn('rounded-xl border p-2.5 text-center', item.cor)}>
-                <p className="text-[10px] font-bold uppercase tracking-wide">{item.sigla}</p>
-                <p className="text-lg font-bold">{item.valor}</p>
-                {'sub' in item && item.sub && <p className="text-[9px] font-semibold opacity-70 leading-tight">{item.sub}</p>}
+          <section aria-label="Resumo da turma" className="rounded-[22px] text-white p-4 flex flex-col gap-4" style={{ background: 'linear-gradient(135deg, #0F6B3C 0%, #08432A 100%)', boxShadow: '0 12px 24px -16px rgba(5,59,32,0.7)' }}>
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <p className="text-xs text-[#BFE3CD]">Frequência média</p>
+                <p className="text-[40px] leading-none font-extrabold tracking-[-0.03em] mt-1 tabular-nums">{String(resumo.media_percentual).replace('.', ',')}%</p>
               </div>
-            ))}
-          </div>
+              <dl className="flex gap-5 text-right tabular-nums">
+                <div><dt className="text-xs text-[#BFE3CD]">Alunos</dt><dd className="text-xl font-extrabold leading-tight">{resumo.total_alunos}</dd></div>
+                <div><dt className="text-xs text-[#BFE3CD]">Pontos médios</dt><dd className="text-xl font-extrabold leading-tight">{String(resumo.media_pontos).replace('.', ',')}</dd></div>
+              </dl>
+            </div>
+            <div>
+              <div className="flex h-2 rounded-full overflow-hidden bg-white/10" role="img"
+                aria-label={`Situação dos alunos: ${resumo.total_ok} OK, ${resumo.total_em_risco} em risco, ${resumo.total_criticos} críticos`}>
+                {[{ n: resumo.total_ok, cor: '#4CC785' }, { n: resumo.total_em_risco, cor: '#F2B632' }, { n: resumo.total_criticos, cor: '#F1695D' }].map(f => f.n > 0 && (
+                  <span key={f.cor} style={{ width: `${(f.n / resumo.total_alunos) * 100}%`, background: f.cor }} />
+                ))}
+              </div>
+              <p className="mt-2 flex flex-wrap gap-x-3.5 gap-y-1 text-xs text-[#BFE3CD] tabular-nums">
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#4CC785]" aria-hidden="true" />OK <b className="text-white font-extrabold">{resumo.total_ok}</b></span>
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#F2B632]" aria-hidden="true" />Em risco <b className="text-white font-extrabold">{resumo.total_em_risco}</b></span>
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#F1695D]" aria-hidden="true" />Crítico <b className="text-white font-extrabold">{resumo.total_criticos}</b></span>
+              </p>
+            </div>
+          </section>
 
           {emRisco.length > 0 && (
             <div className="bg-[#FFF5F4] border border-[#F1C7C2] rounded-[18px] p-4">
@@ -389,22 +403,29 @@ export function AttendanceReport() {
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
-                {emRisco.map((a) => (
+                {(riscoAberto ? emRisco : emRisco.slice(0, 6)).map((a) => (
                   <span key={a.id}
                     className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border bg-white',
                       a.percentual === 0 && a.registros_total > 0 ? 'text-[#7A1A12] border-[#F1C7C2]' : 'text-amber-800 border-amber-200')}
                     title={`${a.percentual}% de presença`}>
                     {a.numero_chamada ? `${a.numero_chamada} ` : ''}{formatarNome(a.nome)}
-                    <span className="font-mono opacity-80">{a.percentual.toFixed(0)}%</span>
+                    <span className="tabular-nums opacity-80">{a.percentual.toFixed(0)}%</span>
                   </span>
                 ))}
               </div>
+              {emRisco.length > 6 && (
+                <button type="button" onClick={() => setRiscoAberto(v => !v)}
+                  className="mt-3 flex items-center gap-1 text-xs font-extrabold text-[#7A1A12] h-9 active:opacity-70">
+                  {riscoAberto ? 'Mostrar menos' : `Ver todos (${emRisco.length})`}
+                  <ChevronDown className={cn('w-4 h-4 transition-transform', riscoAberto && 'rotate-180')} aria-hidden />
+                </button>
+              )}
             </div>
           )}
 
           {/* Painel de gabarito manual */}
           {showGabarito && (
-            <div className="bg-white rounded-3xl border border-rose-200 shadow-sm p-5">
+            <div className="bg-white rounded-[20px] border border-[#F1C7C2] shadow-[0_1px_2px_rgba(5,59,32,0.05)] p-4">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="font-bold text-gray-900 text-sm">Gabarito da prova</h3>
@@ -421,7 +442,7 @@ export function AttendanceReport() {
                   value={temaProva}
                   onChange={e => setTemaProva(e.target.value)}
                   placeholder="Ex: Voleibol, Futsal, Atletismo, Saúde e Qualidade de Vida..."
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-gray-50"
+                  className="w-full h-11 border border-[#DCEBE2] rounded-xl px-3 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-white"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3 mb-5">
@@ -436,7 +457,7 @@ export function AttendanceReport() {
                           'w-9 h-9 rounded-full text-xs font-bold border transition-all active:scale-95',
                           gabaritoInput[String(n)] === l
                             ? 'bg-primary text-white border-primary shadow-sm'
-                            : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'
+                            : 'bg-[#F1F6F3] text-on-surface-variant border-[#DCEBE2] hover:bg-[#E3F2EA]'
                         )}
                       >{l}</button>
                     ))}
@@ -445,7 +466,7 @@ export function AttendanceReport() {
               </div>
               <div className="flex items-center gap-2 mb-3 flex-wrap">
                 {[1,2,3,4,5,6,7,8].map(n => (
-                  <span key={n} className="inline-flex items-center gap-1 bg-gray-100 rounded-lg px-2 py-1 text-xs font-mono">
+                  <span key={n} className="inline-flex items-center gap-1 bg-[#F1F6F3] rounded-lg px-2 py-1 text-xs tabular-nums">
                     <span className="text-gray-500">Q{n}:</span>
                     <span className="font-bold text-primary">{gabaritoInput[String(n)]}</span>
                   </span>
@@ -455,7 +476,7 @@ export function AttendanceReport() {
                 type="button"
                 onClick={criarAvaliacaoRecuperacao}
                 disabled={criandoAvaliacao}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-rose-600 text-white font-bold text-sm disabled:opacity-60 hover:bg-rose-700 active:scale-95 transition-all"
+                className="w-full flex items-center justify-center gap-2 h-12 rounded-2xl bg-[#C2352B] text-white font-extrabold text-sm disabled:opacity-60 active:scale-95 transition-all"
               >
                 <ClipboardList className="w-4 h-4" />
                 {criandoAvaliacao ? 'Criando...' : `Confirmar e criar prova (${alunosCriticos.length} alunos)`}
@@ -463,9 +484,28 @@ export function AttendanceReport() {
             </div>
           )}
 
+          {/* Contadores por nível de participação — nunca mistura AUS com NP/NPJ */}
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+            {[
+              { sigla: 'PI', label: 'Participação Integral', valor: resumo.total_pi, cor: 'bg-teal-50 text-teal-700 border-teal-200' },
+              { sigla: 'PP', label: 'Participação Parcial', valor: resumo.total_pp, cor: 'bg-amber-50 text-amber-700 border-amber-200' },
+              { sigla: 'NP', label: 'Não Participou', valor: resumo.total_np, cor: 'bg-red-50 text-red-700 border-red-200',
+                sub: resumo.total_np > 0 ? `${resumo.total_np - resumo.total_np_com_trabalho} sem trabalho` : undefined },
+              { sigla: 'PA', label: 'Participação Adaptada', valor: resumo.total_pa, cor: 'bg-blue-50 text-blue-700 border-blue-200' },
+              { sigla: 'NPJ', label: 'Não Participou — Justificado', valor: resumo.total_npj, cor: 'bg-purple-50 text-purple-700 border-purple-200' },
+              { sigla: 'AUS', label: 'Ausente', valor: resumo.total_aus, cor: 'bg-gray-100 text-gray-600 border-gray-200' },
+            ].map(item => (
+              <div key={item.sigla} title={item.label} className={cn('rounded-xl border p-2.5 text-center', item.cor)}>
+                <p className="text-[11px] font-extrabold tracking-wide">{item.sigla}</p>
+                <p className="text-lg font-extrabold tabular-nums">{item.valor}</p>
+                {'sub' in item && item.sub && <p className="text-[11px] font-semibold opacity-80 leading-tight">{item.sub}</p>}
+              </div>
+            ))}
+          </div>
+
           <div className="hidden md:block w-full overflow-x-auto rounded-3xl border border-gray-100 shadow-sm bg-white">
             <table className="w-full text-sm text-left" style={{minWidth:"900px"}}>
-              <thead className="bg-gray-100 text-gray-600 text-xs uppercase font-bold tracking-wider">
+              <thead className="bg-[#F1F6F3] text-on-surface-variant text-xs uppercase font-extrabold tracking-wider">
                 <tr>
                   <th className="px-5 py-4 min-w-[220px]">Aluno</th>
                   <th className="px-4 py-4 text-center">Aulas</th>
@@ -497,7 +537,7 @@ export function AttendanceReport() {
                     <td className="px-4 py-3"><BarraProgresso percentual={a.percentual} critico={a.critico} emRisco={a.em_risco} /></td>
                     <td className="px-4 py-3 text-center"><BadgeSituacao aluno={a} /></td>
                     <td className="px-4 py-3 text-center font-semibold text-gray-700">{notaTrabalho > 0 ? notaTrabalho.toFixed(1).replace('.', ',') : '—'}</td>
-                    <td className="px-4 py-3 text-center font-bold text-violet-700">{notaTotal(a.pontos, notaTrabalho, false).toFixed(1).replace('.', ',')}</td>
+                    <td className="px-4 py-3 text-center font-extrabold text-[#0B6B3A]">{notaTotal(a.pontos, notaTrabalho, false).toFixed(1).replace('.', ',')}</td>
                   </tr>
                   );
                 })}
@@ -509,7 +549,7 @@ export function AttendanceReport() {
             {alunos.map((a) => {
               const notaTrabalho = notasTrabalhosPorAluno[a.id] ?? 0;
               return (
-              <div key={a.id} className="p-3.5 rounded-2xl border border-outline-variant bg-white flex flex-col gap-2">
+              <div key={a.id} className="p-3.5 rounded-2xl border border-[#DCEBE2] bg-white shadow-[0_1px_2px_rgba(5,59,32,0.04)] flex flex-col gap-2">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-on-surface-variant w-5 shrink-0">{a.numero_chamada || ''}</span>
                   <span className="flex-1 min-w-0 font-bold text-sm text-on-surface">{formatarNome(a.nome)}</span>
@@ -536,16 +576,6 @@ export function AttendanceReport() {
 function formatarBR(iso: string) {
   const [y, m, d] = iso.split('-');
   return `${d}/${m}/${y}`;
-}
-
-function ResumoCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: React.ReactNode; tone: 'neutral' | 'primary' | 'success' | 'warning' | 'danger' }) {
-  const tones = { neutral: 'text-on-surface', primary: 'text-[#0B6B3A]', success: 'text-[#0B6B3A]', warning: 'text-amber-600', danger: 'text-[#B42318]' };
-  return (
-    <div className="bg-white p-3.5 rounded-[18px] border border-outline-variant">
-      <div className="flex items-center gap-1.5 text-xs font-bold text-on-surface-variant">{icon}{label}</div>
-      <p className={cn('text-[28px] leading-tight font-extrabold tracking-tight mt-1', tones[tone])}>{value}</p>
-    </div>
-  );
 }
 
 function BarraProgresso({ percentual, critico, emRisco }: { percentual: number; critico: boolean; emRisco: boolean }) {
