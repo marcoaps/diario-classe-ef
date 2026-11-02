@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useStore } from '../../store';
 import { cn } from '../AppLayout';
-import { Save, Loader2, X } from 'lucide-react';
+import { Save, Loader2, X, ClipboardList, Info, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '../../data/supabase';
 import { ConteudoAulas } from './ConteudoAulas';
@@ -399,6 +399,10 @@ export function Attendance() {
   const totalPresentes = ativos.filter(a => records[a.id]?.presente === true).length;
   const totalFaltas = ativos.length - totalPresentes;
   const totalTransf = alunos.length - ativos.length;
+  const dataExtenso = (() => {
+    const d = new Date(date + 'T00:00:00');
+    return isNaN(d.getTime()) ? '' : d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+  })();
 
   return (
     <div className="flex flex-col h-full bg-background relative">
@@ -465,27 +469,43 @@ export function Attendance() {
       {/* Aba Chamada */}
       {abaAtiva === 'chamada' && (
         <>
-          <div className="p-4 pt-3 border-b border-outline-variant bg-background/90 backdrop-blur-md">
-            <h2 className="text-xl font-extrabold tracking-tight mb-3 text-on-surface">Chamada Expressa</h2>
-            <div className="flex gap-2 items-center">
-              <input
-                type="date"
-                value={date}
-                onChange={e => setDate(e.target.value)}
-                className="bg-surface border border-gray-300 rounded-xl p-3 text-textPrimary text-base font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all flex-1"
-              />
+          <div className="px-4 pt-3 pb-4 border-b border-outline-variant bg-background/90 backdrop-blur-md">
+            <div className="flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="text-xl font-extrabold tracking-tight leading-tight text-on-surface whitespace-nowrap">Chamada Expressa</h2>
+                <p className="text-xs text-on-surface-variant mt-0.5 truncate first-letter:uppercase">{dataExtenso}</p>
+              </div>
+              <label className="shrink-0">
+                <span className="sr-only">Data da chamada</span>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={e => setDate(e.target.value)}
+                  className="h-11 w-[136px] px-2.5 rounded-xl bg-white border border-[#DCEBE2] text-sm font-bold text-on-surface outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                />
+              </label>
             </div>
-            <label className="flex items-center gap-2 mt-3 px-3 py-3 rounded-[14px] bg-white border border-outline-variant cursor-pointer">
+
+            <label className="flex items-center gap-3 mt-3 px-3.5 py-3 rounded-2xl bg-white border border-[#DCEBE2] cursor-pointer">
+              <span className="flex-1 min-w-0">
+                <span className="block text-[13px] font-extrabold text-on-surface">Aula sem atividade de quadra</span>
+                <span className="block text-xs leading-snug text-on-surface-variant mt-0.5">
+                  Teórica, aplicação de trabalho etc. — não pede nível de participação; presença vale a frequência padrão
+                </span>
+              </span>
               <input
                 type="checkbox"
+                role="switch"
                 checked={semQuadra}
                 onChange={handleToggleSemQuadra}
-                className="w-4 h-4"
+                className="peer sr-only"
               />
-              <span className="text-xs font-semibold text-gray-600">
-                Aula sem atividade de quadra (teórica, aplicação de trabalho, etc.) — não pede nível de participação, presença vale a frequência padrão
-              </span>
+              <span
+                aria-hidden="true"
+                className="relative shrink-0 w-11 h-6 rounded-full bg-[#C5D0CA] transition-colors peer-checked:bg-[#0B6B3A] peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-[#0B7A3D] after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-5 after:h-5 after:rounded-full after:bg-white after:shadow-sm after:transition-transform peer-checked:after:translate-x-5"
+              />
             </label>
+
             <div className="flex gap-2 items-center mt-3">
               <button
                 onClick={() => handleMarcarTodos(true)}
@@ -518,9 +538,17 @@ export function Attendance() {
                 Marcar todos como NP
               </button>
             </div>
-            <p className="text-[11px] text-gray-400 mt-2 leading-snug">
-              <span className="font-semibold text-gray-500">Nível de participação:</span> PI: Participação Integral · PP: Participação Parcial · NP: Não Participou · PA: Participação Adaptada · NPJ: Não Participou — Justificado
-            </p>
+
+            <details className="group mt-3">
+              <summary className="flex items-center gap-1.5 text-xs font-bold text-on-surface-variant cursor-pointer list-none select-none [&::-webkit-details-marker]:hidden">
+                <Info className="w-3.5 h-3.5" aria-hidden />
+                Legenda dos níveis de participação
+                <ChevronDown className="w-3.5 h-3.5 transition-transform group-open:rotate-180" aria-hidden />
+              </summary>
+              <p className="text-xs text-on-surface-variant mt-2 leading-snug">
+                PI: Participação Integral · PP: Participação Parcial · NP: Não Participou · PA: Participação Adaptada · NPJ: Não Participou — Justificado
+              </p>
+            </details>
           </div>
 
           <div className="p-4 pb-32 flex flex-col gap-3">
@@ -561,15 +589,15 @@ export function Attendance() {
                   <div
                     key={aluno.id}
                     className={cn(
-                      "rounded-2xl border overflow-hidden",
-                      isPresent ? "border-outline-variant bg-white" : "border-[#F1C7C2] bg-[#FFF5F4]"
+                      "rounded-2xl border overflow-hidden shadow-[0_1px_2px_rgba(5,59,32,0.04)] transition-colors",
+                      isPresent ? "border-[#DCEBE2] bg-white" : "border-[#F3D9D5] bg-[#FFF9F8]"
                     )}
                   >
                     <div className="w-full p-3 flex items-center gap-2.5">
-                      <span className={cn("w-7 text-center text-xs font-bold shrink-0", isPresent ? "text-on-surface-variant" : "text-[#B42318]")}>
+                      <span className="w-7 text-center text-xs font-bold tabular-nums shrink-0 text-on-surface-variant">
                         {aluno.numero_chamada || ''}
                       </span>
-                      <span className={cn("flex-1 min-w-0 font-bold text-sm leading-snug", isPresent ? "text-on-surface" : "text-[#7A1A12]")}>
+                      <span className="flex-1 min-w-0 font-bold text-sm leading-snug text-on-surface">
                         {aluno.nome}
                         {isEspecial && (
                           <span
@@ -585,14 +613,14 @@ export function Attendance() {
                         <button
                           aria-label="Presente"
                           onClick={() => { if (!isPresent) handleToggle(aluno.id); }}
-                          className={cn("w-11 h-[38px] rounded-[9px] text-sm font-extrabold transition-all", isPresent ? "bg-[#0B6B3A] text-white" : "text-on-surface-variant")}
+                          className={cn("w-12 h-10 rounded-[9px] text-sm font-extrabold transition-all active:scale-95", isPresent ? "bg-[#0B6B3A] text-white shadow-sm" : "text-on-surface-variant")}
                         >
                           P
                         </button>
                         <button
                           aria-label="Falta"
                           onClick={() => { if (isPresent) handleToggle(aluno.id); }}
-                          className={cn("w-11 h-[38px] rounded-[9px] text-sm font-extrabold transition-all", !isPresent ? "bg-[#C2352B] text-white" : "text-on-surface-variant")}
+                          className={cn("w-12 h-10 rounded-[9px] text-sm font-extrabold transition-all active:scale-95", !isPresent ? "bg-[#C2352B] text-white shadow-sm" : "text-on-surface-variant")}
                         >
                           F
                         </button>
@@ -613,7 +641,7 @@ export function Attendance() {
                                 key={opt.valor}
                                 onClick={() => handleParticipacao(aluno.id, opt.valor)}
                                 title={`${opt.sigla}: ${opt.label}`}
-                                className={cn("flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all active:scale-95", ativo ? opt.corAtivo : opt.corInativo)}
+                                className={cn("flex-1 h-9 rounded-xl text-xs font-extrabold border transition-all active:scale-95", ativo ? opt.corAtivo : opt.corInativo)}
                               >
                                 {opt.sigla}
                               </button>
@@ -633,7 +661,7 @@ export function Attendance() {
                           registro?.trabalhoCompensatorioId ? (
                             <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-lg px-2 py-1">
                               <button onClick={() => abrirModalCompensatorio(aluno.id)} className="flex-1 text-left truncate hover:underline">
-                                📋 Trabalho: {trabalhosDaTurma.find(t => t.id === registro.trabalhoCompensatorioId)?.titulo ?? 'vinculado'}
+                                <ClipboardList className="w-3 h-3 inline -mt-0.5 mr-1" aria-hidden />Trabalho: {trabalhosDaTurma.find(t => t.id === registro.trabalhoCompensatorioId)?.titulo ?? 'vinculado'}
                               </button>
                               <button onClick={() => desvincularTrabalhoCompensatorio(aluno.id)} className="shrink-0 text-red-400 hover:text-red-600">
                                 <X className="w-3 h-3" />
@@ -668,6 +696,16 @@ export function Attendance() {
                 <span className="text-[#7FD3A3]">{totalPresentes} presentes</span> · <span className="text-[#FF9A8F]">{totalFaltas} {totalFaltas === 1 ? 'falta' : 'faltas'}</span>
               </p>
               <p className="text-xs text-[#A9BBB1]">{totalTransf > 0 ? `${totalTransf} transferido(s) · ` : ''}{turmaAtual?.name || turmaNorm}</p>
+              <div
+                role="progressbar"
+                aria-label="Presentes na chamada"
+                aria-valuemin={0}
+                aria-valuemax={ativos.length}
+                aria-valuenow={totalPresentes}
+                className="mt-2 h-1 rounded-full bg-white/15 overflow-hidden"
+              >
+                <div className="h-full rounded-full bg-[#7FD3A3] transition-[width] duration-300" style={{ width: ativos.length ? `${(totalPresentes / ativos.length) * 100}%` : '0%' }} />
+              </div>
             </div>
             <button
               onClick={handleSave}
