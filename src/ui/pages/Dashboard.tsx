@@ -3,7 +3,7 @@ import { useStore } from '../../store';
 import { MIN_PASSING_GRADE, MAX_ABSENCES_TOTAL, ClassRoom, Student } from '../../domain/types';
 import { bimestreAtual as bimestreVigente } from '../../domain/useRelatorioFrequencia';
 import { AgendaDia } from './AgendaDia';
-import { ChevronRight, UserX, Users, Download, Upload, Loader2, X, CheckSquare, BarChart3, Edit, Trash2, ChevronDown, GraduationCap, ChevronUp, Share2, Copy, CheckCircle, ClipboardCheck, CaseSensitive, UserCheck, ShieldAlert, type LucideIcon } from 'lucide-react';
+import { ChevronRight, UserX, Users, Download, Upload, Loader2, X, CheckSquare, BarChart3, Edit, Trash2, ChevronDown, GraduationCap, ChevronUp, Share2, Copy, CheckCircle, ClipboardCheck, CaseSensitive, UserCheck, type LucideIcon } from 'lucide-react';
 import { cn } from '../AppLayout';
 import { buscarAlunos, salvarNotas, sincronizarNomesAlunos, supabase } from '../../data/supabase';
 import { formatarNome } from '../../utils/formatarNome';
@@ -97,42 +97,6 @@ function ListaAcoes({ titulo, descricao, itens, onAcao, corrigindoNomes }: {
           </button>
         );
       })}
-    </div>
-  );
-}
-
-// Ação destrutiva fica recolhida, longe do toque acidental. O apagamento em si só
-// acontece na tela /reset, que pede confirmação explícita antes de excluir.
-function ZonaDePerigo({ onAbrirReset }: { onAbrirReset: () => void }) {
-  const [aberta, setAberta] = useState(false);
-  return (
-    <div className="rounded-[20px] border border-[#F3D0CB] bg-[#FFF8F7] overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setAberta(a => !a)}
-        aria-expanded={aberta}
-        aria-controls="zona-de-perigo"
-        className="w-full flex items-center gap-3 px-4 min-h-[52px] text-left focus-visible:outline-none focus-visible:bg-[#FDECEA]"
-      >
-        <ShieldAlert className="w-[18px] h-[18px] text-[#B42318] shrink-0" aria-hidden />
-        <span className="flex-1 text-sm font-bold text-[#B42318]">Zona de perigo</span>
-        <ChevronDown className={cn('w-4 h-4 text-[#B42318] transition-transform duration-200', aberta && 'rotate-180')} aria-hidden />
-      </button>
-      {aberta && (
-        <div id="zona-de-perigo" className="px-4 pb-4 flex flex-col gap-3">
-          <p className="text-xs leading-snug text-[#5B6B63]">
-            O Reset Histórico apaga as notas e médias bimestrais de uma turma ou de todas. Nada é apagado ao tocar aqui:
-            na próxima tela você escolhe o que apagar e confirma antes.
-          </p>
-          <button
-            type="button"
-            onClick={onAbrirReset}
-            className="self-start flex items-center gap-2 px-4 h-11 rounded-full text-sm font-bold text-[#B42318] bg-white border border-[#E8B4AD] active:bg-[#FDECEA] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B42318]"
-          >
-            <Trash2 className="w-4 h-4" aria-hidden /> Abrir Reset Histórico
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -875,7 +839,6 @@ export function Dashboard() {
             <h2 className="text-[13px] font-extrabold text-[#5B6B63] px-1">Gerenciar turmas</h2>
             <ListaAcoes titulo="Rotina pedagógica" itens={ROTINA} onAcao={handleMenuClick} corrigindoNomes={corrigindoNomes} />
             <ListaAcoes titulo="Ferramentas de manutenção" descricao="Uso ocasional: listas, nomes e dados das turmas" itens={MANUTENCAO} onAcao={handleMenuClick} corrigindoNomes={corrigindoNomes} />
-            <ZonaDePerigo onAbrirReset={() => navigate('/reset')} />
           </section>
         </div>
       </div>

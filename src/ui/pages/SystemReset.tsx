@@ -38,6 +38,8 @@ export function SystemReset() {
   const [showConfirmAll, setShowConfirmAll] = useState(false);
   const [showConfirmTurma, setShowConfirmTurma] = useState<ClassRoom | null>(null);
   const [confirmText, setConfirmText] = useState('');
+  const [pin, setPin] = useState('');
+  const [erroModal, setErroModal] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'ok' | 'err'; msg: string } | null>(null);
 
@@ -104,45 +106,50 @@ export function SystemReset() {
     setTimeout(() => setFeedback(null), 4000);
   };
 
-  const apagarTudo = async () => {
-    if (confirmText.trim().toUpperCase() !== 'APAGAR') return;
-    setWorking(true);
-    try {
-      const { error } = await supabase
-        .from('notas')
-        .delete()
-        .gte('bimestre', 0);
-      if (error) throw error;
-
-      setNotesCounts({});
-      setShowConfirmAll(false);
-      setConfirmText('');
-      showFeedback('ok', 'Notas e médias de todas as turmas foram apagadas.');
-    } catch (err: any) {
-      console.error(err);
-      showFeedback('err', 'Erro ao apagar: ' + (err.message || 'desconhecido'));
-    } finally {
-      setWorking(false);
-    }
+  const fecharModal = () => {
+    setShowConfirmAll(false);
+    setShowConfirmTurma(null);
+    setConfirmText('');
+    setPin('');
+    setErroModal(null);
   };
 
-  const apagarTurma = async (cr: ClassRoom) => {
-    setWorking(true);
-    try {
-      const turma = normalizeTurma(cr.name);
-      const { error } = await supabase
-        .from('notas')
-        .delete()
-        .eq('turma', turma);
-      if (error) throw error;
+  const abrirModal = (turma: ClassRoom | null) => {
+    fecharModal();
+    if (turma) setShowConfirmTurma(turma); else setShowConfirmAll(true);
+  };
 
-      setNotesCounts(prev => ({ ...prev, [cr.id]: 0 }));
-      setShowConfirmTurma(null);
-      showFeedback('ok', `Notas e médias do ${cr.name} foram apagadas.`);
+  // O apagamento só acontece na função resetar_notas do banco, que confere o PIN de
+  // administrador no servidor. Se a função não existir, nada é apagado (sem plano B).
+  const executarReset = async (turma: ClassRoom | null) => {
+    if (working || !pin || confirmText.trim().toUpperCase() !== 'CONFIRMAR') return;
+    setWorking(true);
+    setErroModal(null);
+    try {
+      const { data, error } = await supabase.rpc('resetar_notas', {
+        p_pin: pin,
+        p_turma: turma ? normalizeTurma(turma.name) : null,
+      });
+      if (error) {
+        if (/resetar_notas|schema cache|could not find/i.test(error.message)) {
+          throw new Error('A proteção do reset ainda não foi instalada no banco. Rode o arquivo sql/reset_historico_protegido.sql no Supabase.');
+        }
+        throw error;
+      }
+      if (data === -1) throw new Error('PIN incorreto.');
+      if (data === -2) throw new Error('Muitas tentativas erradas. Aguarde 15 minutos e tente de novo.');
+      if (data === -3) throw new Error('O PIN de administrador ainda não foi definido no banco (passo 2 do arquivo sql/reset_historico_protegido.sql).');
+      if (data === -4) throw new Error('Sessão expirada. Entre no app de novo.');
+
+      if (turma) setNotesCounts(prev => ({ ...prev, [turma.id]: 0 }));
+      else setNotesCounts({});
+      fecharModal();
+      showFeedback('ok', turma ? `Notas e médias do ${turma.name} foram apagadas.` : 'Notas e médias de todas as turmas foram apagadas.');
     } catch (err: any) {
       console.error(err);
-      showFeedback('err', 'Erro ao apagar: ' + (err.message || 'desconhecido'));
+      setErroModal(err.message || 'Erro desconhecido ao apagar.');
     } finally {
+      setPin('');
       setWorking(false);
     }
   };
@@ -203,7 +210,7 @@ export function SystemReset() {
 
       {/* Botão grande de reset total */}
       <button
-        onClick={() => { setConfirmText(''); setShowConfirmAll(true); }}
+        onClick={() => abrirModal(null)}
         disabled={loadingCounts || totalNotes === 0}
         className="w-full py-4 rounded-[2rem] font-bold bg-highlight text-white shadow-lg shadow-highlight/30 hover:brightness-110 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
@@ -274,7 +281,7 @@ export function SystemReset() {
                             </span>
                           </div>
                           <button
-                            onClick={() => setShowConfirmTurma(cr)}
+                            onClick={() => abrirModal(cr)}
                             disabled={empty}
                             className={cn(
                               "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-bold transition-colors",
@@ -315,103 +322,26 @@ export function SystemReset() {
         </div>
       )}
 
-      {/* Modal: confirmar apagar tudo */}
-      {showConfirmAll && (
-        <div className="fixed inset-0 bg-primary/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface border border-gray-100 rounded-[2rem] p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl relative">
-            <button
-              onClick={() => { if (!working) { setShowConfirmAll(false); setConfirmText(''); } }}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="w-14 h-14 rounded-full bg-highlight/10 flex items-center justify-center">
-              <ShieldAlert className="w-7 h-7 text-highlight" />
-            </div>
-
-            <h3 className="text-xl font-bold text-textPrimary">Apagar todas as notas?</h3>
-            <p className="text-sm text-gray-600 leading-relaxed">
-              Você está prestes a apagar <span className="font-bold text-highlight">{totalNotes} registro(s)</span> da tabela
-              <span className="font-mono font-semibold"> notas</span>, afetando todas as turmas.
-              Esta ação <span className="font-bold">não pode ser desfeita</span>.
-            </p>
-
-            <div className="bg-gray-50 rounded-2xl p-3 border border-gray-200 flex flex-col gap-2">
-              <label className="text-xs font-semibold text-gray-600">
-                Para confirmar, digite <span className="font-mono text-highlight font-bold">APAGAR</span>
-              </label>
-              <input
-                value={confirmText}
-                onChange={(e) => setConfirmText(e.target.value)}
-                placeholder="APAGAR"
-                disabled={working}
-                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-highlight/30 font-mono uppercase tracking-widest text-center font-bold"
-              />
-            </div>
-
-            <div className="flex gap-3 mt-2">
-              <button
-                onClick={() => { setShowConfirmAll(false); setConfirmText(''); }}
-                disabled={working}
-                className="flex-1 py-3 rounded-2xl font-bold bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={apagarTudo}
-                disabled={working || confirmText.trim().toUpperCase() !== 'APAGAR'}
-                className="flex-1 py-3 rounded-2xl font-bold bg-highlight text-white shadow-lg shadow-highlight/30 hover:brightness-110 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {working ? <><Loader2 className="w-4 h-4 animate-spin" /> Apagando...</> : 'Apagar tudo'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: confirmar apagar uma turma */}
-      {showConfirmTurma && (
-        <div className="fixed inset-0 bg-primary/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface border border-gray-100 rounded-[2rem] p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl relative">
-            <button
-              onClick={() => { if (!working) setShowConfirmTurma(null); }}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="w-14 h-14 rounded-full bg-highlight/10 flex items-center justify-center">
-              <Trash2 className="w-7 h-7 text-highlight" />
-            </div>
-
-            <h3 className="text-xl font-bold text-textPrimary">
-              Apagar notas do {showConfirmTurma.name}?
-            </h3>
-            <p className="text-sm text-gray-600 leading-relaxed">
-              Serão removidos <span className="font-bold text-highlight">{notesCounts[showConfirmTurma.id] || 0} registro(s)</span> de notas desta turma.
-              As médias bimestrais correspondentes deixarão de existir.
-              Alunos e frequência permanecem intactos.
-            </p>
-
-            <div className="flex gap-3 mt-2">
-              <button
-                onClick={() => setShowConfirmTurma(null)}
-                disabled={working}
-                className="flex-1 py-3 rounded-2xl font-bold bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => apagarTurma(showConfirmTurma)}
-                disabled={working}
-                className="flex-1 py-3 rounded-2xl font-bold bg-highlight text-white shadow-lg shadow-highlight/30 hover:brightness-110 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {working ? <><Loader2 className="w-4 h-4 animate-spin" /> Apagando...</> : 'Apagar'}
-              </button>
-            </div>
-          </div>
-        </div>
+      {(showConfirmAll || showConfirmTurma) && (
+        <ModalExclusao
+          titulo={showConfirmTurma ? `Apagar notas do ${showConfirmTurma.name}?` : 'Apagar todas as notas?'}
+          descricao={showConfirmTurma ? (
+            <>Serão removidos <span className="font-bold text-highlight">{notesCounts[showConfirmTurma.id] || 0} registro(s)</span> de notas desta turma.
+              As médias bimestrais correspondentes deixarão de existir. Alunos e frequência permanecem intactos.</>
+          ) : (
+            <>Você está prestes a apagar <span className="font-bold text-highlight">{totalNotes} registro(s)</span> da tabela
+              <span className="font-mono font-semibold"> notas</span>, afetando todas as turmas. Esta ação <span className="font-bold">não pode ser desfeita</span>.</>
+          )}
+          rotuloBotao={showConfirmTurma ? 'Apagar' : 'Apagar tudo'}
+          working={working}
+          erro={erroModal}
+          pin={pin}
+          setPin={setPin}
+          confirmText={confirmText}
+          setConfirmText={setConfirmText}
+          onCancelar={() => { if (!working) fecharModal(); }}
+          onConfirmar={() => executarReset(showConfirmTurma)}
+        />
       )}
     </div>
   );
@@ -426,3 +356,86 @@ const SummaryCard = ({ icon, label, value }: { icon: React.ReactNode; label: str
     <span className="font-bold text-gray-500 text-xs leading-tight">{label}</span>
   </div>
 );
+
+function ModalExclusao({ titulo, descricao, rotuloBotao, working, erro, pin, setPin, confirmText, setConfirmText, onCancelar, onConfirmar }: {
+  titulo: string;
+  descricao: React.ReactNode;
+  rotuloBotao: string;
+  working: boolean;
+  erro: string | null;
+  pin: string;
+  setPin: (v: string) => void;
+  confirmText: string;
+  setConfirmText: (v: string) => void;
+  onCancelar: () => void;
+  onConfirmar: () => void;
+}) {
+  const pronto = !!pin && confirmText.trim().toUpperCase() === 'CONFIRMAR';
+  return (
+    <div className="fixed inset-0 bg-primary/20 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={titulo}>
+      <form
+        onSubmit={(e) => { e.preventDefault(); if (pronto) onConfirmar(); }}
+        className="bg-surface border border-gray-100 rounded-[2rem] p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl relative max-h-[92dvh] overflow-y-auto"
+      >
+        <button type="button" onClick={onCancelar} aria-label="Fechar" className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600">
+          <X className="w-5 h-5" />
+        </button>
+
+        <div className="w-14 h-14 rounded-full bg-highlight/10 flex items-center justify-center">
+          <ShieldAlert className="w-7 h-7 text-highlight" />
+        </div>
+
+        <h3 className="text-xl font-bold text-textPrimary">{titulo}</h3>
+        <p className="text-sm text-gray-600 leading-relaxed">{descricao}</p>
+
+        <div className="bg-gray-50 rounded-2xl p-3 border border-gray-200 flex flex-col gap-3">
+          <label className="flex flex-col gap-1.5 text-xs font-semibold text-gray-600">
+            PIN de administrador
+            <input
+              type="password"
+              value={pin}
+              onChange={(e) => setPin(e.target.value)}
+              autoComplete="off"
+              autoFocus
+              disabled={working}
+              className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-highlight/30 text-center text-base font-bold tracking-widest"
+            />
+          </label>
+          <label className="flex flex-col gap-1.5 text-xs font-semibold text-gray-600">
+            <span>Para confirmar, digite <span className="font-mono text-highlight font-bold">CONFIRMAR</span></span>
+            <input
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder="CONFIRMAR"
+              autoComplete="off"
+              disabled={working}
+              className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-highlight/30 font-mono uppercase tracking-widest text-center font-bold"
+            />
+          </label>
+        </div>
+
+        {erro && (
+          <p role="alert" className="text-sm font-semibold text-[#B42318] bg-[#FFF1EF] border border-[#F3D0CB] rounded-xl px-3 py-2">{erro}</p>
+        )}
+
+        <div className="flex gap-3 mt-1">
+          <button
+            type="button"
+            onClick={onCancelar}
+            disabled={working}
+            className="flex-1 py-3 rounded-2xl font-bold bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={working || !pronto}
+            className="flex-1 py-3 rounded-2xl font-bold bg-highlight text-white shadow-lg shadow-highlight/30 hover:brightness-110 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {working ? <><Loader2 className="w-4 h-4 animate-spin" /> Apagando...</> : rotuloBotao}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
