@@ -47,6 +47,10 @@ export function AppLayout() {
   const location = useLocation();
 
   const maisAtivo = MAIS_PATHS.some(p => location.pathname.startsWith(p));
+  // Início usa duas colunas em tela larga; as outras telas ficam na coluna estreita.
+  // Cabeçalho e conteúdo compartilham a mesma largura para o logo não ficar isolado à esquerda.
+  const inicio = location.pathname === '/';
+  const colunaLarga = inicio ? 'max-w-5xl' : 'max-w-2xl';
 
   return (
     <div
@@ -64,20 +68,22 @@ export function AppLayout() {
         </div>
       )}
       {/* Header */}
-      <header className="flex-shrink-0 flex items-center justify-between px-margin-mobile h-20 bg-surface z-50 sticky top-0 shadow-sm border-b border-outline-variant pt-2">
-        <div className="flex items-center gap-2 px-2 py-1">
-          <img
-            src={LOGO_URL}
-            alt="Diario de Classe EF"
-            className="w-8 h-8 object-contain rounded-lg flex-shrink-0"
-          />
-          <span className="font-bold text-base text-primary">Di&#225;rio de Classe EF</span>
+      <header className="flex-shrink-0 h-20 bg-surface z-50 sticky top-0 shadow-sm border-b border-outline-variant pt-2">
+        <div className={cn("h-full mx-auto w-full flex items-center px-margin-mobile", colunaLarga)}>
+          <div className="flex items-center gap-2 px-2 py-1">
+            <img
+              src={LOGO_URL}
+              alt="Diario de Classe EF"
+              className="w-8 h-8 object-contain rounded-lg flex-shrink-0"
+            />
+            <span className="font-bold text-base text-primary">Di&#225;rio de Classe EF</span>
+          </div>
         </div>
       </header>
 
       {/* Main */}
-      <main className="flex-1 overflow-y-auto w-full pb-24">
-        <div className={cn("max-w-2xl mx-auto w-full px-margin-mobile", location.pathname.startsWith('/report') ? "min-h-full" : "h-full")}>
+      <main className={cn("flex-1 overflow-y-auto w-full pb-24", inicio && "bg-[#EEF9F3]")}>
+        <div className={cn("mx-auto w-full px-margin-mobile", colunaLarga, location.pathname.startsWith('/report') ? "min-h-full" : "h-full")}>
           <Outlet />
         </div>
       </main>

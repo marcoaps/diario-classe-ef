@@ -3,7 +3,7 @@ import { useStore } from '../../store';
 import { MIN_PASSING_GRADE, MAX_ABSENCES_TOTAL, ClassRoom, Student } from '../../domain/types';
 import { bimestreAtual as bimestreVigente } from '../../domain/useRelatorioFrequencia';
 import { AgendaDia } from './AgendaDia';
-import { ChevronRight, UserX, Users, Download, Upload, Loader2, X, CheckSquare, BarChart3, CalendarSearch, Edit, Trash2, Star, ChevronDown, GraduationCap, ChevronUp, Share2, Copy, CheckCircle, ClipboardCheck, CaseSensitive, UserCheck, ArrowUpRight } from 'lucide-react';
+import { ChevronRight, UserX, Users, Download, Upload, Loader2, X, CheckSquare, BarChart3, Edit, Trash2, ChevronDown, GraduationCap, ChevronUp, Share2, Copy, CheckCircle, ClipboardCheck, CaseSensitive, UserCheck, ShieldAlert, type LucideIcon } from 'lucide-react';
 import { cn } from '../AppLayout';
 import { buscarAlunos, salvarNotas, sincronizarNomesAlunos, supabase } from '../../data/supabase';
 import { formatarNome } from '../../utils/formatarNome';
@@ -37,23 +37,105 @@ const YEAR_COLORS: Record<number, { bg: string; text: string; dot: string }> = {
   9: { bg: '#fff7ed', text: '#92400e', dot: '#d97706' },
 };
 
-const MENU_ITEMS = [
-  { Icon: CheckSquare,    title: 'Fazer Chamada',    sub: 'Registrar presença',   color: '#2563eb', bg: '#eff6ff', action: 'route',  value: '/attendance', destaque: false },
-  { Icon: BarChart3,      title: 'Relatórios',       sub: 'Frequência e notas',   color: '#7c3aed', bg: '#f5f3ff', action: 'route',  value: '/report',     destaque: false },
-  { Icon: CalendarSearch, title: 'Histórico',        sub: 'Chamadas passadas',    color: '#059669', bg: '#ecfdf5', action: 'route',  value: '/history',    destaque: false },
-  { Icon: Star,           title: 'Notas Bimestrais', sub: 'Lançar e consultar',   color: '#d97706', bg: '#fffbeb', action: 'route',  value: '/grades',     destaque: false },
-  { Icon: ClipboardCheck, title: 'Trabalhos',        sub: 'Registrar entregas',   color: '#0891b2', bg: '#ecfeff', action: 'route',  value: '/trabalhos',  destaque: false },
-  { Icon: Download,       title: 'Importar Lista',   sub: 'Adicionar alunos',     color: '#0284c7', bg: '#f0f9ff', action: 'import', value: '',            destaque: false },
-  { Icon: Edit,           title: 'Editar Turma',     sub: 'Gerenciar lista',      color: '#64748b', bg: '#f8fafc', action: 'turmas', value: '',            destaque: false },
-  { Icon: UserCheck,      title: 'Marcar Gênero',    sub: 'Meninos e meninas',    color: '#9333ea', bg: '#faf5ff', action: 'route',  value: '/genero',     destaque: false },
-  { Icon: CaseSensitive,  title: 'Corrigir Nomes',   sub: 'Ajustar maiúsculas',   color: '#0d9488', bg: '#f0fdfa', action: 'corrigirNomes', value: '',      destaque: false },
-  { Icon: Trash2,         title: 'Reset Histórico',  sub: 'Apagar registros',     color: '#dc2626', bg: '#fef2f2', action: 'route',  value: '/reset',      destaque: false },
-] as const;
+type AcaoTipo = 'route' | 'import' | 'turmas' | 'corrigirNomes' | 'compartilhar';
+interface Acao { Icon: LucideIcon; title: string; sub: string; action: AcaoTipo; value: string }
 
-// Redesign: 4 ações mais usadas em blocos grandes; o resto vira lista; Reset fica isolado.
-const porTitulo = (...titulos: string[]) => titulos.map(t => MENU_ITEMS.find(m => m.title === t)!);
-const ACESSO_RAPIDO = porTitulo('Fazer Chamada', 'Notas Bimestrais', 'Relatórios', 'Histórico');
-const GERENCIAR = porTitulo('Trabalhos', 'Importar Lista', 'Editar Turma', 'Marcar Gênero', 'Corrigir Nomes');
+const chaveTurma = (nome: string) => nome.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+
+// Atalhos de fluxo de trabalho. Chamada, Notas e Relatórios já estão na barra de baixo.
+const ATALHOS: Acao[] = [
+  { Icon: ClipboardCheck, title: 'Lançar Trabalhos',    sub: 'Registrar entregas',      action: 'route',        value: '/trabalhos' },
+  { Icon: Share2,         title: 'Compartilhar Portal', sub: 'Enviar link no WhatsApp', action: 'compartilhar', value: '' },
+  { Icon: GraduationCap,  title: 'Consultar Alunos',    sub: 'Provas, resultados e QR', action: 'route',        value: '/alunos' },
+  { Icon: BarChart3,      title: 'Exportar Relatório',  sub: 'Frequência e notas',      action: 'route',        value: '/report' },
+];
+
+// Gerenciar turmas: o que se usa toda semana separado do que é ocasional.
+const ROTINA: Acao[] = [
+  { Icon: ClipboardCheck, title: 'Trabalhos / Entregas', sub: 'Registrar entregas',      action: 'route', value: '/trabalhos' },
+  { Icon: GraduationCap,  title: 'Consulta de Alunos',   sub: 'Provas, resultados e QR', action: 'route', value: '/alunos' },
+];
+const MANUTENCAO: Acao[] = [
+  { Icon: Download,      title: 'Importar Lista de Alunos', sub: 'Adicionar alunos à turma', action: 'import',        value: '' },
+  { Icon: Edit,          title: 'Editar Dados da Turma',    sub: 'Gerenciar a lista',        action: 'turmas',        value: '' },
+  { Icon: UserCheck,     title: 'Divisão de Gênero',        sub: 'Meninos e meninas',        action: 'route',         value: '/genero' },
+  { Icon: CaseSensitive, title: 'Padronização de Nomes',    sub: 'Ajustar maiúsculas',       action: 'corrigirNomes', value: '' },
+];
+
+function ListaAcoes({ titulo, descricao, itens, onAcao, corrigindoNomes }: {
+  titulo: string;
+  descricao?: string;
+  itens: Acao[];
+  onAcao: (action: AcaoTipo, value: string) => void;
+  corrigindoNomes: boolean;
+}) {
+  return (
+    <div className="bg-white rounded-[20px] border border-[#DCEBE2] shadow-[0_1px_2px_rgba(5,59,32,0.05)] overflow-hidden">
+      <div className="px-4 pt-3.5 pb-2.5">
+        <h3 className="text-sm font-extrabold text-[#10231A]">{titulo}</h3>
+        {descricao && <p className="text-xs text-[#5B6B63] mt-0.5">{descricao}</p>}
+      </div>
+      {itens.map(item => {
+        const ocupado = item.action === 'corrigirNomes' && corrigindoNomes;
+        return (
+          <button
+            key={item.title}
+            onClick={() => onAcao(item.action, item.value)}
+            disabled={ocupado}
+            className="w-full flex items-center gap-3 px-4 py-2.5 min-h-[56px] text-left border-t border-[#EDF3EF] active:bg-[#F1F8F4] transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:bg-[#F1F8F4]"
+          >
+            <span className="w-9 h-9 rounded-xl bg-[#E3F8EC] flex items-center justify-center shrink-0">
+              {ocupado
+                ? <Loader2 className="w-[18px] h-[18px] animate-spin text-[#0B6B3A]" aria-hidden />
+                : <item.Icon className="w-[18px] h-[18px] text-[#0B6B3A]" aria-hidden />}
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-bold text-[#10231A] leading-tight">{item.title}</span>
+              <span className="block text-xs text-[#5B6B63] mt-0.5">{ocupado ? 'Verificando...' : item.sub}</span>
+            </span>
+            <ChevronRight className="w-4 h-4 text-[#9DB3A6] shrink-0" aria-hidden />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// Ação destrutiva fica recolhida, longe do toque acidental. O apagamento em si só
+// acontece na tela /reset, que pede confirmação explícita antes de excluir.
+function ZonaDePerigo({ onAbrirReset }: { onAbrirReset: () => void }) {
+  const [aberta, setAberta] = useState(false);
+  return (
+    <div className="rounded-[20px] border border-[#F3D0CB] bg-[#FFF8F7] overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setAberta(a => !a)}
+        aria-expanded={aberta}
+        aria-controls="zona-de-perigo"
+        className="w-full flex items-center gap-3 px-4 min-h-[52px] text-left focus-visible:outline-none focus-visible:bg-[#FDECEA]"
+      >
+        <ShieldAlert className="w-[18px] h-[18px] text-[#B42318] shrink-0" aria-hidden />
+        <span className="flex-1 text-sm font-bold text-[#B42318]">Zona de perigo</span>
+        <ChevronDown className={cn('w-4 h-4 text-[#B42318] transition-transform duration-200', aberta && 'rotate-180')} aria-hidden />
+      </button>
+      {aberta && (
+        <div id="zona-de-perigo" className="px-4 pb-4 flex flex-col gap-3">
+          <p className="text-xs leading-snug text-[#5B6B63]">
+            O Reset Histórico apaga as notas e médias bimestrais de uma turma ou de todas. Nada é apagado ao tocar aqui:
+            na próxima tela você escolhe o que apagar e confirma antes.
+          </p>
+          <button
+            type="button"
+            onClick={onAbrirReset}
+            className="self-start flex items-center gap-2 px-4 h-11 rounded-full text-sm font-bold text-[#B42318] bg-white border border-[#E8B4AD] active:bg-[#FDECEA] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B42318]"
+          >
+            <Trash2 className="w-4 h-4" aria-hidden /> Abrir Reset Histórico
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function Dashboard() {
   const navigate = useNavigate();
@@ -169,11 +251,12 @@ export function Dashboard() {
     return () => { mounted = false; };
   }, [uniqueClassRooms]);
 
-  const handleMenuClick = (action: string, value: string) => {
+  const handleMenuClick = (action: AcaoTipo, value: string) => {
     if (action === 'route') navigate(value);
     else if (action === 'turmas') { setShowTurmas(true); setTimeout(() => document.getElementById('turmas-list')?.scrollIntoView({ behavior: 'smooth' }), 100); }
     else if (action === 'import') setShowImportModal(true);
     else if (action === 'corrigirNomes') handleCorrigirNomesTodasTurmas();
+    else if (action === 'compartilhar') setShowCompartilhar(true);
   };
 
   const handleImport = async () => {
@@ -534,6 +617,17 @@ export function Dashboard() {
     return m;
   }, [sortedClassRooms, studentCounts]);
 
+  // Turma ativa (a selecionada no app) e turmas existentes, para o cartão "Chamada de Hoje"
+  const turmaAtiva = useMemo(() => {
+    const cr = sortedClassRooms.find(c => c.id === selectedClassId);
+    return cr ? chaveTurma(cr.name) : null;
+  }, [sortedClassRooms, selectedClassId]);
+  const turmasDisponiveis = useMemo(() => new Set(sortedClassRooms.map(cr => chaveTurma(cr.name))), [sortedClassRooms]);
+  const abrirChamadaDaTurma = (t: string) => {
+    const cr = sortedClassRooms.find(x => chaveTurma(x.name) === t);
+    if (cr) { setSelectedClassId(cr.id); navigate('/attendance'); }
+  };
+
   const totalStudents = Object.values(studentCounts).reduce((acc: number, count: number) => acc + count, 0);
   const totalByYear = (year: number) => (groupedByYear.get(year) || []).reduce((acc, cr) => acc + (studentCounts[cr.id] || 0), 0);
 
@@ -581,7 +675,7 @@ export function Dashboard() {
         </div>
       </header>
 
-      <div className="px-4 flex flex-col gap-5 -mt-12 relative z-10">
+      <div className="px-4 grid gap-5 -mt-12 relative z-10 lg:grid-cols-2 lg:items-start">
 
         {/* Botão Central do Aluno — oculto (mantido para uso futuro) */}
         <button
@@ -601,94 +695,62 @@ export function Dashboard() {
           </span>
         </button>
 
-        {/* Chamada de hoje: a tarefa principal, em destaque sobre o cabeçalho */}
-        <AgendaDia
-          contagens={contagemPorTurma}
-          onTurmaClick={(t) => { const cr = sortedClassRooms.find((x) => x.name.replace(/[^0-9A-Za-z]/g,'').toUpperCase() === t); if (cr) { setSelectedClassId(cr.id); navigate('/attendance'); } }}
-        />
+        <div className="flex flex-col gap-5 min-w-0">
+          {/* Chamada de hoje: um só cartão com a turma ativa e a ação principal.
+              Sem aula no dia, mostra só o aviso (sem botão de chamada). */}
+          <AgendaDia
+            contagens={contagemPorTurma}
+            turmaAtiva={turmaAtiva}
+            turmasDisponiveis={turmasDisponiveis}
+            onTurmaClick={abrirChamadaDaTurma}
+          />
 
-        {/* Acesso rápido: uma ação principal larga + três atalhos */}
-        <section aria-label="Acesso rápido" className="flex flex-col gap-2.5">
-          <h2 className="text-[13px] font-extrabold text-[#5B6B63] px-1">Acesso rápido</h2>
-          <div className="grid grid-cols-3 gap-2.5">
-            {ACESSO_RAPIDO.map((item, i) => i === 0 ? (
-              <button
-                key={item.title}
-                onClick={() => handleMenuClick(item.action, item.value)}
-                className="col-span-3 relative overflow-hidden flex items-center gap-4 px-4 py-4 rounded-[22px] text-left text-white transition-transform duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0B7A3D]"
-                style={{ background: 'linear-gradient(135deg, #0F6B3C 0%, #08432A 100%)', boxShadow: '0 12px 24px -14px rgba(5,59,32,0.7)' }}
-              >
-                <svg aria-hidden="true" className="absolute -right-6 -top-10 w-[190px] h-[190px] opacity-[0.12] pointer-events-none" viewBox="0 0 190 190" fill="none" stroke="#fff" strokeWidth="1.6">
-                  <circle cx="95" cy="95" r="62" /><circle cx="95" cy="95" r="3.5" fill="#fff" /><line x1="95" y1="0" x2="95" y2="190" />
-                </svg>
-                <span className="relative w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center shrink-0">
-                  <item.Icon className="w-6 h-6" aria-hidden />
-                </span>
-                <span className="relative flex-1 min-w-0">
-                  <span className="block text-[17px] font-extrabold leading-tight tracking-tight">{item.title}</span>
-                  <span className="block text-xs text-[#BFE3CD] mt-0.5">{item.sub}</span>
-                </span>
-                <span className="relative w-9 h-9 rounded-full bg-[#F2B632] text-[#3A2A00] flex items-center justify-center shrink-0">
-                  <ChevronRight className="w-5 h-5" aria-hidden />
-                </span>
-              </button>
-            ) : (
-              <button
-                key={item.title}
-                onClick={() => handleMenuClick(item.action, item.value)}
-                className="flex flex-col items-start justify-between gap-3 p-3.5 min-h-[112px] rounded-[20px] text-left bg-white border border-[#DCEBE2] shadow-[0_1px_2px_rgba(5,59,32,0.05)] transition-transform duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0B7A3D]"
-              >
-                <span className="w-10 h-10 rounded-xl bg-[#E3F8EC] text-[#0B6B3A] flex items-center justify-center">
-                  <item.Icon className="w-5 h-5" aria-hidden />
-                </span>
-                <span className="flex flex-col gap-0.5">
-                  <span className="text-[14px] font-extrabold leading-tight text-[#10231A]">{item.title}</span>
-                  <span className="text-xs leading-snug text-[#5B6B63]">{item.sub}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
+          {/* Últimas turmas acessadas: troca rápida de contexto logo abaixo do cartão principal */}
+          {recentClassRooms.length > 0 && (
+            <section aria-label="Últimas turmas acessadas" className="flex flex-col gap-2.5">
+              <h2 className="text-[13px] font-extrabold text-[#5B6B63] px-1">Últimas turmas acessadas</h2>
+              <div className="flex flex-wrap gap-2">
+                {recentClassRooms.map(cr => {
+                  const cor = (YEAR_COLORS[extractYear(cr.name)] || { dot: '#64748b' }).dot;
+                  return (
+                    <button
+                      key={cr.id}
+                      onClick={() => { setSelectedClassId(cr.id); navigate('/attendance'); }}
+                      className="flex items-center gap-2 pl-3 pr-3.5 h-11 rounded-full text-sm font-extrabold bg-white text-[#10231A] border border-[#DCEBE2] shadow-[0_1px_2px_rgba(5,59,32,0.05)] active:scale-95 transition-transform duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B7A3D]"
+                    >
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: cor }} aria-hidden />
+                      {cr.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          )}
 
-        {/* Últimas Turmas Acessadas — pra voltar rápido quando o professor
-            está corrigindo registros em várias turmas seguidas */}
-        {recentClassRooms.length > 0 && (
-          <section aria-label="Últimas turmas acessadas" className="flex flex-col gap-2.5">
-            <h2 className="text-[13px] font-extrabold text-[#5B6B63] px-1">Últimas Turmas Acessadas</h2>
-            <div className="flex flex-wrap gap-2">
-              {recentClassRooms.map(cr => {
-                const cor = (YEAR_COLORS[extractYear(cr.name)] || { dot: '#64748b' }).dot;
-                return (
-                  <button
-                    key={cr.id}
-                    onClick={() => { setSelectedClassId(cr.id); navigate('/attendance'); }}
-                    className="flex items-center gap-2 pl-3 pr-3.5 h-10 rounded-full text-sm font-extrabold bg-white text-[#10231A] border border-[#DCEBE2] shadow-[0_1px_2px_rgba(5,59,32,0.05)] active:scale-95 transition-transform duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B7A3D]"
-                  >
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ background: cor }} aria-hidden />
-                    {cr.name}
-                  </button>
-                );
-              })}
+          {/* Acesso rápido: atalhos de fluxo de trabalho (Chamada, Notas e Relatórios já estão na barra de baixo) */}
+          <section aria-label="Acesso rápido" className="flex flex-col gap-2.5">
+            <h2 className="text-[13px] font-extrabold text-[#5B6B63] px-1">Acesso rápido</h2>
+            <div className="grid grid-cols-2 gap-2.5">
+              {ATALHOS.map(item => (
+                <button
+                  key={item.title}
+                  onClick={() => handleMenuClick(item.action, item.value)}
+                  className="flex flex-col items-start justify-between gap-3 p-3.5 min-h-[112px] rounded-[20px] text-left bg-white border border-[#DCEBE2] shadow-[0_1px_2px_rgba(5,59,32,0.05)] transition-transform duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0B7A3D]"
+                >
+                  <span className="w-10 h-10 rounded-xl bg-[#E3F8EC] text-[#0B6B3A] flex items-center justify-center">
+                    <item.Icon className="w-5 h-5" aria-hidden />
+                  </span>
+                  <span className="flex flex-col gap-0.5">
+                    <span className="text-[14px] font-extrabold leading-tight text-[#10231A]">{item.title}</span>
+                    <span className="text-xs leading-snug text-[#5B6B63]">{item.sub}</span>
+                  </span>
+                </button>
+              ))}
             </div>
           </section>
-        )}
+        </div>
 
-        {/* Compartilhar Portal: uso ocasional, por isso uma linha discreta */}
-        <button
-          onClick={() => setShowCompartilhar(true)}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-[20px] text-left bg-white border border-[#DCEBE2] shadow-[0_1px_2px_rgba(5,59,32,0.05)] transition-transform duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B7A3D]"
-        >
-          <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-[#E3F8EC]">
-            <Share2 className="w-5 h-5 text-[#0B6B3A]" aria-hidden />
-          </span>
-          <span className="flex-1 min-w-0">
-            <span className="block font-extrabold text-[#10231A] text-[15px] leading-tight">Compartilhar Portal</span>
-            <span className="block text-[#5B6B63] text-xs mt-0.5">Enviar link das provas pelo WhatsApp</span>
-          </span>
-          <span className="flex items-center gap-1 px-3 h-8 rounded-full text-xs font-extrabold text-white shrink-0 bg-[#0B6B3A]">
-            ENVIAR <ArrowUpRight className="w-3.5 h-3.5" aria-hidden />
-          </span>
-        </button>
+        <div className="flex flex-col gap-5 min-w-0">
 
         {/* Bloco Turmas colapsável */}
         <div id="turmas-list" className="scroll-mt-20">
@@ -705,16 +767,7 @@ export function Dashboard() {
                 <span className="block text-xs mt-0.5 text-[#5B6B63] tabular-nums">{totalStudents} alunos</span>
               </span>
             </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowImportModal(true); }}
-                className="flex items-center gap-1 px-2.5 h-8 font-bold rounded-full text-xs transition-colors border"
-                style={{ background: '#FBF1E7', color: '#8F5524', borderColor: '#F0DAC0' }}
-              >
-                <Download className="w-3.5 h-3.5" /> Importar
-              </button>
-              {showTurmas ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
-            </div>
+            {showTurmas ? <ChevronUp className="w-5 h-5 text-gray-400 shrink-0" /> : <ChevronDown className="w-5 h-5 text-gray-400 shrink-0" />}
           </button>
 
           {showTurmas && (
@@ -816,41 +869,15 @@ export function Dashboard() {
             </div>
           )}
         </div>
-      </div>
 
-      {/* Gerenciar turmas (lista) + Reset isolado no fim, longe do toque acidental */}
-      <div className="px-4 flex flex-col gap-3">
-        <h2 className="text-[13px] font-extrabold text-[#5B6B63] px-1 -mb-1">Gerenciar turmas</h2>
-        <div className="bg-white rounded-[20px] border border-[#DCEBE2] shadow-[0_1px_2px_rgba(5,59,32,0.05)] flex flex-col overflow-hidden">
-          {GERENCIAR.map((item, i) => {
-            const isCorrigirNomes = item.action === 'corrigirNomes';
-            return (
-              <button
-                key={item.title}
-                onClick={() => handleMenuClick(item.action, item.value)}
-                disabled={isCorrigirNomes && corrigindoNomes}
-                className={cn(
-                  "flex items-center gap-3 px-4 py-3 text-left active:bg-[#F1F8F4] transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:bg-[#F1F8F4]",
-                  i > 0 && "border-t border-[#EDF3EF]"
-                )}
-              >
-                <span className="w-9 h-9 rounded-xl bg-[#E3F8EC] flex items-center justify-center shrink-0">
-                  {isCorrigirNomes && corrigindoNomes
-                    ? <Loader2 className="w-[18px] h-[18px] animate-spin text-[#0B6B3A]" />
-                    : <item.Icon className="w-[18px] h-[18px] text-[#0B6B3A]" aria-hidden />}
-                </span>
-                <span className="flex-1 text-sm font-bold text-[#10231A]">{item.title}</span>
-                <span className="text-xs text-[#5B6B63]">{isCorrigirNomes && corrigindoNomes ? 'Verificando...' : item.sub}</span>
-              </button>
-            );
-          })}
+          {/* Gerenciar turmas: rotina de uso frequente separada da manutenção ocasional */}
+          <section aria-label="Gerenciar turmas" className="flex flex-col gap-3">
+            <h2 className="text-[13px] font-extrabold text-[#5B6B63] px-1">Gerenciar turmas</h2>
+            <ListaAcoes titulo="Rotina pedagógica" itens={ROTINA} onAcao={handleMenuClick} corrigindoNomes={corrigindoNomes} />
+            <ListaAcoes titulo="Ferramentas de manutenção" descricao="Uso ocasional: listas, nomes e dados das turmas" itens={MANUTENCAO} onAcao={handleMenuClick} corrigindoNomes={corrigindoNomes} />
+            <ZonaDePerigo onAbrirReset={() => navigate('/reset')} />
+          </section>
         </div>
-        <button
-          onClick={() => navigate('/reset')}
-          className="self-center h-11 px-3 flex items-center gap-1.5 text-[13px] font-bold text-[#B42318]"
-        >
-          <Trash2 className="w-4 h-4" /> Reset Histórico
-        </button>
       </div>
 
       {/* Modal: Compartilhar Portal */}
