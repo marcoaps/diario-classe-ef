@@ -1,11 +1,10 @@
 ﻿import React, { useEffect, useState } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import {
-  Home, CheckSquare, GraduationCap, CloudOff, Cloud,
+  Home, CheckSquare, GraduationCap,
   CalendarSearch, BarChart3, QrCode, ClipboardList, CalendarDays,
   Sparkles, MoreHorizontal, X, BookOpen, ClipboardCheck, NotebookPen, Crown, UserCheck, HeartHandshake
 } from 'lucide-react';
-import { useStore } from '../store';
 import { aoMudarFila, listarFila, sincronizarFila } from '../data/filaChamada';
 import { sincronizarSumulas } from '../data/filaSumula';
 import { sincronizarSumulas as sincronizarSumulasRodizio } from '../data/filaSumulaRodizio';
@@ -44,7 +43,6 @@ function useFilaPendente(online: boolean) {
 export function AppLayout() {
   const online = useOnline();
   const pendentes = useFilaPendente(online);
-  const { isSynced, triggerSync } = useStore();
   const [maisAberto, setMaisAberto] = useState(false);
   const location = useLocation();
 
@@ -74,20 +72,6 @@ export function AppLayout() {
             className="w-8 h-8 object-contain rounded-lg flex-shrink-0"
           />
           <span className="font-bold text-base text-primary">Di&#225;rio de Classe EF</span>
-        </div>
-        <div className="flex items-center gap-sm">
-          <button
-            onClick={triggerSync}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all",
-              isSynced
-                ? "bg-secondary-container text-on-secondary-container"
-                : "bg-error-container text-on-error-container"
-            )}
-          >
-            {isSynced ? <Cloud className="w-4 h-4" /> : <CloudOff className="w-4 h-4" />}
-            {isSynced ? 'Sync' : 'Pendente'}
-          </button>
         </div>
       </header>
 
