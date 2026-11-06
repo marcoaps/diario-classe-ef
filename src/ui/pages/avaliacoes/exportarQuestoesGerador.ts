@@ -19,7 +19,7 @@ import { saveAs } from 'file-saver';
 import type { ParametrosGeracao, QuestaoGerada } from './tiposGeradorQuestoes';
 import { imagemUrlParaBase64, imagemUrlParaBuffer } from './buscarImagensGerador';
 import {
-  carregarLogoBytes, cabecalhoModelo, caixaInstrucoes, tituloDisciplina, questaoModelo,
+  carregarLogoBytes, cabecalhoModelo, tituloDisciplina, questaoModelo,
   propsSecaoUmaColuna, propsSecaoDuasColunas, propsSecaoNovaPagina,
 } from './layoutProvaModelo';
 
@@ -120,38 +120,8 @@ export async function exportarQuestoesPDF(
   doc.text('Data:', xTexto + 86, 34);
   doc.line(xTexto + 96, 34.5, pageWidth - margin, 34.5);
 
-  // Caixa INSTRUÇÕES
-  const instrucoes = [
-    `Verifique se este caderno contém ${selecionadas.length} questões. Caso apresente alguma divergência, solicite ao responsável pela sala um outro caderno.`,
-    'Não será permitida nenhuma espécie de CONSULTA nem o uso de máquina calculadora ou de dispositivos eletrônicos, tais como celulares e tablets.',
-    'É proibido pedir ou emprestar material durante a realização da prova. USAR CANETA PRETA.',
-    'Você terá ____ hora(s) para responder a todas as questões.',
-  ];
-  doc.setFontSize(8.5);
-  doc.setFont('helvetica', 'normal');
-  const linhasInstr = instrucoes.map((t, i) => doc.splitTextToSize(`${i + 1}. ${t}`, larguraUtil - 12));
-  const alturaInstr = 14 + linhasInstr.reduce((n, l) => n + l.length * 4 + 1.5, 0) + 6;
-  const yInstr = 41;
-  doc.setDrawColor(...cinza);
-  doc.setLineWidth(0.4);
-  doc.rect(margin, yInstr, larguraUtil, alturaInstr);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-  doc.setTextColor(...azul);
-  doc.text('INSTRUÇÕES', margin + 5, yInstr + 8);
-  doc.setTextColor(0, 0, 0);
-  doc.setFontSize(8.5);
-  let yi = yInstr + 14;
-  linhasInstr.forEach(l => {
-    doc.setFont('helvetica', 'normal');
-    doc.text(l, margin + 6, yi);
-    yi += l.length * 4 + 1.5;
-  });
-  doc.setFont('helvetica', 'bold');
-  doc.text('BOA PROVA!', margin + 5, yi + 2);
-
   // Título da disciplina
-  let y = yInstr + alturaInstr + 9;
+  let y = 47;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(11.5);
   doc.setTextColor(79, 129, 189);
@@ -401,13 +371,6 @@ export async function exportarQuestoesWord(
       titulo: `Avaliação — ${params.componenteCurricular}`,
       serie: `${params.anoEscolar}º Ano`,
     }),
-    new Paragraph({ spacing: { before: 120, after: 0 }, children: [] }),
-    caixaInstrucoes([
-      `Verifique se este caderno contém ${selecionadas.length} questões. Caso apresente alguma divergência, solicite ao responsável pela sala um outro caderno.`,
-      'Não será permitida nenhuma espécie de CONSULTA nem o uso de máquina calculadora ou de dispositivos eletrônicos, tais como celulares e tablets.',
-      'É proibido pedir ou emprestar material durante a realização da prova. USAR CANETA PRETA.',
-      'Você terá ____ hora(s) para responder a todas as questões.',
-    ]),
     tituloDisciplina(`${params.componenteCurricular} - Ensino Fundamental${params.conteudo ? ` · ${params.conteudo}` : ''}`),
   ];
 

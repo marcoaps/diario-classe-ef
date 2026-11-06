@@ -8,7 +8,7 @@ import {
 } from 'docx';
 import { saveAs } from 'file-saver';
 import {
-  carregarLogoBytes, cabecalhoModelo, caixaInstrucoes, tituloDisciplina, questaoModelo,
+  carregarLogoBytes, cabecalhoModelo, tituloDisciplina, questaoModelo,
   propsSecaoUmaColuna, propsSecaoDuasColunas, propsSecaoNovaPagina,
 } from '../avaliacoes/layoutProvaModelo';
 
@@ -499,13 +499,6 @@ async function exportarWord(textoOriginal: string, valores: Record<string, strin
       titulo: `Avaliação ${valores.bimestre} - Educação Física - 2026`,
       serie: valores.serie,
     }),
-    esp(120),
-    caixaInstrucoes([
-      'Verifique se este caderno contém todas as questões. Caso apresente alguma divergência, solicite ao professor outro caderno.',
-      'Não será permitida nenhuma espécie de CONSULTA nem o uso de dispositivos eletrônicos, tais como celulares e tablets.',
-      'É proibido pedir ou emprestar material durante a realização da prova. USAR CANETA PRETA.',
-      'Questões objetivas valem 1,0 ponto cada. Questões dissertativas valem 1,0 ponto cada.',
-    ]),
     tituloDisciplina(`Educação Física - Ensino Fundamental${valores.tema ? ` · ${valores.tema}` : ''}`),
   ];
 

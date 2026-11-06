@@ -129,10 +129,6 @@ export function gerarHtmlProva(avaliacao: Avaliacao, aluno: Aluno, opcoes?: Opco
   const turmaHtml = turmaTxt
     ? `<strong>${escaparHTML(turmaTxt)}</strong>`
     : `<span style="border-bottom:1px solid #333;display:inline-block;width:50px;">&nbsp;</span>`;
-  const partesTexto = [
-    qtdObj > 0 ? `${qtdObj} questão(ões) objetiva(s)` : '',
-    qtdDisc > 0 ? `${qtdDisc} discursiva(s)` : '',
-  ].filter(Boolean).join(' e ');
 
   return `
     <div style="font-family:Arial,sans-serif;font-size:10pt;color:#1e293b;width:100%;">
@@ -151,14 +147,6 @@ export function gerarHtmlProva(avaliacao: Avaliacao, aluno: Aluno, opcoes?: Opco
           </td>
         </tr>
       </table>
-
-      <div style="border:1.2px solid ${FIO};padding:5px 10px 5px;margin-bottom:6px;">
-        <div style="font-size:12.5pt;font-weight:bold;color:${AZUL};margin-bottom:3px;text-align:left;">INSTRUÇÕES</div>
-        <div style="font-size:8pt;line-height:1.3;text-align:left;margin-bottom:2px;">1. Verifique se este caderno contém ${partesTexto || 'todas as questões'}. Caso apresente alguma divergência, solicite ao professor outro caderno.</div>
-        <div style="font-size:8pt;line-height:1.3;text-align:left;margin-bottom:2px;">2. Não será permitida nenhuma espécie de CONSULTA nem o uso de dispositivos eletrônicos, tais como celulares e tablets.</div>
-        <div style="font-size:8pt;line-height:1.3;text-align:left;margin-bottom:2px;">3. É proibido pedir ou emprestar material durante a realização da prova. <b>USAR CANETA PRETA.</b></div>
-        <div style="font-size:8pt;font-weight:bold;text-align:left;">BOA PROVA!</div>
-      </div>
 
       <div style="font-size:11pt;color:#4f81bd;margin:6px 0 4px;text-align:left;">${escaparHTML(avaliacao.disciplina || 'Educação Física')} - Ensino Fundamental</div>
 

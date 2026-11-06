@@ -73,25 +73,6 @@ export function cabecalhoModelo(d: DadosCabecalhoProva): Table {
   });
 }
 
-/** Caixa "INSTRUÇÕES" com itens numerados e "BOA PROVA!". */
-export function caixaInstrucoes(itens: string[]): Table {
-  const b = { style: BorderStyle.SINGLE, size: 6, color: CINZA };
-  const filhos: Paragraph[] = [
-    new Paragraph({ spacing: { before: 60, after: 100 }, children: [run('INSTRUÇÕES', { b: true, sz: 30, cor: COR_PROVA })] }),
-    ...itens.map((t, i) => new Paragraph({
-      spacing: { after: 70 },
-      indent: { left: 280, hanging: 280 },
-      children: [run(`${i + 1}. `, { sz: 18 }), run(t, { sz: 18 })],
-    })),
-    new Paragraph({ spacing: { before: 40, after: 60 }, children: [run('BOA PROVA!', { b: true, sz: 18 })] }),
-  ];
-  return new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: { top: b, bottom: b, left: b, right: b, insideHorizontal: semBorda, insideVertical: semBorda },
-    rows: [new TableRow({ children: [new TableCell({ children: filhos, margins: { left: 160, right: 160 } })] })],
-  });
-}
-
 /** Título da disciplina/etapa, em azul, acima das colunas. */
 export function tituloDisciplina(texto: string): Paragraph {
   return new Paragraph({
@@ -109,6 +90,12 @@ export interface QuestaoModelo {
   alternativas?: { letra: string; texto: string }[];
   /** Linhas pautadas para dissertativa/resposta curta. */
   linhasResposta?: number;
+}
+
+/** A→Ⓐ, B→Ⓑ … (U+24B6+). Letras fora de A–Z ficam como estão. */
+function letraCirculada(letra: string): string {
+  const c = (letra || '').trim().toUpperCase().charCodeAt(0);
+  return c >= 65 && c <= 90 ? String.fromCharCode(0x24B6 + (c - 65)) : letra;
 }
 
 /** Parágrafos de uma questão no estilo do modelo. */
@@ -151,15 +138,16 @@ export function questaoModelo(q: QuestaoModelo): Paragraph[] {
     }));
   });
 
-  q.alternativas?.forEach(alt => {
+  q.alternativas?.forEach((alt, idx) => {
     out.push(new Paragraph({
       spacing: { before: 60, after: 60 },
       indent: { left: 360, hanging: 360 },
-      border: { bottom: fio },
+      // `space` alternado: sem isso o Word funde as bordas iguais e só desenha o fio da última alternativa.
+      border: { bottom: { ...fio, space: idx % 2 === 0 ? 3 : 2 } },
       keepLines: true,
       children: [
-        new TextRun({ text: ` ${alt.letra} `, font: FONTE, size: 19, bold: true, color: COR_PROVA, border: { style: BorderStyle.SINGLE, size: 6, color: COR_PROVA, space: 1 } }),
-        run('  ' + alt.texto, { sz: 21 }),
+        new TextRun({ text: letraCirculada(alt.letra), font: 'Segoe UI Symbol', size: 30, color: COR_PROVA }),
+        run(' ' + alt.texto, { sz: 21 }),
       ],
     }));
   });
