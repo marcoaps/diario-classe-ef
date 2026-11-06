@@ -19,7 +19,7 @@ import { saveAs } from 'file-saver';
 import type { ParametrosGeracao, QuestaoGerada } from './tiposGeradorQuestoes';
 import { imagemUrlParaBase64, imagemUrlParaBuffer } from './buscarImagensGerador';
 import {
-  carregarLogoBytes, cabecalhoModelo, tituloDisciplina, questaoModelo,
+  carregarLogoBytes, prepararCirculos, cabecalhoModelo, tituloDisciplina, questaoModelo,
   propsSecaoUmaColuna, propsSecaoDuasColunas, propsSecaoNovaPagina,
 } from './layoutProvaModelo';
 
@@ -211,15 +211,20 @@ export async function exportarQuestoesPDF(
         garantir(Math.max(la.length * 4.7, 6) + 3);
         doc.setDrawColor(...azul);
         doc.setLineWidth(0.3);
-        doc.circle(xCol() + 2.8, y - 1.1, 2.6);
+        const hAlt = la.length * 4.7;
+        const yCentro = y - 3.5 + hAlt / 2; // letra centralizada na vertical em relação ao texto
+        doc.setDrawColor(26, 26, 26);
+        doc.setLineWidth(0.3);
+        doc.circle(xCol() + 2.8, yCentro, 2.7);
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(8);
-        doc.setTextColor(...azul);
-        doc.text(alt.letra, xCol() + 2.8, y + 0.3, { align: 'center' });
+        doc.setTextColor(26, 26, 26);
+        doc.text(alt.letra, xCol() + 2.8, yCentro + 1.1, { align: 'center' });
         doc.setTextColor(0, 0, 0);
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(10);
-        doc.text(la, xCol() + 8, y);
+        if (la.length > 1) doc.text(alt.texto, xCol() + 8, y, { maxWidth: colW - 9, align: 'justify' });
+        else doc.text(la, xCol() + 8, y);
         y += la.length * 4.7 + 1.5;
         doc.setDrawColor(...cinza);
         doc.setLineWidth(0.2);
@@ -363,6 +368,7 @@ export async function exportarQuestoesWord(
   const selecionadas = filtrarParaExportacao(questoes, opcoes);
   const imagensBuffer = await preCarregarImagens(selecionadas, imagemUrlParaBuffer);
   const logo = await carregarLogoBytes();
+  await prepararCirculos();
 
   const cabecalho = [
     cabecalhoModelo({

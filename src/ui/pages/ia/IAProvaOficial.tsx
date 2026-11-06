@@ -8,7 +8,7 @@ import {
 } from 'docx';
 import { saveAs } from 'file-saver';
 import {
-  carregarLogoBytes, cabecalhoModelo, tituloDisciplina, questaoModelo,
+  carregarLogoBytes, prepararCirculos, cabecalhoModelo, tituloDisciplina, questaoModelo,
   propsSecaoUmaColuna, propsSecaoDuasColunas, propsSecaoNovaPagina,
 } from '../avaliacoes/layoutProvaModelo';
 
@@ -492,6 +492,7 @@ async function exportarWord(textoOriginal: string, valores: Record<string, strin
 
   // ── DOCUMENTO ─────────────────────────────────────────────────────────────
   const logoBytes = await carregarLogoBytes();
+  await prepararCirculos();
   const cabecalhoNovo = [
     cabecalhoModelo({
       logo: logoBytes,

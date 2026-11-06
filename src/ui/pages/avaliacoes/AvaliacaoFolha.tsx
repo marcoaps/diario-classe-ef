@@ -94,9 +94,9 @@ export function gerarHtmlProva(avaliacao: Avaliacao, aluno: Aluno, opcoes?: Opco
 
   function questaoHtml(q: QuestaoObjetiva): string {
     const altsHtml = q.alternativas.map(a =>
-      `<div style="display:flex;align-items:flex-start;gap:6px;padding:3px 0;border-bottom:0.6px solid ${FIO};page-break-inside:avoid;">
-        <span style="flex:0 0 auto;width:15px;height:15px;border:1.2px solid ${AZUL};border-radius:50%;color:${AZUL};font-weight:bold;font-size:8pt;line-height:13px;text-align:center;margin-top:1px;">${escaparHTML(a.letra)}</span>
-        <span style="flex:1;text-align:left;line-height:1.3;">${escaparHTML(a.texto)}</span>
+      `<div style="display:flex;align-items:center;gap:7px;padding:4px 0;border-bottom:0.6px solid ${FIO};page-break-inside:avoid;">
+        <span style="flex:0 0 auto;width:15px;height:15px;border:1.2px solid ${AZUL};border-radius:50%;color:${AZUL};font-weight:bold;font-size:8pt;line-height:13px;text-align:center;">${escaparHTML(a.letra)}</span>
+        <span style="flex:1;text-align:justify;line-height:1.3;">${escaparHTML(a.texto)}</span>
       </div>`
     ).join('');
     return `<div style="margin-bottom:9px;">
