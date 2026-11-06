@@ -18,6 +18,10 @@ import {
 import { saveAs } from 'file-saver';
 import type { ParametrosGeracao, QuestaoGerada } from './tiposGeradorQuestoes';
 import { imagemUrlParaBase64, imagemUrlParaBuffer } from './buscarImagensGerador';
+import {
+  carregarLogoBytes, cabecalhoModelo, caixaInstrucoes, tituloDisciplina, questaoModelo,
+  propsSecaoUmaColuna, propsSecaoDuasColunas, propsSecaoNovaPagina,
+} from './layoutProvaModelo';
 
 export interface OpcoesExportacao {
   incluirGabarito: boolean;
@@ -63,6 +67,15 @@ async function preCarregarImagens<T>(
   return mapa;
 }
 
+async function logoParaDataUrl(): Promise<string | null> {
+  try {
+    const resp = await fetch('/Logo_IOP.png');
+    if (!resp.ok) return null;
+    const blob = await resp.blob();
+    return await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result as string); r.onerror = () => res(null); r.readAsDataURL(blob); });
+  } catch { return null; }
+}
+
 // ── PDF ──────────────────────────────────────────────────────────────────
 
 export async function exportarQuestoesPDF(
@@ -75,100 +88,199 @@ export async function exportarQuestoesPDF(
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 14;
   const larguraUtil = pageWidth - margin * 2;
+  const azul: [number, number, number] = [31, 56, 100];
+  const cinza: [number, number, number] = [166, 166, 166];
 
-  // Cabeçalho, no mesmo estilo de exportarFrequencia.ts
-  doc.setFillColor(15, 50, 100);
-  doc.rect(0, 0, pageWidth, 22, 'F');
-  doc.setTextColor(255, 255, 255);
+  // ── Cabeçalho (modelo caderno de prova) ──────────────────────────────
+  const logo = await logoParaDataUrl();
+  if (logo) { try { doc.addImage(logo, 'PNG', margin, 10, 24, 24); } catch { /* segue sem logo */ } }
+  const xTexto = margin + 30;
+  doc.setTextColor(0, 0, 0);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.text('E.E. Instituto Odilon Pratagi', margin, 9);
-  doc.setFontSize(11);
+  doc.setFontSize(9);
+  doc.text('E.E. INSTITUTO ODILON PRATAGI', pageWidth / 2 + 12, 13, { align: 'center' });
+  doc.setTextColor(...azul);
+  doc.setFontSize(10.5);
+  doc.text(`AVALIAÇÃO — ${params.componenteCurricular.toUpperCase()}`, pageWidth / 2 + 12, 19, { align: 'center' });
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(9.5);
+  doc.text('Aluno (a):', xTexto, 27);
+  doc.setDrawColor(120, 120, 120);
+  doc.setLineWidth(0.2);
+  doc.line(xTexto + 19, 27.5, pageWidth - margin, 27.5);
+  doc.text('Série:', xTexto, 34);
   doc.setFont('helvetica', 'normal');
-  doc.text('Gerador de Questões — Banco de Itens de Avaliação', margin, 16);
+  doc.text(`${params.anoEscolar}º Ano`, xTexto + 11, 34);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Turma:', xTexto + 45, 34);
+  doc.line(xTexto + 57, 34.5, xTexto + 80, 34.5);
+  doc.text('Data:', xTexto + 86, 34);
+  doc.line(xTexto + 96, 34.5, pageWidth - margin, 34.5);
 
-  doc.setTextColor(20, 20, 20);
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  let y = 30;
-  const linhaComponenteAno = doc.splitTextToSize(`Componente: ${params.componenteCurricular}    Ano: ${params.anoEscolar}º ano`, larguraUtil);
-  doc.text(linhaComponenteAno, margin, y);
-  y += linhaComponenteAno.length * 5.5 + 1;
-  const linhaConteudo = doc.splitTextToSize(`Conteúdo: ${params.conteudo}`, larguraUtil);
-  doc.text(linhaConteudo, margin, y);
-  y += linhaConteudo.length * 5.5;
+  // Caixa INSTRUÇÕES
+  const instrucoes = [
+    `Verifique se este caderno contém ${selecionadas.length} questões. Caso apresente alguma divergência, solicite ao responsável pela sala um outro caderno.`,
+    'Não será permitida nenhuma espécie de CONSULTA nem o uso de máquina calculadora ou de dispositivos eletrônicos, tais como celulares e tablets.',
+    'É proibido pedir ou emprestar material durante a realização da prova. USAR CANETA PRETA.',
+    'Você terá ____ hora(s) para responder a todas as questões.',
+  ];
+  doc.setFontSize(8.5);
   doc.setFont('helvetica', 'normal');
-  y += 6;
+  const linhasInstr = instrucoes.map((t, i) => doc.splitTextToSize(`${i + 1}. ${t}`, larguraUtil - 12));
+  const alturaInstr = 14 + linhasInstr.reduce((n, l) => n + l.length * 4 + 1.5, 0) + 6;
+  const yInstr = 41;
+  doc.setDrawColor(...cinza);
+  doc.setLineWidth(0.4);
+  doc.rect(margin, yInstr, larguraUtil, alturaInstr);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.setTextColor(...azul);
+  doc.text('INSTRUÇÕES', margin + 5, yInstr + 8);
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(8.5);
+  let yi = yInstr + 14;
+  linhasInstr.forEach(l => {
+    doc.setFont('helvetica', 'normal');
+    doc.text(l, margin + 6, yi);
+    yi += l.length * 4 + 1.5;
+  });
+  doc.setFont('helvetica', 'bold');
+  doc.text('BOA PROVA!', margin + 5, yi + 2);
+
+  // Título da disciplina
+  let y = yInstr + alturaInstr + 9;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(11.5);
+  doc.setTextColor(79, 129, 189);
+  const tituloDisc = doc.splitTextToSize(
+    `${params.componenteCurricular} - Ensino Fundamental${params.conteudo ? ` · ${params.conteudo}` : ''}`, larguraUtil);
+  doc.text(tituloDisc, margin, y);
+  y += tituloDisc.length * 5.5 + 3;
+  doc.setTextColor(0, 0, 0);
+
+  // ── Questões em 2 colunas ─────────────────────────────────────────────
+  const gap = 10;
+  const colW = (larguraUtil - gap) / 2;
+  const fundo = pageHeight - 15;
+  const topoPagina = 16;
+  let col = 0;
+  let pagina = 1;
+  const topoDaPagina: Record<number, number> = { 1: y };
+  const fimDaPagina: Record<number, number> = { 1: y };
+  const xCol = () => margin + col * (colW + gap);
+  const registrarFim = () => { fimDaPagina[pagina] = Math.max(fimDaPagina[pagina] ?? 0, y); };
+  const proximaColuna = () => {
+    registrarFim();
+    if (col === 0) { col = 1; y = topoDaPagina[pagina]; }
+    else { doc.addPage(); pagina++; col = 0; y = topoPagina; topoDaPagina[pagina] = y; }
+  };
+  const garantir = (altura: number) => { if (y + altura > fundo) proximaColuna(); };
 
   selecionadas.forEach((questao, idx) => {
-    if (y > 260) { doc.addPage(); y = 20; }
-
+    garantir(24);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(13);
-    const avisoNaoOficial = !questao.conformeReferenciaOficial ? '  [FORA DO PADRÃO OFICIAL SEE/AC]' : '';
-    doc.text(`QUESTÃO ${idx + 1}${avisoNaoOficial}`, margin, y);
+    doc.setFontSize(10.5);
+    doc.setTextColor(...azul);
+    doc.text(`Questão ${idx + 1}${!questao.conformeReferenciaOficial ? '  [FORA DO PADRÃO SEE/AC]' : ''}`, xCol(), y);
+    doc.setDrawColor(...azul);
+    doc.setLineWidth(0.5);
+    doc.line(xCol(), y + 1.8, xCol() + colW, y + 1.8);
+    doc.setTextColor(0, 0, 0);
     y += 7;
 
+    doc.setFontSize(10);
     if (questao.contexto) {
       doc.setFont('helvetica', 'italic');
-      doc.setFontSize(11);
-      const linhaContexto = doc.splitTextToSize(questao.contexto, larguraUtil - 6);
-      const alturaCaixa = linhaContexto.length * 5.5 + 6;
-      if (y + alturaCaixa > 275) { doc.addPage(); y = 20; }
+      const lc = doc.splitTextToSize(questao.contexto, colW - 4);
+      const h = lc.length * 4.6 + 4;
+      garantir(h);
       doc.setDrawColor(120, 120, 120);
-      doc.rect(margin, y, larguraUtil, alturaCaixa);
-      doc.text(linhaContexto, margin + 3, y + 6);
-      y += alturaCaixa + 4;
+      doc.setLineWidth(0.2);
+      doc.rect(xCol(), y - 3.5, colW, h);
+      doc.text(lc, xCol() + 2, y + 0.5);
+      y += h + 2;
     }
 
-    const imagemBase64 = imagensBase64[questao.idTemporario];
-    if (imagemBase64) {
-      const larguraImagem = 90;
-      const alturaImagem = 56; // proporção ~16:10, igual às fotos "medium" do Pexels
-      if (y + alturaImagem > 275) { doc.addPage(); y = 20; }
-      try {
-        doc.addImage(imagemBase64, 'JPEG', margin, y, larguraImagem, alturaImagem);
-        y += alturaImagem + 1;
-        if (questao.imagemCredito) {
-          doc.setFont('helvetica', 'italic');
-          doc.setFontSize(6);
-          const linhasCredito = doc.splitTextToSize(questao.imagemCredito, larguraUtil);
-          doc.text(linhasCredito, margin, y + 2);
-          y += linhasCredito.length * 2.5 + 2;
-        }
-        y += 2;
-      } catch {
-        // Se a imagem vier num formato que o jsPDF não reconheça, seguimos sem travar a exportação.
+    const img = imagensBase64[questao.idTemporario];
+    if (img) {
+      const wImg = Math.min(colW, 70);
+      const hImg = wImg * 0.62;
+      garantir(hImg + 4);
+      try { doc.addImage(img, 'JPEG', xCol() + (colW - wImg) / 2, y - 2, wImg, hImg); y += hImg + 2; } catch { /* ignora */ }
+      if (questao.imagemCredito) {
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(6);
+        const lcr = doc.splitTextToSize(questao.imagemCredito, colW);
+        doc.text(lcr, xCol(), y);
+        y += lcr.length * 2.5 + 2;
+        doc.setFontSize(10);
       }
     }
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(12);
-    const enunciadoLinhas = doc.splitTextToSize(questao.enunciado, larguraUtil);
-    if (y + enunciadoLinhas.length * 6 > 280) { doc.addPage(); y = 20; }
-    doc.text(enunciadoLinhas, margin, y);
-    y += enunciadoLinhas.length * 6 + 2;
+    doc.setFontSize(10);
+    const le = doc.splitTextToSize(questao.enunciado, colW);
+    let i = 0;
+    while (i < le.length) {
+      const cabem = Math.floor((fundo - y) / 4.7);
+      if (cabem < Math.min(3, le.length - i)) { proximaColuna(); continue; }
+      const n = Math.min(cabem, le.length - i);
+      doc.text(le.slice(i, i + n), xCol(), y);
+      y += n * 4.7;
+      i += n;
+      if (i < le.length) proximaColuna();
+    }
+    y += 2;
 
     if (questao.alternativas) {
       questao.alternativas.forEach(alt => {
-        const linhaAlt = doc.splitTextToSize(`(${alt.letra}) ${alt.texto}`, larguraUtil - 4);
-        if (y > 275) { doc.addPage(); y = 20; }
-        doc.text(linhaAlt, margin + 4, y);
-        y += linhaAlt.length * 6;
+        const la = doc.splitTextToSize(alt.texto, colW - 9);
+        garantir(Math.max(la.length * 4.7, 6) + 3);
+        doc.setDrawColor(...azul);
+        doc.setLineWidth(0.3);
+        doc.circle(xCol() + 2.8, y - 1.1, 2.6);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(...azul);
+        doc.text(alt.letra, xCol() + 2.8, y + 0.3, { align: 'center' });
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.text(la, xCol() + 8, y);
+        y += la.length * 4.7 + 1.5;
+        doc.setDrawColor(...cinza);
+        doc.setLineWidth(0.2);
+        doc.line(xCol(), y, xCol() + colW, y);
+        y += 3.5;
       });
     } else if (questao.tipoQuestao === 'dissertativa' || questao.tipoQuestao === 'resposta_curta') {
       const numLinhas = questao.tipoQuestao === 'dissertativa' ? 5 : 2;
-      for (let i = 0; i < numLinhas; i++) {
-        if (y > 275) { doc.addPage(); y = 20; }
-        doc.setDrawColor(180, 180, 180);
-        doc.line(margin, y, pageWidth - margin, y);
-        y += 7;
+      for (let k = 0; k < numLinhas; k++) {
+        garantir(8);
+        doc.setDrawColor(...cinza);
+        doc.setLineWidth(0.2);
+        doc.line(xCol(), y + 3, xCol() + colW, y + 3);
+        y += 8;
       }
     }
-    y += 4;
+    y += 3;
   });
+  registrarFim();
+
+  // Fio vertical central em cada página
+  for (let pg = 1; pg <= pagina; pg++) {
+    doc.setPage(pg);
+    doc.setDrawColor(...azul);
+    doc.setLineWidth(0.4);
+    const xm = margin + colW + gap / 2;
+    doc.line(xm, (topoDaPagina[pg] ?? topoPagina) - 3, xm, fimDaPagina[pg] ?? fundo);
+  }
+  doc.setPage(pagina);
+  doc.setLineWidth(0.2);
+  doc.setTextColor(20, 20, 20);
 
   if (opcoes.incluirGabarito) {
     doc.addPage();
@@ -280,67 +392,59 @@ export async function exportarQuestoesWord(
 ): Promise<void> {
   const selecionadas = filtrarParaExportacao(questoes, opcoes);
   const imagensBuffer = await preCarregarImagens(selecionadas, imagemUrlParaBuffer);
+  const logo = await carregarLogoBytes();
 
-  const cabecalho = new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: bordas(),
-    rows: [new TableRow({ children: [celulaTitulo(`Questões — ${params.componenteCurricular} — ${params.anoEscolar}º ano — ${params.conteudo}`)] })],
-  });
+  const cabecalho = [
+    cabecalhoModelo({
+      logo,
+      escola: 'E.E. Instituto Odilon Pratagi',
+      titulo: `Avaliação — ${params.componenteCurricular}`,
+      serie: `${params.anoEscolar}º Ano`,
+    }),
+    new Paragraph({ spacing: { before: 120, after: 0 }, children: [] }),
+    caixaInstrucoes([
+      `Verifique se este caderno contém ${selecionadas.length} questões. Caso apresente alguma divergência, solicite ao responsável pela sala um outro caderno.`,
+      'Não será permitida nenhuma espécie de CONSULTA nem o uso de máquina calculadora ou de dispositivos eletrônicos, tais como celulares e tablets.',
+      'É proibido pedir ou emprestar material durante a realização da prova. USAR CANETA PRETA.',
+      'Você terá ____ hora(s) para responder a todas as questões.',
+    ]),
+    tituloDisciplina(`${params.componenteCurricular} - Ensino Fundamental${params.conteudo ? ` · ${params.conteudo}` : ''}`),
+  ];
 
-  const corpoQuestoes = selecionadas.flatMap((questao, idx) => {
-    const paragrafos: Paragraph[] = [];
-    const avisoNaoOficial = !questao.conformeReferenciaOficial ? '  [FORA DO PADRÃO OFICIAL SEE/AC]' : '';
-    paragrafos.push(par([run(`QUESTÃO ${idx + 1}${avisoNaoOficial}`, { bold: true, sz: 26 })], AlignmentType.LEFT, 160, 40));
+  const corpoQuestoes = selecionadas.flatMap((questao, idx) =>
+    questaoModelo({
+      rotulo: `Questão ${idx + 1}${!questao.conformeReferenciaOficial ? '  [FORA DO PADRÃO OFICIAL SEE/AC]' : ''}`,
+      contexto: questao.contexto || undefined,
+      imagem: imagensBuffer[questao.idTemporario],
+      imagemCredito: questao.imagemCredito || undefined,
+      enunciado: questao.enunciado,
+      alternativas: questao.alternativas?.map(a => ({ letra: a.letra, texto: a.texto })),
+      linhasResposta: !questao.alternativas
+        ? (questao.tipoQuestao === 'dissertativa' ? 5 : questao.tipoQuestao === 'resposta_curta' ? 2 : undefined)
+        : undefined,
+    })
+  );
 
-    if (questao.contexto) {
-      paragrafos.push(paragrafoContexto(questao.contexto));
-    }
-
-    const bufferImagem = imagensBuffer[questao.idTemporario];
-    if (bufferImagem) {
-      paragrafos.push(paragrafoImagem(bufferImagem));
-      if (questao.imagemCredito) {
-        paragrafos.push(par([run(questao.imagemCredito, { it: true, sz: 12 })], AlignmentType.CENTER, 0, 40));
-      }
-    }
-
-    paragrafos.push(par([run(questao.enunciado, { sz: 24 })], AlignmentType.LEFT, 20, 60));
-
-    if (questao.alternativas) {
-      questao.alternativas.forEach(alt => {
-        paragrafos.push(par([run(`(${alt.letra}) ${alt.texto}`, { sz: 24 })], AlignmentType.LEFT, 10, 10));
-      });
-    } else if (questao.tipoQuestao === 'dissertativa') {
-      paragrafos.push(...linhasResposta(5));
-    } else if (questao.tipoQuestao === 'resposta_curta') {
-      paragrafos.push(...linhasResposta(2));
-    }
-
-    return paragrafos;
-  });
-
-  const secoes: Paragraph[] = [];
-
+  const gabarito: Paragraph[] = [];
   if (opcoes.incluirGabarito) {
-    secoes.push(par([run('GABARITO', { bold: true, cor: BR, sz: 26 })], AlignmentType.CENTER, 200, 100));
+    gabarito.push(par([run('GABARITO', { bold: true, cor: AZ, sz: 28 })], AlignmentType.CENTER, 0, 120));
     selecionadas.forEach((q, idx) => {
       const resposta = q.alternativas ? (q.alternativas.find(a => a.correta)?.letra ?? '-') : (q.respostaCorreta ?? '-');
-      secoes.push(par([run(`${idx + 1}. ${resposta}`, { bold: true, sz: 24 })], AlignmentType.LEFT, 20, 20));
-
+      gabarito.push(par([run(`${idx + 1}. ${resposta}`, { bold: true, sz: 24 })], AlignmentType.LEFT, 20, 20));
       if (opcoes.incluirComentariosDistratores && q.alternativas) {
         q.alternativas.filter(a => !a.correta && a.comentarioDistrator).forEach(a => {
-          secoes.push(par([run(`  (${a.letra}) incorreta — ${a.comentarioDistrator}`, { sz: 22 })], AlignmentType.LEFT, 0, 10));
+          gabarito.push(par([run(`  (${a.letra}) incorreta — ${a.comentarioDistrator}`, { sz: 22 })], AlignmentType.LEFT, 0, 10));
         });
       }
     });
   }
 
-  const conteudoDocumento: (Paragraph | Table)[] = [cabecalho, ...corpoQuestoes, ...secoes];
-
   const doc = new Document({
-    sections: [{
-      children: conteudoDocumento,
-    }],
+    sections: [
+      { properties: propsSecaoUmaColuna, children: cabecalho },
+      { properties: propsSecaoDuasColunas, children: corpoQuestoes },
+      ...(gabarito.length ? [{ properties: propsSecaoNovaPagina, children: gabarito }] : []),
+    ],
   });
 
   const blob = await Packer.toBlob(doc);

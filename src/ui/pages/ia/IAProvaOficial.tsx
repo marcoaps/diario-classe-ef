@@ -7,6 +7,10 @@ import {
   VerticalAlign, PageBreak, ImageRun, ColumnBreak,
 } from 'docx';
 import { saveAs } from 'file-saver';
+import {
+  carregarLogoBytes, cabecalhoModelo, caixaInstrucoes, tituloDisciplina, questaoModelo,
+  propsSecaoUmaColuna, propsSecaoDuasColunas, propsSecaoNovaPagina,
+} from '../avaliacoes/layoutProvaModelo';
 
 const CAMPOS = [
   { id: 'professores', label: 'Professor(es)', tipo: 'text' as const, placeholder: 'Ex: Jessiane / Marco Pedro' },
@@ -487,24 +491,56 @@ async function exportarWord(textoOriginal: string, valores: Record<string, strin
   const tabelaGabDis = new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: bd(), rows: gabDisRows });
 
   // ── DOCUMENTO ─────────────────────────────────────────────────────────────
+  const logoBytes = await carregarLogoBytes();
+  const cabecalhoNovo = [
+    cabecalhoModelo({
+      logo: logoBytes,
+      escola: 'E.E. Instituto Odilon Pratagi',
+      titulo: `Avaliação ${valores.bimestre} - Educação Física - 2026`,
+      serie: valores.serie,
+    }),
+    esp(120),
+    caixaInstrucoes([
+      'Verifique se este caderno contém todas as questões. Caso apresente alguma divergência, solicite ao professor outro caderno.',
+      'Não será permitida nenhuma espécie de CONSULTA nem o uso de dispositivos eletrônicos, tais como celulares e tablets.',
+      'É proibido pedir ou emprestar material durante a realização da prova. USAR CANETA PRETA.',
+      'Questões objetivas valem 1,0 ponto cada. Questões dissertativas valem 1,0 ponto cada.',
+    ]),
+    tituloDisciplina(`Educação Física - Ensino Fundamental${valores.tema ? ` · ${valores.tema}` : ''}`),
+  ];
+
+  const objNovas = d.questoesObj.length > 0
+    ? d.questoesObj.flatMap(q => questaoModelo({
+        rotulo: `Questão ${q.numero}`,
+        enunciado: q.enunciado,
+        alternativas: q.alternativas.map(alt => ({ letra: alt.letra, texto: alt.texto })),
+      }))
+    : renderQObjFallback();
+
+  const disNovas = d.questoesDis.length > 0
+    ? d.questoesDis.flatMap(q => questaoModelo({
+        rotulo: `Questão ${q.numero} (1,0 ponto)`,
+        enunciado: q.enunciado,
+        linhasResposta: 8,
+      }))
+    : [par([run(extrairBloco(d.textoLimpo, 'QUESTOES_DISSERTATIVAS', 'GABARITO_OBJETIVAS'), { sz: 20 })])];
+
   const doc = new Document({
-    sections: [{
-      properties: { page: { margin: { top: 600, bottom: 600, left: 800, right: 800 } } },
-      children: [
-        cabecalho, esp(80),
-        instrucoes, esp(80),
-        parte1Header,
-        tabelaObj, esp(80),
-        parte2Header,
-        tabelaDis,
-        quebraSecao,
+    sections: [
+      { properties: propsSecaoUmaColuna, children: cabecalhoNovo },
+      { properties: propsSecaoDuasColunas, children: objNovas },
+      { properties: { ...propsSecaoNovaPagina, column: { count: 2, space: 500, separate: true } }, children: [
+        par([run('QUESTÕES DISSERTATIVAS  (2,0 pontos)', { bold: true, sz: 22, cor: AZ })], AlignmentType.LEFT, 0, 60),
+        ...disNovas,
+      ] },
+      { properties: propsSecaoNovaPagina, children: [
         gabHeader, esp(80),
         gabObjHeader,
         gabObjGrid, esp(100),
         gabDisHeader,
         tabelaGabDis,
-      ],
-    }],
+      ] },
+    ],
   });
 
   const blob = await Packer.toBlob(doc);
