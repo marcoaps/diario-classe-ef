@@ -6,6 +6,7 @@ const Dashboard = lazy(() => import('./ui/pages/Dashboard').then(m => ({ default
 const Attendance = lazy(() => import('./ui/pages/Attendance').then(m => ({ default: m.Attendance })));
 const MarcarGenero = lazy(() => import('./ui/pages/MarcarGenero').then(m => ({ default: m.MarcarGenero })));
 const AttendanceHistory = lazy(() => import('./ui/pages/AttendanceHistory').then(m => ({ default: m.AttendanceHistory })));
+const RelatorioAluno = lazy(() => import('./ui/pages/RelatorioAluno').then(m => ({ default: m.RelatorioAluno })));
 const AttendanceReport = lazy(() => import('./ui/pages/AttendanceReport').then(m => ({ default: m.AttendanceReport })));
 const Evaluations = lazy(() => import('./ui/pages/Evaluations').then(m => ({ default: m.Evaluations })));
 const GradeReport = lazy(() => import('./ui/pages/GradeReport').then(m => ({ default: m.GradeReport })));
@@ -113,6 +114,7 @@ export default function App() {
           <Route path="/alunos-especiais" element={<AlunosEspeciais />} />
           <Route path="/history" element={<AttendanceHistory />} />
           <Route path="/report" element={<AttendanceReport />} />
+          <Route path="/relatorio-aluno" element={<RelatorioAluno />} />
           <Route path="/evaluations" element={<Evaluations />} />
           <Route path="/grades" element={<GradeReport />} />
           <Route path="/trabalhos" element={<Trabalhos />} />

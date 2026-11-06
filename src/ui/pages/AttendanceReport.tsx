@@ -1,8 +1,8 @@
 ﻿import React, { useMemo, useState } from 'react';
 import { useStore } from '../../store';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../../data/supabase';
-import { Loader2, BarChart3, AlertTriangle, FileSpreadsheet, FileText, ShieldCheck, Users, Percent, Award, Trash2, Calendar, X, BookOpen, ClipboardList, Download, ChevronDown } from 'lucide-react';
+import { UserRound, Loader2, BarChart3, AlertTriangle, FileSpreadsheet, FileText, ShieldCheck, Users, Percent, Award, Trash2, Calendar, X, BookOpen, ClipboardList, Download, ChevronDown } from 'lucide-react';
 import { cn } from '../AppLayout';
 import { useRelatorioFrequencia, type Bimestre, PONTOS_MAXIMOS, getPeriodoBimestre, bimestreAtual } from '../../domain/useRelatorioFrequencia';
 import { exportarExcel, exportarPDF } from '../../domain/exportarFrequencia';
@@ -250,6 +250,9 @@ export function AttendanceReport() {
     <div className="flex flex-col gap-4 font-sans animate-in fade-in pb-8 bg-background p-4 md:p-6 md:relative md:left-1/2 md:-translate-x-1/2 md:w-[min(1100px,96vw)]">
       <div className="flex items-center justify-between gap-3 relative">
         <h2 className="text-xl font-extrabold tracking-tight text-on-surface">Frequência</h2>
+        <Link to="/relatorio-aluno" className="ml-auto h-11 px-3 rounded-[14px] border border-[#0B6B3A] text-[#0B6B3A] text-[13px] font-extrabold flex items-center gap-1.5 active:scale-95 transition-all">
+          <UserRound className="w-4 h-4" /> Por aluno
+        </Link>
         <button
           type="button"
           onClick={() => setMenuExportar(m => !m)}
