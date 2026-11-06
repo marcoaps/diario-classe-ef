@@ -169,3 +169,26 @@ export async function excluirQuestaoBanco(id: string): Promise<void> {
   const { error } = await supabase.from('banco_questoes').delete().eq('id', id);
   if (error) throw error;
 }
+
+/** Questão do banco + dados da geração (ano, componente, bimestre, data) para a tela do Banco de Questões. */
+export interface ItemBancoQuestoes {
+  id: string;
+  questao: QuestaoGerada;
+  componenteCurricular: ComponenteCurricular;
+  anoEscolar: AnoEscolar;
+  bimestre: string | null;
+  criadoEm: string;
+}
+
+export async function listarBancoQuestoes(): Promise<ItemBancoQuestoes[]> {
+  const { data, error } = await supabase.from('banco_questoes').select('*').order('criado_em', { ascending: false });
+  if (error) throw error;
+  return (data as LinhaBancoQuestoes[]).map(l => ({
+    id: l.id,
+    questao: linhaParaQuestao(l),
+    componenteCurricular: l.componente_curricular,
+    anoEscolar: l.ano_escolar,
+    bimestre: l.bimestre,
+    criadoEm: l.criado_em,
+  }));
+}

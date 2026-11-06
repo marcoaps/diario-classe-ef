@@ -41,6 +41,7 @@ const AvaliacaoCorrecoes = lazy(() => import('./ui/pages/avaliacoes/AvaliacaoCor
 const AvaliacaoFormatar = lazy(() => import('./ui/pages/avaliacoes/AvaliacaoFormatar').then(m => ({ default: m.AvaliacaoFormatar })));
 const ExerciciosFixacao = lazy(() => import('./ui/pages/exercicios/ExerciciosFixacao').then(m => ({ default: m.ExerciciosFixacao })));
 const ExercicioFormatar = lazy(() => import('./ui/pages/exercicios/ExercicioFormatar').then(m => ({ default: m.ExercicioFormatar })));
+const BancoQuestoes = lazy(() => import('./ui/pages/avaliacoes/BancoQuestoes').then(m => ({ default: m.BancoQuestoes })));
 const GeradorQuestoes = lazy(() => import('./ui/pages/avaliacoes/GeradorQuestoes').then(m => ({ default: m.GeradorQuestoes })));
 const AvaliacaoGabaritoRapido = lazy(() => import('./ui/pages/avaliacoes/AvaliacaoGabaritoRapido').then(m => ({ default: m.AvaliacaoGabaritoRapido })));
 const GeradorCharges = lazy(() => import('./ui/pages/charges/GeradorCharges').then(m => ({ default: m.GeradorCharges })));
@@ -133,6 +134,7 @@ export default function App() {
           <Route path="/avaliacoes/formatar/:id" element={<AvaliacaoFormatar />} />
           <Route path="/prova-alunos" element={<AlunosProva />} />
           <Route path="/avaliacoes/gerador" element={<GeradorQuestoes />} />
+          <Route path="/avaliacoes/banco" element={<BancoQuestoes />} />
           <Route path="/avaliacoes/gabarito-rapido" element={<AvaliacaoGabaritoRapido />} />
 
           {/* Exercicios de Fixacao — conteudo livre, poucas questoes, mesmo cabecalho/Formatar */}

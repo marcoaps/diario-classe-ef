@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
-import { ClipboardList, Plus, QrCode, Camera, Trash2, ChevronDown, ChevronUp, BarChart2, Sparkles, Share2, Copy, Check, ListChecks, FileUp, Printer, HeartHandshake } from 'lucide-react';
+import { ClipboardList, Plus, QrCode, Camera, Trash2, ChevronDown, ChevronUp, BarChart2, Sparkles, Share2, Copy, Check, ListChecks, FileUp, Printer, HeartHandshake, Database } from 'lucide-react';
 import type { Avaliacao, QuestaoObjetiva } from './tiposCorretorProvas';
 import { ALTERNATIVAS_PADRAO, valorPorQuestaoObjetiva, arredondar, GRUPOS_CORRETOR, ehGrupoDeTurmas, labelTurmaOuGrupo } from './tiposCorretorProvas';
 import { getTurmasDoGrupo, getLabelGrupo } from '../ProvasOnline';
@@ -568,6 +568,13 @@ export function Avaliacoes() {
           >
             <ClipboardList className="w-4 h-4" />
             Só o Gabarito
+          </button>
+          <button
+            onClick={() => navigate('/avaliacoes/banco')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-outline-variant text-on-surface text-sm font-semibold"
+          >
+            <Database className="w-4 h-4" />
+            Banco de Questões
           </button>
           <button
             onClick={() => navigate('/avaliacoes/gerador')}

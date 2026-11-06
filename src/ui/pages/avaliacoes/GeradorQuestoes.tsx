@@ -389,7 +389,12 @@ export function GeradorQuestoes() {
                 <ClipboardCheck className="w-3.5 h-3.5" /> Criar avaliação com estas questões
               </button>
             </div>
-            {mensagemBanco && <p className="text-xs text-primary font-semibold">{mensagemBanco}</p>}
+            {mensagemBanco && (
+              <p className="text-xs text-primary font-semibold">
+                {mensagemBanco}{' '}
+                <button type="button" onClick={() => navigate('/avaliacoes/banco')} className="underline">Abrir o Banco de Questões</button>
+              </p>
+            )}
           </div>
 
           {(semImagem > 0 || progressoImagens !== null || erroImagens) && (
