@@ -85,18 +85,24 @@ export function gerarHtmlProva(avaliacao: Avaliacao, aluno: Aluno, opcoes?: Opco
     ? labelTurmaOuGrupo(turmaEfetivaProva)
     : turmaEfetivaProva.replace(/(\d+).*/, '$1') + 'º ano';
   const professorNome = opcoes?.professorNome?.trim() || avaliacao.professor?.trim() || '';
-  const linhaNome = (opcoes?.preencherAluno && aluno)
-    ? `Nome: <strong>${escaparHTML(aluno.nome)}</strong> &nbsp;&nbsp; N&#186;: <strong>${aluno.numero_chamada ?? '-'}</strong> &nbsp;&nbsp; Data: ____/____/______`
-    : `Nome: <span style="border-bottom:1px solid #333;display:inline-block;width:320px;">&nbsp;</span> &nbsp;&nbsp; Data: ____/____/______`;
+
+  // Layout "caderno de prova" (modelo OLIEFAC): cabeçalho com logo, caixa de
+  // INSTRUÇÕES, 2 colunas com fio central, "Questão N" sublinhado e letras
+  // das alternativas em círculo. Só bordas (sem fundos), pra imprimir bem em P&B.
+  const AZUL = '#1e3a5f';
+  const FIO = '#a6a6a6';
 
   function questaoHtml(q: QuestaoObjetiva): string {
     const altsHtml = q.alternativas.map(a =>
-      `<tr><td style="width:20px;font-weight:bold;vertical-align:top;padding:1px 4px;">(${escaparHTML(a.letra)})</td><td style="vertical-align:top;padding:1px 2px;text-align:justify;">${escaparHTML(a.texto)}</td></tr>`
+      `<div style="display:flex;align-items:flex-start;gap:6px;padding:3px 0;border-bottom:0.6px solid ${FIO};page-break-inside:avoid;">
+        <span style="flex:0 0 auto;width:15px;height:15px;border:1.2px solid ${AZUL};border-radius:50%;color:${AZUL};font-weight:bold;font-size:8pt;line-height:13px;text-align:center;margin-top:1px;">${escaparHTML(a.letra)}</span>
+        <span style="flex:1;text-align:left;line-height:1.3;">${escaparHTML(a.texto)}</span>
+      </div>`
     ).join('');
-    return `<div style="margin-bottom:8px;">
-        <div style="font-weight:bold;margin-bottom:2px;text-align:left;">Questão ${q.numero} –</div>
-        <div style="margin-bottom:3px;line-height:1.4;text-align:justify;">${escaparHTML(q.enunciado)}</div>
-        <table style="border-collapse:collapse;width:100%;">${altsHtml}</table>
+    return `<div style="margin-bottom:9px;">
+        <div style="font-weight:bold;color:${AZUL};font-size:10pt;border-bottom:1.5px solid ${AZUL};padding-bottom:1px;margin-bottom:4px;text-align:left;">Questão ${q.numero}</div>
+        <div style="margin-bottom:4px;line-height:1.35;text-align:justify;">${escaparHTML(q.enunciado)}</div>
+        ${altsHtml}
       </div>`;
   }
 
@@ -107,43 +113,59 @@ export function gerarHtmlProva(avaliacao: Avaliacao, aluno: Aluno, opcoes?: Opco
   const dissHtml = Array.from({ length: qtdDisc }, (_, i) => qtdObj + i + 1).map(n => {
     const enunciado = qSubj[String(n)] || '';
     return `
-      <div style="border:1.5px solid #1e3a5f;margin-bottom:10px;page-break-inside:avoid;">
-        <div style="background:#1e3a5f;color:white;font-weight:bold;padding:5px 8px;font-size:11pt;">
-          Questão ${n} <span style="font-weight:normal;opacity:0.85;">(${valorDisc.toFixed(1)} ponto${valorDisc !== 1 ? 's' : ''})</span>
+      <div style="margin-bottom:9px;page-break-inside:avoid;">
+        <div style="font-weight:bold;color:${AZUL};font-size:10pt;border-bottom:1.5px solid ${AZUL};padding-bottom:1px;margin-bottom:4px;text-align:left;">
+          Questão ${n} <span style="font-weight:normal;color:#475569;">(${valorDisc.toFixed(1)} ponto${valorDisc !== 1 ? 's' : ''})</span>
         </div>
-        <div style="padding:8px 8px 10px 8px;background:white;">
-          <div style="line-height:1.6;font-size:11pt;margin-bottom:10px;text-align:justify;">${escaparHTML(enunciado)}</div>
-          <div style="font-size:10pt;color:#1e293b;border-top:1px dashed #cbd5e1;padding-top:6px;">
-            <strong>Resposta:</strong> <em>Escreva sua resposta no espaço reservado na folha de respostas.</em>
-          </div>
-        </div>
+        <div style="line-height:1.4;margin-bottom:5px;text-align:justify;">${escaparHTML(enunciado)}</div>
+        <div style="font-size:9pt;color:#475569;"><em>Escreva sua resposta no espaço reservado na folha de respostas.</em></div>
       </div>`;
   }).join('');
 
-  return `
-    <div style="font-family:Arial,sans-serif;font-size:12pt;color:#1e293b;width:100%;">
+  const nomeAluno = (opcoes?.preencherAluno && aluno)
+    ? `<strong>${escaparHTML(aluno.nome)}</strong> &nbsp;&nbsp;<b>N&#186;:</b> <strong>${aluno.numero_chamada ?? '-'}</strong>`
+    : `<span style="border-bottom:1px solid #333;display:inline-block;width:300px;">&nbsp;</span>`;
+  const turmaTxt = ehGrupoDeTurmas(turmaEfetivaProva) ? '' : turmaEfetivaProva.replace(/\d+/, '');
+  const turmaHtml = turmaTxt
+    ? `<strong>${escaparHTML(turmaTxt)}</strong>`
+    : `<span style="border-bottom:1px solid #333;display:inline-block;width:50px;">&nbsp;</span>`;
+  const partesTexto = [
+    qtdObj > 0 ? `${qtdObj} questão(ões) objetiva(s)` : '',
+    qtdDisc > 0 ? `${qtdDisc} discursiva(s)` : '',
+  ].filter(Boolean).join(' e ');
 
-      <table style="width:100%;border:2px solid #1e3a5f;border-radius:4px;margin-bottom:6px;border-collapse:collapse;">
+  return `
+    <div style="font-family:Arial,sans-serif;font-size:10pt;color:#1e293b;width:100%;">
+
+      <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
         <tr>
-          <td style="width:72px;padding:6px;vertical-align:middle;text-align:center;">
-            <img src="${LOGO_IOP}" width="64" height="64" style="width:64px;height:64px;max-width:64px;max-height:64px;object-fit:contain;display:block;" />
+          <td style="width:80px;vertical-align:middle;text-align:center;">
+            <img src="${LOGO_IOP}" width="68" height="68" style="width:68px;height:68px;object-fit:contain;display:block;" />
           </td>
-          <td style="padding:6px;vertical-align:middle;">
-            <div style="font-size:11pt;font-weight:bold;margin-bottom:2px;">${escaparHTML(avaliacao.titulo)}</div>
-            <div style="font-size:10pt;margin-bottom:1px;">Disciplina: <strong>${escaparHTML(avaliacao.disciplina || 'Educação Física')}</strong> &nbsp;&nbsp; Professor(a): <strong>${escaparHTML(professorNome)}</strong></div>
-            <div style="font-size:10pt;margin-bottom:1px;">S&#233;rie: <strong>${escaparHTML(serie)}</strong> &nbsp;&nbsp; Turma: <strong>${escaparHTML(ehGrupoDeTurmas(turmaEfetivaProva) ? '-' : turmaEfetivaProva.replace(/\d+/, ''))}</strong></div>
-            <div style="font-size:10pt;border-top:1px solid #cbd5e1;padding-top:3px;margin-top:3px;">${linhaNome}</div>
+          <td style="vertical-align:middle;padding-left:6px;">
+            <div style="text-align:center;font-size:9pt;font-weight:bold;">E.E. INSTITUTO ODILON PRATAGI</div>
+            <div style="text-align:center;font-size:10.5pt;font-weight:bold;color:${AZUL};margin-bottom:5px;">${escaparHTML(avaliacao.titulo)}</div>
+            <div style="font-size:9.5pt;margin-bottom:3px;text-align:left;"><b>Aluno (a):</b> ${nomeAluno}</div>
+            <div style="font-size:9.5pt;text-align:left;"><b>Série:</b> ${escaparHTML(serie)} &nbsp;&nbsp; <b>Turma:</b> ${turmaHtml} &nbsp;&nbsp; <b>Data:</b> ____/____/______</div>
+            <div style="font-size:9.5pt;margin-top:3px;text-align:left;"><b>Disciplina:</b> ${escaparHTML(avaliacao.disciplina || 'Educação Física')} &nbsp;&nbsp; <b>Professor(a):</b> ${escaparHTML(professorNome)}</div>
           </td>
         </tr>
       </table>
 
-      ${qtdObj > 0 ? `
-      <div style="background:#1e3a5f;color:white;font-weight:bold;font-size:11pt;text-align:center;padding:4px;margin-bottom:6px;">
-        PARTE 1 — QUESTÕES OBJETIVAS (${(qtdObj * valorObj).toFixed(1)} pontos)
+      <div style="border:1.2px solid ${FIO};padding:5px 10px 5px;margin-bottom:6px;">
+        <div style="font-size:12.5pt;font-weight:bold;color:${AZUL};margin-bottom:3px;text-align:left;">INSTRUÇÕES</div>
+        <div style="font-size:8pt;line-height:1.3;text-align:left;margin-bottom:2px;">1. Verifique se este caderno contém ${partesTexto || 'todas as questões'}. Caso apresente alguma divergência, solicite ao professor outro caderno.</div>
+        <div style="font-size:8pt;line-height:1.3;text-align:left;margin-bottom:2px;">2. Não será permitida nenhuma espécie de CONSULTA nem o uso de dispositivos eletrônicos, tais como celulares e tablets.</div>
+        <div style="font-size:8pt;line-height:1.3;text-align:left;margin-bottom:2px;">3. É proibido pedir ou emprestar material durante a realização da prova. <b>USAR CANETA PRETA.</b></div>
+        <div style="font-size:8pt;font-weight:bold;text-align:left;">BOA PROVA!</div>
       </div>
+
+      <div style="font-size:11pt;color:#4f81bd;margin:6px 0 4px;text-align:left;">${escaparHTML(avaliacao.disciplina || 'Educação Física')} - Ensino Fundamental</div>
+
+      ${qtdObj > 0 ? `
       <table style="width:100%;border-collapse:collapse;margin-bottom:4px;">
         <tr>
-          <td style="width:49%;vertical-align:top;padding-right:8px;border-right:1.5px solid #1e3a5f;">
+          <td style="width:49%;vertical-align:top;padding-right:8px;border-right:1.2px solid ${AZUL};">
             ${colEsq}
           </td>
           <td style="width:2%;"></td>
@@ -154,12 +176,10 @@ export function gerarHtmlProva(avaliacao: Avaliacao, aluno: Aluno, opcoes?: Opco
       </table>` : ''}
 
       ${qtdDisc > 0 ? `
-      <div style="background:#1e3a5f;color:white;font-weight:bold;font-size:11pt;text-align:center;padding:4px;margin:8px 0 6px;">
-        PARTE 2 — QUESTÕES DISCURSIVAS (${(qtdDisc * valorDisc).toFixed(1)} pontos)
-      </div>
+      <div style="font-size:11pt;font-weight:bold;color:${AZUL};margin:8px 0 5px;text-align:left;">Questões discursivas (${(qtdDisc * valorDisc).toFixed(1)} pontos)</div>
       ${dissHtml}` : ''}
 
-      <div style="font-size:9pt;color:#94a3b8;text-align:center;margin-top:8px;border-top:1px solid #e2e8f0;padding-top:4px;">
+      <div style="font-size:8pt;color:#94a3b8;text-align:center;margin-top:6px;border-top:1px solid #e2e8f0;padding-top:3px;">
         E.E. Instituto Odilon Pratagi — ${escaparHTML(avaliacao.disciplina || 'Educação Física')}
       </div>
     </div>`;
