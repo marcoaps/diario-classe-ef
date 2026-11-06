@@ -147,7 +147,11 @@ Gere ${quantidadeNesteLote} questão(ões) de avaliação com estes parâmetros:
 As questões devem ser especificamente sobre: "${params.conteudo}"
 Use o vocabulário, as regras, os fatos e as situações REAIS e específicas desse conteúdo — nunca troque por outro tema/modalidade/prática diferente, mesmo que pertença à mesma categoria pedagógica mais ampla indicada abaixo. Se "${params.conteudo}" nomear um esporte, prática ou tema específico (ex: "Handebol", "Capoeira", "Vôlei"), as questões inteiras devem girar em torno DESSE assunto — não de exemplos genéricos da categoria.
 
-=== CLASSIFICAÇÃO PEDAGÓGICA (contexto/enquadramento no padrão TEKS do Texas — não redefine nem generaliza o assunto acima) ===
+${params.objetoConhecimento.includes(' | ') ? `=== VÁRIOS ASSUNTOS NA MESMA PROVA ===
+O professor reuniu vários objetos de conhecimento numa única prova: ${params.objetoConhecimento.split(' | ').map(o => `"${o}"`).join('; ')}.
+Distribua as questões entre TODOS esses assuntos, cobrindo cada um ao menos uma vez sempre que a quantidade de questões permitir, sem concentrar tudo em um só. Cada questão deve ser claramente sobre UM desses assuntos (use o vocabulário e as situações reais dele).
+
+` : ''}=== CLASSIFICAÇÃO PEDAGÓGICA (contexto/enquadramento no padrão TEKS do Texas — não redefine nem generaliza o assunto acima) ===
 - Objeto de conhecimento: ${params.objetoConhecimento || '(não especificado — infira a partir do conteúdo)'}
 - Habilidade (padrão TEKS — "O estudante deve...")/referência: ${params.habilidadeBncc || '(não especificada — descreva a habilidade avaliada no campo "objetivoQuestao")'}
 

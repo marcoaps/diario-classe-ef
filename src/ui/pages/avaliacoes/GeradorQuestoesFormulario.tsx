@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import {
   ANOS_ESCOLARES,
@@ -18,6 +18,12 @@ import { formatarHabilidadeTEKS, getHabilidadesTEKS } from '../../../data/teksEd
 const CLASSE_INPUT = 'w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface';
 const CLASSE_LABEL = 'text-xs text-on-surface-variant mb-1 block';
 
+/** Vários objetos de conhecimento ficam num só texto, separados por " | " (nenhum objeto da lista usa essa barra). */
+const SEP_OBJETOS = ' | ';
+function separarObjetos(texto: string): string[] {
+  return texto.split(SEP_OBJETOS).map(t => t.trim()).filter(Boolean);
+}
+
 export interface GeradorQuestoesFormularioProps {
   valores: ParametrosGeracao;
   onChange: <K extends keyof ParametrosGeracao>(campo: K, valor: ParametrosGeracao[K]) => void;
@@ -36,6 +42,7 @@ export interface GeradorQuestoesFormularioProps {
  * organizado por ano (6º, 7º, 8º; 9º = cursos do Ensino Médio) — também independe do Bimestre.
  */
 export function GeradorQuestoesFormulario({ valores, onChange, desabilitado }: GeradorQuestoesFormularioProps) {
+  const [filtroObjetos, setFiltroObjetos] = useState('');
   const politicaTipo = POLITICA_TIPOS_QUESTAO[valores.tipoQuestao];
   const ehEducacaoFisica = valores.componenteCurricular === 'Educação Física';
   const objetosConhecimento = ehEducacaoFisica ? getObjetosConhecimentoDoAno(valores.anoEscolar) : [];
@@ -48,7 +55,8 @@ export function GeradorQuestoesFormulario({ valores, onChange, desabilitado }: G
   // primeiro item de cada uma.
   useEffect(() => {
     if (!ehEducacaoFisica) return;
-    if (!objetosConhecimento.includes(valores.objetoConhecimento)) {
+    const selecionadosAtuais = separarObjetos(valores.objetoConhecimento);
+    if (selecionadosAtuais.length === 0 || !selecionadosAtuais.every(o => objetosConhecimento.includes(o))) {
       const primeiroObjeto = objetosConhecimento[0] ?? '';
       onChange('objetoConhecimento', primeiroObjeto);
       onChange('conteudo', primeiroObjeto);
@@ -60,9 +68,20 @@ export function GeradorQuestoesFormulario({ valores, onChange, desabilitado }: G
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ehEducacaoFisica, valores.anoEscolar]);
 
-  function selecionarObjetoConhecimento(valor: string) {
-    onChange('objetoConhecimento', valor);
-    onChange('conteudo', valor); // Conteúdo acompanha o Objeto de Conhecimento escolhido, mas continua editável logo abaixo.
+  const objetosSelecionados = separarObjetos(valores.objetoConhecimento);
+  const objetosFiltrados = objetosConhecimento.filter(o => o.toLowerCase().includes(filtroObjetos.trim().toLowerCase()));
+
+  /** Atualiza a seleção (na ordem da lista) e deixa o Conteúdo acompanhando — continua editável logo abaixo. */
+  function definirObjetosSelecionados(novos: string[]) {
+    const ordenados = objetosConhecimento.filter(o => novos.includes(o));
+    onChange('objetoConhecimento', ordenados.join(SEP_OBJETOS));
+    onChange('conteudo', ordenados.join('; '));
+  }
+
+  function alternarObjeto(o: string) {
+    const novos = objetosSelecionados.includes(o) ? objetosSelecionados.filter(x => x !== o) : [...objetosSelecionados, o];
+    if (novos.length === 0) return; // mantém ao menos um assunto
+    definirObjetosSelecionados(novos);
   }
 
   return (
@@ -108,16 +127,46 @@ export function GeradorQuestoesFormulario({ valores, onChange, desabilitado }: G
         <label className={CLASSE_LABEL}>Objeto de Conhecimento</label>
         {ehEducacaoFisica ? (
           <>
-            <select
-              value={valores.objetoConhecimento}
-              onChange={e => selecionarObjetoConhecimento(e.target.value)}
+            <input
+              value={filtroObjetos}
+              onChange={e => setFiltroObjetos(e.target.value)}
               disabled={desabilitado}
-              className={CLASSE_INPUT}
-            >
-              {objetosConhecimento.map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
+              placeholder="Filtrar a lista — ex: ginástica"
+              className={`${CLASSE_INPUT} mb-1.5`}
+            />
+            <div className="flex items-center gap-3 text-[11px] mb-1.5 flex-wrap">
+              <button
+                type="button" disabled={desabilitado || objetosFiltrados.length === 0}
+                onClick={() => definirObjetosSelecionados(objetosFiltrados)}
+                className="text-primary font-semibold underline"
+              >
+                {filtroObjetos.trim() ? `Marcar só os ${objetosFiltrados.length} filtrados` : 'Marcar todos'}
+              </button>
+              <button
+                type="button" disabled={desabilitado || objetosSelecionados.length <= 1}
+                onClick={() => definirObjetosSelecionados(objetosSelecionados.slice(0, 1))}
+                className="text-on-surface-variant underline"
+              >
+                Desmarcar (manter 1)
+              </button>
+              <span className="text-on-surface-variant ml-auto">{objetosSelecionados.length} selecionado(s)</span>
+            </div>
+            <div className="max-h-56 overflow-y-auto rounded-xl border border-outline-variant bg-background divide-y divide-outline-variant/50">
+              {objetosFiltrados.length === 0 && <p className="text-xs text-on-surface-variant px-3 py-2">Nenhum objeto encontrado.</p>}
+              {objetosFiltrados.map(o => (
+                <label key={o} className="flex items-start gap-2 px-3 py-1.5 text-sm text-on-surface cursor-pointer">
+                  <input
+                    type="checkbox" className="mt-1"
+                    checked={objetosSelecionados.includes(o)}
+                    onChange={() => alternarObjeto(o)}
+                    disabled={desabilitado}
+                  />
+                  <span>{o}</span>
+                </label>
+              ))}
+            </div>
             <p className="text-[11px] text-on-surface-variant mt-1">
-              Lista completa do {valores.anoEscolar}º Ano (todos os bimestres) — escolha livre, não depende do Bimestre selecionado.
+              Lista completa do {valores.anoEscolar}º Ano (todos os bimestres) — marque quantos quiser para reunir vários assuntos numa só prova.
             </p>
           </>
         ) : (
@@ -175,7 +224,7 @@ export function GeradorQuestoesFormulario({ valores, onChange, desabilitado }: G
           className={CLASSE_INPUT}
         />
         {ehEducacaoFisica && (
-          valores.conteudo === valores.objetoConhecimento ? (
+          valores.conteudo === objetosSelecionados.join('; ') ? (
             <p className="text-[11px] text-amber-600 dark:text-amber-500 font-medium mt-1">
               ⚠ Ainda está com o texto genérico do Objeto de Conhecimento — sem um esporte/prática específico, a IA pode escolher qualquer exemplo da categoria. Edite para nomear o esporte, ex: "Handebol — Defesa Legal".
             </p>
