@@ -1,12 +1,9 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Sparkles, Loader2, RefreshCw, Printer, FileText, Copy, Check, ImagePlus, Upload, Clipboard, Images } from 'lucide-react';
+import { ArrowLeft, Sparkles, Loader2, RefreshCw, Printer, FileText, Copy, Check, Upload, Clipboard } from 'lucide-react';
 import { supabase } from '../../../data/supabase';
 import { bimestreAtual, getPeriodoBimestre, type Bimestre } from '../../../domain/useRelatorioFrequencia';
-import { gerarImagemDaQuestao, imagemDeArquivo, type ErroImagem, type ContextoImagem } from '../../../utils/imagemIA';
-import { SeletorBancoImagens } from './SeletorBancoImagens';
-import { BANCO_IMAGENS, pontuarItemComTitulo } from './bancoImagens';
-import type { ItemBancoImagem } from './bancoImagens';
+import { imagemDeArquivo } from '../../../utils/imagemIA';
 import { htmlImpressao, type DadosProva } from './provaAdaptadaHtml';
 import { htmlImpressaoLote, type DadosLote, type ProvaDoAluno } from './provaAdaptadaLote';
 import { docxGabaritoIndividual, docxGabaritoLote, docxLote, docxProvaIndividual } from './provaAdaptadaLoteDocx';
@@ -218,31 +215,6 @@ function tipoDaQuestao(q: Questao): TipoImagemSugerido {
   return 'ilustracao';
 }
 
-// Melhor imagem do banco para a questão. "svg" só procura entre os diagramas;
-// "ilustracao" procura entre pictogramas e fotos (DI, autismo e deficiência múltipla
-// preferem pictograma) e só aceita diagrama se a ligação com o texto for forte.
-function sugerirItemDoBanco(q: Questao, preferirPictograma = false): ItemBancoImagem | null {
-  const tipo = tipoDaQuestao(q);
-  if (tipo === 'nenhuma') return null;
-  // Só o texto que o aluno lê entra na busca. A resposta certa NÃO entra: ela puxaria
-  // justamente a imagem que entrega a resposta (ex.: "cartão vermelho" numa pergunta de falta).
-  const titulo = q.titulo ?? '';
-  const texto = [q.titulo, q.contexto, q.pergunta, q.imageQuery].filter(Boolean).join(' ');
-  const melhor = (aceita: (i: ItemBancoImagem) => boolean, minimo: number): ItemBancoImagem | null => {
-    let escolhido: ItemBancoImagem | null = null;
-    let pontos = minimo - 1;
-    for (const item of BANCO_IMAGENS) {
-      if (!aceita(item)) continue;
-      const p = pontuarItemComTitulo(item, titulo, texto);
-      if (p > pontos) { escolhido = item; pontos = p; }
-    }
-    return escolhido;
-  };
-  if (tipo === 'svg') return melhor(i => i.tipo === 'diagrama', 3);
-  const pictograma = preferirPictograma ? melhor(i => i.tipo === 'pictograma', 3) : null;
-  return pictograma ?? melhor(i => i.tipo !== 'diagrama', 3) ?? melhor(i => i.tipo === 'diagrama', 5);
-}
-
 // Deduz o tipo de NEE a partir do texto do CID/diagnóstico cadastrado em
 // alunos_especiais, pra não depender do professor lembrar/adivinhar. Se o
 // aluno tiver mais de uma condição reconhecida, cai em "Deficiencia Multipla".
@@ -294,27 +266,6 @@ async function pedirQuestoes(p: { tema: string; serie: string; nee: string; nive
   return (parsed.questoes || []).map((q: Questao) => normalizarImagemDaQuestao(limparTituloDaPergunta(q)));
 }
 
-async function carregarImagemDoBanco(item: ItemBancoImagem): Promise<string> {
-  const resp = await fetch(item.arquivo);
-  if (!resp.ok) throw new Error('não consegui carregar a imagem do banco');
-  return imagemDeArquivo(await resp.blob());
-}
-
-/** Devolve as questões com a melhor imagem do banco nas que ainda não têm imagem. */
-async function colocarImagensDoBanco(lista: Questao[], preferirPictograma: boolean): Promise<Questao[]> {
-  const alvo = lista
-    .filter(q => !q.imagemDataUrl)
-    .map(q => ({ q, item: sugerirItemDoBanco(q, preferirPictograma) }))
-    .filter((x): x is { q: Questao; item: ItemBancoImagem } => x.item !== null);
-  const resultados = await Promise.allSettled(alvo.map(x => carregarImagemDoBanco(x.item)));
-  const novas = new Map<number, { url: string; credito: string }>();
-  resultados.forEach((r, i) => { if (r.status === 'fulfilled') novas.set(alvo[i].q.numero, { url: r.value, credito: alvo[i].item.credito }); });
-  return lista.map(q => {
-    const nova = novas.get(q.numero);
-    return nova ? { ...q, imagemDataUrl: nova.url, imagemCredito: nova.credito } : q;
-  });
-}
-
 export function IAIdeiasAvaliacoes() {
   const navigate = useNavigate();
   const [tema, setTema] = useState('');
@@ -341,16 +292,13 @@ export function IAIdeiasAvaliacoes() {
   const [etapa, setEtapa] = useState('');
   const [erro, setErro] = useState('');
   const [copiado, setCopiado] = useState<string | null>(null);
-  const [progressoImagens, setProgressoImagens] = useState<{ feitas: number; total: number } | null>(null);
   const [erroImagens, setErroImagens] = useState('');
   const [avisoImagens, setAvisoImagens] = useState('');
-  const [bancoAbertoPara, setBancoAbertoPara] = useState<number | null>(null);
   const [lote, setLote] = useState<DadosLote | null>(null);
   const [progressoLote, setProgressoLote] = useState<{ feitos: number; total: number; aluno: string } | null>(null);
   const [avisoLote, setAvisoLote] = useState('');
   const [exportandoLote, setExportandoLote] = useState(false);
   const [exportandoWord, setExportandoWord] = useState(false);
-  const preferePictograma = /Intelectual|Autismo|Multipla/i.test(deficiencia);
 
   // Buscar alunos quando série ou turma mudar — só os cadastrados como AEE
   // nessa turma (esta tela é justamente pra gerar a versão adaptada deles).
@@ -449,17 +397,9 @@ export function IAIdeiasAvaliacoes() {
       // Só o tipo de NEE e o nível vão pro prompt — nunca o nome do aluno nem
       // o texto do CID (que traz número de processo etc.).
       const qs = await pedirQuestoes({ tema, serie, nee: deficiencia, nivel, objetivo: objetivoFinal });
-      // Busca automática de imagem (Pexels) abandonada — mesmo exigindo o
-      // esporte certo, várias questões ficavam sem imagem boa ou vinham com
-      // foto de outro esporte. Cada questão sai com um espaço em branco
-      // (com a sugestão da IA como legenda) pra você colar a imagem certa
-      // manualmente na hora de imprimir/exportar.
-      // Já o banco de imagens aprovadas (pictogramas, fotos e diagramas) é consultado
-      // sozinho: cada questão sai com a melhor imagem do banco e, se não combinar, o
-      // professor troca pelo botão "Banco de imagens" da própria questão.
+      // Sem busca automática de imagem: nenhuma sugeria imagem que combinasse de verdade.
+      // A prova sai com o espaço em branco; o professor envia/cola a imagem se quiser.
       setQuestoes(qs);
-      setEtapa('Escolhendo imagens do banco...');
-      await aplicarSugestoesDoBanco(qs, true);
       setEtapa('');
     } catch (e: any) {
       setErro('Erro: ' + e.message);
@@ -471,49 +411,6 @@ export function IAIdeiasAvaliacoes() {
   function promptImagem(q: Questao): string {
     // Pedido curto em inglês escrito pela IA; o modelo antigo (em português) só entra se ele faltar.
     return q.promptImagem || montarPromptImagem({ tema, serie, nee: deficiencia, cena: q.imageQuery ?? '' });
-  }
-
-  // Tudo que a IA precisa pra entender O QUE a imagem deve mostrar: o enunciado
-  // que o aluno lê, as alternativas e a resposta correta (não só o assunto).
-  function contextoDaImagem(q: Questao): ContextoImagem {
-    return {
-      disciplina: 'Educação Física',
-      serie,
-      tema,
-      enunciado: [q.contexto, q.pergunta].filter(Boolean).join(' '),
-      alternativas: [
-        { letra: 'A', texto: q.opcaoA },
-        { letra: 'B', texto: q.opcaoB },
-        ...(q.opcaoC ? [{ letra: 'C', texto: q.opcaoC }] : []),
-      ],
-      respostaCorreta: q.resposta?.trim().charAt(0).toUpperCase(),
-      dica: q.promptImagem || q.imageQuery,
-      cuidado: CUIDADO_IMAGEM_POR_NEE[deficiencia],
-    };
-  }
-
-  // Sem `somenteQuestao`: gera as que ainda não têm imagem, uma de cada vez.
-  // Com `somenteQuestao`: gera (ou refaz) só essa.
-  async function gerarImagens(somenteQuestao?: number) {
-    const alvo = questoes.filter(q => (somenteQuestao ? q.numero === somenteQuestao : !q.imagemDataUrl));
-    if (alvo.length === 0) return;
-    setErroImagens('');
-    setProgressoImagens({ feitas: 0, total: alvo.length });
-    const erros: string[] = [];
-    let feitas = 0;
-    for (const q of alvo) {
-      try {
-        const url = await gerarImagemDaQuestao(contextoDaImagem(q));
-        setQuestoes(prev => prev.map(x => (x.numero === q.numero ? { ...x, imagemDataUrl: url, imagemCredito: undefined } : x)));
-      } catch (e) {
-        erros.push(`Questão ${q.numero}: ${(e as Error).message}`);
-        if ((e as ErroImagem).fatal) break;
-      }
-      feitas++;
-      setProgressoImagens({ feitas, total: alvo.length });
-    }
-    setProgressoImagens(null);
-    setErroImagens(erros.join(' · '));
   }
 
   function removerImagem(numero: number) {
@@ -562,64 +459,6 @@ export function IAIdeiasAvaliacoes() {
     setErroImagens(erros.join(' · '));
   }
 
-  // Imagem do banco (pictograma ou foto aprovada): entra igual às outras, mas guarda o
-  // crédito exigido pela licença para sair no rodapé da prova.
-  async function carregarItemDoBanco(item: ItemBancoImagem): Promise<string> {
-    const resp = await fetch(item.arquivo);
-    if (!resp.ok) throw new Error('não consegui carregar a imagem do banco');
-    return imagemDeArquivo(await resp.blob());
-  }
-
-  async function usarItemDoBanco(numero: number, item: ItemBancoImagem) {
-    setBancoAbertoPara(null);
-    setErroImagens('');
-    setAvisoImagens('');
-    try {
-      const url = await carregarItemDoBanco(item);
-      setQuestoes(prev => prev.map(x => (x.numero === numero ? { ...x, imagemDataUrl: url, imagemCredito: item.credito } : x)));
-    } catch (e) {
-      setErroImagens(`Questão ${numero}: ${(e as Error).message}`);
-    }
-  }
-
-  // Preenche, de uma vez, as questões SEM imagem com a melhor sugestão do banco.
-  // Não mexe em imagem que já está lá. Cenas de ação ficam para o Gemini.
-  // Roda sozinho logo depois que a avaliação é gerada e também pelo botão "Aplicar sugestões do banco".
-  async function aplicarSugestoesDoBanco(lista: Questao[] = questoes, automatico = false) {
-    setErroImagens('');
-    setAvisoImagens('');
-    const alvo = lista
-      .filter(q => !q.imagemDataUrl)
-      .map(q => ({ q, item: sugerirItemDoBanco(q, preferePictograma) }))
-      .filter((x): x is { q: Questao; item: ItemBancoImagem } => x.item !== null);
-    if (alvo.length === 0) {
-      setAvisoImagens('Nenhuma questão sem imagem tem uma sugestão do banco. As de cena de ação pedem o Gemini; nas outras, use "Banco de imagens".');
-      return;
-    }
-    const resultados = await Promise.allSettled(alvo.map(x => carregarItemDoBanco(x.item)));
-    const novas = new Map<number, { url: string; credito: string }>();
-    const erros: string[] = [];
-    resultados.forEach((r, i) => {
-      if (r.status === 'fulfilled') novas.set(alvo[i].q.numero, { url: r.value, credito: alvo[i].item.credito });
-      else erros.push(`Questão ${alvo[i].q.numero}: ${(r.reason as Error).message}`);
-    });
-    setQuestoes(prev => prev.map(x => {
-      const nova = novas.get(x.numero);
-      return nova ? { ...x, imagemDataUrl: nova.url, imagemCredito: nova.credito } : x;
-    }));
-    const colocadas = alvo.filter(x => novas.has(x.q.numero)).map(x => x.q.numero);
-    // Questões que continuam em branco e que pedem imagem (as "sem imagem" não contam).
-    const emBranco = lista
-      .filter(q => !colocadas.includes(q.numero) && !q.imagemDataUrl && tipoDaQuestao(q) !== 'nenhuma')
-      .map(q => q.numero);
-    setAvisoImagens(
-      `${automatico ? 'Imagens do banco colocadas automaticamente' : 'Sugestões do banco aplicadas'} nas questões ${colocadas.join(', ')}. ` +
-      'Confira se cada imagem combina com a pergunta; se não combinar, clique em "Banco de imagens" na questão e escolha outra.' +
-      (emBranco.length ? ` Sem imagem parecida no banco (questões ${emBranco.join(', ')}): escolha no "Banco de imagens" ou use o Gemini.` : '')
-    );
-    setErroImagens(erros.join(' · '));
-  }
-
   function arquivoDeImagem(dados: DataTransfer | null): File | null {
     return Array.from(dados?.files ?? []).find(f => f.type.startsWith('image/')) ?? null;
   }
@@ -641,10 +480,9 @@ export function IAIdeiasAvaliacoes() {
   }
 
   function botoesImagemManual(numero: number) {
-    const desabilitado = progressoImagens !== null;
     return (
       <>
-        <label className={`flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary text-on-primary text-xs font-semibold cursor-pointer ${desabilitado ? 'opacity-50 pointer-events-none' : ''}`}>
+        <label className={`flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary text-on-primary text-xs font-semibold cursor-pointer`}>
           <Upload className="w-3.5 h-3.5" /> Enviar imagem
           <input
             type="file"
@@ -658,15 +496,7 @@ export function IAIdeiasAvaliacoes() {
           />
         </label>
         <button
-          onClick={() => setBancoAbertoPara(numero)}
-          disabled={desabilitado}
-          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-secondary-container text-on-secondary-container text-xs font-semibold disabled:opacity-50"
-        >
-          <Images className="w-3.5 h-3.5" /> Banco de imagens
-        </button>
-        <button
           onClick={() => colarImagemDaAreaDeTransferencia(numero)}
-          disabled={desabilitado}
           className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-secondary-container text-on-secondary-container text-xs font-semibold disabled:opacity-50"
         >
           <Clipboard className="w-3.5 h-3.5" /> Colar imagem
@@ -769,7 +599,6 @@ export function IAIdeiasAvaliacoes() {
           const objetivoDoPerfil = await pedirObjetivo(tema, nee, nivelDoAluno);
           if (!objetivoDoPerfil) throw new Error('não consegui gerar o objetivo');
           qs = await pedirQuestoes({ tema, serie, nee, nivel: nivelDoAluno, objetivo: objetivoDoPerfil });
-          qs = await colocarImagensDoBanco(qs, /Intelectual|Autismo|Multipla/i.test(nee));
           porPerfil.set(chave, qs);
         }
         provas.push({
@@ -824,17 +653,6 @@ export function IAIdeiasAvaliacoes() {
 
   return (
     <div className="py-4 space-y-4">
-      {bancoAbertoPara !== null && (() => {
-        const q = questoes.find(x => x.numero === bancoAbertoPara);
-        return (
-          <SeletorBancoImagens
-            tituloQuestao={q?.titulo}
-            textoQuestao={[q?.titulo, q?.contexto, q?.pergunta, q?.imageQuery].filter(Boolean).join(' ')}
-            onEscolher={item => usarItemDoBanco(bancoAbertoPara, item)}
-            onFechar={() => setBancoAbertoPara(null)}
-          />
-        );
-      })()}
       <div className="flex items-center gap-2">
         <button onClick={() => navigate('/ia')} className="p-1 rounded-lg text-on-surface-variant">
           <ArrowLeft className="w-5 h-5" />
@@ -1002,19 +820,7 @@ export function IAIdeiasAvaliacoes() {
               Gere as imagens no chat do Gemini (a partir dos prompts do guia abaixo) e, em cada questão, use <b>Enviar imagem</b>, <b>Colar imagem</b>,
               arraste o arquivo para a caixa ou clique nela e aperte Ctrl+V. O app ajusta o tamanho sem cortar a imagem.
             </p>
-            <button
-              onClick={() => aplicarSugestoesDoBanco()}
-              disabled={progressoImagens !== null || questoes.every(q => q.imagemDataUrl || !sugerirItemDoBanco(q, preferePictograma))}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-semibold disabled:opacity-50"
-            >
-              <Images className="w-4 h-4" /> Aplicar sugestões do banco ({questoes.filter(q => !q.imagemDataUrl && sugerirItemDoBanco(q, preferePictograma)).length} questões)
-            </button>
-            <p className="text-[11px] text-on-surface-variant">
-              Ao gerar a avaliação, o app já procura no banco a imagem que combina com cada questão (a IA sugere o tipo: diagrama, pictograma, foto ou cena de ação).
-              Se alguma não combinar, clique em <b>Banco de imagens</b> na questão e escolha outra. Este botão refaz a busca nas questões que ficaram sem imagem.
-              Cenas de ação ficam para o Gemini.
-            </p>
-            <label className={`w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-surface-variant text-on-surface-variant text-xs font-semibold cursor-pointer ${progressoImagens !== null ? 'opacity-60 pointer-events-none' : ''}`}>
+            <label className={`w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-surface-variant text-on-surface-variant text-xs font-semibold cursor-pointer ${false ? 'opacity-60 pointer-events-none' : ''}`}>
               <Upload className="w-4 h-4" /> Enviar todas as imagens de uma vez
               <input
                 type="file"
@@ -1030,18 +836,6 @@ export function IAIdeiasAvaliacoes() {
             <p className="text-[11px] text-on-surface-variant">
               Escolha todos os arquivos juntos. Eles vão para as questões 1, 2, 3... na ordem dos nomes, então nomeie 1, 2, 3... antes. Substitui as imagens que já estiverem nessas questões.
             </p>
-            {(progressoImagens !== null || questoes.some(q => !q.imagemDataUrl)) && (
-              <button
-                onClick={() => gerarImagens()}
-                disabled={progressoImagens !== null}
-                className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-surface-variant text-on-surface-variant text-xs font-semibold disabled:opacity-60"
-              >
-                {progressoImagens ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
-                {progressoImagens
-                  ? `Gerando imagens ${progressoImagens.feitas}/${progressoImagens.total}...`
-                  : 'Ou gerar as que faltam com IA do app (pode ter custo)'}
-              </button>
-            )}
             {avisoImagens && <p className="text-xs text-primary font-semibold">{avisoImagens}</p>}
             {erroImagens && <p className="text-xs text-error">{erroImagens}</p>}
           </div>
@@ -1072,15 +866,7 @@ export function IAIdeiasAvaliacoes() {
                       <div className="flex flex-wrap gap-2">
                         {botoesImagemManual(q.numero)}
                         <button
-                          onClick={() => gerarImagens(q.numero)}
-                          disabled={progressoImagens !== null}
-                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface-variant text-on-surface-variant text-xs font-semibold disabled:opacity-50"
-                        >
-                          <RefreshCw className="w-3.5 h-3.5" /> Gerar outra (IA)
-                        </button>
-                        <button
                           onClick={() => removerImagem(q.numero)}
-                          disabled={progressoImagens !== null}
                           className="px-2.5 py-1 rounded-lg bg-surface-variant text-on-surface-variant text-xs font-semibold disabled:opacity-50"
                         >
                           Remover
@@ -1090,47 +876,8 @@ export function IAIdeiasAvaliacoes() {
                   ) : (
                     <div className="w-full rounded-xl border-2 border-dashed border-outline-variant flex flex-col items-center justify-center gap-1.5 text-center px-3 py-3">
                       <span className="text-xs text-on-surface-variant">Espaço para imagem — arraste um arquivo aqui ou clique e aperte Ctrl+V</span>
-                      {(() => {
-                        const tipo = tipoDaQuestao(q);
-                        const sugerido = sugerirItemDoBanco(q, preferePictograma);
-                        return (
-                          <div className="flex flex-wrap items-center justify-center gap-2">
-                            <span className="text-[11px] text-on-surface-variant">
-                              Sugestão da IA: <strong>{ROTULO_TIPO_IMAGEM[tipo]}</strong>{tipo === 'nenhuma' && q.motivoImagem ? ` — ${q.motivoImagem}` : ''}
-                            </span>
-                            {sugerido && (
-                              <button
-                                onClick={() => usarItemDoBanco(q.numero, sugerido)}
-                                disabled={progressoImagens !== null}
-                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary text-on-primary text-xs font-semibold disabled:opacity-50"
-                              >
-                                <Images className="w-3.5 h-3.5" /> Usar: {sugerido.titulo}
-                              </button>
-                            )}
-                            {tipo === 'ilustracao' && promptImagem(q) && (
-                              <button
-                                onClick={() => copiar(String(q.numero), promptImagem(q))}
-                                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold ${sugerido ? 'bg-secondary-container text-on-secondary-container' : 'bg-primary text-on-primary'}`}
-                              >
-                                {copiado === String(q.numero) ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                                {copiado === String(q.numero) ? 'Copiado!' : 'Copiar prompt para o Gemini'}
-                              </button>
-                            )}
-                            {tipo === 'svg' && !sugerido && (
-                              <span className="text-[11px] text-on-surface-variant italic">nenhum diagrama parecido no banco — escolha no Banco de imagens</span>
-                            )}
-                          </div>
-                        );
-                      })()}
                       <div className="flex flex-wrap justify-center gap-2">
                         {botoesImagemManual(q.numero)}
-                        <button
-                          onClick={() => gerarImagens(q.numero)}
-                          disabled={progressoImagens !== null}
-                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface-variant text-on-surface-variant text-xs font-semibold disabled:opacity-50"
-                        >
-                          <ImagePlus className="w-3.5 h-3.5" /> Gerar com IA
-                        </button>
                       </div>
                     </div>
                   )}
