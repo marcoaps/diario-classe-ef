@@ -602,7 +602,16 @@ export function AvaliacaoFolha() {
   // Gera UMA ÚNICA folha pra série inteira (mesmo cabeçalho/QR/conteúdo),
   // com o campo TURMA mostrando só "6º Ano" -- sem separar por sala, já
   // que a folha não identifica turma nem aluno (só a avaliação, via QR).
-  async function gerarEImprimirTodasTurmas() {
+  function baixarPng(dataUrl: string, nome: string) {
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = `${nome.replace(/[^\w\-.]+/g, '_')}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  async function gerarEImprimirTodasTurmas(modo: 'imprimir' | 'png' = 'imprimir') {
     if (!avaliacao) return;
     setGerandoTodas(true);
     setErroGeracao('');
@@ -640,6 +649,13 @@ export function AvaliacaoFolha() {
         const canvas = document.createElement('canvas');
         await desenharFolhaModelo(canvas, avaliacaoParaLote, codigo, `${label} (      )`);
         paginas.push(canvas.toDataURL('image/png'));
+      }
+
+      if (modo === 'png') {
+        paginas.forEach((url, i) => {
+          setTimeout(() => baixarPng(url, `${codigo}_${labels[i]}`), i * 400);
+        });
+        return;
       }
 
       const blocos = paginas.map((url, i) => `<div style="${i === paginas.length - 1 ? '' : 'page-break-after: always;'}text-align:center;">
@@ -839,7 +855,7 @@ export function AvaliacaoFolha() {
         {erroGeracao && <p className="text-xs text-red-500">{erroGeracao}</p>}
 
         {turmasParaLoteCombinado(avaliacao.turma_id).length > 1 && (
-          <button onClick={gerarEImprimirTodasTurmas} disabled={gerandoTodas}
+          <button onClick={() => gerarEImprimirTodasTurmas()} disabled={gerandoTodas}
             className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-bold disabled:opacity-50">
             <Printer className="w-4 h-4" />
             {gerandoTodas
@@ -850,6 +866,14 @@ export function AvaliacaoFolha() {
                     ? `Gerar folhas de ${labels.join(' e ')} (todas as turmas, ${labels.length} páginas)`
                     : `Gerar folha única do ${labels[0]} (todas as turmas, 1 página)`;
                 })()}
+          </button>
+        )}
+
+        {turmasParaLoteCombinado(avaliacao.turma_id).length > 1 && (
+          <button onClick={() => gerarEImprimirTodasTurmas('png')} disabled={gerandoTodas}
+            className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-primary text-primary text-sm font-bold disabled:opacity-50">
+            <Download className="w-4 h-4" />
+            Baixar PNG (todas as turmas)
           </button>
         )}
 
@@ -870,6 +894,10 @@ export function AvaliacaoFolha() {
             <button onClick={() => imprimirFolha(numCopias)}
               className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-tertiary-container text-on-tertiary-container text-sm font-bold">
               <FileText className="w-4 h-4" /> Imprimir {numCopias} cópia{numCopias !== 1 ? 's' : ''} — {turmaSelecionada ? formatarTurma(turmaSelecionada) : 'esta turma'}
+            </button>
+            <button onClick={() => baixarPng(folhaDataUrl, `${avaliacao.codigo_avaliacao || avaliacao.titulo}_${turmaSelecionada ? formatarTurma(turmaSelecionada) : 'folha'}`)}
+              className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-outline-variant text-sm font-bold">
+              <Download className="w-4 h-4" /> Baixar PNG — {turmaSelecionada ? formatarTurma(turmaSelecionada) : 'esta turma'}
             </button>
           </>
         )}
