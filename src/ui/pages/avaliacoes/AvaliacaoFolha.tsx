@@ -7,7 +7,7 @@ import QRCode from 'qrcode';
 import type { Avaliacao, Aluno, QuestaoObjetiva } from './tiposCorretorProvas';
 import { valorPorQuestaoObjetiva, turmasDoValor, ehGrupoDeTurmas, labelTurmaOuGrupo, GRUPOS_CORRETOR } from './tiposCorretorProvas';
 import {
-  FOLHA_W, FOLHA_H, FOLHA_PAD, FOLHA_MARK, discursivasNaFolha, marcaColunaDe,
+  FOLHA_W, FOLHA_H, FOLHA_PAD, FOLHA_MARK, discursivasNaFolha, marcaColunaDe, folhaV2,
   BUBBLE_R as BUBBLE_R_GEO, BUBBLE_GAP, GAP_APOS_CABECALHO, HEADER_H, ALUNO_FIELDS_H, calcularGeometriaQuestoes,
 } from './geometriaFolha';
 
@@ -341,10 +341,9 @@ async function desenharFolhaModelo(
   // Geometria compartilhada com src/utils/omrEngine.ts (via geometriaFolha.ts)
   // para a leitura por Visão Computacional nunca desalinhar do que é impresso aqui.
   const BUBBLE_R = BUBBLE_R_GEO;
-  const { Q_START_X, INICIO_BOLHAS_Y, Q_ROW_H, ULTIMA_COLUNA_X, colTop, colBottom, colLeft, colRight } =
-    calcularGeometriaQuestoes(qtdObj, qtdDisc, alternativas.length);
+  const { Q_START_Y, Q_START_X, INICIO_BOLHAS_Y, Q_ROW_H, ULTIMA_COLUNA_X, colTop, colBottom, colLeft, colRight } =
+    calcularGeometriaQuestoes(qtdObj, qtdDisc, alternativas.length, folhaV2(avaliacao));
   // Espaço entre o título "QUESTÕES OBJETIVAS" e a 1ª bolha (ver geometriaFolha.ts).
-  const Q_START_Y = INICIO_BOLHAS_Y - GAP_APOS_CABECALHO;
 
   if (qtdObj > 0) {
     ctx.fillStyle = '#1e293b';

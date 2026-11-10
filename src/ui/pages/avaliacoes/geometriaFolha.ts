@@ -51,6 +51,8 @@ export const BUBBLE_R = 17;
 export const BUBBLE_GAP = 56;
 /** Espaço entre a linha "QUESTÕES OBJETIVAS" e a 1ª bolha. */
 export const GAP_APOS_CABECALHO = 30;
+/** Folha v2: mais espaço, pois os marcadores da coluna (34px) ficam entre a linha do título e as bolhas. */
+export const GAP_APOS_CABECALHO_V2 = 58;
 /** Altura do cabeçalho (nome da escola + disciplina/título) e da caixa de
  * identificação do aluno (nome/turma/nº/data + QR) -- únicas em geometriaFolha.ts
  * pra a leitura nunca poder desalinhar do que é impresso (mesmo raciocínio das
@@ -59,6 +61,7 @@ export const HEADER_H = 44;
 export const ALUNO_FIELDS_H = 126;
 
 export interface GeometriaQuestoes {
+  Q_START_Y: number;
   Q_START_X: number;
   INICIO_BOLHAS_Y: number;
   Q_ROW_H: number;
@@ -79,7 +82,8 @@ export interface GeometriaQuestoes {
 export function calcularGeometriaQuestoes(
   qtdObj: number,
   qtdDisc: number,
-  qtdAlternativas = 4
+  qtdAlternativas = 4,
+  v2 = false
 ): GeometriaQuestoes {
   const PAD = FOLHA_PAD;
   const MARK = FOLHA_MARK;
@@ -88,9 +92,12 @@ export function calcularGeometriaQuestoes(
 
   const alunoY = PAD + HEADER_H + 10;
 
-  const Q_START_X = CX + 8;
+  // v2: coluna deslocada 12px p/ a direita (marcador esquerdo longe da borda de impressão) e
+  // mais espaço entre o título e as bolhas, para os marcadores maiores ficarem
+  // centralizados entre o cabeçalho e o gabarito, sem encostar em nada.
+  const Q_START_X = CX + 8 + (v2 ? 12 : 0);
   const Q_START_Y = alunoY + ALUNO_FIELDS_H + 26;
-  const INICIO_BOLHAS_Y = Q_START_Y + GAP_APOS_CABECALHO;
+  const INICIO_BOLHAS_Y = Q_START_Y + (v2 ? GAP_APOS_CABECALHO_V2 : GAP_APOS_CABECALHO);
 
   const areaDisponivelAltura = H - PAD - MARK - 20 - INICIO_BOLHAS_Y - (qtdDisc > 0 ? 24 : 0);
   const alturaReservadaDiscursivas = qtdDisc * 95 + (qtdDisc > 0 ? 12 : 0);
@@ -104,7 +111,7 @@ export function calcularGeometriaQuestoes(
   const colLeft = Q_START_X - 10;
   const colRight = ULTIMA_COLUNA_X + BUBBLE_R + 12;
 
-  return { Q_START_X, INICIO_BOLHAS_Y, Q_ROW_H, ULTIMA_COLUNA_X, colTop, colBottom, colLeft, colRight };
+  return { Q_START_Y, Q_START_X, INICIO_BOLHAS_Y, Q_ROW_H, ULTIMA_COLUNA_X, colTop, colBottom, colLeft, colRight };
 }
 
 /** Centro (em coordenadas do canvas de referência) da bolha da questão/alternativa dadas (índices 0-based). */

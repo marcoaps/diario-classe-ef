@@ -8,7 +8,7 @@ import { arredondar, valorPorQuestaoObjetiva, labelTurmaOuGrupo, ehGrupoDeTurmas
 import { lancarNotaImpressaNoDiario, textoLancamento } from '../../../domain/notaProvaImpressa';
 import { processarFolhaOMR, localizarAncorasNaFoto } from '../../../utils/omrEngine';
 import type { MotivoFalhaOMR } from '../../../utils/omrEngine';
-import { discursivasNaFolha, marcaColunaDe } from './geometriaFolha';
+import { discursivasNaFolha, marcaColunaDe, folhaV2 } from './geometriaFolha';
 
 // ============================================================================
 // CORRETOR DE PROVAS — modelo ANÔNIMO baseado em AVALIAÇÃO + QR Code.
@@ -459,6 +459,7 @@ export function AvaliacaoCorrigir() {
         qtdDiscursivas: discursivasNaFolha(avaliacao),
         alternativas,
         marcaColuna: marcaColunaDe(avaliacao),
+        folhaV2: folhaV2(avaliacao),
       }, 'coluna');
 
       if (!resultadoOMR.ok) {
@@ -518,6 +519,7 @@ export function AvaliacaoCorrigir() {
           qtdDiscursivas: discursivasNaFolha(avaliacao),
           alternativas,
           marcaColuna: marcaColunaDe(avaliacao),
+          folhaV2: folhaV2(avaliacao),
         }, 'pagina');
 
         if (!resultadoOMR.ok) {

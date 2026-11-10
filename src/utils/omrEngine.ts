@@ -60,6 +60,8 @@ export interface ParametrosOMR {
   alternativas: string[];
   /** Lado (px, na folha de referência) dos marcadores da coluna; omitido = valor antigo (20). */
   marcaColuna?: number;
+  /** Folha v2 (só gabarito, layout reposicionado). */
+  folhaV2?: boolean;
 }
 
 // ─── Constantes de calibração (primeiro ajuste — ver aviso acima) ──────────
@@ -553,7 +555,7 @@ export function processarFolhaOMR(
   }
 
   // 2) Homografia: referência (folha impressa, 794x1123) -> foto original.
-  const geo = calcularGeometriaQuestoes(qtdObjetivas, qtdDiscursivas, alternativas.length);
+  const geo = calcularGeometriaQuestoes(qtdObjetivas, qtdDiscursivas, alternativas.length, params.folhaV2 ?? false);
   const ref = modoAncora === 'coluna' ? centrosAncorasColuna(geo, params.marcaColuna) : centrosAncorasPagina();
   let h: number[];
   try {
