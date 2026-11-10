@@ -7,7 +7,7 @@ import QRCode from 'qrcode';
 import type { Avaliacao, Aluno, QuestaoObjetiva } from './tiposCorretorProvas';
 import { valorPorQuestaoObjetiva, turmasDoValor, ehGrupoDeTurmas, labelTurmaOuGrupo, GRUPOS_CORRETOR } from './tiposCorretorProvas';
 import {
-  FOLHA_W, FOLHA_H, FOLHA_PAD, FOLHA_MARK, FOLHA_MARK_COL,
+  FOLHA_W, FOLHA_H, FOLHA_PAD, FOLHA_MARK, discursivasNaFolha, marcaColunaDe,
   BUBBLE_R as BUBBLE_R_GEO, BUBBLE_GAP, GAP_APOS_CABECALHO, HEADER_H, ALUNO_FIELDS_H, calcularGeometriaQuestoes,
 } from './geometriaFolha';
 
@@ -241,7 +241,8 @@ async function desenharFolhaModelo(
   canvas.height = H;
   const ctx = canvas.getContext('2d')!;
   const qtdObj = avaliacao.quantidade_objetivas || 0;
-  const qtdDisc = avaliacao.quantidade_discursivas || 0;
+  // Folha v2 = só gabarito (sem áreas de discursivas); ver geometriaFolha.ts.
+  const qtdDisc = discursivasNaFolha(avaliacao);
   const alternativas = avaliacao.alternativas?.length ? avaliacao.alternativas : ['A', 'B', 'C', 'D'];
 
   ctx.fillStyle = '#ffffff';
@@ -382,7 +383,7 @@ async function desenharFolhaModelo(
     // (menores que os marcadores de página), só como referência visual pro
     // professor enquadrar bem essa área ao fotografar (a leitura em si usa as
     // 4 marcas de página, que cobrem a folha inteira e incluem o QR).
-    const MARK_COL = FOLHA_MARK_COL;
+    const MARK_COL = marcaColunaDe(avaliacao);
     ctx.fillStyle = '#1e293b';
     ctx.fillRect(colLeft - MARK_COL, colTop - MARK_COL, MARK_COL, MARK_COL);
     ctx.fillRect(colRight, colTop - MARK_COL, MARK_COL, MARK_COL);

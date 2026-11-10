@@ -29,6 +29,23 @@ export const FOLHA_MARK = 24;
 // confiança numa foto de celular (poucos pixels, sensível a borrão/sombra).
 export const FOLHA_MARK_COL = 20;
 
+// Folha "só gabarito" (v2): sem áreas de discursivas e com marcadores da coluna
+// maiores (mais pixels = leitura mais confiável). Vale para avaliações criadas
+// a partir desta data; as anteriores continuam com o layout antigo, para que
+// folhas já impressas sejam lidas com a geometria com que foram impressas.
+export const FOLHA_V2_DESDE = '2026-11-10';
+export const FOLHA_MARK_COL_V2 = 34;
+export function folhaV2(av: { criado_em?: string | null }): boolean {
+  return String(av.criado_em || '') >= FOLHA_V2_DESDE;
+}
+/** Quantidade de discursivas que ocupam espaço NA FOLHA (0 na v2). */
+export function discursivasNaFolha(av: { criado_em?: string | null; quantidade_discursivas?: number | null }): number {
+  return folhaV2(av) ? 0 : (av.quantidade_discursivas || 0);
+}
+export function marcaColunaDe(av: { criado_em?: string | null }): number {
+  return folhaV2(av) ? FOLHA_MARK_COL_V2 : FOLHA_MARK_COL;
+}
+
 // Geometria das bolhas — idêntica aos valores usados em desenharFolhaQR().
 export const BUBBLE_R = 17;
 export const BUBBLE_GAP = 56;
@@ -113,8 +130,8 @@ export function centrosAncorasPagina(): { tl: Ponto; tr: Ponto; bl: Ponto; br: P
 /** Centros dos 4 marcadores menores ao redor só da coluna de bolhas, no canvas
  * de referência — usados como destino da homografia quando a foto enquadra só
  * essa região (bem mais perto, muito mais resolução por bolha). */
-export function centrosAncorasColuna(geo: GeometriaQuestoes): { tl: Ponto; tr: Ponto; bl: Ponto; br: Ponto } {
-  const c = FOLHA_MARK_COL / 2;
+export function centrosAncorasColuna(geo: GeometriaQuestoes, marcaColuna: number = FOLHA_MARK_COL): { tl: Ponto; tr: Ponto; bl: Ponto; br: Ponto } {
+  const c = marcaColuna / 2;
   return {
     tl: { x: geo.colLeft - c, y: geo.colTop - c },
     tr: { x: geo.colRight + c, y: geo.colTop - c },
