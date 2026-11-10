@@ -141,6 +141,12 @@ export function Avaliacoes() {
   const [erro, setErro] = useState('');
   const [avisoImportacao, setAvisoImportacao] = useState('');
   const [publicando, setPublicando] = useState<string | null>(null);
+  // Editor do texto de apoio (dentro do card de cada avaliação)
+  const [editandoTextoId, setEditandoTextoId] = useState<string | null>(null);
+  const [textoEdit, setTextoEdit] = useState('');
+  const [resumindoTexto, setResumindoTexto] = useState(false);
+  const [salvandoTexto, setSalvandoTexto] = useState(false);
+  const [erroTexto, setErroTexto] = useState('');
   const [copiadoOnline, setCopiadoOnline] = useState<string | null>(null);
   // Erro de "Publicar como Prova Online" -- separado do `erro` do formulário
   // de criação (lá em cima) porque esse fica escondido enquanto o formulário
@@ -491,6 +497,49 @@ Regras: (1) escreva um parágrafo curto para cada assunto diferente das questõe
 
   // Corrige só o gabarito (letras) de uma avaliação já criada. As notas das
   // correções já feitas NÃO mudam sozinhas: use "Recalcular notas" em Correções.
+  function abrirEditorTexto(av: Avaliacao) {
+    setEditandoTextoId(av.id); setTextoEdit(av.texto_apoio || ''); setErroTexto('');
+  }
+
+  // Resume o texto atual com a IA mantendo o que é preciso para responder
+  // cada questão (usa as questões e o gabarito da própria avaliação).
+  async function resumirTexto(av: Avaliacao) {
+    if (!textoEdit.trim()) { setErroTexto('Não há texto para resumir. Escreva ou cole um texto primeiro.'); return; }
+    setResumindoTexto(true); setErroTexto('');
+    try {
+      const objetivas = (av.questoes_objetivas || []).map(q => {
+        const letra = av.gabarito?.[String(q.numero)] || '';
+        const certa = q.alternativas.find(a => a.letra === letra)?.texto || '(não definida)';
+        return `Questão ${q.numero}: ${q.enunciado}\n   Resposta correta: ${certa}`;
+      });
+      const discursivas = Object.entries(av.questoes_subjetivas || {}).filter(([, v]) => v).map(([n, v]) => `Questão ${n} (discursiva): ${v}`);
+      const lista = [...objetivas, ...discursivas].join('\n');
+      const novo = (await chamarClaudeTexto(
+        `Resuma o TEXTO DE APOIO abaixo, deixando-o cerca de metade do tamanho, SEM perder nenhuma informação necessária para responder as questões listadas (inclusive as ideias que o aluno precisa para as discursivas).\n\nQuestões e respostas corretas:\n${lista}\n\nTEXTO ATUAL:\n${textoEdit}\n\nRegras: mantenha um parágrafo curto por assunto, na mesma ordem; mantenha os termos técnicos e as regras exatamente corretos; não invente informações nem acrescente nada que contradiga as respostas corretas; corte exemplos, repetições e frases de enchimento; não use asteriscos, marcadores nem formatação markdown; não cite número de questão nem letra de alternativa. Responda APENAS com o texto resumido.`,
+        2000
+      )).trim();
+      setTextoEdit(novo);
+    } catch (e: any) {
+      setErroTexto('Erro ao resumir: ' + (e.message || e));
+    } finally {
+      setResumindoTexto(false);
+    }
+  }
+
+  // Grava na avaliação e, se já estiver publicada online, também na prova online.
+  async function salvarTexto(av: Avaliacao) {
+    setSalvandoTexto(true); setErroTexto('');
+    const novo = textoEdit.trim() || null;
+    const { error } = await supabase.from('avaliacoes').update({ texto_apoio: novo }).eq('id', av.id);
+    if (error) { setErroTexto('Erro ao salvar: ' + error.message); setSalvandoTexto(false); return; }
+    if (av.prova_online_id) {
+      const { error: errP } = await supabase.from('provas').update({ texto_apoio: novo }).eq('id', av.prova_online_id);
+      if (errP) { setErroTexto('Salvo na avaliação, mas a prova online não foi atualizada: ' + errP.message); setSalvandoTexto(false); return; }
+    }
+    setLista(prev => prev.map(a => a.id === av.id ? { ...a, texto_apoio: novo } : a));
+    setEditandoTextoId(null); setSalvandoTexto(false);
+  }
+
   async function editarGabarito(av: Avaliacao) {
     const qtd = av.quantidade_objetivas || Object.keys(av.gabarito || {}).length;
     const atual = Array.from({ length: qtd }, (_, i) => av.gabarito?.[String(i + 1)] || '').join(' ');
@@ -1106,6 +1155,38 @@ Regras: (1) escreva um parágrafo curto para cada assunto diferente das questõe
                   >
                     Corrigir gabarito
                   </button>
+                  {editandoTextoId === av.id ? (
+                    <div className="space-y-2 border border-outline-variant rounded-xl p-3">
+                      <p className="text-xs font-semibold text-on-surface-variant">Texto de apoio{av.texto_apoio ? '' : ' (esta avaliação ainda não tem)'}</p>
+                      <textarea
+                        value={textoEdit}
+                        onChange={e => setTextoEdit(e.target.value)}
+                        rows={10}
+                        className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-background text-sm text-on-surface"
+                      />
+                      <p className="text-[11px] text-on-surface-variant">{textoEdit.trim().length} caracteres{av.prova_online_id ? ' · ao salvar, atualiza também a prova online' : ''}</p>
+                      {erroTexto && <p className="text-xs text-red-500">{erroTexto}</p>}
+                      <div className="flex gap-2">
+                        <button onClick={() => resumirTexto(av)} disabled={resumindoTexto || salvandoTexto}
+                          className="flex-1 py-1.5 rounded-xl bg-secondary-container text-on-secondary-container text-xs font-semibold disabled:opacity-50">
+                          {resumindoTexto ? 'Resumindo...' : 'Resumir com IA'}
+                        </button>
+                        <button onClick={() => salvarTexto(av)} disabled={resumindoTexto || salvandoTexto}
+                          className="flex-1 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-semibold disabled:opacity-50">
+                          {salvandoTexto ? 'Salvando...' : 'Salvar'}
+                        </button>
+                        <button onClick={() => setEditandoTextoId(null)} disabled={salvandoTexto}
+                          className="px-3 py-1.5 rounded-xl border border-outline-variant text-xs text-on-surface-variant">Cancelar</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => abrirEditorTexto(av)}
+                      className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-xl bg-secondary-container text-on-secondary-container text-xs font-semibold"
+                    >
+                      {av.texto_apoio ? 'Editar / resumir texto de apoio' : 'Adicionar texto de apoio'}
+                    </button>
+                  )}
                   <button
                     onClick={() => excluir(av.id)}
                     className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-xl border border-error text-error text-xs font-semibold"
