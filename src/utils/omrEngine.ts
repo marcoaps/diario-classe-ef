@@ -26,7 +26,6 @@
 // ============================================================================
 
 import {
-  BUBBLE_R,
   calcularGeometriaQuestoes,
   centroBolha,
   centrosAncorasColuna,
@@ -467,7 +466,7 @@ function desenharOverlay(
       const cx = (centroRef.x - regiaoRef.x0) * escala;
       const cy = (centroRef.y - regiaoRef.y0) * escala;
       ctx.beginPath();
-      ctx.arc(cx, cy, BUBBLE_R * escala * 0.85, 0, Math.PI * 2);
+      ctx.arc(cx, cy, geo.BUBBLE_R * escala * 0.85, 0, Math.PI * 2);
       ctx.strokeStyle = cor;
       ctx.lineWidth = 3;
       ctx.stroke();
@@ -571,7 +570,7 @@ export function processarFolhaOMR(
   const margem = 20;
   const regiaoRef = {
     x0: geo.Q_START_X - margem,
-    x1: geo.ULTIMA_COLUNA_X + BUBBLE_R + margem,
+    x1: geo.ULTIMA_COLUNA_X + geo.BUBBLE_R + margem,
     y0: geo.INICIO_BOLHAS_Y - margem,
     y1: geo.INICIO_BOLHAS_Y + qtdObjetivas * geo.Q_ROW_H + margem,
   };
@@ -583,7 +582,7 @@ export function processarFolhaOMR(
   const binaria = limiarAdaptativo(cinzaCrop, cropW, cropH, raioBloco, C_LIMIAR_ADAPTATIVO);
 
   // 5) Amostragem por bolha + classificação relativa por linha.
-  const raioAmostra = BUBBLE_R * 0.75 * ESCALA_RETIFICACAO;
+  const raioAmostra = geo.BUBBLE_R * 0.75 * ESCALA_RETIFICACAO;
   const respostas: Record<string, string> = {};
   const confiancaPorQuestao: Record<string, number> = {};
   const detalhes: DetalheQuestao[] = [];

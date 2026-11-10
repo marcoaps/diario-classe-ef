@@ -59,6 +59,11 @@ export const GAP_APOS_CABECALHO_V2 = 58;
  * constantes de bolha acima). */
 export const HEADER_H = 44;
 export const ALUNO_FIELDS_H = 126;
+/** Folha v2: cabeçalho e caixa do aluno maiores (fontes grandes + QR maior). */
+export const HEADER_H_V2 = 76;
+export const ALUNO_FIELDS_H_V2 = 200;
+export function headerHDe(v2: boolean): number { return v2 ? HEADER_H_V2 : HEADER_H; }
+export function alunoFieldsHDe(v2: boolean): number { return v2 ? ALUNO_FIELDS_H_V2 : ALUNO_FIELDS_H; }
 
 export interface GeometriaQuestoes {
   Q_START_Y: number;
@@ -70,6 +75,12 @@ export interface GeometriaQuestoes {
   colBottom: number;
   colLeft: number;
   colRight: number;
+  /** Raio das bolhas desta geometria (v1 = 17 fixo; v2 cresce para ocupar a folha). */
+  BUBBLE_R: number;
+  /** Distância entre centros de bolhas vizinhas. */
+  BUBBLE_GAP: number;
+  /** Distância de Q_START_X até o centro da 1ª bolha (espaço do número da questão). */
+  OFFSET_1A_BOLHA: number;
 }
 
 /**
@@ -88,16 +99,48 @@ export function calcularGeometriaQuestoes(
   const PAD = FOLHA_PAD;
   const MARK = FOLHA_MARK;
   const H = FOLHA_H;
+  const W = FOLHA_W;
   const CX = PAD + MARK + 8;
 
-  const alunoY = PAD + HEADER_H + 10;
+  if (v2) {
+    // ── Folha v2 (só gabarito): ocupa a página A4 inteira ──────────────────
+    // Linhas tão altas quanto couber até o rodapé, bolhas proporcionais à
+    // linha e a coluna inteira (marcadores incluídos) CENTRALIZADA na folha.
+    const MARK_COL = FOLHA_MARK_COL_V2;
+    const alunoY = PAD + HEADER_H_V2 + 10;
+    const Q_START_Y = alunoY + ALUNO_FIELDS_H_V2 + 40;
+    const INICIO_BOLHAS_Y = Q_START_Y + GAP_APOS_CABECALHO_V2;
+    // Limite inferior: marcador de baixo termina ~1,2cm antes da borda física.
+    const limiteColBottom = H - PAD - 30 - MARK_COL;
+    const alturaParaObjetivas = Math.max(0, limiteColBottom - 6 - INICIO_BOLHAS_Y);
+    const Q_ROW_H = qtdObj > 0 ? Math.max(30, Math.min(110, alturaParaObjetivas / qtdObj)) : 0;
 
-  // v2: coluna deslocada 12px p/ a direita (marcador esquerdo longe da borda de impressão) e
-  // mais espaço entre o título e as bolhas, para os marcadores maiores ficarem
-  // centralizados entre o cabeçalho e o gabarito, sem encostar em nada.
-  const Q_START_X = CX + 8 + (v2 ? 12 : 0);
+    const R = Math.round(Math.max(13, Math.min(27, Q_ROW_H * 0.34)));
+    const GAP = Math.round(R * 3.6);
+    const OFFSET = Math.round(R * 2.9);
+
+    // Largura do bloco = marcador + folga + número + bolhas + folga + marcador.
+    const larguraConteudo = OFFSET + (qtdAlternativas - 1) * GAP + R;
+    const larguraBloco = MARK_COL + 10 + larguraConteudo + 12 + MARK_COL;
+    const Q_START_X = Math.round((W - larguraBloco) / 2 + MARK_COL + 10);
+    const ULTIMA_COLUNA_X = Q_START_X + OFFSET + (qtdAlternativas - 1) * GAP;
+
+    const colTop = INICIO_BOLHAS_Y - 10;
+    const colBottom = INICIO_BOLHAS_Y + qtdObj * Q_ROW_H + 6;
+    const colLeft = Q_START_X - 10;
+    const colRight = ULTIMA_COLUNA_X + R + 12;
+    return {
+      Q_START_Y, Q_START_X, INICIO_BOLHAS_Y, Q_ROW_H, ULTIMA_COLUNA_X,
+      colTop, colBottom, colLeft, colRight,
+      BUBBLE_R: R, BUBBLE_GAP: GAP, OFFSET_1A_BOLHA: OFFSET,
+    };
+  }
+
+  // ── Folha v1 (layout antigo, mantido para folhas já impressas) ───────────
+  const alunoY = PAD + HEADER_H + 10;
+  const Q_START_X = CX + 8;
   const Q_START_Y = alunoY + ALUNO_FIELDS_H + 26;
-  const INICIO_BOLHAS_Y = Q_START_Y + (v2 ? GAP_APOS_CABECALHO_V2 : GAP_APOS_CABECALHO);
+  const INICIO_BOLHAS_Y = Q_START_Y + GAP_APOS_CABECALHO;
 
   const areaDisponivelAltura = H - PAD - MARK - 20 - INICIO_BOLHAS_Y - (qtdDisc > 0 ? 24 : 0);
   const alturaReservadaDiscursivas = qtdDisc * 95 + (qtdDisc > 0 ? 12 : 0);
@@ -111,13 +154,17 @@ export function calcularGeometriaQuestoes(
   const colLeft = Q_START_X - 10;
   const colRight = ULTIMA_COLUNA_X + BUBBLE_R + 12;
 
-  return { Q_START_Y, Q_START_X, INICIO_BOLHAS_Y, Q_ROW_H, ULTIMA_COLUNA_X, colTop, colBottom, colLeft, colRight };
+  return {
+    Q_START_Y, Q_START_X, INICIO_BOLHAS_Y, Q_ROW_H, ULTIMA_COLUNA_X,
+    colTop, colBottom, colLeft, colRight,
+    BUBBLE_R, BUBBLE_GAP, OFFSET_1A_BOLHA: 46,
+  };
 }
 
 /** Centro (em coordenadas do canvas de referência) da bolha da questão/alternativa dadas (índices 0-based). */
 export function centroBolha(geo: GeometriaQuestoes, questaoIdx0: number, alternativaIdx0: number): Ponto {
   const y = geo.INICIO_BOLHAS_Y + questaoIdx0 * geo.Q_ROW_H + geo.Q_ROW_H / 2;
-  const x = geo.Q_START_X + 46 + alternativaIdx0 * BUBBLE_GAP;
+  const x = geo.Q_START_X + geo.OFFSET_1A_BOLHA + alternativaIdx0 * geo.BUBBLE_GAP;
   return { x, y };
 }
 

@@ -8,7 +8,7 @@ import type { Avaliacao, Aluno, QuestaoObjetiva } from './tiposCorretorProvas';
 import { valorPorQuestaoObjetiva, turmasDoValor, ehGrupoDeTurmas, labelTurmaOuGrupo, GRUPOS_CORRETOR } from './tiposCorretorProvas';
 import {
   FOLHA_W, FOLHA_H, FOLHA_PAD, FOLHA_MARK, discursivasNaFolha, marcaColunaDe, folhaV2,
-  BUBBLE_R as BUBBLE_R_GEO, BUBBLE_GAP, GAP_APOS_CABECALHO, HEADER_H, ALUNO_FIELDS_H, calcularGeometriaQuestoes,
+  headerHDe, alunoFieldsHDe, calcularGeometriaQuestoes, centroBolha,
 } from './geometriaFolha';
 
 export type { Avaliacao, Aluno } from './tiposCorretorProvas';
@@ -237,151 +237,163 @@ async function desenharFolhaModelo(
 ): Promise<void> {
   const W = FOLHA_W;
   const H = FOLHA_H;
-  canvas.width = W;
-  canvas.height = H;
+  // Renderiza em 2x (o desenho continua nas coordenadas 794x1123 da geometria
+  // de referência) -- a impressão sai nítida, sem letras borradas.
+  const ESCALA_IMPRESSAO = 2;
+  canvas.width = W * ESCALA_IMPRESSAO;
+  canvas.height = H * ESCALA_IMPRESSAO;
   const ctx = canvas.getContext('2d')!;
+  ctx.scale(ESCALA_IMPRESSAO, ESCALA_IMPRESSAO);
   const qtdObj = avaliacao.quantidade_objetivas || 0;
   // Folha v2 = só gabarito (sem áreas de discursivas); ver geometriaFolha.ts.
+  const v2 = folhaV2(avaliacao);
   const qtdDisc = discursivasNaFolha(avaliacao);
   const alternativas = avaliacao.alternativas?.length ? avaliacao.alternativas : ['A', 'B', 'C', 'D'];
 
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, W, H);
 
-  // Os 4 marcadores dos CANTOS DA PÁGINA foram removidos a pedido -- só
-  // ficam os marcadores da COLUNA de respostas (ao redor do gabarito), que
-  // são os únicos usados pela leitura em duas etapas (câmera ao vivo). MARK/
-  // PAD continuam definindo a margem segura do layout (sem risco de corte),
-  // só não desenham mais o quadrado preto.
+  // MARK/PAD definem a margem segura do layout (sem risco de corte na
+  // impressora); os quadrados dos cantos da página não são mais desenhados.
   const MARK = FOLHA_MARK;
   const PAD = FOLHA_PAD;
   const CX = PAD + MARK + 8;
   const CW = W - 2 * (PAD + MARK + 8);
+  const HEADER = headerHDe(v2);
+  const ALUNO_H = alunoFieldsHDe(v2);
 
-  // Cabeçalho — só 2 linhas (nome da escola + disciplina/título), pra
-  // sobrar mais espaço útil pro gabarito e as discursivas.
+  // Tamanhos de fonte/QR: v2 maior (folha só de gabarito, sobra espaço).
+  const F = v2
+    ? { escola: 28, titulo: 19, rotulo: 17, valor: 19, qr: 168, linhas: [42, 86, 128, 172] }
+    : { escola: 18, titulo: 14, rotulo: 13, valor: 15, qr: 90, linhas: [24, 54, 80, 104] };
+
+  // Cabeçalho — nome da escola + disciplina/título, centralizados.
   ctx.fillStyle = '#e8edf2';
-  ctx.fillRect(CX, PAD, CW, HEADER_H);
+  ctx.fillRect(CX, PAD, CW, HEADER);
   ctx.fillStyle = '#1e293b';
-  ctx.font = 'bold 18px Arial';
   ctx.textAlign = 'center';
-  ctx.fillText('E.E. INSTITUTO ODILON PRATAGI', W / 2, PAD + 21);
-  ctx.font = '14px Arial';
-  ctx.fillText((avaliacao.disciplina || 'Educação Física') + ' — ' + avaliacao.titulo, W / 2, PAD + 39);
+  ctx.font = `bold ${F.escola}px Arial`;
+  ctx.fillText('E.E. INSTITUTO ODILON PRATAGI', W / 2, PAD + (v2 ? 34 : 21));
+  ctx.font = `${F.titulo}px Arial`;
+  ctx.fillText((avaliacao.disciplina || 'Educação Física') + ' — ' + avaliacao.titulo, W / 2, PAD + (v2 ? 62 : 39));
   ctx.textAlign = 'left';
 
-  // Área do aluno — folha-modelo (sem depender de nenhum cadastro): nome e
-  // data ficam em BRANCO, pra o próprio aluno preencher à caneta. Essa
-  // informação NUNCA entra no QR nem é lida automaticamente -- serve só pra
-  // associação manual posterior (ver AvaliacaoCorrecoes.tsx). O QR fica
-  // encaixado dentro dessa mesma caixa, à direita.
-  const alunoY = PAD + HEADER_H + 10;
-  const qrSize = 90;
+  // Área do aluno — nome/nº/data em BRANCO pro aluno preencher à caneta.
+  // Nada disso entra no QR. O QR fica dentro dessa caixa, à direita.
+  const alunoY = PAD + HEADER + 10;
+  const qrSize = F.qr;
   ctx.fillStyle = '#f8fafc';
-  ctx.fillRect(CX, alunoY, CW, ALUNO_FIELDS_H);
+  ctx.fillRect(CX, alunoY, CW, ALUNO_H);
   ctx.strokeStyle = '#cbd5e1';
   ctx.lineWidth = 1;
-  ctx.strokeRect(CX, alunoY, CW, ALUNO_FIELDS_H);
+  ctx.strokeRect(CX, alunoY, CW, ALUNO_H);
 
-  const larguraCampos = CW - 16 - qrSize - 24;
+  const MX = v2 ? 16 : 8;
+  const larguraCampos = CW - MX * 2 - qrSize - 20;
 
   function linhaPreencher(rotulo: string, x: number, y: number, largura: number) {
     ctx.fillStyle = '#334155';
-    ctx.font = 'bold 13px Arial';
+    ctx.font = `bold ${F.rotulo}px Arial`;
     ctx.fillText(rotulo, x, y);
     const larguraRotulo = ctx.measureText(rotulo).width;
     ctx.strokeStyle = '#334155';
-    ctx.lineWidth = 0.8;
+    ctx.lineWidth = v2 ? 1 : 0.8;
     ctx.beginPath();
-    ctx.moveTo(x + larguraRotulo + 6, y + 1);
-    ctx.lineTo(x + largura, y + 1);
+    ctx.moveTo(x + larguraRotulo + 6, y + 2);
+    ctx.lineTo(x + largura, y + 2);
     ctx.stroke();
   }
 
-  // TURMA já vem preenchida (o professor escolhe pra qual turma gerar,
-  // antes de imprimir) -- só NOME/Nº/DATA ficam em branco pra escrever à
-  // mão, já que não identificam a turma nem entram no QR.
+  // TURMA já vem preenchida (o professor escolhe a turma antes de imprimir).
   function linhaComValor(rotulo: string, valor: string, x: number, y: number) {
     ctx.fillStyle = '#334155';
-    ctx.font = 'bold 13px Arial';
+    ctx.font = `bold ${F.rotulo}px Arial`;
     ctx.fillText(rotulo, x, y);
     const larguraRotulo = ctx.measureText(rotulo).width;
     ctx.fillStyle = '#1e293b';
-    ctx.font = 'bold 15px Arial';
-    ctx.fillText(valor, x + larguraRotulo + 6, y);
+    ctx.font = `bold ${F.valor}px Arial`;
+    ctx.fillText(valor, x + larguraRotulo + 8, y);
   }
 
-  linhaPreencher('NOME:', CX + 8, alunoY + 24, larguraCampos);
-  const ncX = CX + Math.floor(larguraCampos / 2) + 8;
+  const [l1, l2, l3, l4] = F.linhas;
+  const xCampos = CX + MX;
+  linhaPreencher('NOME:', xCampos, alunoY + l1, larguraCampos);
+  const metade = Math.floor(larguraCampos / 2);
   if (turmaPreenchida) {
-    linhaComValor('TURMA:', turmaPreenchida, CX + 8, alunoY + 54);
+    linhaComValor('TURMA:', turmaPreenchida, xCampos, alunoY + l2);
   } else {
-    linhaPreencher('TURMA:', CX + 8, alunoY + 54, Math.floor(larguraCampos / 2) - 8);
+    linhaPreencher('TURMA:', xCampos, alunoY + l2, metade - 12);
   }
-  linhaPreencher('Nº:', ncX, alunoY + 54, Math.floor(larguraCampos / 2) - 16);
-  // Barras "/" com bastante espaço nos dois lados, pro aluno escrever
-  // dia/mês/ano à caneta diretamente entre elas (sem linha de baixo).
-  linhaComValor('DATA:', '        /        /          ', CX + 8, alunoY + 80);
-  // Sempre em branco pra preencher à mão -- não pré-preenche com
-  // avaliacoes.professor, igual ao NOME.
-  linhaPreencher('NOME DO PROFESSOR(A):', CX + 8, alunoY + 104, larguraCampos);
+  linhaPreencher('Nº:', xCampos + metade + 12, alunoY + l2, metade - 12);
+  // Barras "/" com espaço dos dois lados pro aluno escrever dia/mês/ano.
+  linhaComValor('DATA:', '         /         /            ', xCampos, alunoY + l3);
+  linhaPreencher('NOME DO PROFESSOR(A):', xCampos, alunoY + l4, larguraCampos);
 
-  // QR Code — no modo individual, `qrConteudo` é o payload assinado (payload +
-  // assinatura HMAC), exclusivo desta folha; no modo 100% anônimo, é só o
-  // texto puro da turma/grupo (ex: "GRUPO_6_7"), igual em toda folha do grupo.
-  // O gabarito NUNCA vai dentro do QR, nos dois modos.
-  const qrDataUrl = await QRCode.toDataURL(qrConteudo, { width: 150, margin: 1, errorCorrectionLevel: 'M' });
+  // QR Code — só identifica a avaliação (e a turma); o gabarito NUNCA vai nele.
+  const qrDataUrl = await QRCode.toDataURL(qrConteudo, { width: qrSize * ESCALA_IMPRESSAO, margin: 1, errorCorrectionLevel: 'M' });
   const qrImg = new Image();
   await new Promise<void>(res => { qrImg.onload = () => res(); qrImg.src = qrDataUrl; });
-  const qrX = CX + CW - 8 - qrSize;
-  const qrY = alunoY + (ALUNO_FIELDS_H - qrSize) / 2;
+  const qrX = CX + CW - MX - qrSize;
+  const qrY = alunoY + (ALUNO_H - qrSize) / 2;
   ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
 
-  // Questões objetivas — grade calculada pela quantidade real, nunca fixa.
-  // Geometria compartilhada com src/utils/omrEngine.ts (via geometriaFolha.ts)
-  // para a leitura por Visão Computacional nunca desalinhar do que é impresso aqui.
-  const BUBBLE_R = BUBBLE_R_GEO;
-  const { Q_START_Y, Q_START_X, INICIO_BOLHAS_Y, Q_ROW_H, ULTIMA_COLUNA_X, colTop, colBottom, colLeft, colRight } =
-    calcularGeometriaQuestoes(qtdObj, qtdDisc, alternativas.length, folhaV2(avaliacao));
-  // Espaço entre o título "QUESTÕES OBJETIVAS" e a 1ª bolha (ver geometriaFolha.ts).
+  // Questões objetivas — geometria compartilhada com src/utils/omrEngine.ts
+  // (via geometriaFolha.ts): a leitura nunca desalinha do que é impresso.
+  const geo = calcularGeometriaQuestoes(qtdObj, qtdDisc, alternativas.length, v2);
+  const { Q_START_Y, Q_START_X, INICIO_BOLHAS_Y, Q_ROW_H, colTop, colBottom, colLeft, colRight } = geo;
+  const BUBBLE_R = geo.BUBBLE_R;
 
   if (qtdObj > 0) {
     ctx.fillStyle = '#1e293b';
-    ctx.font = 'bold 14px Arial';
-    ctx.fillText('QUESTÕES OBJETIVAS', Q_START_X, Q_START_Y - 8);
     ctx.strokeStyle = '#1e293b';
     ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(Q_START_X, Q_START_Y - 4);
-    ctx.lineTo(qrX - 16, Q_START_Y - 4);
-    ctx.stroke();
+    if (v2) {
+      // Título centralizado, com o fio ocupando a largura útil da folha.
+      ctx.font = 'bold 20px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('QUESTÕES OBJETIVAS', W / 2, Q_START_Y - 10);
+      ctx.textAlign = 'left';
+      ctx.beginPath();
+      ctx.moveTo(CX, Q_START_Y - 2);
+      ctx.lineTo(CX + CW, Q_START_Y - 2);
+      ctx.stroke();
+    } else {
+      ctx.font = 'bold 14px Arial';
+      ctx.fillText('QUESTÕES OBJETIVAS', Q_START_X, Q_START_Y - 8);
+      ctx.beginPath();
+      ctx.moveTo(Q_START_X, Q_START_Y - 4);
+      ctx.lineTo(qrX - 16, Q_START_Y - 4);
+      ctx.stroke();
+    }
 
+    const fonteNumero = v2 ? Math.round(BUBBLE_R * 1.05) : 14;
+    const fonteLetra = v2 ? Math.round(BUBBLE_R * 0.8) : 12;
     for (let i = 0; i < qtdObj; i++) {
       const qy = INICIO_BOLHAS_Y + i * Q_ROW_H + Q_ROW_H / 2;
       ctx.fillStyle = '#1e293b';
-      ctx.font = 'bold 14px Arial';
-      ctx.fillText(String(i + 1), Q_START_X + 2, qy + 5);
+      ctx.font = `bold ${fonteNumero}px Arial`;
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(i + 1), Q_START_X + 2, qy + 1);
       alternativas.forEach((l, li) => {
-        const bx = Q_START_X + 46 + li * BUBBLE_GAP;
+        const { x: bx } = centroBolha(geo, i, li);
         ctx.beginPath();
         ctx.arc(bx, qy, BUBBLE_R, 0, Math.PI * 2);
-        ctx.strokeStyle = '#334155';
-        ctx.lineWidth = 2;
-        ctx.stroke();
         ctx.fillStyle = '#ffffff';
         ctx.fill();
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = v2 ? 2.2 : 2;
+        ctx.stroke();
         ctx.fillStyle = '#334155';
-        ctx.font = 'bold 12px Arial';
+        ctx.font = `bold ${fonteLetra}px Arial`;
         ctx.textAlign = 'center';
-        ctx.fillText(l, bx, qy + 4);
+        ctx.fillText(l, bx, qy + 1);
         ctx.textAlign = 'left';
       });
+      ctx.textBaseline = 'alphabetic';
     }
 
-    // Marcadores da coluna de respostas — 4 cantos ao redor só das bolhas
-    // (menores que os marcadores de página), só como referência visual pro
-    // professor enquadrar bem essa área ao fotografar (a leitura em si usa as
-    // 4 marcas de página, que cobrem a folha inteira e incluem o QR).
+    // Marcadores da coluna de respostas — os 4 quadrados usados pela leitura
+    // da câmera ao vivo para enquadrar e retificar a área das bolhas.
     const MARK_COL = marcaColunaDe(avaliacao);
     ctx.fillStyle = '#1e293b';
     ctx.fillRect(colLeft - MARK_COL, colTop - MARK_COL, MARK_COL, MARK_COL);
@@ -390,14 +402,10 @@ async function desenharFolhaModelo(
     ctx.fillRect(colRight, colBottom, MARK_COL, MARK_COL);
   }
 
-  // Questões discursivas — só rótulo + linhas pautadas (sem caixa colorida),
-  // preenchendo TODO o espaço restante da folha até o rodapé, dividido
-  // igualmente entre as questões. A geometria das bolhas acima já reserva
-  // esse espaço (via calcularGeometriaQuestoes, com o qtdDisc REAL) -- aqui
-  // só desenha dentro do que já foi reservado, sem invadir a área das bolhas.
+  // Questões discursivas (só folha v1) — rótulo + linhas pautadas no espaço
+  // restante, já reservado por calcularGeometriaQuestoes.
   if (qtdDisc > 0) {
     const subjStartY = INICIO_BOLHAS_Y + qtdObj * Q_ROW_H + 30;
-    // Sem rodapé -- só a margem segura até a borda física da folha (~1cm).
     const bottomLimit = H - PAD - MARK;
     const totalAlturaDisc = bottomLimit - subjStartY;
     const GAP_DISC = 14;
@@ -635,12 +643,12 @@ export function AvaliacaoFolha() {
       }
 
       const blocos = paginas.map((url, i) => `<div style="${i === paginas.length - 1 ? '' : 'page-break-after: always;'}text-align:center;">
-        <img src="${url}" style="width:100%;max-width:794px;display:block;margin:0 auto;" />
+        <img src="${url}" style="width:210mm;height:297mm;display:block;margin:0 auto;" />
       </div>`).join('');
       const html = `<!DOCTYPE html><html><head>
         <meta charset="utf-8">
         <title>${labels.join(', ')} — ${codigo || avaliacao.titulo}</title>
-        <style>* { margin:0; padding:0; box-sizing:border-box; } @page { margin:0; size: A4 portrait; } body { background:white; }</style>
+        <style>* { margin:0; padding:0; box-sizing:border-box; } @page { margin:0; size: A4 portrait; } html, body { width:210mm; background:white; } div { overflow:hidden; height:297mm; }</style>
       </head><body>${blocos}
         <script>setTimeout(function(){ window.print(); }, 600);<\/script>
       </body></html>`;
@@ -659,12 +667,12 @@ export function AvaliacaoFolha() {
     if (!avaliacao || !folhaDataUrl) return;
     const n = Math.max(1, copias || 1);
     const blocos = Array.from({ length: n }, (_, i) => `<div style="${i === n - 1 ? '' : 'page-break-after: always;'}text-align:center;">
-        <img src="${folhaDataUrl}" style="width:100%;max-width:794px;display:block;margin:0 auto;" />
+        <img src="${folhaDataUrl}" style="width:210mm;height:297mm;display:block;margin:0 auto;" />
       </div>`).join('');
     const html = `<!DOCTYPE html><html><head>
       <meta charset="utf-8">
       <title>${turmaSelecionada ? formatarTurma(turmaSelecionada) : 'Folha QR'} — ${avaliacao.codigo_avaliacao || avaliacao.titulo}</title>
-      <style>* { margin:0; padding:0; box-sizing:border-box; } @page { margin:0; size: A4 portrait; } body { background:white; }</style>
+      <style>* { margin:0; padding:0; box-sizing:border-box; } @page { margin:0; size: A4 portrait; } html, body { width:210mm; background:white; } div { overflow:hidden; height:297mm; }</style>
     </head><body>${blocos}
       <script>setTimeout(function(){ window.print(); }, 600);<\/script>
     </body></html>`;
