@@ -338,12 +338,37 @@ export function Avaliacoes() {
 
   async function gerarTextoApoioIA() {
     if (!titulo.trim()) { setErro('Informe o título antes de gerar o texto de apoio.'); return; }
+    // O texto precisa cobrir as respostas de CADA questão, então parte das
+    // questões já preenchidas e do gabarito (marque as corretas antes).
+    const objetivas = questoesObjetivas
+      .filter(q => q.enunciado.trim())
+      .map(q => {
+        const letra = gabarito[String(q.numero)] || '';
+        const certa = q.alternativas.find(a => a.letra === letra)?.texto || '';
+        return { numero: q.numero, enunciado: q.enunciado, certa, letra };
+      });
+    const semGabarito = objetivas.filter(q => !q.certa);
+    if (objetivas.length > 0 && semGabarito.length > 0) {
+      setErro(`Marque a alternativa correta de todas as objetivas antes de gerar o texto de apoio (faltam: ${semGabarito.map(q => q.numero).join(', ')}).`);
+      return;
+    }
+    const discursivas = Object.entries(enunciadosDiscursivas).filter(([, v]) => String(v).trim());
     setGerandoTexto(true);
     setErro('');
     try {
+      const lista = [
+        ...objetivas.map(q => `Questão ${q.numero}: ${q.enunciado}
+   Resposta correta: ${q.certa}`),
+        ...discursivas.map(([n, v]) => `Questão ${n} (discursiva): ${v}`),
+      ].join('\n');
       const text = await chamarClaudeTexto(
-        `Você é professor de ${disciplina} do Ensino Fundamental. Crie um TEXTO DE APOIO para uma avaliação sobre o tema: "${titulo}"${descricao ? ' - ' + descricao : ''}. O texto deve: ter entre 15 e 25 linhas, ser informativo e adequado para alunos do Ensino Fundamental II, abordar os principais conceitos do tema, conter TODAS as respostas das questões de forma implícita ou explícita, usar linguagem clara e acessível. Retorne APENAS o texto, sem título nem introdução.`,
-        1500
+        `Você é professor de ${disciplina} do Ensino Fundamental. Crie um TEXTO DE APOIO para a avaliação "${titulo}"${descricao ? ' - ' + descricao : ''}. O aluno vai ler o texto e depois responder às questões abaixo, então o texto PRECISA conter a informação necessária para responder CADA UMA delas (inclusive as discursivas), sem nenhuma lacuna.
+
+Questões e respostas corretas:
+${lista}
+
+Regras: (1) escreva um parágrafo curto para cada assunto diferente das questões, na ordem em que aparecem; (2) use exatamente a modalidade das questões (por exemplo, futsal e não futebol; handebol; voleibol) e não afirme nada que contradiga as respostas corretas; (3) explique o fato, a regra ou o conceito de cada resposta com suas próprias palavras, sem copiar a alternativa nem citar número de questão ou letra; (4) para as discursivas, traga as ideias que o aluno precisa para elaborar a resposta; (5) linguagem clara para o nível dos alunos, sem textos de enchimento sobre assuntos que não caem na prova. Retorne APENAS o texto, sem título nem introdução.`,
+        2500
       );
       setTextoApoio(text.trim());
     } catch (e) {
