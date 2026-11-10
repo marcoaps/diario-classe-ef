@@ -136,6 +136,7 @@ export function Avaliacoes() {
   const [lista, setLista] = useState<Avaliacao[]>([]);
   const [loading, setLoading] = useState(true);
   const [criando, setCriando] = useState(false);
+  const [salvoOk, setSalvoOk] = useState(false);
   const [expandido, setExpandido] = useState<string | null>(null);
   const [erro, setErro] = useState('');
   const [avisoImportacao, setAvisoImportacao] = useState('');
@@ -405,13 +406,28 @@ Regras: (1) escreva um parágrafo curto para cada assunto diferente das questõe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state]);
 
+  // Ordem automática: série (6º, 7º, 8º, 9º), depois turma (A, B, C...) e,
+  // dentro da mesma turma, a mais recente primeiro. Grupos de turmas usam a
+  // primeira turma do grupo como referência.
+  function ordenarAvaliacoes(itens: Avaliacao[]): Avaliacao[] {
+    const chave = (a: Avaliacao) => {
+      const t = ehGrupoDeTurmas(a.turma_id) ? (getTurmasDoGrupo(a.turma_id)[0] || a.turma_id) : a.turma_id;
+      return String(t || '');
+    };
+    return [...itens].sort((x, y) => {
+      const c = chave(x).localeCompare(chave(y), 'pt-BR', { numeric: true });
+      if (c !== 0) return c;
+      return String(y.criado_em || '').localeCompare(String(x.criado_em || ''));
+    });
+  }
+
   async function carregar() {
     setLoading(true);
     const { data } = await supabase
       .from('avaliacoes')
       .select('*')
       .order('criado_em', { ascending: false });
-    setLista((data || []) as Avaliacao[]);
+    setLista(ordenarAvaliacoes((data || []) as Avaliacao[]));
     setLoading(false);
   }
 
@@ -469,6 +485,7 @@ Regras: (1) escreva um parágrafo curto para cada assunto diferente das questõe
     if (error) { setErro('Erro ao salvar: ' + error.message); return; }
     limparFormulario();
     setCriando(false);
+    setSalvoOk(true);
     carregar();
   }
 
@@ -652,7 +669,7 @@ Regras: (1) escreva um parágrafo curto para cada assunto diferente das questõe
             Gerador de Questões
           </button>
           <button
-            onClick={() => { setCriando(!criando); setErro(''); }}
+            onClick={() => { setCriando(!criando); setErro(''); setSalvoOk(false); }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-on-primary text-sm font-semibold"
           >
             <Plus className="w-4 h-4" />
@@ -661,10 +678,23 @@ Regras: (1) escreva um parágrafo curto para cada assunto diferente das questõe
         </div>
       </div>
 
+      {salvoOk && !criando && (
+        <div className="bg-secondary-container text-on-secondary-container rounded-2xl px-4 py-3 flex items-center justify-between gap-3">
+          <p className="text-sm font-semibold">Avaliação salva! Ela já aparece na lista abaixo.</p>
+          <div className="flex gap-2 shrink-0">
+            <button onClick={() => navigate(-1)} className="px-3 py-1.5 rounded-full bg-primary text-on-primary text-xs font-semibold">Voltar</button>
+            <button onClick={() => setSalvoOk(false)} className="px-3 py-1.5 rounded-full border border-outline-variant text-xs font-semibold">Fechar</button>
+          </div>
+        </div>
+      )}
+
       {/* Formulario de criacao */}
       {criando && (
         <div className="bg-surface border border-outline-variant rounded-2xl p-4 space-y-4">
-          <p className="text-sm font-semibold text-on-surface">Nova avaliação</p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-on-surface">Nova avaliação</p>
+            <button onClick={() => setCriando(false)} className="text-xs font-semibold text-primary">← Voltar</button>
+          </div>
 
           {avisoImportacao && (
             <div className="bg-secondary-container text-on-secondary-container text-xs px-3 py-2 rounded-xl">{avisoImportacao}</div>
