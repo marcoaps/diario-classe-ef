@@ -63,6 +63,7 @@ interface Prova {
   codigo: string;
   data_limite: string;
   criado_em: string;
+  texto_apoio?: string | null;
 }
 
 const GRUPOS = [
@@ -256,6 +257,12 @@ export function ProvasOnline() {
   const [erroImport, setErroImport] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [provaResultados, setProvaResultados] = useState<Prova | null>(null);
+  // Edição do texto de apoio de uma prova já publicada
+  const [editandoTextoId, setEditandoTextoId] = useState<string | null>(null);
+  const [textoEdit, setTextoEdit] = useState('');
+  const [resumindoTexto, setResumindoTexto] = useState(false);
+  const [salvandoTexto, setSalvandoTexto] = useState(false);
+  const [erroTexto, setErroTexto] = useState('');
   const [resultados, setResultados] = useState<Resposta[]>([]);
   const [questoesProva, setQuestoesProva] = useState<QuestaoCompleta[]>([]);
   const [respostaCorrigir, setRespostaCorrigir] = useState<Resposta | null>(null);
@@ -278,6 +285,63 @@ export function ProvasOnline() {
     const { data } = await supabase.from('provas').select('*').order('criado_em', { ascending: false });
     setProvas(data || []);
     setLoading(false);
+  };
+
+  const abrirEditorTexto = (prova: Prova) => {
+    setEditandoTextoId(prova.id); setTextoEdit(prova.texto_apoio || ''); setErroTexto('');
+  };
+
+  // Resume o texto atual com a IA, mantendo a informação necessária para
+  // responder cada questão da prova (lê as questões e o gabarito do banco).
+  const resumirTexto = async (prova: Prova) => {
+    if (!textoEdit.trim()) { setErroTexto('Não há texto para resumir. Escreva ou cole um texto primeiro.'); return; }
+    setResumindoTexto(true); setErroTexto('');
+    try {
+      const { data: qs, error } = await supabase.from('questoes').select('*').eq('prova_id', prova.id).order('ordem');
+      if (error) throw error;
+      const lista = (qs || []).map((q: any) => {
+        if (q.tipo === 'multipla_escolha' && Array.isArray(q.opcoes)) {
+          const certa = q.resposta_correta != null ? q.opcoes[Number(q.resposta_correta)] : '';
+          return `Questão ${q.ordem}: ${q.enunciado}
+   Resposta correta: ${certa || '(não definida)'}`;
+        }
+        return `Questão ${q.ordem} (discursiva): ${q.enunciado}`;
+      }).join('\n');
+      const resp = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 2000, messages: [{ role: 'user', content:
+          `Resuma o TEXTO DE APOIO abaixo, deixando-o cerca de metade do tamanho, SEM perder nenhuma informação necessária para responder as questões listadas (inclusive as ideias que o aluno precisa para as discursivas).
+
+Questões e respostas corretas:
+${lista}
+
+TEXTO ATUAL:
+${textoEdit}
+
+Regras: mantenha um parágrafo curto por assunto, na mesma ordem; mantenha os termos técnicos e as regras exatamente corretos; não invente informações nem acrescente nada que contradiga as respostas corretas; corte exemplos, repetições e frases de enchimento; não use asteriscos, marcadores nem formatação markdown; não cite número de questão nem letra de alternativa. Responda APENAS com o texto resumido.` }] }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data?.error?.message || data?.error || `A IA respondeu com erro ${resp.status}.`);
+      const novo = (data.content?.[0]?.text || '').trim();
+      if (!novo) throw new Error('A IA devolveu uma resposta vazia.');
+      setTextoEdit(novo);
+    } catch (e: any) {
+      setErroTexto('Erro ao resumir: ' + (e.message || e));
+    } finally {
+      setResumindoTexto(false);
+    }
+  };
+
+  // Grava o texto na prova online e, se ela veio de uma Avaliação, na avaliação também.
+  const salvarTexto = async (prova: Prova) => {
+    setSalvandoTexto(true); setErroTexto('');
+    const novo = textoEdit.trim() || null;
+    const { error } = await supabase.from('provas').update({ texto_apoio: novo }).eq('id', prova.id);
+    if (error) { setErroTexto('Erro ao salvar: ' + error.message); setSalvandoTexto(false); return; }
+    await supabase.from('avaliacoes').update({ texto_apoio: novo }).eq('prova_online_id', prova.id);
+    setProvas(prev => prev.map(p => p.id === prova.id ? { ...p, texto_apoio: novo } : p));
+    setEditandoTextoId(null); setSalvandoTexto(false);
   };
 
   const adicionarQuestao = (tipo: 'multipla_escolha' | 'dissertativa' | 'composta') => {
@@ -578,6 +642,32 @@ export function ProvasOnline() {
                 className={`w-full py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${compartilhado === prova.id ? 'bg-green-500 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'}`}>
                 {compartilhado === prova.id ? <><CheckCircle className="w-4 h-4" /> Link copiado!</> : <><Share2 className="w-4 h-4" /> Compartilhar link + código</>}
               </button>
+              {editandoTextoId === prova.id ? (
+                <div className="flex flex-col gap-2 border border-gray-200 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-gray-500">Texto de apoio {prova.texto_apoio ? '' : '(esta prova ainda não tem)'}</p>
+                  <textarea value={textoEdit} onChange={e => setTextoEdit(e.target.value)} rows={10}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
+                  <p className="text-xs text-gray-400">{textoEdit.trim().length} caracteres</p>
+                  {erroTexto && <p className="text-xs text-red-500">{erroTexto}</p>}
+                  <div className="flex gap-2">
+                    <button onClick={() => resumirTexto(prova)} disabled={resumindoTexto || salvandoTexto}
+                      className="flex-1 py-2 rounded-xl bg-amber-100 text-amber-800 font-bold text-sm disabled:opacity-50">
+                      {resumindoTexto ? 'Resumindo...' : 'Resumir com IA'}
+                    </button>
+                    <button onClick={() => salvarTexto(prova)} disabled={resumindoTexto || salvandoTexto}
+                      className="flex-1 py-2 rounded-xl bg-primary text-white font-bold text-sm disabled:opacity-50">
+                      {salvandoTexto ? 'Salvando...' : 'Salvar'}
+                    </button>
+                    <button onClick={() => setEditandoTextoId(null)} disabled={salvandoTexto}
+                      className="px-3 py-2 rounded-xl border border-gray-200 text-gray-500 text-sm">Cancelar</button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => abrirEditorTexto(prova)}
+                  className="w-full py-2 rounded-xl bg-amber-50 text-amber-800 font-bold text-sm flex items-center justify-center gap-2 hover:bg-amber-100 transition-colors">
+                  <FileText className="w-4 h-4" /> {prova.texto_apoio ? 'Editar / resumir texto de apoio' : 'Adicionar texto de apoio'}
+                </button>
+              )}
               <button onClick={() => verResultados(prova)}
                 className="w-full py-2 rounded-xl bg-primary/10 text-primary font-bold text-sm flex items-center justify-center gap-2 hover:bg-primary/20 transition-colors">
                 <Eye className="w-4 h-4" /> Ver Resultados
