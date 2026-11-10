@@ -263,11 +263,11 @@ async function desenharFolhaModelo(
   ctx.fillStyle = '#e8edf2';
   ctx.fillRect(CX, PAD, CW, HEADER_H);
   ctx.fillStyle = '#1e293b';
-  ctx.font = 'bold 14px Arial';
+  ctx.font = 'bold 18px Arial';
   ctx.textAlign = 'center';
-  ctx.fillText('E.E. INSTITUTO ODILON PRATAGI', W / 2, PAD + 20);
-  ctx.font = '11px Arial';
-  ctx.fillText((avaliacao.disciplina || 'Educação Física') + ' — ' + avaliacao.titulo, W / 2, PAD + 36);
+  ctx.fillText('E.E. INSTITUTO ODILON PRATAGI', W / 2, PAD + 21);
+  ctx.font = '14px Arial';
+  ctx.fillText((avaliacao.disciplina || 'Educação Física') + ' — ' + avaliacao.titulo, W / 2, PAD + 39);
   ctx.textAlign = 'left';
 
   // Área do aluno — folha-modelo (sem depender de nenhum cadastro): nome e
@@ -287,7 +287,7 @@ async function desenharFolhaModelo(
 
   function linhaPreencher(rotulo: string, x: number, y: number, largura: number) {
     ctx.fillStyle = '#334155';
-    ctx.font = 'bold 10px Arial';
+    ctx.font = 'bold 13px Arial';
     ctx.fillText(rotulo, x, y);
     const larguraRotulo = ctx.measureText(rotulo).width;
     ctx.strokeStyle = '#334155';
@@ -303,11 +303,11 @@ async function desenharFolhaModelo(
   // mão, já que não identificam a turma nem entram no QR.
   function linhaComValor(rotulo: string, valor: string, x: number, y: number) {
     ctx.fillStyle = '#334155';
-    ctx.font = 'bold 10px Arial';
+    ctx.font = 'bold 13px Arial';
     ctx.fillText(rotulo, x, y);
     const larguraRotulo = ctx.measureText(rotulo).width;
     ctx.fillStyle = '#1e293b';
-    ctx.font = 'bold 11px Arial';
+    ctx.font = 'bold 15px Arial';
     ctx.fillText(valor, x + larguraRotulo + 6, y);
   }
 
@@ -347,7 +347,7 @@ async function desenharFolhaModelo(
 
   if (qtdObj > 0) {
     ctx.fillStyle = '#1e293b';
-    ctx.font = 'bold 11px Arial';
+    ctx.font = 'bold 14px Arial';
     ctx.fillText('QUESTÕES OBJETIVAS', Q_START_X, Q_START_Y - 8);
     ctx.strokeStyle = '#1e293b';
     ctx.lineWidth = 1.5;
