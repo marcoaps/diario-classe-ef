@@ -854,7 +854,7 @@ export function AvaliacaoFolha() {
 
         {erroGeracao && <p className="text-xs text-red-500">{erroGeracao}</p>}
 
-        {turmasParaLoteCombinado(avaliacao.turma_id).length > 1 && (
+        {(
           <button onClick={() => gerarEImprimirTodasTurmas()} disabled={gerandoTodas}
             className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-bold disabled:opacity-50">
             <Printer className="w-4 h-4" />
@@ -869,7 +869,7 @@ export function AvaliacaoFolha() {
           </button>
         )}
 
-        {turmasParaLoteCombinado(avaliacao.turma_id).length > 1 && (
+        {(
           <button onClick={() => gerarEImprimirTodasTurmas('png')} disabled={gerandoTodas}
             className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-primary text-primary text-sm font-bold disabled:opacity-50">
             <Download className="w-4 h-4" />
