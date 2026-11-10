@@ -50,8 +50,39 @@ function questaoVazia(numero: number): QuestaoObjetiva {
  * isso, então o gabarito é preenchido manualmente no app depois de importar
  * (tocando na letra de cada alternativa, igual já funciona pra questão
  * digitada à mão). */
-function parseQuestoesDoTexto(texto: string): QuestaoObjetiva[] {
-  const linhas = texto.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+function parseQuestoesDoTexto(texto: string): { objetivas: QuestaoObjetiva[]; discursivas: string[] } {
+  let linhas = texto.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  // O gabarito no fim do documento ("1. B", "9. Resposta esperada...") não é
+  // questão; a marca d'água "Faça sua resposta na folha do Gabarito" também não.
+  const iGab = linhas.findIndex(l => /^gabarito$/i.test(l));
+  if (iGab >= 0) linhas = linhas.slice(0, iGab);
+  linhas = linhas.filter(l => !/fa[çc]a sua resposta|na folha do gabarito/i.test(l));
+  // Modo "bloco": provas no modelo do banco de questões, com "Questão N" numa
+  // linha própria e alternativas SEM letra no texto (a letra é só um círculo
+  // desenhado no Word). Cada bloco com 5+ linhas = enunciado + 4 alternativas
+  // (as 4 últimas linhas); bloco curto = discursiva.
+  if (linhas.filter(l => /^quest[ãa]o\s+\d{1,3}$/i.test(l)).length >= 3 && !linhas.some(l => /^\(?[A-D][.\)]\s/.test(l))) {
+    const blocos: string[][] = [];
+    for (const l of linhas) {
+      if (/^quest[ãa]o\s+\d{1,3}$/i.test(l)) blocos.push([]);
+      else if (blocos.length) blocos[blocos.length - 1].push(l);
+    }
+    const objetivas: QuestaoObjetiva[] = [];
+    const discursivas: string[] = [];
+    for (const b of blocos) {
+      if (b.length >= 5) {
+        const opcoes = b.slice(-4);
+        objetivas.push({
+          numero: objetivas.length + 1,
+          enunciado: b.slice(0, -4).join(' '),
+          alternativas: ALTERNATIVAS_PADRAO.map((letra, i) => ({ letra, texto: opcoes[i] })),
+        });
+      } else if (b.length > 0) {
+        discursivas.push(b.join(' '));
+      }
+    }
+    if (objetivas.length > 0 || discursivas.length > 0) return { objetivas, discursivas };
+  }
   const reQuestao = /^(?:quest[ãa]o\s+)?(\d{1,3})\s*[.\):-]?\s*(.*)$/i;
   const reAlternativa = /^\(?([A-D])[.\)]\s*(.*)$/;
 
@@ -83,7 +114,7 @@ function parseQuestoesDoTexto(texto: string): QuestaoObjetiva[] {
   // preenche vazio o que não foi encontrado, descarta letras extras. Questão
   // sem NENHUMA alternativa reconhecida é discursiva (sem A/B/C/D no Word),
   // não objetiva -- não faz sentido importar como objetiva em branco.
-  return brutas
+  const objetivas = brutas
     .filter(q => q.enunciado && q.alternativas.length > 0)
     .map((q, i) => ({
       numero: i + 1,
@@ -93,6 +124,10 @@ function parseQuestoesDoTexto(texto: string): QuestaoObjetiva[] {
         texto: q.alternativas.find(a => a.letra === letra)?.texto || '',
       })),
     }));
+  const discursivas = brutas
+    .filter(q => q.enunciado && q.alternativas.length === 0)
+    .map(q => q.enunciado);
+  return { objetivas, discursivas };
 }
 
 export function Avaliacoes() {
@@ -247,15 +282,23 @@ export function Avaliacoes() {
       const mammoth = (await import('mammoth/mammoth.browser')).default;
       const arrayBuffer = await file.arrayBuffer();
       const resultado = await mammoth.extractRawText({ arrayBuffer });
-      const questoes = parseQuestoesDoTexto(resultado.value).slice(0, MAX_OBJETIVAS);
+      const { objetivas, discursivas: discTextos } = parseQuestoesDoTexto(resultado.value);
+      const questoes = objetivas.slice(0, MAX_OBJETIVAS);
+      const discs = discTextos.slice(0, MAX_DISCURSIVAS);
       if (questoes.length === 0) {
         throw new Error('Não consegui reconhecer nenhuma questão no formato "1. Enunciado" seguido de "A) alternativa", "B) alternativa"... Confira a formatação do documento.');
       }
       setQtdObjetivasStr(String(questoes.length));
       setQuestoesObjetivas(questoes);
       setGabarito({});
+      if (discs.length > 0) {
+        const novo: Record<string, string> = {};
+        discs.forEach((t, i) => { novo[String(questoes.length + i + 1)] = t; });
+        setQtdDiscursivasStr(String(discs.length));
+        setEnunciadosDiscursivas(novo);
+      }
       setAvisoImportacao(
-        `${questoes.length} questão(ões) importada(s) do Word — confira o texto e marque a alternativa correta de cada uma (toque na letra) antes de salvar.`
+        `${questoes.length} objetiva(s)${discs.length ? ` e ${discs.length} discursiva(s)` : ''} importada(s) do Word — confira o texto e marque a alternativa correta de cada uma (toque na letra) antes de salvar.`
       );
     } catch (e) {
       setErro('Erro ao importar o Word: ' + (e as Error).message);
