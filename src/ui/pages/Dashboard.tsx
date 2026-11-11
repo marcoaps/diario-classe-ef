@@ -9,6 +9,7 @@ import { buscarAlunos, salvarNotas, sincronizarNomesAlunos, supabase } from '../
 import { formatarNome } from '../../utils/formatarNome';
 import { v4 as uuidv4 } from 'uuid';
 import { useNavigate } from 'react-router-dom';
+import { CardCalendarioHoje } from './CardCalendarioHoje';
 
 const LOGO_URL = "https://i.imgur.com/3t5GEnQ.jpeg";
 const LOGO_IOP = "/Logo_IOP.png";
@@ -125,6 +126,7 @@ export function Dashboard() {
   const [cardMessage, setCardMessage] = useState<string | null>(null);
   const [openYears, setOpenYears] = useState<Set<number>>(new Set<number>());
   const [showTurmas, setShowTurmas] = useState(false);
+  const [showGerenciar, setShowGerenciar] = useState(false);
   const [corrigindoNomes, setCorrigindoNomes] = useState(false);
 
   const handleCorrigirNomesTodasTurmas = async () => {
@@ -669,6 +671,9 @@ export function Dashboard() {
             onTurmaClick={abrirChamadaDaTurma}
           />
 
+          {/* Calendário escolar: o que acontece hoje e os próximos eventos */}
+          <CardCalendarioHoje onAbrir={() => navigate('/calendario')} />
+
           {/* Últimas turmas acessadas: troca rápida de contexto logo abaixo do cartão principal */}
           {recentClassRooms.length > 0 && (
             <section aria-label="Últimas turmas acessadas" className="flex flex-col gap-2.5">
@@ -834,11 +839,26 @@ export function Dashboard() {
           )}
         </div>
 
-          {/* Gerenciar turmas: rotina de uso frequente separada da manutenção ocasional */}
+          {/* Gerenciar turmas: recolhido por padrão; Trabalhos e Consulta de Alunos já estão no Acesso rápido */}
           <section aria-label="Gerenciar turmas" className="flex flex-col gap-3">
-            <h2 className="text-[13px] font-extrabold text-[#5B6B63] px-1">Gerenciar turmas</h2>
-            <ListaAcoes titulo="Rotina pedagógica" itens={ROTINA} onAcao={handleMenuClick} corrigindoNomes={corrigindoNomes} />
-            <ListaAcoes titulo="Ferramentas de manutenção" descricao="Uso ocasional: listas, nomes e dados das turmas" itens={MANUTENCAO} onAcao={handleMenuClick} corrigindoNomes={corrigindoNomes} />
+            <button
+              type="button"
+              aria-expanded={showGerenciar}
+              onClick={() => setShowGerenciar(v => !v)}
+              className="w-full flex items-center justify-between gap-2 px-4 py-3 bg-white rounded-[20px] border border-[#DCEBE2] shadow-[0_1px_2px_rgba(5,59,32,0.05)] hover:bg-[#F5FCF8] transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B7A3D]"
+            >
+              <span className="min-w-0">
+                <span className="block text-[15px] font-extrabold leading-tight text-[#10231A]">Gerenciar turmas</span>
+                <span className="block text-xs mt-0.5 text-[#5B6B63]">Listas, nomes, gênero e trabalhos</span>
+              </span>
+              {showGerenciar ? <ChevronUp className="w-5 h-5 text-gray-400 shrink-0" /> : <ChevronDown className="w-5 h-5 text-gray-400 shrink-0" />}
+            </button>
+            {showGerenciar && (
+              <>
+                <ListaAcoes titulo="Rotina pedagógica" itens={ROTINA} onAcao={handleMenuClick} corrigindoNomes={corrigindoNomes} />
+                <ListaAcoes titulo="Ferramentas de manutenção" descricao="Uso ocasional: listas, nomes e dados das turmas" itens={MANUTENCAO} onAcao={handleMenuClick} corrigindoNomes={corrigindoNomes} />
+              </>
+            )}
           </section>
         </div>
       </div>
