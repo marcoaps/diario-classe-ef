@@ -2,7 +2,7 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import {
   Home, CheckSquare, GraduationCap,
-  CalendarSearch, BarChart3, QrCode, ClipboardList, CalendarDays,
+  CalendarSearch, CalendarRange, BarChart3, QrCode, ClipboardList, CalendarDays,
   Sparkles, MoreHorizontal, X, BookOpen, ClipboardCheck, NotebookPen, Crown, UserCheck, HeartHandshake
 } from 'lucide-react';
 import { aoMudarFila, listarFila, sincronizarFila } from '../data/filaChamada';
@@ -17,7 +17,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-const MAIS_PATHS = ['/history', '/ia', '/avaliacoes', '/alunos', '/diario-aulas', '/torneio', '/trabalhos', '/rodizio', '/prova-alunos', '/alunos-especiais'];
+const MAIS_PATHS = ['/calendario', '/history', '/ia', '/avaliacoes', '/alunos', '/diario-aulas', '/torneio', '/trabalhos', '/rodizio', '/prova-alunos', '/alunos-especiais'];
 
 function useOnline() {
   const [online, setOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine !== false);
@@ -105,6 +105,12 @@ export function AppLayout() {
               <X className="w-4 h-4" />
             </button>
           </div>
+          <PopupItem
+            to="/calendario"
+            icon={<CalendarRange className="w-5 h-5" />}
+            label="Calend&#225;rio Escolar"
+            onClick={() => setMaisAberto(false)}
+          />
           <PopupItem
             to="/history"
             icon={<CalendarSearch className="w-5 h-5" />}

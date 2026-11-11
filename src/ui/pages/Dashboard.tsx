@@ -3,7 +3,7 @@ import { useStore } from '../../store';
 import { MIN_PASSING_GRADE, MAX_ABSENCES_TOTAL, ClassRoom, Student } from '../../domain/types';
 import { bimestreAtual as bimestreVigente } from '../../domain/useRelatorioFrequencia';
 import { AgendaDia } from './AgendaDia';
-import { ChevronRight, UserX, Users, Download, Upload, Loader2, X, CheckSquare, BarChart3, Edit, Trash2, ChevronDown, GraduationCap, ChevronUp, Share2, Copy, CheckCircle, ClipboardCheck, CaseSensitive, UserCheck, type LucideIcon } from 'lucide-react';
+import { CalendarRange, ChevronRight, UserX, Users, Download, Upload, Loader2, X, CheckSquare, BarChart3, Edit, Trash2, ChevronDown, GraduationCap, ChevronUp, Share2, Copy, CheckCircle, ClipboardCheck, CaseSensitive, UserCheck, type LucideIcon } from 'lucide-react';
 import { cn } from '../AppLayout';
 import { buscarAlunos, salvarNotas, sincronizarNomesAlunos, supabase } from '../../data/supabase';
 import { formatarNome } from '../../utils/formatarNome';
@@ -47,7 +47,7 @@ const ATALHOS: Acao[] = [
   { Icon: ClipboardCheck, title: 'Lançar Trabalhos',    sub: 'Registrar entregas',      action: 'route',        value: '/trabalhos' },
   { Icon: Share2,         title: 'Compartilhar Portal', sub: 'Enviar link no WhatsApp', action: 'compartilhar', value: '' },
   { Icon: GraduationCap,  title: 'Consultar Alunos',    sub: 'Provas, resultados e QR', action: 'route',        value: '/alunos' },
-  { Icon: BarChart3,      title: 'Exportar Relatório',  sub: 'Frequência e notas',      action: 'route',        value: '/report' },
+  { Icon: CalendarRange,  title: 'Calendário Escolar', sub: 'Feriados, provas e recessos', action: 'route',    value: '/calendario' },
 ];
 
 // Gerenciar turmas: o que se usa toda semana separado do que é ocasional.
