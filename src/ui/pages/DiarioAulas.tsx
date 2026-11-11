@@ -602,6 +602,7 @@ export function DiarioAulas() {
   const [erroIA, setErroIA] = useState('');
   const [previewTitulos, setPreviewTitulos] = useState<{ data: string; titulo: string }[] | null>(null);
   const [salvandoConteudo, setSalvandoConteudo] = useState(false);
+  const [aplicarTodas, setAplicarTodas] = useState(false);
 
   async function handleGerar(dia: DiaKey) {
     setGerando(dia);
@@ -686,6 +687,8 @@ ${contexto}
 Gere exatamente ${letivas.length} títulos curtos (3 a 8 palavras cada) para o campo "Conteúdos Desenvolvidos" do diário de classe, um para cada uma das ${letivas.length} aulas consecutivas sobre o tema "${formTema}", em ordem pedagógica lógica (ex: história/origem → características gerais → regras → fundamentos técnicos → prática/aplicação).
 Sempre que possível, relacione os títulos com os itens de "Objetos de Conhecimento" do plano de curso oficial acima. Se o plano de curso não tiver nada relacionado ao tema, gere títulos coerentes mesmo assim.
 
+Se o tema reunir duas modalidades (ex: "Ginástica e Badminton"), divida as aulas em dois blocos seguidos: a primeira metade sobre a primeira modalidade e a segunda metade sobre a segunda, cada bloco em ordem pedagógica lógica.
+
 Responda SOMENTE com um array JSON de ${letivas.length} strings, sem markdown, sem texto antes ou depois. Exemplo de formato:
 ["História e origem do(a) ${formTema}", "Características gerais da modalidade", "Regras básicas e adaptações do jogo", "Fundamentos técnicos"]`;
 
@@ -716,19 +719,22 @@ Responda SOMENTE com um array JSON de ${letivas.length} strings, sem markdown, s
     if (!turma || !previewTitulos) return;
     setSalvandoConteudo(true);
     try {
-      const rows = previewTitulos.map(p => ({
-        turma,
+      const turmasAlvo = aplicarTodas ? GRUPOS[dia].turmas : [turma];
+      const rows = turmasAlvo.flatMap(t => previewTitulos.map(p => ({
+        turma: t,
         data: p.data,
         bimestre: parseInt(formBimestre, 10),
         tema: formTema,
         titulo: p.titulo,
-      }));
+      })));
       const { error } = await supabase
         .from('conteudo_aulas')
         .upsert(rows, { onConflict: 'turma,data' });
       if (error) throw error;
       setPreviewTitulos(null);
       setFormTema('');
+      setAplicarTodas(false);
+      setConteudosPorTurma({});
       await carregarConteudos(turma);
     } catch (e: any) {
       setErroIA('Erro ao salvar: ' + e.message);
@@ -945,6 +951,10 @@ Responda SOMENTE com um array JSON de ${letivas.length} strings, sem markdown, s
                               />
                             </div>
                           ))}
+                          <label className="flex items-start gap-2 text-xs text-gray-700">
+                            <input type="checkbox" className="mt-0.5" checked={aplicarTodas} onChange={e => setAplicarTodas(e.target.checked)} />
+                            <span>Salvar igual para todas as turmas de {dia} ({GRUPOS[dia].turmas.join(', ')}). Substitui o conteúdo já salvo nessas datas.</span>
+                          </label>
                           <div className="flex gap-2">
                             <button
                               onClick={() => handleSalvarConteudo(dia)}
