@@ -603,6 +603,7 @@ export function DiarioAulas() {
   const [previewTitulos, setPreviewTitulos] = useState<{ data: string; titulo: string }[] | null>(null);
   const [salvandoConteudo, setSalvandoConteudo] = useState(false);
   const [aplicarTodas, setAplicarTodas] = useState(false);
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
 
   async function handleGerar(dia: DiaKey) {
     setGerando(dia);
@@ -741,6 +742,21 @@ Responda SOMENTE com um array JSON de ${letivas.length} strings, sem markdown, s
     } finally {
       setSalvandoConteudo(false);
     }
+  }
+
+  function alternarSelecionado(id?: string) {
+    if (!id) return;
+    setSelecionados(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  }
+
+  async function handleRemoverSelecionados(turma: string) {
+    const ids = (conteudosPorTurma[turma] || []).map(c => c.id).filter((id): id is string => !!id && selecionados.has(id));
+    if (ids.length === 0) return;
+    if (!confirm(`Remover ${ids.length} conteúdo(s) da turma ${turma}? Não dá para desfazer.`)) return;
+    const { error } = await supabase.from('conteudo_aulas').delete().in('id', ids);
+    if (error) { alert('Erro ao remover: ' + error.message); return; }
+    setSelecionados(new Set());
+    await carregarConteudos(turma);
   }
 
   async function handleRemoverConteudo(turma: string, id?: string) {
@@ -983,22 +999,54 @@ Responda SOMENTE com um array JSON de ${letivas.length} strings, sem markdown, s
                         ) : (conteudosPorTurma[turmaSelecionada]?.length ?? 0) === 0 ? (
                           <p className="text-xs text-gray-400">Nenhum conteúdo registrado ainda para essa turma.</p>
                         ) : (
-                          <div className="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
-                            {conteudosPorTurma[turmaSelecionada].map(c => (
-                              <div key={c.id} className="flex items-center justify-between px-3 py-2 text-xs">
-                                <div>
-                                  <span className="font-semibold text-gray-700">{chaveParaBR(c.data)}</span>
-                                  <span className="text-gray-500"> — {c.titulo}</span>
+                          <>
+                            {(() => {
+                              const lista = conteudosPorTurma[turmaSelecionada];
+                              const ids = lista.map(c => c.id).filter((i): i is string => !!i);
+                              const nSel = ids.filter(i => selecionados.has(i)).length;
+                              const bims = Array.from(new Set(lista.map(c => c.bimestre))).sort();
+                              return (
+                                <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                                  <button onClick={() => setSelecionados(nSel === ids.length ? new Set() : new Set(ids))} className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-700 font-semibold">
+                                    {nSel === ids.length ? 'Limpar seleção' : 'Selecionar tudo'}
+                                  </button>
+                                  {bims.map(b => (
+                                    <button key={b} onClick={() => setSelecionados(new Set(lista.filter(c => c.bimestre === b && c.id).map(c => c.id as string)))} className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-700">
+                                      Só {b}º bim.
+                                    </button>
+                                  ))}
+                                  {nSel > 0 && (
+                                    <button onClick={() => handleRemoverSelecionados(turmaSelecionada)} className="ml-auto px-3 py-1.5 rounded-lg bg-red-600 text-white font-semibold">
+                                      Remover selecionados ({nSel})
+                                    </button>
+                                  )}
                                 </div>
-                                <button
-                                  onClick={() => handleRemoverConteudo(turmaSelecionada, c.id)}
-                                  className="text-red-500 hover:underline"
-                                >
-                                  remover
-                                </button>
-                              </div>
-                            ))}
-                          </div>
+                              );
+                            })()}
+                            <div className="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
+                              {conteudosPorTurma[turmaSelecionada].map(c => (
+                                <div key={c.id} className={`flex items-center gap-2.5 px-3 py-2 text-xs ${c.id && selecionados.has(c.id) ? 'bg-red-50' : ''}`}>
+                                  <input
+                                    type="checkbox"
+                                    aria-label={`Selecionar ${chaveParaBR(c.data)}`}
+                                    className="w-4 h-4 shrink-0 accent-red-600"
+                                    checked={!!c.id && selecionados.has(c.id)}
+                                    onChange={() => alternarSelecionado(c.id)}
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <span className="font-semibold text-gray-700">{chaveParaBR(c.data)}</span>
+                                    <span className="text-gray-500"> — {c.titulo}</span>
+                                  </div>
+                                  <button
+                                    onClick={() => handleRemoverConteudo(turmaSelecionada, c.id)}
+                                    className="text-red-500 hover:underline shrink-0"
+                                  >
+                                    remover
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </>
                         )}
                       </div>
                     </>
