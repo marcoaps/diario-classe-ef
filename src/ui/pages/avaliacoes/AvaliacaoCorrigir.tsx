@@ -8,7 +8,7 @@ import { arredondar, valorPorQuestaoObjetiva, labelTurmaOuGrupo, ehGrupoDeTurmas
 import { lancarNotaImpressaNoDiario, textoLancamento } from '../../../domain/notaProvaImpressa';
 import { processarFolhaOMR, localizarAncorasNaFoto } from '../../../utils/omrEngine';
 import type { MotivoFalhaOMR } from '../../../utils/omrEngine';
-import { discursivasNaFolha, marcaColunaDe, folhaV2, folhaV3 } from './geometriaFolha';
+import { discursivasNaFolha, marcaColunaDe, folhaV2, folhaV3, layoutCardV3 } from './geometriaFolha';
 
 // ============================================================================
 // CORRETOR DE PROVAS — modelo ANÔNIMO baseado em AVALIAÇÃO + QR Code.
@@ -870,6 +870,20 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
   const totalQuestoes = avaliacao.quantidade_objetivas + avaliacao.quantidade_discursivas;
   const valorTotal = (avaliacao.valor_total_objetivas || 0) + (avaliacao.valor_total_discursivas || 0);
 
+  // Moldura-guia da câmera (etapa de leitura das bolhas). Na folha v3 ela tem a
+  // MESMA proporção do retângulo formado pelos centros das 4 âncoras (barra de
+  // respostas), para os quadrados pretos caírem nos cantos da moldura.
+  const moldura: React.CSSProperties = (() => {
+    if (avaliacao && folhaV3(avaliacao)) {
+      const L = layoutCardV3(avaliacao.quantidade_objetivas || 0, avaliacao.alternativas?.length || 4);
+      const proporcao = (L.barW - L.marca) / (L.barH - L.marca);   // largura / altura
+      const altura = 0.74;                                           // fração da altura do visor
+      const larguraPct = altura * proporcao * (4 / 3);               // visor é 3:4
+      const lado = ((1 - larguraPct) / 2) * 100;
+      return { left: `${lado}%`, right: `${lado}%`, top: '12%', bottom: `${(1 - altura) * 100 - 12}%` };
+    }
+    return { left: '22%', right: '22%', top: '8%', bottom: '8%' };
+  })();
   return (
     <div className={['py-4 space-y-4', (etapa === 'identificar' || etapa === 'lendo_bolhas') && modoCamera ? 'pb-24' : ''].join(' ')}>
       <div className="flex items-center gap-2">
@@ -948,7 +962,7 @@ Responda APENAS com um JSON (sem markdown, sem texto fora do JSON) com uma chave
                 }} />
               ) : (
                 <div style={{
-                  position: 'absolute', left: '22%', right: '22%', top: '8%', bottom: '8%',
+                  position: 'absolute', ...moldura,
                   border: `3px solid ${marcadoresVisiveis ? '#22c55e' : 'rgba(255,255,255,0.75)'}`,
                   borderRadius: 16, pointerEvents: 'none', transition: 'border-color 0.2s',
                 }} />
