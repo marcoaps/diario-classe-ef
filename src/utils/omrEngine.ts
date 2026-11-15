@@ -61,6 +61,8 @@ export interface ParametrosOMR {
   marcaColuna?: number;
   /** Folha v2 (só gabarito, layout reposicionado). */
   folhaV2?: boolean;
+  /** Folha v3 (card do pacote gabarito-qr): âncoras nos cantos da barra de respostas. */
+  folhaV3?: boolean;
 }
 
 // ─── Constantes de calibração (primeiro ajuste — ver aviso acima) ──────────
@@ -249,10 +251,19 @@ function detectarAncoras(mask: Uint8Array, largura: number, altura: number): { t
  * grupo de candidatos: o centro de massa de todos os blobs quadrados
  * encontrados vira a referência, e escolhe o mais extremo de cada quadrante.
  */
-function detectarAncorasPorCentroide(mask: Uint8Array, largura: number, altura: number): { tl: Blob; tr: Blob; bl: Blob; br: Blob } | null {
+function detectarAncorasPorCentroide(mask: Uint8Array, largura: number, altura: number, filtrarPorTamanho = false): { tl: Blob; tr: Blob; bl: Blob; br: Blob } | null {
   const areaImagem = largura * altura;
-  const blobs = rotularComponentes(mask, largura, altura, areaImagem * 0.00015, areaImagem * 0.02)
+  let blobs = rotularComponentes(mask, largura, altura, areaImagem * 0.00015, areaImagem * 0.02)
     .filter(b => cantosDoBoundingBoxEscuros(b, mask, largura) && pontuarQuadratude(b) >= LIMIAR_QUALIDADE_ANCORA);
+  if (filtrarPorTamanho && blobs.length > 4) {
+    // Folha v3: o QR (módulos e padrões de localização) fica colado na barra de
+    // respostas e também tem quadrados pretos. As âncoras são os MAIORES quadrados
+    // sólidos (6 mm) — descarta os menores (< 70% da área da 4ª maior: módulos do QR, bolhas marcadas).
+    const areas = blobs.map(b => b.area).sort((a, b) => b - a);
+    // O 4º maior é o piso de referência: as 4 âncoras têm área parecida.
+    const ref = areas[3];
+    blobs = blobs.filter(b => b.area >= ref * 0.7);
+  }
   if (blobs.length < 4) return null;
 
   const cx = blobs.reduce((s, b) => s + b.cx, 0) / blobs.length;
@@ -500,7 +511,8 @@ function desenharOverlay(
  */
 export function localizarAncorasNaFoto(
   canvasFoto: HTMLCanvasElement,
-  modo: 'pagina' | 'coluna' = 'coluna'
+  modo: 'pagina' | 'coluna' = 'coluna',
+  folhaV3 = false
 ): { tl: Ponto; tr: Ponto; bl: Ponto; br: Ponto } | null {
   const { canvas: buscaCanvas, escala: escalaBusca } = criarCopiaReduzida(canvasFoto, LADO_MAX_BUSCA_ANCORAS);
   const buscaImgData = buscaCanvas.getContext('2d')!.getImageData(0, 0, buscaCanvas.width, buscaCanvas.height);
@@ -513,7 +525,7 @@ export function localizarAncorasNaFoto(
   })();
   const ancoras = modo === 'pagina'
     ? detectarAncoras(mask, buscaCanvas.width, buscaCanvas.height)
-    : detectarAncorasPorCentroide(mask, buscaCanvas.width, buscaCanvas.height);
+    : detectarAncorasPorCentroide(mask, buscaCanvas.width, buscaCanvas.height, folhaV3);
   if (!ancoras) return null;
 
   const paraFotoOriginal = (b: Blob): Ponto => ({ x: b.cx / escalaBusca, y: b.cy / escalaBusca });
@@ -548,13 +560,13 @@ export function processarFolhaOMR(
   const fotoImgData = ctxFoto.getImageData(0, 0, canvasFoto.width, canvasFoto.height);
 
   // 1) Localizar as 4 âncoras numa cópia reduzida (mais rápido).
-  const ancorasFoto = localizarAncorasNaFoto(canvasFoto, modoAncora);
+  const ancorasFoto = localizarAncorasNaFoto(canvasFoto, modoAncora, params.folhaV3 ?? false);
   if (!ancorasFoto) {
     return { ok: false, motivo: 'ancoras_nao_encontradas', respostas: {}, confiancaPorQuestao: {} };
   }
 
   // 2) Homografia: referência (folha impressa, 794x1123) -> foto original.
-  const geo = calcularGeometriaQuestoes(qtdObjetivas, qtdDiscursivas, alternativas.length, params.folhaV2 ?? false);
+  const geo = calcularGeometriaQuestoes(qtdObjetivas, qtdDiscursivas, alternativas.length, params.folhaV2 ?? false, params.folhaV3 ?? false);
   const ref = modoAncora === 'coluna' ? centrosAncorasColuna(geo, params.marcaColuna) : centrosAncorasPagina();
   let h: number[];
   try {

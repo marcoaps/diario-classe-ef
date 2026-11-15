@@ -7,9 +7,10 @@ import QRCode from 'qrcode';
 import type { Avaliacao, Aluno, QuestaoObjetiva } from './tiposCorretorProvas';
 import { valorPorQuestaoObjetiva, turmasDoValor, ehGrupoDeTurmas, labelTurmaOuGrupo, GRUPOS_CORRETOR } from './tiposCorretorProvas';
 import {
-  FOLHA_W, FOLHA_H, FOLHA_PAD, FOLHA_MARK, discursivasNaFolha, marcaColunaDe, folhaV2,
+  FOLHA_W, FOLHA_H, FOLHA_PAD, FOLHA_MARK, discursivasNaFolha, marcaColunaDe, folhaV2, folhaV3,
   headerHDe, alunoFieldsHDe, calcularGeometriaQuestoes, centroBolha,
 } from './geometriaFolha';
+import { desenharFolhaCardV3 } from './folhaCardV3';
 
 export type { Avaliacao, Aluno } from './tiposCorretorProvas';
 
@@ -252,6 +253,39 @@ async function desenharFolhaModelo(
 
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, W, H);
+
+  // Folha v3: card do pacote gabarito-qr (visual novo + âncoras nos cantos da barra).
+  if (folhaV3(avaliacao)) {
+    const logo = await new Promise<HTMLImageElement | null>(res => {
+      const img = new Image();
+      img.onload = () => res(img);
+      img.onerror = () => res(null);
+      img.src = LOGO_IOP;
+    });
+    const comCelula = !!turmaPreenchida && turmaPreenchida.includes('(');
+    const serie = turmaPreenchida
+      ? turmaPreenchida.replace(/\(.*\)/, '').trim()
+      : (seriesDoTurmaId(avaliacao.turma_id)[0] || '');
+    const bim = parseInt(String(avaliacao.bimestre || '').match(/\d/)?.[0] || String(avaliacao.titulo).match(/(\d)\s*º?\s*bimestre/i)?.[1] || '', 10);
+    const anoCard = parseInt(String(avaliacao.criado_em || '').slice(0, 4), 10) || new Date().getFullYear();
+    await desenharFolhaCardV3(ctx, {
+      qtdObj,
+      alternativas,
+      serie,
+      celulaTurma: comCelula || !turmaPreenchida,
+      bimestre: Number.isFinite(bim) ? bim : null,
+      ano: anoCard,
+      codigoProva: qrConteudo.split('|')[0],
+      qrConteudo,
+      disciplina: avaliacao.disciplina || 'Educação Física',
+      rodape: (avaliacao.quantidade_discursivas || 0) > 0
+        ? `Questões ${String(qtdObj + 1).padStart(2, '0')}${(avaliacao.quantidade_discursivas || 0) > 1 ? ` a ${String(qtdObj + avaliacao.quantidade_discursivas).padStart(2, '0')}` : ''} na prova`
+        : '',
+      logo,
+      escalaImpressao: ESCALA_IMPRESSAO,
+    });
+    return;
+  }
 
   // MARK/PAD definem a margem segura do layout (sem risco de corte na
   // impressora); os quadrados dos cantos da página não são mais desenhados.

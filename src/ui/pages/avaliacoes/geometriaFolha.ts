@@ -42,8 +42,62 @@ export function folhaV2(av: { criado_em?: string | null }): boolean {
 export function discursivasNaFolha(av: { criado_em?: string | null; quantidade_discursivas?: number | null }): number {
   return folhaV2(av) ? 0 : (av.quantidade_discursivas || 0);
 }
-export function marcaColunaDe(av: { criado_em?: string | null }): number {
+export function marcaColunaDe(av: { criado_em?: string | null; quantidade_objetivas?: number | null; alternativas?: string[] | null }): number {
+  if (folhaV3(av)) return layoutCardV3(av.quantidade_objetivas || 0, av.alternativas?.length || 4).marca;
   return folhaV2(av) ? FOLHA_MARK_COL_V2 : FOLHA_MARK_COL;
+}
+
+// Folha "card" (v3): visual do pacote gabarito-qr-pacote (cabeçalho azul, campos,
+// barra de respostas com 4 âncoras nos cantos, QR + legenda embaixo). Vale para
+// avaliações criadas a partir desta data (inclui as 4 do 4º bimestre, criadas
+// em 10/11/2026); as anteriores mantêm v1 para as folhas já impressas serem
+// lidas com a geometria com que foram impressas.
+export const FOLHA_V3_DESDE = '2026-11-10';
+export function folhaV3(av: { criado_em?: string | null }): boolean {
+  return String(av.criado_em || '') >= FOLHA_V3_DESDE;
+}
+
+/** Medidas do card em mm (do pacote GabaritoCard.css). A parte OMR NÃO muda sem atualizar o leitor. */
+export const CARD_MM = {
+  largura: 92, cabecalho: 18, identificacao: 35,
+  ancora: 6, padV: 9, padH: 5, colNumero: 11, colBolha: 10, linha: 9, letras: 4.2, bolha: 6.6,
+  qr: 30, legenda: 3, padScanTopo: 3, padScanBase: 4, rodape: 6,
+} as const;
+
+export interface LayoutCardV3 {
+  /** px de referência por mm do card (já com a escala que faz o card caber na folha). */
+  u: number;
+  cardX: number; cardY: number; cardW: number; cardH: number;
+  headH: number; identY: number; identH: number;
+  barX: number; barY: number; barW: number; barH: number;
+  qrY: number; qrSize: number; rodapeY: number;
+  marca: number;
+}
+
+/** Posição de tudo no canvas de referência (794x1123) — usada por quem desenha e por quem lê. */
+export function layoutCardV3(qtdObj: number, qtdAlt = 4): LayoutCardV3 {
+  const M = CARD_MM;
+  const barWmm = 2 * M.padH + M.colNumero + M.colBolha * qtdAlt;
+  const barHmm = 2 * M.padV + 2 * M.letras + M.linha * qtdObj;
+  const cardHmm = M.cabecalho + M.identificacao + M.padScanTopo + barHmm + M.legenda + M.qr + M.padScanBase + M.rodape;
+  const pxMm = FOLHA_W / 210; // 794px = 210mm
+  const margem = 26;
+  const S = Math.min(1.45, (FOLHA_H - 2 * margem) / (cardHmm * pxMm));
+  const u = pxMm * S;
+  const cardW = M.largura * u, cardH = cardHmm * u;
+  const cardX = (FOLHA_W - cardW) / 2;
+  const cardY = (FOLHA_H - cardH) / 2;
+  const identY = cardY + M.cabecalho * u;
+  const barY = identY + (M.identificacao + M.padScanTopo) * u;
+  const barW = barWmm * u;
+  return {
+    u, cardX, cardY, cardW, cardH,
+    headH: M.cabecalho * u, identY, identH: M.identificacao * u,
+    barX: cardX + (cardW - barW) / 2, barY, barW, barH: barHmm * u,
+    qrY: barY + (barHmm + M.legenda) * u, qrSize: 30 * u,
+    rodapeY: cardY + (cardHmm - M.rodape) * u,
+    marca: M.ancora * u,
+  };
 }
 
 // Geometria das bolhas — idêntica aos valores usados em desenharFolhaQR().
@@ -94,13 +148,33 @@ export function calcularGeometriaQuestoes(
   qtdObj: number,
   qtdDisc: number,
   qtdAlternativas = 4,
-  v2 = false
+  v2 = false,
+  v3 = false
 ): GeometriaQuestoes {
   const PAD = FOLHA_PAD;
   const MARK = FOLHA_MARK;
   const H = FOLHA_H;
   const W = FOLHA_W;
   const CX = PAD + MARK + 8;
+
+  if (v3) {
+    // ── Folha v3 (card): âncoras nos cantos da barra de respostas ──────────
+    const L = layoutCardV3(qtdObj, qtdAlternativas);
+    const M = CARD_MM, u = L.u;
+    const Q_START_X = L.barX + M.padH * u;
+    const OFFSET = (M.colNumero + M.padH) * u;      // do início da coluna de números ao centro da 1ª bolha
+    const GAP = M.colBolha * u;
+    return {
+      Q_START_Y: L.barY, Q_START_X,
+      INICIO_BOLHAS_Y: L.barY + (M.padV + M.letras) * u,
+      Q_ROW_H: M.linha * u,
+      ULTIMA_COLUNA_X: Q_START_X + OFFSET + (qtdAlternativas - 1) * GAP,
+      // Retângulo cujos cantos externos ficam no centro das âncoras (centrosAncorasColuna usa marca/2).
+      colTop: L.barY + L.marca, colBottom: L.barY + L.barH - L.marca,
+      colLeft: L.barX + L.marca, colRight: L.barX + L.barW - L.marca,
+      BUBBLE_R: (M.bolha / 2) * u, BUBBLE_GAP: GAP, OFFSET_1A_BOLHA: OFFSET,
+    };
+  }
 
   if (v2) {
     // ── Folha v2 (só gabarito): ocupa a página A4 inteira ──────────────────

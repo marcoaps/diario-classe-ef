@@ -8,7 +8,7 @@ import { arredondar, valorPorQuestaoObjetiva, labelTurmaOuGrupo, ehGrupoDeTurmas
 import { lancarNotaImpressaNoDiario, textoLancamento } from '../../../domain/notaProvaImpressa';
 import { processarFolhaOMR, localizarAncorasNaFoto } from '../../../utils/omrEngine';
 import type { MotivoFalhaOMR } from '../../../utils/omrEngine';
-import { discursivasNaFolha, marcaColunaDe, folhaV2 } from './geometriaFolha';
+import { discursivasNaFolha, marcaColunaDe, folhaV2, folhaV3 } from './geometriaFolha';
 
 // ============================================================================
 // CORRETOR DE PROVAS — modelo ANÔNIMO baseado em AVALIAÇÃO + QR Code.
@@ -332,7 +332,7 @@ export function AvaliacaoCorrigir() {
           framesDesdeChecagemRef.current += 1;
           if (framesDesdeChecagemRef.current >= INTERVALO_CHECAGEM_MARCADORES) {
             framesDesdeChecagemRef.current = 0;
-            setMarcadoresVisiveis(!!localizarAncorasNaFoto(canvas, 'coluna'));
+            setMarcadoresVisiveis(!!localizarAncorasNaFoto(canvas, 'coluna', !!avaliacao && folhaV3(avaliacao)));
           }
         }
 
@@ -460,6 +460,7 @@ export function AvaliacaoCorrigir() {
         alternativas,
         marcaColuna: marcaColunaDe(avaliacao),
         folhaV2: folhaV2(avaliacao),
+        folhaV3: folhaV3(avaliacao),
       }, 'coluna');
 
       if (!resultadoOMR.ok) {
@@ -520,7 +521,8 @@ export function AvaliacaoCorrigir() {
           alternativas,
           marcaColuna: marcaColunaDe(avaliacao),
           folhaV2: folhaV2(avaliacao),
-        }, 'pagina');
+          folhaV3: folhaV3(avaliacao),
+        }, folhaV3(avaliacao) ? 'coluna' : 'pagina');
 
         if (!resultadoOMR.ok) {
           setErro(MENSAGENS_ERRO_OMR[resultadoOMR.motivo!] || 'Não foi possível ler as respostas desta foto.');
