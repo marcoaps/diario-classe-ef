@@ -61,7 +61,7 @@ export function folhaV3(av: { criado_em?: string | null }): boolean {
 export const CARD_MM = {
   largura: 92, cabecalho: 18, identificacao: 35,
   ancora: 6, padV: 9, padH: 5, colNumero: 11, colBolha: 10, linha: 9, letras: 4.2, bolha: 6.6,
-  qr: 30, legenda: 3, padScanTopo: 3, padScanBase: 4, rodape: 6,
+  qr: 30, legenda: 6.8, padScanTopo: 3, padScanBase: 4, rodape: 6,
 } as const;
 
 export interface LayoutCardV3 {
