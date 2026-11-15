@@ -164,6 +164,46 @@ export async function desenharFolhaCardV3(ctx: CanvasRenderingContext2D, d: Dado
     ctx.fillText(`   /   / ${d.ano}`, x, yb - 0.5 * u);
   });
   campo('Professor(a)', xD, 2, colW);
+  // Aviso: muitos alunos deixam nome, letra da turma e nº em branco.
+  {
+    const bx = xE, bw = colW * 2 + 4 * u, by = L.identY + 33.6 * u, bh = 7.6 * u;
+    caminhoArredondado(ctx, bx, by, bw, bh, 1.6 * u);
+    ctx.fillStyle = '#fff6e0'; ctx.fill();
+    ctx.lineWidth = px1; ctx.strokeStyle = '#efc36b'; ctx.stroke();
+    ctx.fillStyle = '#d98a00';
+    ctx.fillRect(bx, by + 1 * u, 1.1 * u, bh - 2 * u);
+    const turmaEx = `${d.serie.replace(/\s*ano/i, '')} A`;
+    const aviso = `escreva seu NOME, a LETRA da turma (ex.: ${turmaEx}) e seu Nº da chamada. Sem isso, o professor não consegue identificar sua prova.`;
+    const tx0 = bx + 3 * u, larguraMax = bw - 5 * u;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.font = `800 ${pt(6.4)}px ${FONTE}`;
+    const pre = 'ATENÇÃO: ';
+    const wPre = ctx.measureText(pre).width;
+    ctx.font = `500 ${pt(6.4)}px ${FONTE}`;
+    const palavras = aviso.split(' ');
+    const linhas: string[] = []; let atual = ''; let limite = larguraMax - wPre;
+    for (const p of palavras) {
+      const t = atual ? `${atual} ${p}` : p;
+      if (ctx.measureText(t).width > limite && atual) { linhas.push(atual); atual = p; limite = larguraMax; }
+      else atual = t;
+    }
+    if (atual) linhas.push(atual);
+    const passoL = 3.1 * u;
+    const y0 = by + bh / 2 - ((linhas.length - 1) * passoL) / 2;
+    linhas.forEach((ln, i) => {
+      const y = y0 + i * passoL;
+      if (i === 0) {
+        ctx.font = `800 ${pt(6.4)}px ${FONTE}`; ctx.fillStyle = '#9a5b00';
+        ctx.fillText(pre, tx0, y);
+        ctx.font = `500 ${pt(6.4)}px ${FONTE}`; ctx.fillStyle = INK;
+        ctx.fillText(ln, tx0 + wPre, y);
+      } else {
+        ctx.font = `500 ${pt(6.4)}px ${FONTE}`; ctx.fillStyle = INK;
+        ctx.fillText(ln, tx0, y);
+      }
+    });
+    ctx.textBaseline = 'alphabetic';
+  }
   ctx.strokeStyle = LINE; ctx.lineWidth = px1;
   const identFim = L.identY + L.identH;
   ctx.beginPath(); ctx.moveTo(L.cardX, identFim); ctx.lineTo(L.cardX + L.cardW, identFim); ctx.stroke();

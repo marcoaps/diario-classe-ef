@@ -59,7 +59,7 @@ export function folhaV3(av: { criado_em?: string | null }): boolean {
 
 /** Medidas do card em mm (do pacote GabaritoCard.css). A parte OMR NÃO muda sem atualizar o leitor. */
 export const CARD_MM = {
-  largura: 92, cabecalho: 18, identificacao: 35,
+  largura: 92, cabecalho: 18, identificacao: 43,
   ancora: 6, padV: 9, padH: 5, colNumero: 11, colBolha: 10, linha: 9, letras: 4.2, bolha: 6.6,
   qr: 30, legenda: 6.8, padScanTopo: 3, padScanBase: 4, rodape: 6,
 } as const;
