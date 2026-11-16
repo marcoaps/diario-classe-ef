@@ -39,7 +39,7 @@ const FERIADOS: Record<string, string> = {
   '2026-10-28': 'Dia do Servidor',
   '2026-11-02': 'Finados',
   '2026-11-15': 'Proclamação Rep.',
-  '2026-11-17': 'Tratado Petrópolis',
+  '2026-11-19': 'Folga (comp. 17/11)',
   '2026-11-20': 'Consciência Negra',
   '2026-12-24': 'Véspera Natal',
   '2026-12-25': 'Natal',
