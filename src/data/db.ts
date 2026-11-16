@@ -46,7 +46,7 @@ export async function initDb() {
 
   // Turmas acrescentadas depois do cadastro inicial: o seed acima só roda com
   // o banco local vazio, então aqui garantimos (sem duplicar) que existam.
-  const turmasExtras = ['6ºA', '6ºB'];
+  const turmasExtras = ['6ºA', '6ºB', '6ºC', '7ºA'];
   const existentes = new Set<string>();
   await dbItems.classRooms.iterate((cr: ClassRoom) => { existentes.add(cr.name); });
   const faltando = turmasExtras.filter(n => !existentes.has(n));
