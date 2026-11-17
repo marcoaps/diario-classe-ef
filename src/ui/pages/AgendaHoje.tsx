@@ -11,6 +11,10 @@ const HORARIO: Record<number, { periodo: string; turmas: string[] }[]> = {
     { periodo: 'Manhã',  turmas: ['6F','7D','7E','7F'] },
     { periodo: 'Tarde',  turmas: ['7B','7C'] },
   ],
+  2: [ // Terça-feira (turmas da Jessiane)
+    { periodo: 'Manhã',  turmas: ['6D','6E'] },
+    { periodo: 'Tarde',  turmas: ['6A','6B'] },
+  ],
   3: [ // Quarta-feira
     { periodo: 'Manhã',  turmas: ['8D','8E','8F'] },
     { periodo: 'Tarde',  turmas: ['8A','8B','8C'] },
@@ -18,6 +22,9 @@ const HORARIO: Record<number, { periodo: string; turmas: string[] }[]> = {
   4: [ // Quinta-feira
     { periodo: 'Manhã',  turmas: ['9D','9E','9F'] },
     { periodo: 'Tarde',  turmas: ['9A','9B','9C'] },
+  ],
+  5: [ // Sexta-feira (turmas da Jessiane)
+    { periodo: 'Tarde',  turmas: ['6C','7A'] },
   ],
 };
 

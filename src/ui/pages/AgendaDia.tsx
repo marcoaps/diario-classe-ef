@@ -3,8 +3,10 @@ import { CalendarDays, CheckSquare, ChevronRight, Sun, Sunset } from 'lucide-rea
 
 const AGENDA: Record<number, {label: string; turmas: string[]}[]> = {
   1: [{label:'Manha', turmas:['6F','7D','7E','7F']},{label:'Tarde', turmas:['7B','7C']}],
+  2: [{label:'Manha', turmas:['6D','6E']},{label:'Tarde', turmas:['6A','6B']}],
   3: [{label:'Manha', turmas:['8D','8E','8F']},{label:'Tarde', turmas:['8A','8B','8C']}],
   4: [{label:'Manha', turmas:['9D','9E','9F']},{label:'Tarde', turmas:['9A','9B','9C']}],
+  5: [{label:'Tarde', turmas:['6C','7A']}],
 };
 
 const NOME_DIA = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
