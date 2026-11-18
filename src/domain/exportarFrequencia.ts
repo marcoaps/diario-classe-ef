@@ -138,7 +138,8 @@ export type ModoPDF = 'consolidado' | 'caderneta' | 'oficial';
 
 const PROFESSOR = 'Prof. Marco Antonio';
 const ASSINATURA = 'Prof. Marco Antonio - CREF 000940-G/AC';
-const VERDE: [number, number, number] = [5, 59, 32];
+const VERDE: [number, number, number] = [226, 232, 240]; // cinza claro (cabeçalhos)
+const TEXTO_CABECALHO: [number, number, number] = [30, 41, 59];
 const GRADE: [number, number, number] = [203, 213, 225];
 const COLS_DATA_POR_FAIXA = 8; // 4 dias x 2 tempos por faixa de tabela
 
@@ -182,6 +183,7 @@ export function exportarPDF(ctx: PDFContext) {
   const comDatas = modo !== 'consolidado';
   const comPontos = modo !== 'caderneta';
   const comSituacao = modo !== 'caderneta';
+  const comFreq = modo !== 'caderneta';
 
   // Dias de aula = datas com registro de chamada no período. Cada dia = 2 tempos.
   const pe = ctx.periodoEfetivo || ctx.periodo;
@@ -197,7 +199,7 @@ export function exportarPDF(ctx: PDFContext) {
   // ── Cabeçalho institucional ──
   doc.setFillColor(...VERDE);
   doc.rect(0, 0, pageWidth, 20, 'F');
-  doc.setTextColor(255, 255, 255);
+  doc.setTextColor(...TEXTO_CABECALHO);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
   doc.text(ctx.escola || 'E.E. Instituto Odilon Pratagi', margin, 8.5);
@@ -240,7 +242,7 @@ export function exportarPDF(ctx: PDFContext) {
   const porFaixa = Math.ceil(datasCols.length / nFaixas / 2) * 2 || 0; // mantém os 2 tempos juntos
 
   const W_NUM = 8, W_PRES = 10, W_FALTAS = 11, W_PONTOS = 14, W_FREQ = 14, W_SIT = 20;
-  const wResumo = W_PRES + W_FALTAS + W_FREQ + (comPontos ? W_PONTOS : 0) + (comSituacao ? W_SIT : 0);
+  const wResumo = W_PRES + W_FALTAS + (comFreq ? W_FREQ : 0) + (comPontos ? W_PONTOS : 0) + (comSituacao ? W_SIT : 0);
   const nomeMin = 40;
 
   for (let f = 0; f < nFaixas; f++) {
@@ -253,7 +255,7 @@ export function exportarPDF(ctx: PDFContext) {
     const head: string[] = ['Nº', 'Nome', ...fatia.map((c) => `${c.iso.slice(8, 10)}/${c.iso.slice(5, 7)}`)];
     if (ultima) head.push('Pres.', 'Faltas');
     if (ultima && comPontos) head.push('Pontos');
-    if (ultima) head.push('Freq.%');
+    if (ultima && comFreq) head.push('Freq.%');
     if (ultima && comSituacao) head.push('Situação');
 
     const body = ctx.alunos.map((a) => {
@@ -267,7 +269,7 @@ export function exportarPDF(ctx: PDFContext) {
       if (ultima) {
         linha.push(transf ? '-' : a.presentes, transf ? '-' : a.ausentes);
         if (comPontos) linha.push(transf ? '-' : fmtNum(a.pontos));
-        linha.push(transf ? '-' : `${fmtNum(a.percentual)}%`);
+        if (comFreq) linha.push(transf ? '-' : `${fmtNum(a.percentual)}%`);
         if (comSituacao) linha.push(''); // desenhado como pílula em didDrawCell
       }
       return linha;
@@ -288,7 +290,7 @@ export function exportarPDF(ctx: PDFContext) {
       colunas[c0++] = { halign: 'center', cellWidth: W_PRES };
       colunas[c0++] = { halign: 'center', cellWidth: W_FALTAS };
       if (comPontos) colunas[c0++] = { halign: 'center', cellWidth: W_PONTOS };
-      colunas[c0++] = { halign: 'center', cellWidth: W_FREQ };
+      if (comFreq) colunas[c0++] = { halign: 'center', cellWidth: W_FREQ };
       if (comSituacao) colunas[c0++] = { halign: 'center', cellWidth: W_SIT };
     }
     const idxSit = comSituacao && ultima ? head.length - 1 : -1;
@@ -300,7 +302,7 @@ export function exportarPDF(ctx: PDFContext) {
       body,
       theme: 'plain',
       styles: { fontSize: 8, cellPadding: { top: 1.5, bottom: 1.5, left: 1.5, right: 1.5 }, lineColor: GRADE, lineWidth: 0.15, textColor: [30, 41, 59], valign: 'middle' },
-      headStyles: { fillColor: VERDE, textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center', lineWidth: 0 },
+      headStyles: { fillColor: VERDE, textColor: TEXTO_CABECALHO, fontStyle: 'bold', halign: 'center', lineWidth: 0 },
       alternateRowStyles: { fillColor: [248, 250, 252] },
       columnStyles: colunas,
       didParseCell: (d) => {
