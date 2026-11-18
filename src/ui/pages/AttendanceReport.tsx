@@ -2,13 +2,11 @@
 import { useStore } from '../../store';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../../data/supabase';
-import { UserRound, Loader2, BarChart3, AlertTriangle, FileSpreadsheet, FileText, ShieldCheck, Users, Percent, Award, Trash2, Calendar, X, BookOpen, ClipboardList, Download, ChevronDown } from 'lucide-react';
+import { UserRound, Loader2, BarChart3, AlertTriangle, FileSpreadsheet, FileText, ShieldCheck, Users, Percent, Award, Trash2, Calendar, X, BookOpen, ClipboardList, Download, ChevronDown, MoreHorizontal } from 'lucide-react';
 import { cn } from '../AppLayout';
 import { useRelatorioFrequencia, type Bimestre, PONTOS_MAXIMOS, getPeriodoBimestre, bimestreAtual } from '../../domain/useRelatorioFrequencia';
-import { exportarExcel, exportarPDF } from '../../domain/exportarFrequencia';
+import { exportarExcel, exportarPDF, type ModoPDF } from '../../domain/exportarFrequencia';
 import { situacoesEfetivasDaTurma } from '../../domain/situacaoAluno';
-import { exportarDiario } from '../../domain/exportarDiario';
-import { exportarDiarioOficial } from '../../domain/exportarDiarioOficial';
 
 const BIMESTRES: Bimestre[] = [1, 2, 3, 4];
 
@@ -34,8 +32,9 @@ export function AttendanceReport() {
   const [deleting, setDeleting] = useState(false);
   const [menuExportar, setMenuExportar] = useState(false);
   const [dataFiltro, setDataFiltro] = useState<string>('');
-  const [exportandoDiario, setExportandoDiario] = useState(false);
-  const [exportandoDiarioOficial, setExportandoDiarioOficial] = useState(false);
+  const [menuMais, setMenuMais] = useState(false);
+  const [confirmarLimpeza, setConfirmarLimpeza] = useState(false);
+  const [gerandoPDF, setGerandoPDF] = useState<ModoPDF | null>(null);
   const [criandoAvaliacao, setCriandoAvaliacao] = useState(false);
   const [calculandoNota, setCalculandoNota] = useState(false);
   const [notasCalculadas, setNotasCalculadas] = useState(false);
@@ -124,11 +123,11 @@ export function AttendanceReport() {
   );
 
   const handleExcel = () => exportarExcel({ turma: turmaId, bimestre, periodo, periodoEfetivo, dataFiltro: dataFiltro || null, alunos, resumo, nomesAEE, nomesTransferidos, notasTrabalhosPorAluno });
-  const handlePDF   = () => exportarPDF({ turma: turmaId, bimestre, periodo, periodoEfetivo, dataFiltro: dataFiltro || null, alunos, resumo });
-
-  const handleDiario = async () => {
+  // PDFs (consolidado, caderneta e diário oficial): todos usam as datas com
+  // chamada do bimestre para montar as colunas de tempos (2 por dia).
+  const gerarPDF = async (modo: ModoPDF) => {
     if (alunos.length === 0) return;
-    setExportandoDiario(true);
+    setGerandoPDF(modo);
     try {
       const turmaNorm = normalizarTurma(turmaId);
       const ano = new Date().getFullYear();
@@ -138,31 +137,15 @@ export function AttendanceReport() {
       if (freqErr) throw freqErr;
       const frequenciaPorDia: Record<string, Record<string, boolean>> = {};
       (freqData || []).forEach((r: any) => { if (!frequenciaPorDia[r.data]) frequenciaPorDia[r.data] = {}; frequenciaPorDia[r.data][r.aluno_id] = r.presente; });
-      await exportarDiario({ turma: turmaNorm, bimestre, alunos, frequenciaPorDia });
-    } catch (e: any) { alert('Erro ao gerar diário: ' + e.message); }
-    finally { setExportandoDiario(false); }
+      exportarPDF({ modo, turma: turmaNorm, bimestre, periodo, periodoEfetivo, dataFiltro: dataFiltro || null, alunos, resumo, frequenciaPorDia });
+    } catch (e: any) { alert('Erro ao gerar PDF: ' + e.message); }
+    finally { setGerandoPDF(null); }
   };
 
-  const handleDiarioOficial = async () => {
-    if (alunos.length === 0) return;
-    setExportandoDiarioOficial(true);
-    try {
-      const turmaNorm = normalizarTurma(turmaId);
-      const ano = new Date().getFullYear();
-      const p = getPeriodoBimestre(bimestre, ano);
-      const alunoIds = alunos.map(a => a.id);
-      const { data: freqData, error: freqErr } = await supabase.from('frequencia').select('aluno_id, data, presente').in('aluno_id', alunoIds).gte('data', p.inicio).lte('data', p.fim);
-      if (freqErr) throw freqErr;
-      const frequenciaPorDia: Record<string, Record<string, boolean>> = {};
-      (freqData || []).forEach((r: any) => { if (!frequenciaPorDia[r.data]) frequenciaPorDia[r.data] = {}; frequenciaPorDia[r.data][r.aluno_id] = r.presente; });
-      await exportarDiarioOficial({ turma: turmaNorm, bimestre, alunos, frequenciaPorDia });
-    } catch (e: any) { alert('Erro ao gerar diário oficial: ' + e.message); }
-    finally { setExportandoDiarioOficial(false); }
-  };
+  const rotuloPeriodoLimpeza = dataFiltro ? `do dia ${formatarBR(dataFiltro)}` : `do ${bimestre}º Bimestre`;
 
   const handleExcluir = async () => {
-    const label = dataFiltro ? `do dia ${formatarBR(dataFiltro)}` : `do ${bimestre}º Bimestre`;
-    if (!window.confirm(`Excluir TODOS os registros de frequência da turma ${turmaId} ${label}?\n\nEsta ação não pode ser desfeita.`)) return;
+    const label = rotuloPeriodoLimpeza;
     setDeleting(true);
     try {
       const turmaNorm = normalizarTurma(turmaId);
@@ -177,7 +160,7 @@ export function AttendanceReport() {
       alert(`Frequência ${label} da turma ${turmaId} excluída!`);
       if (recarregar) recarregar();
     } catch (err: any) { alert('Erro ao excluir. Tente novamente.'); }
-    finally { setDeleting(false); }
+    finally { setDeleting(false); setConfirmarLimpeza(false); }
   };
 
   async function criarAvaliacaoRecuperacao() {
@@ -248,44 +231,117 @@ export function AttendanceReport() {
 
   return (
     <div className="flex flex-col gap-4 font-sans animate-in fade-in pb-8 bg-background p-4 md:p-6 md:relative md:left-1/2 md:-translate-x-1/2 md:w-[min(1100px,96vw)]">
-      <div className="flex items-center justify-between gap-3 relative">
-        <h2 className="text-xl font-extrabold tracking-tight text-on-surface">Frequência</h2>
-        <Link to="/relatorio-aluno" className="ml-auto h-11 px-3 rounded-[14px] border border-[#0B6B3A] text-[#0B6B3A] text-[13px] font-extrabold flex items-center gap-1.5 active:scale-95 transition-all">
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="text-xl font-extrabold tracking-tight text-on-surface mr-auto">Frequência</h2>
+        <Link to="/relatorio-aluno" className="h-11 px-3 rounded-[14px] border border-[#0B6B3A] text-[#0B6B3A] text-[13px] font-extrabold flex items-center gap-1.5 active:scale-95 transition-all">
           <UserRound className="w-4 h-4" /> Por aluno
         </Link>
         <button
           type="button"
-          onClick={() => setMenuExportar(m => !m)}
-          className="h-11 px-4 rounded-[14px] bg-[#0B6B3A] text-white text-[13px] font-extrabold flex items-center gap-1.5 active:scale-95 transition-all"
+          onClick={calcularESalvarNotasEf}
+          disabled={loading || calculandoNota || alunos.length === 0}
+          className="h-11 px-3 rounded-[14px] border border-[#0B6B3A] bg-[#E3F2EA] text-[#0B6B3A] text-[13px] font-extrabold flex items-center gap-1.5 active:scale-95 transition-all disabled:opacity-50"
         >
-          <Download className="w-4 h-4" /> Exportar <ChevronDown className="w-4 h-4" />
+          {calculandoNota ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
+          {calculandoNota ? 'Calculando...' : 'Calcular e salvar Nota EF'}
         </button>
-        {menuExportar && (
-          <>
-            <div className="fixed inset-0 z-30" onClick={() => setMenuExportar(false)} />
-            <div className="absolute right-0 top-12 z-40 w-64 bg-white rounded-2xl border border-outline-variant shadow-xl overflow-hidden flex flex-col">
-              <button type="button" onClick={() => { setMenuExportar(false); handleExcel(); }} disabled={loading || alunos.length === 0} className="flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left active:bg-surface-container disabled:opacity-50"><FileSpreadsheet className="w-4 h-4 text-[#0B6B3A]" /> Nota {bimestre}BIM-{new Date().getFullYear()} (Excel)</button>
-              <button type="button" onClick={() => { setMenuExportar(false); handlePDF(); }} disabled={loading || alunos.length === 0} className="flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left border-t border-surface-container active:bg-surface-container disabled:opacity-50"><FileText className="w-4 h-4 text-[#0B6B3A]" /> PDF</button>
-              <button type="button" onClick={() => { setMenuExportar(false); handleDiario(); }} disabled={loading || exportandoDiario || alunos.length === 0} className="flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left border-t border-surface-container active:bg-surface-container disabled:opacity-50">
-                {exportandoDiario ? <Loader2 className="w-4 h-4 animate-spin text-[#0B6B3A]" /> : <BookOpen className="w-4 h-4 text-[#0B6B3A]" />}
-                {exportandoDiario ? 'Gerando...' : 'Diário'}
-              </button>
-              <button type="button" onClick={() => { setMenuExportar(false); handleDiarioOficial(); }} disabled={loading || exportandoDiarioOficial || alunos.length === 0} className="flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left border-t border-surface-container active:bg-surface-container disabled:opacity-50">
-                {exportandoDiarioOficial ? <Loader2 className="w-4 h-4 animate-spin text-[#0B6B3A]" /> : <FileSpreadsheet className="w-4 h-4 text-[#0B6B3A]" />}
-                {exportandoDiarioOficial ? 'Gerando...' : 'Diário oficial'}
-              </button>
-              <button type="button" onClick={() => { setMenuExportar(false); calcularESalvarNotasEf(); }} disabled={loading || calculandoNota || alunos.length === 0} className="flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left border-t border-surface-container active:bg-surface-container disabled:opacity-50">
-                {calculandoNota ? <Loader2 className="w-4 h-4 animate-spin text-[#0B6B3A]" /> : <BarChart3 className="w-4 h-4 text-[#0B6B3A]" />}
-                {calculandoNota ? 'Calculando...' : 'Calcular e salvar Nota EF'}
-              </button>
-              <button type="button" onClick={() => { setMenuExportar(false); handleExcluir(); }} disabled={loading || deleting || alunos.length === 0} className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-left text-[#B42318] border-t border-surface-container active:bg-[#FDECEA] disabled:opacity-50">
+
+        <div className="relative">
+          <button
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={menuExportar}
+            onClick={() => { setMenuMais(false); setMenuExportar(m => !m); }}
+            className="h-11 px-4 rounded-[14px] bg-[#0B6B3A] text-white text-[13px] font-extrabold flex items-center gap-1.5 active:scale-95 transition-all"
+          >
+            <Download className="w-4 h-4" /> Exportar <ChevronDown className="w-4 h-4" />
+          </button>
+          {menuExportar && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setMenuExportar(false)} />
+              <div role="menu" className="absolute right-0 top-full mt-2 z-40 w-[min(22rem,calc(100vw-2rem))] bg-white rounded-2xl border border-[#DCEBE2] shadow-[0_12px_28px_rgba(5,59,32,0.16)] overflow-hidden flex flex-col">
+                {([
+                  { id: 'excel', icon: FileSpreadsheet, titulo: 'Planilha de Notas (Excel)', sub: `Nota ${bimestre}BIM-${new Date().getFullYear()} (.xlsx)`, ocupado: false, acao: () => handleExcel() },
+                  { id: 'consolidado', icon: FileText, titulo: 'Relatório Consolidado (PDF)', sub: 'Resumo de frequência, pontos e situação', ocupado: gerandoPDF === 'consolidado', acao: () => gerarPDF('consolidado') },
+                  { id: 'caderneta', icon: BookOpen, titulo: 'Caderneta de Chamada (PDF)', sub: 'Grade completa com datas das aulas geminadas (2 tempos/dia)', ocupado: gerandoPDF === 'caderneta', acao: () => gerarPDF('caderneta') },
+                  { id: 'oficial', icon: ClipboardList, titulo: 'Diário Oficial SEE/AC (PDF)', sub: 'Formato oficial enxuto para secretaria/arquivo', ocupado: gerandoPDF === 'oficial', acao: () => gerarPDF('oficial') },
+                ] as const).map((it, i) => (
+                  <button
+                    key={it.id}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => { setMenuExportar(false); it.acao(); }}
+                    disabled={loading || alunos.length === 0 || gerandoPDF !== null}
+                    className={cn('flex items-start gap-3 px-4 py-3 text-left active:bg-surface-container hover:bg-[#F4FBF7] disabled:opacity-50', i > 0 && 'border-t border-[#EDF3EF]')}
+                  >
+                    <span className="mt-0.5 w-8 h-8 shrink-0 rounded-lg bg-[#E3F2EA] flex items-center justify-center">
+                      {it.ocupado ? <Loader2 className="w-4 h-4 animate-spin text-[#0B6B3A]" /> : <it.icon className="w-4 h-4 text-[#0B6B3A]" />}
+                    </span>
+                    <span className="flex flex-col min-w-0">
+                      <span className="text-[14px] font-bold text-on-surface leading-tight">{it.ocupado ? 'Gerando...' : it.titulo}</span>
+                      <span className="text-[12px] text-on-surface-variant leading-snug mt-0.5">{it.sub}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="relative">
+          <button
+            type="button"
+            aria-label="Mais opções"
+            aria-haspopup="menu"
+            aria-expanded={menuMais}
+            onClick={() => { setMenuExportar(false); setMenuMais(m => !m); }}
+            className="h-11 w-11 rounded-[14px] border border-[#D3DCD7] bg-white text-on-surface-variant flex items-center justify-center active:scale-95 transition-all"
+          >
+            <MoreHorizontal className="w-5 h-5" />
+          </button>
+          {menuMais && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setMenuMais(false)} />
+              <div role="menu" className="absolute right-0 top-full mt-2 z-40 w-60 bg-white rounded-2xl border border-[#DCEBE2] shadow-[0_12px_28px_rgba(5,59,32,0.16)] overflow-hidden flex flex-col">
+                <p className="px-4 pt-3 pb-2 text-[12px] font-bold text-on-surface-variant">Zona de perigo</p>
+                <div className="border-t border-[#EDF3EF]" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => { setMenuMais(false); setConfirmarLimpeza(true); }}
+                  disabled={loading || deleting || alunos.length === 0}
+                  className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-left text-[#B42318] active:bg-[#FDECEA] hover:bg-[#FDECEA] disabled:opacity-50"
+                >
+                  <Trash2 className="w-4 h-4" /> Limpar frequência
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {confirmarLimpeza && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/45" onClick={() => !deleting && setConfirmarLimpeza(false)} onKeyDown={(e) => { if (e.key === 'Escape' && !deleting) setConfirmarLimpeza(false); }}>
+          <div role="alertdialog" aria-modal="true" aria-labelledby="limpar-titulo" aria-describedby="limpar-desc" className="w-full max-w-sm bg-white rounded-[20px] shadow-[0_20px_48px_rgba(0,0,0,0.25)] p-5 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start gap-3">
+              <span className="w-10 h-10 shrink-0 rounded-xl bg-[#FDECEA] text-[#B42318] flex items-center justify-center"><Trash2 className="w-5 h-5" /></span>
+              <div className="flex flex-col gap-1">
+                <h3 id="limpar-titulo" className="text-[16px] font-extrabold text-on-surface leading-tight">Limpar frequência?</h3>
+                <p id="limpar-desc" className="text-[13px] text-on-surface-variant leading-snug">
+                  Serão excluídos <strong className="text-on-surface">todos os registros de frequência</strong> da turma <strong className="text-on-surface">{turmaId}</strong> {rotuloPeriodoLimpeza}. Esta ação não pode ser desfeita.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" autoFocus onClick={() => setConfirmarLimpeza(false)} disabled={deleting} className="flex-1 h-11 rounded-[14px] border border-[#D3DCD7] text-[13px] font-extrabold text-on-surface active:scale-95 transition-all disabled:opacity-50">Cancelar</button>
+              <button type="button" onClick={handleExcluir} disabled={deleting} className="flex-1 h-11 rounded-[14px] bg-[#B42318] text-white text-[13px] font-extrabold flex items-center justify-center gap-1.5 active:scale-95 transition-all disabled:opacity-60">
                 {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                {deleting ? 'Excluindo...' : 'Limpar frequência'}
+                {deleting ? 'Excluindo...' : 'Excluir registros'}
               </button>
             </div>
-          </>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
       {notasCalculadas && <p className="text-xs font-bold text-[#0B6B3A] bg-[#E3F2EA] rounded-xl px-3 py-2">Notas salvas!</p>}
 
       <div className="bg-white rounded-[20px] border border-[#DCEBE2] shadow-[0_1px_2px_rgba(5,59,32,0.05)] p-4 flex flex-col gap-3">
