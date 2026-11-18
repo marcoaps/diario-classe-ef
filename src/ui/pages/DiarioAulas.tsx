@@ -45,15 +45,6 @@ const FERIADOS: Record<string, string> = {
   '2026-12-25': 'Natal',
 };
 
-const PLANEJAMENTOS = new Set([
-  '2026-03-02','2026-03-03','2026-03-04','2026-03-05','2026-03-06',
-  '2026-04-06','2026-04-07','2026-04-08','2026-04-09','2026-04-10',
-  '2026-08-17','2026-08-21',
-  '2026-10-19','2026-10-20','2026-10-23',
-  '2026-11-16',
-  '2026-12-14','2026-12-15','2026-12-16',
-]);
-
 // Recesso e férias — só exclui períodos sem aula alguma
 function emRecessoOuFerias(d: Date): boolean {
   const mes = d.getMonth() + 1;
@@ -86,17 +77,14 @@ function gerarDatas(diaSemana: number, comChamada?: Set<string>): DiaTipo[] {
       const chave = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
       const teveChamada = comChamada?.has(chave) ?? false;
       const feriado = teveChamada ? null : (FERIADOS[chave] || null);
-      const ehPlanj = !teveChamada && PLANEJAMENTOS.has(chave);
-      // Excluir dias de planejamento — não são aulas com alunos
-      if (!ehPlanj) {
-        resultado.push({
-          dia: d.getDate(),
-          mes: d.getMonth() + 1,
-          ano: d.getFullYear(),
-          feriado: feriado || null,
-          label: feriado || '',
-        });
-      }
+      // Dias de planejamento escolar são dia normal de aula para o professor.
+      resultado.push({
+        dia: d.getDate(),
+        mes: d.getMonth() + 1,
+        ano: d.getFullYear(),
+        feriado: feriado || null,
+        label: feriado || '',
+      });
     }
     d.setDate(d.getDate() + 1);
   }
