@@ -223,18 +223,20 @@ export function exportarPDF(ctx: PDFContext) {
   doc.text(periodoTxt, margin + 100, y);
   y += 6;
 
-  // Barra de resumo (sem "pontos médios": pontos ficam só na coluna individual)
-  doc.setFillColor(241, 245, 249);
-  doc.roundedRect(margin, y - 4, util, 7, 1.2, 1.2, 'F');
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(30, 41, 59);
-  const r = ctx.resumo;
-  doc.text(
-    `Alunos: ${r.total_alunos}  |  Aulas dadas: ${aulasDadas} (${qtdDias} ${qtdDias === 1 ? 'dia' : 'dias'})  |  Média Freq.: ${fmtNum(r.media_percentual)}%  |  OK: ${r.total_ok}  |  Em risco: ${r.total_em_risco}  |  Críticos: ${r.total_criticos}`,
-    margin + 3, y + 0.6,
-  );
-  y += 8;
+  // Barra de resumo (não aparece na caderneta)
+  if (modo !== 'caderneta') {
+    doc.setFillColor(241, 245, 249);
+    doc.roundedRect(margin, y - 4, util, 7, 1.2, 1.2, 'F');
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(30, 41, 59);
+    const r = ctx.resumo;
+    doc.text(
+      `Alunos: ${r.total_alunos}  |  Aulas dadas: ${aulasDadas} (${qtdDias} ${qtdDias === 1 ? 'dia' : 'dias'})  |  Média Freq.: ${fmtNum(r.media_percentual)}%  |  OK: ${r.total_ok}  |  Em risco: ${r.total_em_risco}  |  Críticos: ${r.total_criticos}`,
+      margin + 3, y + 0.6,
+    );
+    y += 8;
+  }
 
   // ── Tabela(s) ──
   const datasCols: { iso: string }[] = comDatas && dias ? dias.flatMap((iso) => [{ iso }, { iso }]) : [];
