@@ -198,7 +198,7 @@ export function AttendanceReport() {
 
   async function calcularESalvarNotasEf() {
     if (alunos.length === 0) return;
-    if (!window.confirm(`Calcular e salvar nota_ef para ${alunos.length} alunos da turma ${turmaId} (${bimestre}º Bimestre)?\n\nIsso irá atualizar o campo nota_ef de cada aluno com pontos de frequência + nota de trabalho, limitado a 10,0.`)) return;
+    if (!window.confirm(`Calcular e salvar nota_ef para ${alunos.length} alunos da turma ${turmaId} (${bimestre}º Bimestre)?\n\nIsso irá atualizar o campo nota_ef de cada aluno com pontos de frequência + nota de trabalho, limitado a 10,0.${bimestre === 4 ? '\n\nNo 4º Bimestre, quem tem frequência de 80% a 100% recebe 10,0.' : ''}`)) return;
     setCalculandoNota(true);
     setNotasCalculadas(false);
     try {
@@ -210,7 +210,10 @@ export function AttendanceReport() {
           bimestre,
           nome: a.nome,
           numero: a.numero_chamada ?? 0,
-          nota_ef: notaTotal(a.pontos, notasTrabalhosPorAluno[a.id] ?? 0, true),
+          // 4º Bimestre: frequência de 80% a 100% => nota 10,0 direto.
+          nota_ef: bimestre === 4 && a.percentual >= 80
+            ? 10.0
+            : notaTotal(a.pontos, notasTrabalhosPorAluno[a.id] ?? 0, true),
         }));
       if (updates.length === 0) { alert('Nenhum aluno com registros de frequência.'); return; }
       const { error } = await supabase
