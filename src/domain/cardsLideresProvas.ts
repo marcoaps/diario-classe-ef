@@ -16,7 +16,8 @@ function desenharCard(turma: string, bimestre: Bimestre, nomes: string[], hoje: 
   const topo = 250;
   const subtitulo = 120;
   const rodape = 150;
-  const H = topo + subtitulo + nomes.length * ALTURA_LINHA + rodape;
+  const aviso = 270;
+  const H = topo + subtitulo + nomes.length * ALTURA_LINHA + aviso + rodape;
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
@@ -60,6 +61,22 @@ function desenharCard(turma: string, bimestre: Bimestre, nomes: string[], hoje: 
     }
     y += ALTURA_LINHA;
   });
+
+  // Aviso: nome na lista por engano
+  const yAviso = H - rodape - aviso + 20;
+  ctx.fillStyle = '#FEF3C7';
+  ctx.fillRect(MARGEM - 16, yAviso, W - (MARGEM - 16) * 2, aviso - 40);
+  ctx.fillStyle = '#92400E';
+  ctx.font = `800 32px ${FONTE}`;
+  ctx.fillText('Seu nome está na lista por engano?', MARGEM, yAviso + 56);
+  ctx.fillStyle = '#78350F';
+  ctx.font = `500 29px ${FONTE}`;
+  const linhasAviso = [
+    'Se você acredita que não deveria estar aqui (por exemplo,',
+    'esteve presente nas aulas), procure o professor de Educação',
+    'Física antes da prova para conferirmos sua frequência.',
+  ];
+  linhasAviso.forEach((l, i) => ctx.fillText(l, MARGEM, yAviso + 106 + i * 40));
 
   // Rodapé
   ctx.fillStyle = '#F1F5F9';
