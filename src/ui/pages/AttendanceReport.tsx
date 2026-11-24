@@ -269,7 +269,7 @@ export function AttendanceReport() {
     <div className="flex flex-col gap-4 font-sans animate-in fade-in pb-8 bg-background p-4 md:p-6 md:relative md:left-1/2 md:-translate-x-1/2 md:w-[min(1100px,96vw)]">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-xl font-extrabold tracking-tight text-on-surface mr-auto">Frequência</h2>
-        <Link to="/relatorio-aluno" className="h-11 px-3 rounded-[14px] border border-[#0B6B3A] text-[#0B6B3A] text-[13px] font-extrabold flex items-center gap-1.5 active:scale-95 transition-all">
+        <Link to={`/relatorio-aluno?turma=${encodeURIComponent(turmaId)}&bimestre=${bimestre}`}className="h-11 px-3 rounded-[14px] border border-[#0B6B3A] text-[#0B6B3A] text-[13px] font-extrabold flex items-center gap-1.5 active:scale-95 transition-all">
           <UserRound className="w-4 h-4" /> Por aluno
         </Link>
         <button

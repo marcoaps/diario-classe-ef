@@ -2,7 +2,7 @@
 // trabalhos e a conta da nota de cada bimestre. Serve para mostrar ao aluno ou
 // responsável, na hora, de onde saiu a nota (contestação) — e para imprimir.
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Loader2, Printer } from 'lucide-react';
 import { useStore } from '../../store';
 import { supabase } from '../../data/supabase';
@@ -44,10 +44,15 @@ export function RelatorioAluno() {
       .sort((a: any, b: any) => a.name.localeCompare(b.name, 'pt-BR', { numeric: true })),
     [classRooms],
   );
+  const [searchParams] = useSearchParams();
+  const turmaPedida = searchParams.get('turma');
   const [turmaId, setTurmaId] = useState('');
   const [alunos, setAlunos] = useState<AlunoLinha[]>([]);
   const [alunoId, setAlunoId] = useState('');
-  const [bimestre, setBimestre] = useState<Bimestre>(() => bimestreAtual());
+  const [bimestre, setBimestre] = useState<Bimestre>(() => {
+    const b = Number(searchParams.get('bimestre'));
+    return (b >= 1 && b <= 4 ? b : bimestreAtual()) as Bimestre;
+  });
   const [carregandoAlunos, setCarregandoAlunos] = useState(false);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState('');
@@ -61,8 +66,12 @@ export function RelatorioAluno() {
   const series = Array.from(new Set(turmas.map((t: any) => t.name.charAt(0))));
 
   useEffect(() => {
-    if (!turmaId && turmas.length > 0) setTurmaId((turmas[0] as any).name);
-  }, [turmas, turmaId]);
+    if (!turmaId && turmas.length > 0) {
+      // Vem da tela de Frequência com ?turma=7ºB: abre direto na turma que estava selecionada.
+      const pedida = (turmas as any[]).find((t) => t.name === turmaPedida);
+      setTurmaId(pedida ? pedida.name : (turmas[0] as any).name);
+    }
+  }, [turmas, turmaId, turmaPedida]);
 
   useEffect(() => {
     if (!turmaId) return;
