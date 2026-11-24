@@ -43,6 +43,7 @@ interface CorrecaoDissertativa {
 
 const LETRAS = ['A', 'B', 'C', 'D', 'E'];
 const MAX_TENTATIVAS_PADRAO = 3;
+const NOTA_APROVACAO = 7;
 
 // Bimestre da prova, lido do título ("...4ºBimestre..."), igual ao servidor
 // (api/sincronizar-nota-online.ts).
@@ -687,9 +688,9 @@ export function ResponderProva() {
       <div className="w-full max-w-lg flex flex-col gap-4 pt-4 lg:pt-0">
         <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-7 text-center">
           <div className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-5 ${
-            nota !== null && nota >= 6 ? 'bg-green-100 border-4 border-green-300' : 'bg-red-100 border-4 border-red-300'
+            nota !== null && nota >= NOTA_APROVACAO ? 'bg-green-100 border-4 border-green-300' : 'bg-red-100 border-4 border-red-300'
           }`}>
-            <CheckCircle className={`w-14 h-14 ${nota !== null && nota >= 6 ? 'text-green-500' : 'text-red-500'}`} />
+            <CheckCircle className={`w-14 h-14 ${nota !== null && nota >= NOTA_APROVACAO ? 'text-green-500' : 'text-red-500'}`} />
           </div>
 
           <p className="text-gray-400 text-base mb-1">Avaliação enviada com sucesso!</p>
@@ -700,19 +701,19 @@ export function ResponderProva() {
           </p>
 
           {nota !== null && (
-            <div className={`rounded-2xl p-7 mb-5 border-2 ${nota >= 6 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+            <div className={`rounded-2xl p-7 mb-5 border-2 ${nota >= NOTA_APROVACAO ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
               <p className="text-gray-500 text-base mb-2">Nota final</p>
-              <p className={`text-8xl font-black mb-3 ${nota >= 6 ? 'text-green-600' : 'text-red-600'}`}>
+              <p className={`text-8xl font-black mb-3 ${nota >= NOTA_APROVACAO ? 'text-green-600' : 'text-red-600'}`}>
                 {nota.toFixed(1)}
               </p>
               <div className="h-3 bg-gray-200 rounded-full overflow-hidden mb-3">
-                <div className={`h-full rounded-full ${nota >= 6 ? 'bg-green-500' : 'bg-red-500'}`}
+                <div className={`h-full rounded-full ${nota >= NOTA_APROVACAO ? 'bg-green-500' : 'bg-red-500'}`}
                   style={{ width: `${nota * 10}%` }} />
               </div>
-              <p className={`text-lg font-black ${nota >= 6 ? 'text-green-600' : 'text-red-600'}`}>
+              <p className={`text-lg font-black ${nota >= NOTA_APROVACAO ? 'text-green-600' : 'text-red-600'}`}>
                 {nota >= NOTA_MAXIMA_PROVA ? '🏆 Nota máxima! Parabéns!'
-                  : nota >= 6 ? '✓ Aprovado'
-                  : '⚠ Abaixo da média'}
+                  : nota >= NOTA_APROVACAO ? '✓ Aprovado'
+                  : (tentativaAtual !== null && tentativaAtual < MAX_TENTATIVAS ? '⚠ Abaixo de 7,0 (nota para aprovação) — você pode refazer' : '⚠ Abaixo de 7,0 (nota para aprovação)')}
               </p>
             </div>
           )}

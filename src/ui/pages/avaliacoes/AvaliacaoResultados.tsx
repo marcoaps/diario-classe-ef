@@ -135,7 +135,7 @@ export function AvaliacaoResultados() {
       'Nome': r.aluno.nome,
       'Acertos': r.resposta?.acertos ?? '',
       'Nota': r.resposta ? notaDe(r.resposta) : '',
-      'Situação': r.resposta ? (notaDe(r.resposta) >= valorTotal / 2 ? 'Aprovado' : 'Recuperação') : 'Pendente',
+      'Situação': r.resposta ? (notaDe(r.resposta) >= valorTotal * 0.7 ? 'Aprovado' : 'Recuperação') : 'Pendente',
     }));
     const ws = XLSX.utils.json_to_sheet(dados);
     const wb = XLSX.utils.book_new();
@@ -149,7 +149,7 @@ export function AvaliacaoResultados() {
   const mediaNotas = corrigidos.length > 0
     ? corrigidos.reduce((s, r) => s + notaDe(r.resposta), 0) / corrigidos.length
     : 0;
-  const aprovados = corrigidos.filter(r => notaDe(r.resposta) >= valorTotalAvaliacao / 2).length;
+  const aprovados = corrigidos.filter(r => notaDe(r.resposta) >= valorTotalAvaliacao * 0.7).length;
 
   // Análise por questão (só leitura): ranking de erros + folhas de correção.
   const linhasPorAluno = corrigidos.map(r => ({
@@ -300,7 +300,7 @@ export function AvaliacaoResultados() {
       <div className="space-y-2">
         {listaFiltrada.map(({ aluno, resposta }) => {
           const nota = resposta ? notaDe(resposta) : null;
-          const aprovado = nota !== null && nota >= valorTotalAvaliacao / 2;
+          const aprovado = nota !== null && nota >= valorTotalAvaliacao * 0.7;
           return (
             <div
               key={aluno.id}
