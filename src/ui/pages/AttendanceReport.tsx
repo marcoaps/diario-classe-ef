@@ -92,8 +92,10 @@ export function AttendanceReport() {
   }, [uniqueClassRooms, turmaId]);
 
   const { alunos, resumo, loading, erro, periodo, periodoEfetivo, recarregar } = useRelatorioFrequencia(
-    turmaId || null, bimestre, undefined, dataFiltro || null,
+    turmaId || null, bimestre, undefined, dataFiltro || null, true,
   );
+  // Bimestre inteiro: só para Caderneta e Diário Oficial (precisam de todas as datas).
+  const completo = useRelatorioFrequencia(turmaId || null, bimestre, undefined, dataFiltro || null, false);
 
   const [notasTrabalhosPorAluno, setNotasTrabalhosPorAluno] = useState<Record<string, number>>({});
   const [ajustandoId, setAjustandoId] = useState<string | null>(null);
@@ -141,7 +143,15 @@ export function AttendanceReport() {
       if (freqErr) throw freqErr;
       const frequenciaPorDia: Record<string, Record<string, boolean>> = {};
       (freqData || []).forEach((r: any) => { if (!frequenciaPorDia[r.data]) frequenciaPorDia[r.data] = {}; frequenciaPorDia[r.data][r.aluno_id] = r.presente; });
-      exportarPDF({ modo, turma: turmaNorm, bimestre, periodo, periodoEfetivo, dataFiltro: dataFiltro || null, alunos, resumo, frequenciaPorDia });
+      const inteiro = modo !== 'consolidado';
+      exportarPDF({
+        modo, turma: turmaNorm, bimestre, periodo,
+        periodoEfetivo: inteiro ? completo.periodoEfetivo : periodoEfetivo,
+        dataFiltro: dataFiltro || null,
+        alunos: inteiro ? completo.alunos : alunos,
+        resumo: inteiro ? completo.resumo : resumo,
+        frequenciaPorDia,
+      });
     } catch (e: any) { alert('Erro ao gerar PDF: ' + e.message); }
     finally { setGerandoPDF(null); }
   };
@@ -490,7 +500,9 @@ export function AttendanceReport() {
           )}
         </details>
         <p className="text-xs text-on-surface-variant tabular-nums">
-          {dataFiltro ? `Data: ${formatarBR(dataFiltro)}` : `Período: ${formatarBR(periodo.inicio)} a ${formatarBR(periodo.fim)} • ${PONTOS_MAXIMOS} aulas • ${PONTOS_MAXIMOS * 0.5} pts máx`}
+          {dataFiltro ? `Data: ${formatarBR(dataFiltro)}` : (periodoEfetivo.inicio !== periodo.inicio
+            ? `Frequência contada de ${formatarBR(periodoEfetivo.inicio)} a ${formatarBR(periodoEfetivo.fim)} (base das notas do ${bimestre}º Bim.)`
+            : `Período: ${formatarBR(periodo.inicio)} a ${formatarBR(periodo.fim)} • ${PONTOS_MAXIMOS} aulas • ${PONTOS_MAXIMOS * 0.5} pts máx`)}
         </p>
       </div>
 

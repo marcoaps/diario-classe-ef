@@ -96,6 +96,9 @@ export function useRelatorioFrequencia(
   bimestre: Bimestre,
   ano?: number,
   dataFiltro?: string | null, // data específica no formato yyyy-MM-dd
+  // true => usa a mesma base de frequência das notas (4º Bim: a partir de 01/11).
+  // false => bimestre inteiro (caderneta/diário oficial precisam de todas as datas).
+  baseDasNotas: boolean = false,
 ) {
   const [alunos, setAlunos] = useState<AlunoFrequencia[]>([]);
   const [loading, setLoading] = useState(false);
@@ -107,8 +110,9 @@ export function useRelatorioFrequencia(
   // Período efetivo: se dataFiltro preenchida, usa só aquele dia
   const periodoEfetivo = useMemo(() => {
     if (dataFiltro) return { inicio: dataFiltro, fim: dataFiltro };
+    if (baseDasNotas) return periodoParaNotas(bimestre, ano);
     return periodo;
-  }, [dataFiltro, periodo]);
+  }, [dataFiltro, periodo, baseDasNotas, bimestre, ano]);
 
   const carregar = useCallback(async () => {
     if (!turmaId) {
