@@ -161,7 +161,8 @@ export function GradeReport() {
       setAlunos(data.map((d: any) => ({
         num: d.numero,
         nome: d.nome,
-        nota: d.nota,
+        // Sem nota do Simaed, mostra a nota_ef calculada na tela de Relatórios.
+        nota: d.nota ?? d.nota_ef ?? null,
         situacao: situacaoReal(d),
         data_situacao: d.data_situacao || '',
         faltas: faltasPorNome[d.nome?.toUpperCase()] ?? (d.faltas ?? 0),
