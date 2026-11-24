@@ -115,10 +115,10 @@ export function ResponderProva() {
     } catch { return ''; }
   });
   const [prova, setProva] = useState<Prova | null>(null);
-  // 4º Bimestre (2026): UMA tentativa só; quem gabaritar fica com 10,0.
+  // 4º Bimestre (2026): até 2 tentativas (vale a maior nota); quem gabaritar fica com 10,0.
   // Demais provas: até 3 tentativas e teto 9,5.
   const bimestreProva = prova ? bimestreDoTitulo(prova.titulo) : null;
-  const MAX_TENTATIVAS = bimestreProva === 4 ? 1 : MAX_TENTATIVAS_PADRAO;
+  const MAX_TENTATIVAS = bimestreProva === 4 ? 2 : MAX_TENTATIVAS_PADRAO;
   const NOTA_MAXIMA_PROVA = bimestreProva === 4 ? 10 : 9.5;
   const [questoes, setQuestoes] = useState<Questao[]>([]);
   const [nome, setNome] = useState('');
@@ -409,7 +409,7 @@ export function ResponderProva() {
           {MAX_TENTATIVAS === 1
             ? 'Atenção: você tem apenas UMA tentativa para realizar esta prova. Depois de enviar, não será possível refazer. Quem acertar todas as questões fica com nota 10,0.'
             : <>Atenção: você tem direito a no máximo {MAX_TENTATIVAS} tentativas para realizar esta prova.
-          Vale a sua nota mais alta entre elas — refazer nunca piora sua nota.</>}
+          Vale a sua nota mais alta entre elas — refazer nunca piora sua nota.{bimestreProva === 4 ? ' Quem acertar todas as questões fica com nota 10,0.' : ''}</>}
         </p>
       </div>
 
