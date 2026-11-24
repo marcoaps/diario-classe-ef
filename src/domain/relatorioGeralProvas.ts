@@ -171,3 +171,64 @@ export async function gerarRelatorioGeralProvas(bimestre: Bimestre) {
   }
   doc.save(`Relatorio-Geral-Provas-${bimestre}Bim.pdf`);
 }
+
+// Resumo de contagem: por turma, subtotal por série (6º, 7º, 8º, 9º ano) e total geral.
+export async function gerarResumoContagemProvas(bimestre: Bimestre) {
+  const secoes = await coletarProvasDoBimestre(bimestre);
+  const periodo = getPeriodoBimestre(bimestre);
+
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = doc.internal.pageSize.getWidth();
+  const m = 12;
+
+  doc.setFillColor(...VERDE);
+  doc.rect(0, 0, W, 20, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
+  doc.text('E.E. Instituto Odilon Pratagi', m, 8.5);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5);
+  doc.text(`Resumo de Provas por Turma e Série - ${bimestre}º Bimestre`, m, 15);
+
+  doc.setTextColor(20, 20, 20); doc.setFontSize(9);
+  doc.text('Disciplina: Educação Física', m, 26);
+  doc.text(`Frequência de ${dataBR(periodo.inicio)} a ${dataBR(periodo.fim)}`, m + 62, 26);
+  doc.setFontSize(8.5); doc.setTextColor(71, 85, 105);
+  doc.text('Prova comum: alunos com 0% de frequência.  AEE: alunos do AEE com 0% de frequência (prova adaptada).', m, 31, { maxWidth: W - m * 2 });
+
+  const body: any[] = [];
+  const estilos: Record<number, 'serie' | 'total'> = {};
+  let totC = 0, totA = 0;
+  for (const serie of ['6', '7', '8', '9']) {
+    const da = secoes.filter((s) => s.turma.startsWith(serie));
+    if (da.length === 0) continue;
+    let sc = 0, sa = 0;
+    da.forEach((s) => {
+      body.push([`${serie}º${s.turma.slice(1)}`, s.comum.length, s.adaptada.length, s.comum.length + s.adaptada.length]);
+      sc += s.comum.length; sa += s.adaptada.length;
+    });
+    estilos[body.length] = 'serie';
+    body.push([`${serie}º ano - Geral`, sc, sa, sc + sa]);
+    totC += sc; totA += sa;
+  }
+  estilos[body.length] = 'total';
+  body.push(['TOTAL GERAL', totC, totA, totC + totA]);
+
+  autoTable(doc, {
+    startY: 38,
+    head: [['Turma', 'Farão a prova', 'AEE (prova adaptada)', 'Total']],
+    body,
+    theme: 'grid',
+    styles: { fontSize: 9.5, cellPadding: 2, textColor: [30, 41, 59], halign: 'center' },
+    headStyles: { fillColor: VERDE, textColor: 255, fontStyle: 'bold' },
+    columnStyles: { 0: { halign: 'left', fontStyle: 'bold' } },
+    didParseCell: (d) => {
+      if (d.section !== 'body') return;
+      const e = estilos[d.row.index];
+      if (e === 'serie') { d.cell.styles.fillColor = [227, 242, 234]; d.cell.styles.fontStyle = 'bold'; }
+      if (e === 'total') { d.cell.styles.fillColor = VERDE; d.cell.styles.textColor = 255; d.cell.styles.fontStyle = 'bold'; }
+    },
+    margin: { left: m, right: m },
+  });
+
+  doc.save(`Resumo-Provas-${bimestre}Bim.pdf`);
+}
