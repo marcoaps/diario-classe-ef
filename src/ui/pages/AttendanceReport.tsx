@@ -95,6 +95,7 @@ export function AttendanceReport() {
   );
 
   const [notasTrabalhosPorAluno, setNotasTrabalhosPorAluno] = useState<Record<string, number>>({});
+  const [ajustandoId, setAjustandoId] = useState<string | null>(null);
 
   React.useEffect(() => {
     let mounted = true;
@@ -203,18 +204,28 @@ export function AttendanceReport() {
     setNotasCalculadas(false);
     try {
       const turmaNorm = normalizarTurma(turmaId);
+      // Nunca rebaixa: se o aluno já tem nota_ef maior (ex.: ajuste manual para
+      // 10,0), o recálculo mantém a maior.
+      const { data: existentes, error: errEx } = await supabase
+        .from('notas').select('nome, nota_ef').eq('turma', turmaNorm).eq('bimestre', bimestre);
+      if (errEx) throw errEx;
+      const atualPorNome: Record<string, number> = {};
+      (existentes || []).forEach((r: any) => { if (r.nota_ef != null) atualPorNome[r.nome] = Number(r.nota_ef); });
       const updates = alunos
         .filter(a => a.registros_total > 0)
-        .map(a => ({
-          turma: turmaNorm,
-          bimestre,
-          nome: a.nome,
-          numero: a.numero_chamada ?? 0,
+        .map(a => {
           // 4º Bimestre: frequência de 80% a 100% => nota 10,0 direto.
-          nota_ef: bimestre === 4 && a.percentual >= 80
+          const calculada = bimestre === 4 && a.percentual >= 80
             ? 10.0
-            : notaTotal(a.pontos, notasTrabalhosPorAluno[a.id] ?? 0, true),
-        }));
+            : notaTotal(a.pontos, notasTrabalhosPorAluno[a.id] ?? 0, true);
+          return {
+            turma: turmaNorm,
+            bimestre,
+            nome: a.nome,
+            numero: a.numero_chamada ?? 0,
+            nota_ef: Math.max(calculada, atualPorNome[a.nome] ?? 0),
+          };
+        });
       if (updates.length === 0) { alert('Nenhum aluno com registros de frequência.'); return; }
       const { error } = await supabase
         .from('notas')
@@ -226,6 +237,28 @@ export function AttendanceReport() {
       alert('Erro ao salvar notas: ' + e.message);
     } finally {
       setCalculandoNota(false);
+    }
+  }
+
+  // Ajuste manual para casos excepcionais: grava nota_ef = 10,0 só deste aluno.
+  async function ajustarPara10(a: any) {
+    if (!window.confirm(`Ajustar a nota de ${formatarNome(a.nome)} para 10,0 (${bimestre}º Bimestre, turma ${turmaId})?\n\nUse só em casos excepcionais.`)) return;
+    setAjustandoId(a.id);
+    try {
+      const { error } = await supabase.from('notas').upsert([{
+        turma: normalizarTurma(turmaId),
+        bimestre,
+        nome: a.nome,
+        numero: a.numero_chamada ?? 0,
+        nota_ef: 10.0,
+      }], { onConflict: 'turma,bimestre,nome' });
+      if (error) throw error;
+      setNotasCalculadas(true);
+      setTimeout(() => setNotasCalculadas(false), 4000);
+    } catch (e: any) {
+      alert('Erro ao ajustar nota: ' + e.message);
+    } finally {
+      setAjustandoId(null);
     }
   }
 
@@ -577,6 +610,7 @@ export function AttendanceReport() {
                   <th className="px-4 py-4 text-center">Situação</th>
                   <th className="px-4 py-4 text-center" title="Soma das notas de todos os trabalhos do aluno neste bimestre">Nota Trabalho</th>
                   <th className="px-4 py-4 text-center" title="Pontos de frequência + Nota Trabalho">Nota EF</th>
+                  <th className="px-4 py-4 text-center" title="Caso excepcional: grava 10,0 só para este aluno">Ajuste</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -600,6 +634,12 @@ export function AttendanceReport() {
                     <td className="px-4 py-3 text-center"><BadgeSituacao aluno={a} /></td>
                     <td className="px-4 py-3 text-center font-semibold text-gray-700">{notaTrabalho > 0 ? notaTrabalho.toFixed(1).replace('.', ',') : '—'}</td>
                     <td className="px-4 py-3 text-center font-extrabold text-[#0B6B3A]">{notaTotal(a.pontos, notaTrabalho, false).toFixed(1).replace('.', ',')}</td>
+                    <td className="px-4 py-3 text-center">
+                      <button type="button" onClick={() => ajustarPara10(a)} disabled={ajustandoId === a.id}
+                        className="h-8 px-3 rounded-full border border-[#0B6B3A] text-[#0B6B3A] text-xs font-extrabold active:scale-95 transition-all disabled:opacity-50">
+                        {ajustandoId === a.id ? '…' : 'Lançar 10,0'}
+                      </button>
+                    </td>
                   </tr>
                   );
                 })}
@@ -624,6 +664,10 @@ export function AttendanceReport() {
                   <span>{a.pontos.toFixed(1).replace('.', ',')} pts freq.</span>
                   <span>Trabalho <strong className="text-on-surface">{notaTrabalho > 0 ? notaTrabalho.toFixed(1).replace('.', ',') : '—'}</strong></span>
                   <span>Nota EF <strong className="text-on-surface">{notaTotal(a.pontos, notaTrabalho, false).toFixed(1).replace('.', ',')}</strong></span>
+                  <button type="button" onClick={() => ajustarPara10(a)} disabled={ajustandoId === a.id}
+                    className="ml-auto h-8 px-3 rounded-full border border-[#0B6B3A] text-[#0B6B3A] text-xs font-extrabold active:scale-95 transition-all disabled:opacity-50">
+                    {ajustandoId === a.id ? '…' : 'Lançar 10,0'}
+                  </button>
                 </div>
               </div>
               );
