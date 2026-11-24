@@ -163,9 +163,9 @@ export function AttendanceReport() {
     finally { setGerandoProvas(false); }
   };
 
-  const gerarResumo = async () => {
+  const gerarResumo = async (comNomes: boolean) => {
     setGerandoResumo(true);
-    try { await gerarResumoContagemProvas(bimestre); }
+    try { await gerarResumoContagemProvas(bimestre, comNomes); }
     catch (e: any) { alert('Erro ao gerar resumo de provas: ' + (e?.message ?? e)); }
     finally { setGerandoResumo(false); }
   };
@@ -362,14 +362,15 @@ export function AttendanceReport() {
                   { id: 'caderneta', icon: BookOpen, titulo: 'Caderneta de Chamada (PDF)', sub: 'Grade completa com datas das aulas geminadas (2 tempos/dia)', ocupado: gerandoPDF === 'caderneta', acao: () => gerarPDF('caderneta') },
                   { id: 'oficial', icon: ClipboardList, titulo: 'Diário Oficial SEE/AC (PDF)', sub: 'Formato oficial enxuto para secretaria/arquivo', ocupado: gerandoPDF === 'oficial', acao: () => gerarPDF('oficial') },
                   { id: 'provas', icon: Users, titulo: 'Relatório Geral de Provas (PDF)', sub: `Todas as turmas, ${bimestre}º Bim: prova comum (0% freq.) e prova adaptada (AEE)`, ocupado: gerandoProvas, acao: () => gerarProvas() },
-                  { id: 'resumo', icon: BarChart3, titulo: 'Resumo de Provas por Série (PDF)', sub: `Contagem por turma, total de cada série (6º ao 9º) e total geral`, ocupado: gerandoResumo, acao: () => gerarResumo() },
+                  { id: 'resumo', icon: BarChart3, titulo: 'Resumo de Provas por Série (PDF)', sub: `Contagem por turma, total de cada série (6º ao 9º) e total geral`, ocupado: gerandoResumo, acao: () => gerarResumo(false) },
+                  { id: 'resumo-nomes', icon: Users, titulo: 'Resumo de Provas com nomes (PDF)', sub: 'Contagem por turma e série + os nomes de quem fará a prova e dos AEE', ocupado: gerandoResumo, acao: () => gerarResumo(true) },
                 ] as const).map((it, i) => (
                   <button
                     key={it.id}
                     type="button"
                     role="menuitem"
                     onClick={() => { setMenuExportar(false); it.acao(); }}
-                    disabled={it.id === 'provas' ? gerandoProvas : it.id === 'resumo' ? gerandoResumo : (loading || alunos.length === 0 || gerandoPDF !== null)}
+                    disabled={it.id === 'provas' ? gerandoProvas : (it.id === 'resumo' || it.id === 'resumo-nomes') ? gerandoResumo : (loading || alunos.length === 0 || gerandoPDF !== null)}
                     className={cn('flex items-start gap-3 px-4 py-3 text-left active:bg-surface-container hover:bg-[#F4FBF7] disabled:opacity-50', i > 0 && 'border-t border-[#EDF3EF]')}
                   >
                     <span className="mt-0.5 w-8 h-8 shrink-0 rounded-lg bg-[#E3F2EA] flex items-center justify-center">

@@ -173,7 +173,7 @@ export async function gerarRelatorioGeralProvas(bimestre: Bimestre) {
 }
 
 // Resumo de contagem: por turma, subtotal por série (6º, 7º, 8º, 9º ano) e total geral.
-export async function gerarResumoContagemProvas(bimestre: Bimestre) {
+export async function gerarResumoContagemProvas(bimestre: Bimestre, comNomes = false) {
   const secoes = await coletarProvasDoBimestre(bimestre);
   const periodo = periodoParaNotas(bimestre);
 
@@ -230,5 +230,44 @@ export async function gerarResumoContagemProvas(bimestre: Bimestre) {
     margin: { left: m, right: m },
   });
 
-  doc.save(`Resumo-Provas-${bimestre}Bim.pdf`);
+  if (comNomes) {
+    // Nomes por turma, agrupados por série, logo após a tabela de contagem.
+    const H = doc.internal.pageSize.getHeight();
+    let y = (doc as any).lastAutoTable.finalY + 10;
+    const garantir = (altura: number) => { if (y + altura > H - 14) { doc.addPage(); y = 16; } };
+    const bloco = (titulo: string, linhas: LinhaAluno[]) => {
+      const texto = linhas.length ? linhas.map((l) => l.nome).join('; ') : 'Nenhum aluno.';
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+      const partes = doc.splitTextToSize(texto, W - m * 2 - 4) as string[];
+      garantir(5 + partes.length * 4);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(11, 107, 58);
+      doc.text(titulo, m + 2, y); y += 4;
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(linhas.length ? 30 : 107, linhas.length ? 41 : 114, linhas.length ? 59 : 128);
+      doc.text(partes, m + 2, y); y += partes.length * 4 + 2;
+    };
+    for (const serie of ['6', '7', '8', '9']) {
+      const da = secoes.filter((s) => s.turma.startsWith(serie));
+      if (da.length === 0) continue;
+      garantir(14);
+      doc.setFillColor(227, 242, 234);
+      doc.rect(m, y - 4.5, W - m * 2, 6.5, 'F');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(11, 107, 58);
+      doc.text(`${serie}º ano - nomes`, m + 2, y); y += 7;
+      for (const s of da) {
+        const rot = `${serie}º${s.turma.slice(1)}`;
+        bloco(`${rot} - ${s.comum.length} ${s.comum.length === 1 ? 'fará' : 'farão'} a prova`, s.comum);
+        bloco(`${rot} - ${s.adaptada.length} AEE (prova adaptada)`, s.adaptada);
+        y += 1;
+      }
+      y += 3;
+    }
+    const total = doc.getNumberOfPages();
+    for (let i = 1; i <= total; i++) {
+      doc.setPage(i);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
+      doc.text(`Página ${i} de ${total}`, W - m, H - 6, { align: 'right' });
+    }
+  }
+
+  doc.save(`Resumo-Provas-${bimestre}Bim${comNomes ? '-com-nomes' : ''}.pdf`);
 }
