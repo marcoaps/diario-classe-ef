@@ -118,7 +118,7 @@ export function ResponderProva() {
   // 4º Bimestre (2026): até 2 tentativas (vale a maior nota); quem gabaritar fica com 10,0.
   // Demais provas: até 3 tentativas e teto 9,5.
   const bimestreProva = prova ? bimestreDoTitulo(prova.titulo) : null;
-  const MAX_TENTATIVAS = bimestreProva === 4 ? 2 : MAX_TENTATIVAS_PADRAO;
+  const MAX_TENTATIVAS: number = bimestreProva === 4 ? 2 : MAX_TENTATIVAS_PADRAO;
   const NOTA_MAXIMA_PROVA = bimestreProva === 4 ? 10 : 9.5;
   const [questoes, setQuestoes] = useState<Questao[]>([]);
   const [nome, setNome] = useState('');
