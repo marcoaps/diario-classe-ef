@@ -41,6 +41,7 @@ export function AvaliacaoResultados() {
   const [avaliacao, setAvaliacao] = useState<Avaliacao | null>(null);
   const [resultados, setResultados] = useState<ResultadoAluno[]>([]);
   const [loading, setLoading] = useState(true);
+  const [variasTurmas, setVariasTurmas] = useState(false);
   const [filtro, setFiltro] = useState<'todos' | 'corrigidos' | 'pendentes'>('todos');
   const [questoesOnline, setQuestoesOnline] = useState<QuestaoOnline[]>([]);
   const [verResposta, setVerResposta] = useState<ResultadoAluno | null>(null);
@@ -52,10 +53,22 @@ export function AvaliacaoResultados() {
       if (!av) { setLoading(false); return; }
       setAvaliacao(av);
 
+      // Prova online compartilhada entre turmas (ex.: "AVA-8ºanos" cadastrada na 8A,
+      // mas respondida por 8A–8F): inclui também as turmas que enviaram respostas,
+      // senão elas ficariam invisíveis aqui.
+      let turmasLista = turmasDoValor(av.turma_id);
+      if (av.prova_online_id) {
+        const { data: turmasOnline } = await supabase
+          .from('respostas').select('turma_id').eq('prova_id', av.prova_online_id);
+        const extras = [...new Set((turmasOnline || []).map(t => t.turma_id).filter(Boolean))] as string[];
+        turmasLista = [...new Set([...turmasLista, ...extras])];
+      }
+      setVariasTurmas(turmasLista.length > 1);
+
       const { data: alunos } = await supabase
         .from('alunos')
         .select('id, nome, numero_chamada, turma_id')
-        .in('turma_id', turmasDoValor(av.turma_id))
+        .in('turma_id', turmasLista)
         .order('turma_id')
         .order('numero_chamada');
 
@@ -294,8 +307,8 @@ export function AvaliacaoResultados() {
               className="bg-surface border border-outline-variant rounded-2xl px-4 py-3 flex items-center justify-between"
             >
               <div className="flex items-center gap-3">
-                <span className="text-xs text-on-surface-variant w-10 text-right">
-                  {ehGrupoDeTurmas(avaliacao.turma_id) ? `${aluno.turma_id} ${aluno.numero_chamada}.` : `${aluno.numero_chamada}.`}
+                <span className="text-xs text-on-surface-variant w-12 text-right">
+                  {(variasTurmas || ehGrupoDeTurmas(avaliacao.turma_id)) ? `${aluno.turma_id} ${aluno.numero_chamada}.` : `${aluno.numero_chamada}.`}
                 </span>
                 <div>
                   <p className="text-sm text-on-surface font-medium">{aluno.nome}</p>
