@@ -52,6 +52,16 @@ export function getPeriodoBimestre(bimestre: Bimestre, ano?: number) {
   }
 }
 
+// Período de frequência usado para CALCULAR AS NOTAS e definir quem faz prova.
+// No 4º Bimestre conta só a partir de 01/11 (decisão de 24/11/2026: muitos alunos
+// pararam de vir depois do 3º bimestre e não devem receber nota pela frequência
+// de outubro). Nos demais bimestres é o período inteiro.
+export function periodoParaNotas(bimestre: Bimestre, ano?: number) {
+  const p = getPeriodoBimestre(bimestre, ano);
+  if (bimestre === 4) return { inicio: `${ano ?? new Date().getFullYear()}-11-01`, fim: p.fim };
+  return p;
+}
+
 // Data-limite de cada bimestre conforme o Calendário Escolar 2026 oficial
 // (Instituto Odilon Pratagi): fim das avaliações/fechamento de cada um.
 // Atualizar estas datas todo início de ano letivo, conforme o novo calendário.

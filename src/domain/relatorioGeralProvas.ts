@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { supabase } from '../data/supabase';
-import { getPeriodoBimestre, type Bimestre } from './useRelatorioFrequencia';
+import { getPeriodoBimestre, periodoParaNotas, type Bimestre } from './useRelatorioFrequencia';
 import { situacoesEfetivasDaTurma } from './situacaoAluno';
 import { formatarNome } from '../utils/formatarNome';
 
@@ -25,7 +25,7 @@ interface Secao { turma: string; comum: LinhaAluno[]; adaptada: LinhaAluno[] }
 // presença), fora transferidos/remanejados. Com AEE => prova adaptada; sem AEE =>
 // prova comum.
 export async function coletarProvasDoBimestre(bimestre: Bimestre): Promise<Secao[]> {
-  const periodo = getPeriodoBimestre(bimestre);
+  const periodo = periodoParaNotas(bimestre);
 
   const [{ data: alunosData, error: eAl }, { data: aeeData, error: eAee }, { data: transfData, error: eTr }] = await Promise.all([
     supabase.from('alunos').select('id, nome, turma_id, numero_chamada').in('turma_id', TURMAS_DO_PROFESSOR),
@@ -88,7 +88,7 @@ export async function coletarProvasDoBimestre(bimestre: Bimestre): Promise<Secao
 
 export async function gerarRelatorioGeralProvas(bimestre: Bimestre) {
   const secoes = await coletarProvasDoBimestre(bimestre);
-  const periodo = getPeriodoBimestre(bimestre);
+  const periodo = periodoParaNotas(bimestre);
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const W = doc.internal.pageSize.getWidth();
@@ -175,7 +175,7 @@ export async function gerarRelatorioGeralProvas(bimestre: Bimestre) {
 // Resumo de contagem: por turma, subtotal por série (6º, 7º, 8º, 9º ano) e total geral.
 export async function gerarResumoContagemProvas(bimestre: Bimestre) {
   const secoes = await coletarProvasDoBimestre(bimestre);
-  const periodo = getPeriodoBimestre(bimestre);
+  const periodo = periodoParaNotas(bimestre);
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const W = doc.internal.pageSize.getWidth();

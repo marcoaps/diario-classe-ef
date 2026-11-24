@@ -4,7 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../../data/supabase';
 import { UserRound, Loader2, BarChart3, AlertTriangle, FileSpreadsheet, FileText, ShieldCheck, Users, Percent, Award, Trash2, Calendar, X, BookOpen, ClipboardList, Download, ChevronDown, MoreHorizontal } from 'lucide-react';
 import { cn } from '../AppLayout';
-import { useRelatorioFrequencia, type Bimestre, PONTOS_MAXIMOS, getPeriodoBimestre, bimestreAtual } from '../../domain/useRelatorioFrequencia';
+import { useRelatorioFrequencia, type Bimestre, PONTOS_MAXIMOS, getPeriodoBimestre, periodoParaNotas, bimestreAtual } from '../../domain/useRelatorioFrequencia';
 import { exportarExcel, exportarPDF, type ModoPDF } from '../../domain/exportarFrequencia';
 import { situacoesEfetivasDaTurma } from '../../domain/situacaoAluno';
 import { gerarRelatorioGeralProvas, gerarResumoContagemProvas } from '../../domain/relatorioGeralProvas';
@@ -224,25 +224,50 @@ export function AttendanceReport() {
 
   async function calcularESalvarNotasEf() {
     if (alunos.length === 0) return;
-    if (!window.confirm(`Calcular e salvar nota_ef para ${alunos.length} alunos da turma ${turmaId} (${bimestre}º Bimestre)?\n\nIsso irá atualizar o campo nota_ef de cada aluno com pontos de frequência + nota de trabalho, limitado a 10,0.${bimestre === 4 ? '\n\nNo 4º Bimestre a nota vem da frequência: 1–20% = 8,0 · 21–40% = 8,5 · 41–79% = 9,5 · 80–100% = 10,0 (0% segue o cálculo normal).' : ''}`)) return;
+    if (!window.confirm(`Calcular e salvar nota_ef para ${alunos.length} alunos da turma ${turmaId} (${bimestre}º Bimestre)?\n\nIsso irá atualizar o campo nota_ef de cada aluno com pontos de frequência + nota de trabalho, limitado a 10,0.${bimestre === 4 ? '\n\nNo 4º Bimestre a nota vem da frequência: 1–20% = 8,0 · 21–40% = 8,5 · 41–79% = 9,5 · 80–100% = 10,0 (0% segue o cálculo normal). A frequência do 4º Bimestre conta só a partir de 01/11.' : ''}`)) return;
     setCalculandoNota(true);
     setNotasCalculadas(false);
     try {
       const turmaNorm = normalizarTurma(turmaId);
-      // Nunca rebaixa: se o aluno já tem nota_ef maior (ex.: ajuste manual para
-      // 10,0), o recálculo mantém a maior.
+      // Por padrão nunca rebaixa: se o aluno já tem nota_ef maior (ex.: ajuste
+      // manual para 10,0), o recálculo mantém a maior. O professor pode escolher
+      // substituir (recálculo com nova base de frequência).
       const { data: existentes, error: errEx } = await supabase
         .from('notas').select('nome, nota_ef').eq('turma', turmaNorm).eq('bimestre', bimestre);
       if (errEx) throw errEx;
+      const substituir = (existentes || []).some((r: any) => r.nota_ef != null)
+        && window.confirm('Já existem notas salvas neste bimestre.\n\nOK = SUBSTITUIR pelas notas recalculadas (pode baixar notas, inclusive ajustes manuais de 10,0).\nCancelar = manter a maior entre a nota salva e a recalculada.');
       const atualPorNome: Record<string, number> = {};
-      (existentes || []).forEach((r: any) => { if (r.nota_ef != null) atualPorNome[r.nome] = Number(r.nota_ef); });
+      if (!substituir) (existentes || []).forEach((r: any) => { if (r.nota_ef != null) atualPorNome[r.nome] = Number(r.nota_ef); });
+
+      // 4º Bimestre: a frequência conta só a partir de 01/11 (periodoParaNotas).
+      const janela = bimestre === 4 ? periodoParaNotas(bimestre) : null;
+      const freqJanela = new Map<string, { pres: number; total: number }>();
+      if (janela) {
+        const { data: fj, error: errFj } = await supabase
+          .from('frequencia').select('aluno_id, presente')
+          .gte('data', janela.inicio).lte('data', janela.fim)
+          .in('aluno_id', alunos.map(a => a.id));
+        if (errFj) throw errFj;
+        (fj || []).forEach((r: any) => {
+          const acc = freqJanela.get(r.aluno_id) || { pres: 0, total: 0 };
+          acc.total += 1; if (r.presente) acc.pres += 1;
+          freqJanela.set(r.aluno_id, acc);
+        });
+      }
+
       const updates = alunos
-        .filter(a => a.registros_total > 0)
+        .filter(a => janela ? (freqJanela.get(a.id)?.total ?? 0) > 0 : a.registros_total > 0)
         .map(a => {
-          // 4º Bimestre: nota por faixa de frequência (0% segue a fórmula normal).
-          const calculada = bimestre === 4 && a.percentual > 0
-            ? notaFaixaBimestre4(a.percentual)
-            : notaTotal(a.pontos, notasTrabalhosPorAluno[a.id] ?? 0, true);
+          let calculada: number;
+          if (janela) {
+            const f = freqJanela.get(a.id)!;
+            const pct = (f.pres / f.total) * 100;
+            // 0% na janela: sem pontos de frequência, só trabalhos (a prova define o resto).
+            calculada = pct > 0 ? notaFaixaBimestre4(pct) : notaTotal(0, notasTrabalhosPorAluno[a.id] ?? 0, true);
+          } else {
+            calculada = notaTotal(a.pontos, notasTrabalhosPorAluno[a.id] ?? 0, true);
+          }
           return {
             turma: turmaNorm,
             bimestre,
