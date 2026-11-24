@@ -8,6 +8,7 @@ import { useRelatorioFrequencia, type Bimestre, PONTOS_MAXIMOS, getPeriodoBimest
 import { exportarExcel, exportarPDF, type ModoPDF } from '../../domain/exportarFrequencia';
 import { situacoesEfetivasDaTurma } from '../../domain/situacaoAluno';
 import { gerarRelatorioGeralProvas, gerarResumoContagemProvas } from '../../domain/relatorioGeralProvas';
+import { gerarCardsLideresProvas } from '../../domain/cardsLideresProvas';
 
 const BIMESTRES: Bimestre[] = [1, 2, 3, 4];
 
@@ -101,6 +102,7 @@ export function AttendanceReport() {
   const [ajustandoId, setAjustandoId] = useState<string | null>(null);
   const [gerandoProvas, setGerandoProvas] = useState(false);
   const [gerandoResumo, setGerandoResumo] = useState(false);
+  const [gerandoCards, setGerandoCards] = useState(false);
 
   React.useEffect(() => {
     let mounted = true;
@@ -161,6 +163,13 @@ export function AttendanceReport() {
     try { await gerarRelatorioGeralProvas(bimestre); }
     catch (e: any) { alert('Erro ao gerar relatório de provas: ' + (e?.message ?? e)); }
     finally { setGerandoProvas(false); }
+  };
+
+  const gerarCards = async () => {
+    setGerandoCards(true);
+    try { await gerarCardsLideresProvas(bimestre); }
+    catch (e: any) { alert('Erro ao gerar cards: ' + (e?.message ?? e)); }
+    finally { setGerandoCards(false); }
   };
 
   const gerarResumo = async (comNomes: boolean) => {
@@ -364,13 +373,14 @@ export function AttendanceReport() {
                   { id: 'provas', icon: Users, titulo: 'Relatório Geral de Provas (PDF)', sub: `Todas as turmas, ${bimestre}º Bim: prova comum (0% freq.) e prova adaptada (AEE)`, ocupado: gerandoProvas, acao: () => gerarProvas() },
                   { id: 'resumo', icon: BarChart3, titulo: 'Resumo de Provas por Série (PDF)', sub: `Contagem por turma, total de cada série (6º ao 9º) e total geral`, ocupado: gerandoResumo, acao: () => gerarResumo(false) },
                   { id: 'resumo-nomes', icon: Users, titulo: 'Resumo de Provas com nomes (PDF)', sub: 'Contagem por turma e série + os nomes de quem fará a prova e dos AEE', ocupado: gerandoResumo, acao: () => gerarResumo(true) },
+                  { id: 'cards', icon: Users, titulo: 'Cards para o grupo de líderes (imagens)', sub: 'Um card por turma com os nomes de quem fará a prova (ZIP de PNGs)', ocupado: gerandoCards, acao: () => gerarCards() },
                 ] as const).map((it, i) => (
                   <button
                     key={it.id}
                     type="button"
                     role="menuitem"
                     onClick={() => { setMenuExportar(false); it.acao(); }}
-                    disabled={it.id === 'provas' ? gerandoProvas : (it.id === 'resumo' || it.id === 'resumo-nomes') ? gerandoResumo : (loading || alunos.length === 0 || gerandoPDF !== null)}
+                    disabled={it.id === 'provas' ? gerandoProvas : (it.id === 'resumo' || it.id === 'resumo-nomes') ? gerandoResumo : it.id === 'cards' ? gerandoCards : (loading || alunos.length === 0 || gerandoPDF !== null)}
                     className={cn('flex items-start gap-3 px-4 py-3 text-left active:bg-surface-container hover:bg-[#F4FBF7] disabled:opacity-50', i > 0 && 'border-t border-[#EDF3EF]')}
                   >
                     <span className="mt-0.5 w-8 h-8 shrink-0 rounded-lg bg-[#E3F2EA] flex items-center justify-center">
