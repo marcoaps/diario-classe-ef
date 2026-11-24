@@ -106,7 +106,14 @@ Responda APENAS com JSON neste formato exato (sem markdown, sem explicações fo
 
 export function ResponderProva() {
   const [step, setStep] = useState<'codigo' | 'identificacao' | 'prova' | 'corrigindo' | 'resultado'>('codigo');
-  const [codigo, setCodigo] = useState('');
+  // Link com o código já preenchido (ex.: /responder?codigo=ABC123), para o aluno
+  // não precisar copiar/digitar. Só preenche o campo; quem envia é o aluno.
+  const [codigo, setCodigo] = useState(() => {
+    try {
+      const c = new URLSearchParams(window.location.search).get('codigo') ?? '';
+      return /^[A-Za-z0-9]{6}$/.test(c) ? c.toUpperCase() : '';
+    } catch { return ''; }
+  });
   const [prova, setProva] = useState<Prova | null>(null);
   // 4º Bimestre (2026): UMA tentativa só; quem gabaritar fica com 10,0.
   // Demais provas: até 3 tentativas e teto 9,5.
