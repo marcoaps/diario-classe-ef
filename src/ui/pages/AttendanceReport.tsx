@@ -198,7 +198,7 @@ export function AttendanceReport() {
 
   async function calcularESalvarNotasEf() {
     if (alunos.length === 0) return;
-    if (!window.confirm(`Calcular e salvar nota_ef para ${alunos.length} alunos da turma ${turmaId} (2º Bimestre)?\n\nIsso irá atualizar o campo nota_ef de cada aluno com pontos de frequência + nota de trabalho, limitado a 10,0.`)) return;
+    if (!window.confirm(`Calcular e salvar nota_ef para ${alunos.length} alunos da turma ${turmaId} (${bimestre}º Bimestre)?\n\nIsso irá atualizar o campo nota_ef de cada aluno com pontos de frequência + nota de trabalho, limitado a 10,0.`)) return;
     setCalculandoNota(true);
     setNotasCalculadas(false);
     try {
@@ -207,7 +207,7 @@ export function AttendanceReport() {
         .filter(a => a.registros_total > 0)
         .map(a => ({
           turma: turmaNorm,
-          bimestre: 2,
+          bimestre,
           nome: a.nome,
           numero: a.numero_chamada ?? 0,
           nota_ef: notaTotal(a.pontos, notasTrabalhosPorAluno[a.id] ?? 0, true),
