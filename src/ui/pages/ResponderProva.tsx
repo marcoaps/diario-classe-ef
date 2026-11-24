@@ -42,7 +42,14 @@ interface CorrecaoDissertativa {
 }
 
 const LETRAS = ['A', 'B', 'C', 'D', 'E'];
-const MAX_TENTATIVAS = 3;
+const MAX_TENTATIVAS_PADRAO = 3;
+
+// Bimestre da prova, lido do título ("...4ºBimestre..."), igual ao servidor
+// (api/sincronizar-nota-online.ts).
+function bimestreDoTitulo(titulo: string): number | null {
+  const m = titulo.match(/([1-4])\s*[º°o]?\s*bim/i);
+  return m ? parseInt(m[1], 10) : null;
+}
 
 async function corrigirDissertativaComIA(
   enunciado: string,
@@ -101,6 +108,11 @@ export function ResponderProva() {
   const [step, setStep] = useState<'codigo' | 'identificacao' | 'prova' | 'corrigindo' | 'resultado'>('codigo');
   const [codigo, setCodigo] = useState('');
   const [prova, setProva] = useState<Prova | null>(null);
+  // 4º Bimestre (2026): UMA tentativa só; quem gabaritar fica com 10,0.
+  // Demais provas: até 3 tentativas e teto 9,5.
+  const bimestreProva = prova ? bimestreDoTitulo(prova.titulo) : null;
+  const MAX_TENTATIVAS = bimestreProva === 4 ? 1 : MAX_TENTATIVAS_PADRAO;
+  const NOTA_MAXIMA_PROVA = bimestreProva === 4 ? 10 : 9.5;
   const [questoes, setQuestoes] = useState<Questao[]>([]);
   const [nome, setNome] = useState('');
   const [numero, setNumero] = useState('');
@@ -286,7 +298,7 @@ export function ResponderProva() {
 
     setEtapaCorrecao('Calculando nota final...');
     const notaBruta = totalPontos > 0 ? (pontosObtidos / totalPontos) * 10 : null;
-    const notaFinal = notaBruta !== null ? (notaBruta >= 10 ? 9.5 : notaBruta) : null;
+    const notaFinal = notaBruta !== null ? (notaBruta >= 10 ? NOTA_MAXIMA_PROVA : notaBruta) : null;
 
     try {
       await supabase.from('respostas').insert({
@@ -387,8 +399,10 @@ export function ResponderProva() {
       <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 mb-4 flex items-start gap-2.5">
         <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
         <p className="text-amber-800 text-sm font-bold leading-snug">
-          Atenção: você tem direito a no máximo {MAX_TENTATIVAS} tentativas para realizar esta prova.
-          Vale a sua nota mais alta entre elas — refazer nunca piora sua nota.
+          {MAX_TENTATIVAS === 1
+            ? 'Atenção: você tem apenas UMA tentativa para realizar esta prova. Depois de enviar, não será possível refazer. Quem acertar todas as questões fica com nota 10,0.'
+            : <>Atenção: você tem direito a no máximo {MAX_TENTATIVAS} tentativas para realizar esta prova.
+          Vale a sua nota mais alta entre elas — refazer nunca piora sua nota.</>}
         </p>
       </div>
 
@@ -474,8 +488,8 @@ export function ResponderProva() {
           <div className="flex items-center gap-2 shrink-0 ml-2">
             {tentativaAtual && (
               <span className="bg-amber-100 text-amber-700 border border-amber-300 text-[11px] font-black px-2 py-1 rounded-full whitespace-nowrap"
-                title={`Vale a sua nota mais alta entre as ${MAX_TENTATIVAS} tentativas`}>
-                Tentativa {tentativaAtual}/{MAX_TENTATIVAS}
+                title={MAX_TENTATIVAS === 1 ? 'Tentativa única' : `Vale a sua nota mais alta entre as ${MAX_TENTATIVAS} tentativas`}>
+                {MAX_TENTATIVAS === 1 ? 'Tentativa única' : `Tentativa ${tentativaAtual}/${MAX_TENTATIVAS}`}
               </span>
             )}
             <span className="text-xs text-gray-400 font-semibold hidden sm:block">
@@ -675,7 +689,7 @@ export function ResponderProva() {
           <h2 className="text-gray-800 font-black text-2xl mb-1">{nome}</h2>
           <p className="text-gray-500 text-base mb-6">
             Turma {turmaAluno} · {prova?.titulo}
-            {tentativaAtual ? ` · Tentativa ${tentativaAtual}/${MAX_TENTATIVAS}` : ''}
+            {tentativaAtual && MAX_TENTATIVAS > 1 ? ` · Tentativa ${tentativaAtual}/${MAX_TENTATIVAS}` : ''}
           </p>
 
           {nota !== null && (
@@ -689,7 +703,7 @@ export function ResponderProva() {
                   style={{ width: `${nota * 10}%` }} />
               </div>
               <p className={`text-lg font-black ${nota >= 6 ? 'text-green-600' : 'text-red-600'}`}>
-                {nota >= 9.5 ? '🏆 Nota máxima! Parabéns!'
+                {nota >= NOTA_MAXIMA_PROVA ? '🏆 Nota máxima! Parabéns!'
                   : nota >= 6 ? '✓ Aprovado'
                   : '⚠ Abaixo da média'}
               </p>
@@ -698,7 +712,9 @@ export function ResponderProva() {
 
           {tentativaAtual && (
             <p className="text-xs text-gray-400 mb-4">
-              {tentativaAtual < MAX_TENTATIVAS
+              {MAX_TENTATIVAS === 1
+                ? 'Tentativa única — esta é a sua nota final desta prova.'
+                : tentativaAtual < MAX_TENTATIVAS
                 ? `Tentativa ${tentativaAtual}/${MAX_TENTATIVAS} — vale a maior nota entre elas. Você ainda pode refazer com o mesmo código pra tentar melhorar, sem risco de perder essa nota.`
                 : `Tentativa ${tentativaAtual}/${MAX_TENTATIVAS} — essa foi sua última tentativa. Vale a maior nota entre as ${MAX_TENTATIVAS}.`}
             </p>

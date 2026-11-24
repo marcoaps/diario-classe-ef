@@ -556,7 +556,10 @@ Regras: mantenha um parágrafo curto por assunto, na mesma ordem; mantenha os te
       const totalPontos = totalObj + totalDisser;
       const pontosTotal = pontosObj + pontosDisser;
       const novaNota = totalPontos > 0 ? parseFloat(((pontosTotal / totalPontos) * 10).toFixed(1)) : 0;
-      const notaFinal = novaNota >= 10 ? 9.5 : novaNota;
+      // 4º Bimestre: gabarito completo vale 10,0 (demais provas: teto 9,5).
+      const gabaritou = totalPontos > 0 && pontosTotal >= totalPontos - 1e-9;
+      const tetoProva = /4\s*[º°o]?\s*bim/i.test(provaResultados.titulo) ? 10 : 9.5;
+      const notaFinal = gabaritou ? tetoProva : Math.min(novaNota, 9.5);
       const { error } = await supabase.from('respostas').update({ nota: notaFinal, correcoes_dissertativas: novasCorrecoes }).eq('id', respostaCorrigir.id);
       if (error) throw error;
       setResultados(prev => prev.map(r => r.id === respostaCorrigir.id ? { ...r, nota: notaFinal, correcoes_dissertativas: novasCorrecoes } : r));
