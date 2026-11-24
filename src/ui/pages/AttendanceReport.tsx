@@ -195,11 +195,19 @@ export function AttendanceReport() {
     return comTeto ? Math.min(total, 10.0) : total;
   }
 
+  // 4º Bimestre: 1–20% = 8,0 · 21–40% = 8,5 · 41–79% = 9,5 · 80–100% = 10,0.
+  function notaFaixaBimestre4(percentual: number): number {
+    if (percentual >= 80) return 10.0;
+    if (percentual > 40) return 9.5;
+    if (percentual > 20) return 8.5;
+    return 8.0;
+  }
+
   function normNome(s: string) { return s.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
 
   async function calcularESalvarNotasEf() {
     if (alunos.length === 0) return;
-    if (!window.confirm(`Calcular e salvar nota_ef para ${alunos.length} alunos da turma ${turmaId} (${bimestre}º Bimestre)?\n\nIsso irá atualizar o campo nota_ef de cada aluno com pontos de frequência + nota de trabalho, limitado a 10,0.${bimestre === 4 ? '\n\nNo 4º Bimestre, quem tem frequência de 80% a 100% recebe 10,0.' : ''}`)) return;
+    if (!window.confirm(`Calcular e salvar nota_ef para ${alunos.length} alunos da turma ${turmaId} (${bimestre}º Bimestre)?\n\nIsso irá atualizar o campo nota_ef de cada aluno com pontos de frequência + nota de trabalho, limitado a 10,0.${bimestre === 4 ? '\n\nNo 4º Bimestre a nota vem da frequência: 1–20% = 8,0 · 21–40% = 8,5 · 41–79% = 9,5 · 80–100% = 10,0 (0% segue o cálculo normal).' : ''}`)) return;
     setCalculandoNota(true);
     setNotasCalculadas(false);
     try {
@@ -214,9 +222,9 @@ export function AttendanceReport() {
       const updates = alunos
         .filter(a => a.registros_total > 0)
         .map(a => {
-          // 4º Bimestre: frequência de 80% a 100% => nota 10,0 direto.
-          const calculada = bimestre === 4 && a.percentual >= 80
-            ? 10.0
+          // 4º Bimestre: nota por faixa de frequência (0% segue a fórmula normal).
+          const calculada = bimestre === 4 && a.percentual > 0
+            ? notaFaixaBimestre4(a.percentual)
             : notaTotal(a.pontos, notasTrabalhosPorAluno[a.id] ?? 0, true);
           return {
             turma: turmaNorm,
