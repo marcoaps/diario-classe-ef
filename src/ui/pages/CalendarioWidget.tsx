@@ -36,11 +36,13 @@ function Marca({ cat }: { cat: CatId }) {
  * Widget público e compacto do calendário escolar, pensado para ficar aberto numa janela
  * pequena (PWA instalado), em tela cheia numa TV ou ser capturado como papel de parede.
  * Não exige login. Atualiza sozinho: acompanha a data de hoje e muda de mês à meia-noite.
- * Parâmetros opcionais: ?mes=1..12 (fixa o mês) e ?legenda=0 (esconde a legenda).
+ * Parâmetros opcionais: ?mes=1..12 (fixa o mês), ?legenda=0 (esconde a legenda) e
+ * ?fundo=1 (modo papel de parede: fundo escuro e calendário só na metade direita).
  */
 export function CalendarioWidget() {
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const mesFixo = Number(params.get('mes'));
+  const fundo = params.get('fundo') === '1';
   const mostrarLegenda = params.get('legenda') !== '0';
 
   const [hoje, setHoje] = useState(() => isoDeData(new Date()));
@@ -58,10 +60,17 @@ export function CalendarioWidget() {
   const status = diaDestaque ? statusDoDia(diaDestaque) : null;
 
   return (
-    <div className="min-h-screen lg:h-screen lg:overflow-hidden bg-[#F3F7F4] p-3 sm:p-4" style={{ color: TINTA }}>
-      <div className="h-full grid gap-3 sm:gap-4 lg:grid-cols-[minmax(320px,1.1fr)_minmax(300px,1fr)]">
+    <div
+      className={fundo
+        ? 'h-screen overflow-hidden p-8 flex justify-end'
+        : 'min-h-screen lg:h-screen lg:overflow-hidden bg-[#F3F7F4] p-3 sm:p-4'}
+      style={{ color: TINTA, ...(fundo ? { background: 'linear-gradient(135deg,#06281a 0%,#0b3d29 55%,#0f4d34 100%)' } : {}) }}
+    >
+      <div className={fundo
+        ? 'h-full w-[52%] grid gap-4 grid-cols-[1.1fr_1fr]'
+        : 'h-full grid gap-3 sm:gap-4 lg:grid-cols-[minmax(320px,1.1fr)_minmax(300px,1fr)]'}>
         {/* Mês */}
-        <section className="bg-white rounded-[20px] border border-[#DCEBE2] p-3 sm:p-4 flex flex-col min-h-0">
+        <section className={`bg-white rounded-[20px] border border-[#DCEBE2] p-3 sm:p-4 flex flex-col min-h-0 ${fundo ? 'self-start' : ''}`}>
           <header className="text-center pb-2">
             <h1 className="text-xl sm:text-2xl font-extrabold leading-tight">{MESES[mes]} de {ANO}</h1>
             <p className="text-xs tabular-nums" style={{ color: TINTA_SUAVE }}>
