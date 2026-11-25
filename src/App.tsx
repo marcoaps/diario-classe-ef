@@ -4,6 +4,7 @@ import { StoreProvider } from './store';
 import { AppLayout } from './ui/AppLayout';
 const Dashboard = lazy(() => import('./ui/pages/Dashboard').then(m => ({ default: m.Dashboard })));
 const CalendarioEscolar = lazy(() => import('./ui/pages/CalendarioEscolar').then(m => ({ default: m.CalendarioEscolar })));
+const CalendarioWidget = lazy(() => import('./ui/pages/CalendarioWidget').then(m => ({ default: m.CalendarioWidget })));
 const Attendance = lazy(() => import('./ui/pages/Attendance').then(m => ({ default: m.Attendance })));
 const MarcarGenero = lazy(() => import('./ui/pages/MarcarGenero').then(m => ({ default: m.MarcarGenero })));
 const AttendanceHistory = lazy(() => import('./ui/pages/AttendanceHistory').then(m => ({ default: m.AttendanceHistory })));
@@ -105,6 +106,7 @@ export default function App() {
         <Route path="/interclasses/inscricao" element={<InscricaoAlunosPublico />} />
         <Route path="/interclasses/resultados" element={<ConfrontosPublico />} />
         <Route path="/agenda" element={<AgendaHoje />} />
+        <Route path="/widget" element={<CalendarioWidget />} />
         <Route path="/lideres-prova" element={<LideresProva />} />
         <Route path="/lideres-prova/:turma" element={<LideresProva />} />
 
