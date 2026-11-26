@@ -89,6 +89,9 @@ async function buscarFaltasBimestre(turma: string, bimestre: number): Promise<Re
   }
 }
 
+// Nota mínima para aprovação (a mesma da prova online).
+const NOTA_APROVACAO = 7;
+
 export function GradeReport() {
   const [view, setView] = useState<"notas" | "desempenho" | "grafico">("notas");
   const [bimestre, setBimestre] = useState<1 | 2 | 3 | 4>(() => bimestreAtual());
@@ -356,8 +359,7 @@ export function GradeReport() {
   };
 
   const getBarColor = (media: number) => {
-    if (media >= 7) return "#0B6B3A";
-    if (media >= 5) return "#D9A21B";
+    if (media >= NOTA_APROVACAO) return "#0B6B3A";
     if (media >= 3) return "#E07B1A";
     return "#C2352B";
   };
@@ -562,7 +564,7 @@ export function GradeReport() {
   };
 
   const getStatus = (nota: number) => {
-    if (nota >= 5) return { text: "Aprovado", color: "text-green-600" };
+    if (nota >= NOTA_APROVACAO) return { text: "Aprovado", color: "text-green-600" };
     if (nota >= 3) return { text: "Rec.", color: "text-yellow-600" };
     return { text: "Reprov.", color: "text-red-600" };
   };
@@ -575,7 +577,7 @@ export function GradeReport() {
   const ativosNotas = alunos.filter(a => !/transferi|remanej/.test(a.situacao?.toLowerCase() ?? ''));
   const comNota = ativosNotas.filter(a => a.nota !== null);
   const mediaTurma = comNota.length ? comNota.reduce((s, a) => s + (a.nota as number), 0) / comNota.length : null;
-  const aprovados = comNota.filter(a => (a.nota as number) >= 5).length;
+  const aprovados = comNota.filter(a => (a.nota as number) >= NOTA_APROVACAO).length;
   const transferidosTotal = alunos.length - ativosNotas.length;
   const serieAtual = turma.charAt(0);
   const series = Array.from(new Set(TURMAS.map(t => t.charAt(0))));
@@ -584,7 +586,7 @@ export function GradeReport() {
   // (verde = aprovado, laranja = rec., vermelho = reprovado).
   const notaChip = (nota: number | null) => {
     if (nota === null) return "text-on-surface-variant bg-[#EEF2EF]";
-    if (nota >= 5) return "text-[#0B6B3A] bg-[#E3F2EA]";
+    if (nota >= NOTA_APROVACAO) return "text-[#0B6B3A] bg-[#E3F2EA]";
     if (nota >= 3) return "text-[#9A4708] bg-[#FFEDD5]";
     return "text-[#B42318] bg-[#FDECEA]";
   };
@@ -593,8 +595,8 @@ export function GradeReport() {
 
   const faixas = [
     { rot: '9 a 10', cor: '#4CC785', n: comNota.filter(a => (a.nota as number) >= 9).length },
-    { rot: '5 a 8,9', cor: '#F2B632', n: comNota.filter(a => (a.nota as number) >= 5 && (a.nota as number) < 9).length },
-    { rot: '3 a 4,9', cor: '#F08A3C', n: comNota.filter(a => (a.nota as number) >= 3 && (a.nota as number) < 5).length },
+    { rot: '7 a 8,9', cor: '#B5E48C', n: comNota.filter(a => (a.nota as number) >= NOTA_APROVACAO && (a.nota as number) < 9).length },
+    { rot: '3 a 6,9', cor: '#F08A3C', n: comNota.filter(a => (a.nota as number) >= 3 && (a.nota as number) < NOTA_APROVACAO).length },
     { rot: 'abaixo de 3', cor: '#F1695D', n: comNota.filter(a => (a.nota as number) < 3).length },
   ];
 
@@ -837,8 +839,7 @@ export function GradeReport() {
               </div>
               <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3 text-xs text-on-surface-variant">
                 <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#0B6B3A] inline-block" /> 7 ou mais</span>
-                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#D9A21B] inline-block" /> 5 a 6,9</span>
-                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#E07B1A] inline-block" /> 3 a 4,9</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#E07B1A] inline-block" /> 3 a 6,9</span>
                 <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#C2352B] inline-block" /> abaixo de 3</span>
               </div>
             </div>
