@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import { cn } from "../AppLayout";
 import { X, FileDown, Save, Upload, Loader2, Check, RefreshCw } from "lucide-react";
 import { PainelProvasTurma } from "./PainelProvasTurma";
-import { salvarNotas, buscarNotas, sincronizarNomesAlunos, supabase } from "../../data/supabase";
+import { salvarNotas, buscarNotas, editarNota, sincronizarNomesAlunos, supabase } from "../../data/supabase";
+import { EditorNota } from "./EditorNota";
 import { buscarRemanejados, ehTransferenciaErroneaDeImportacao, chaveNomeSituacao, chavesCanonicasDeNomesCompativeis } from "../../domain/situacaoAluno";
 import { bimestreAtual } from "../../domain/useRelatorioFrequencia";
 import { formatarNome } from "../../utils/formatarNome";
@@ -29,6 +30,8 @@ interface AlunoNota {
   num: number;
   nome: string;
   nota: number | null;
+  /** Nota calculada pela frequência, mostrada quando não há nota lançada. */
+  notaFrequencia?: number | null;
   situacao: string;
   data_situacao: string;
   faltas?: number;
@@ -149,6 +152,22 @@ export function GradeReport() {
     else carregarGrafico();
   }, [turma, bimestre, view]);
 
+  // Edição manual: guarda turma/bimestre/nome pra fechar ao trocar de lista.
+  const [editando, setEditando] = useState<string | null>(null);
+  const chaveEdicao = (nome: string) => `${turma}|${bimestre}|${nome}`;
+  const fecharEdicao = (chave: string) => {
+    setEditando(null);
+    // Devolve o foco ao selo que abriu a edição.
+    setTimeout(() => document.querySelector<HTMLButtonElement>(`[data-nota="${CSS.escape(chave)}"]`)?.focus(), 0);
+  };
+  const salvarEdicao = async (nome: string, nota: number | null) => {
+    const chave = chaveEdicao(nome);
+    await editarNota(turma, bimestre, nome, nota);
+    setAlunos(lista => lista.map(a => a.nome === nome ? { ...a, nota: nota ?? a.notaFrequencia ?? null } : a));
+    setConsultaProvas(null);
+    fecharEdicao(chave);
+  };
+
   const painelProvas = consultaProvas?.turma === turma && consultaProvas.bimestre === bimestre ? consultaProvas : null;
   const atualizarProvas = () => {
     setConsultaProvas(c => ({ turma, bimestre, vez: (c?.vez ?? 0) + 1 }));
@@ -177,6 +196,7 @@ export function GradeReport() {
         nome: d.nome,
         // Sem nota do Simaed, mostra a nota_ef calculada na tela de Relatórios.
         nota: d.nota ?? d.nota_ef ?? null,
+        notaFrequencia: d.nota_ef ?? null,
         situacao: situacaoReal(d),
         data_situacao: d.data_situacao || '',
         faltas: faltasPorNome[d.nome?.toUpperCase()] ?? (d.faltas ?? 0),
@@ -766,12 +786,16 @@ export function GradeReport() {
                   <span className="w-12 text-center">FALTAS</span>
                   <span className="w-16 flex justify-end"><span className="w-[52px] text-center">NOTA</span></span>
                 </div>
+                {saved && (
+                  <p className="px-3.5 pt-2 text-xs text-on-surface-variant print:hidden">Toque em uma nota para editar.</p>
+                )}
                 <div className="flex flex-col divide-y divide-surface-container">
                   {alunos.map(aluno => {
                     const transferido = /transferi|remanej/.test(aluno.situacao?.toLowerCase() ?? '');
                     const status = !transferido && aluno.nota !== null ? getStatus(aluno.nota!) : null;
                     return (
-                      <div key={aluno.nome} className="px-3.5 py-3 flex items-center gap-1">
+                      <div key={aluno.nome}>
+                      <div className="px-3.5 py-3 flex items-center gap-1">
                         <span className="text-xs text-on-surface-variant w-6 shrink-0 tabular-nums">{aluno.num}</span>
                         <span className="flex-1 min-w-0 flex flex-col">
                           <span className={cn("text-sm font-bold leading-snug", transferido ? "text-on-surface-variant line-through" : "text-on-surface")}>{formatarNome(aluno.nome)}</span>
@@ -787,10 +811,24 @@ export function GradeReport() {
                         <span className="w-16 flex justify-end shrink-0">
                           {transferido ? (
                             <span className={cn(caixaNota, "text-[11px] text-on-surface-variant bg-[#E7ECE9]")}>{situacaoAbrev(aluno.situacao)}</span>
+                          ) : saved ? (
+                            <button type="button" data-nota={chaveEdicao(aluno.nome)}
+                              onClick={() => setEditando(chaveEdicao(aluno.nome))}
+                              aria-expanded={editando === chaveEdicao(aluno.nome)}
+                              aria-label={`Editar nota de ${formatarNome(aluno.nome)}: ${aluno.nota === null ? 'sem nota' : fmtNota(aluno.nota)}`}
+                              className="-my-1.5 py-1.5 rounded-lg group focus-visible:outline-none">
+                              <span className={cn(caixaNota, "text-sm cursor-pointer group-hover:ring-2 group-hover:ring-[#0B6B3A]/40 group-focus-visible:ring-2 group-focus-visible:ring-[#0B6B3A]", notaChip(aluno.nota))}>{fmtNota(aluno.nota)}</span>
+                            </button>
                           ) : (
                             <span className={cn(caixaNota, "text-sm", notaChip(aluno.nota))}>{fmtNota(aluno.nota)}</span>
                           )}
                         </span>
+                      </div>
+                      {saved && !transferido && editando === chaveEdicao(aluno.nome) && (
+                        <EditorNota aluno={formatarNome(aluno.nome)} notaAtual={aluno.nota}
+                          onSalvar={nota => salvarEdicao(aluno.nome, nota)}
+                          onCancelar={() => fecharEdicao(chaveEdicao(aluno.nome))} />
+                      )}
                       </div>
                     );
                   })}

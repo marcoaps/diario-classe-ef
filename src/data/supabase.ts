@@ -243,6 +243,18 @@ export async function salvarNotas(
   }
 }
 
+// Edição manual de uma nota: muda só a coluna `nota` da linha do aluno. Vale o
+// que o professor digitar, inclusive baixar (a regra "vale a maior" é só das
+// provas). O select confirma a gravação: sem login a RLS não acusa erro.
+export async function editarNota(turma: string, bimestre: number, nome: string, nota: number | null) {
+  const { data, error } = await supabase
+    .from("notas").update({ nota })
+    .eq("turma", turma).eq("bimestre", bimestre).eq("nome", nome)
+    .select("nome");
+  if (error) throw error;
+  if (!data || data.length === 0) throw new Error("Nada foi salvo. Faça login novamente e tente de novo.");
+}
+
 export async function buscarNotas(turma: string, bimestre: number) {
   const { data, error } = await supabase
     .from("notas").select("*")
