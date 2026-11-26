@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../data/supabase';
 import { filtrarTransferenciasEfetivas } from './situacaoAluno';
 import { useRelatorioFrequencia, type Bimestre, type AlunoFrequencia } from './useRelatorioFrequencia';
+import type { OrigemProva } from './resumoProvasTurma';
 
 // Regra de quem precisa fazer a prova (papel/online) num bimestre — usada
 // tanto na tela do professor (AlunosProva.tsx, com ações de liberar/exportar)
@@ -44,6 +45,10 @@ export interface ContextoPendentesProva {
   envios: Envio[];
   avaliacoesImpressas: AvaliacaoImpressa[];
   correcoesImpressas: CorrecaoImpressa[];
+  /** Todas as buscas terminaram. */
+  pronto?: boolean;
+  /** Falha ao ler as provas ou os envios. */
+  erro?: string | null;
 }
 
 // Busca uma vez (independe de turma/bimestre) os dados compartilhados entre
@@ -57,19 +62,24 @@ export function useContextoPendentesProva(): ContextoPendentesProva {
   const [avaliacoesImpressas, setAvaliacoesImpressas] = useState<AvaliacaoImpressa[]>([]);
   const [correcoesImpressas, setCorrecoesImpressas] = useState<CorrecaoImpressa[]>([]);
 
+  const [terminadas, setTerminadas] = useState(0);
+  const [erro, setErro] = useState<string | null>(null);
+
   useEffect(() => {
+    const terminou = () => setTerminadas(n => n + 1);
     (async () => {
       const { data: aee } = await supabase.from('alunos_especiais').select('nome');
       const { data: transf } = await supabase.from('notas').select('nome, turma, situacao, data_situacao').or('situacao.ilike.%transferi%,situacao.ilike.%remanej%');
       setAeeNomes(new Set<string>((aee || []).map((e: any) => normNome(e.nome))));
       setNomesExcluidos(new Set<string>(filtrarTransferenciasEfetivas(transf || []).map((e: any) => `${chaveTurma(e.turma)}|${normNome(e.nome)}`)));
-    })();
+    })().finally(terminou);
     (async () => {
-      const { data: provas } = await supabase.from('provas').select('id, titulo, turma_id');
-      const { data: resp } = await supabase.from('respostas').select('prova_id, turma_id, aluno_numero, aluno_nome, nota');
+      const { data: provas, error: eProvas } = await supabase.from('provas').select('id, titulo, turma_id');
+      const { data: resp, error: eResp } = await supabase.from('respostas').select('prova_id, turma_id, aluno_numero, aluno_nome, nota');
+      if (eProvas || eResp) setErro((eProvas || eResp)!.message);
       setProvasOnline(provas || []);
       setEnvios(resp || []);
-    })();
+    })().finally(terminou);
     // Provas impressas corrigidas e já vinculadas a um aluno. Na página
     // pública dos líderes (sem login) a RLS de avaliacoes_respostas não
     // libera leitura -- aí volta vazio e a página segue só com as online.
@@ -88,10 +98,10 @@ export function useContextoPendentesProva(): ContextoPendentesProva {
         setAvaliacoesImpressas((avs || []) as AvaliacaoImpressa[]);
         setCorrecoesImpressas(cor as CorrecaoImpressa[]);
       } catch { /* sem acesso: mantém só as provas online */ }
-    })();
+    })().finally(terminou);
   }, []);
 
-  return { nomesExcluidos, aeeNomes, provasOnline, envios, avaliacoesImpressas, correcoesImpressas };
+  return { nomesExcluidos, aeeNomes, provasOnline, envios, avaliacoesImpressas, correcoesImpressas, pronto: terminadas >= 3, erro };
 }
 
 // Pra uma turma+bimestre, calcula quem precisa fazer a prova (farao), quem
@@ -119,13 +129,15 @@ export function usePendentesProva(turmaId: string, bimestre: Bimestre, ctx: Cont
   // regra usada em AvaliacaoResultados.tsx. O nome digitado tem prioridade:
   // se bater (mesmo parcialmente) com um aluno da turma, o nº de chamada é
   // ignorado. Sem nome reconhecível, vale o nº de chamada.
-  const notasOnline = useMemo(() => {
+  const { notasOnline, origens } = useMemo(() => {
     const re = new RegExp(String.raw`(^|\D)${bimestre}\s*[º°o]?\s*bim`, 'i');
     const provaIds = new Set(provasOnline.filter(p => re.test(p.titulo)).map(p => p.id));
     const turma = chaveTurma(turmaId);
     const tokens = (n: string) => normNome(n).split(/\s+/).filter(t => t.length > 1);
     const mapa = new Map<string, number | null>();
-    const registrar = (id: string, nota: number | null) => {
+    const origens = new Map<string, Set<OrigemProva>>();
+    const registrar = (id: string, nota: number | null, origem: OrigemProva = 'online') => {
+      origens.set(id, (origens.get(id) ?? new Set<OrigemProva>()).add(origem));
       const atual = mapa.get(id);
       if (!mapa.has(id) || (nota ?? -1) > (atual ?? -1)) mapa.set(id, nota);
     };
@@ -163,9 +175,9 @@ export function usePendentesProva(turmaId: string, bimestre: Bimestre, ctx: Cont
       if (!av || !idsDaTurma.has(c.aluno_id)) continue;
       const total = (av.valor_total_objetivas || 0) + (av.valor_total_discursivas || 0);
       const nota = c.nota_final == null ? null : total > 0 ? Math.round((c.nota_final / total) * 100) / 10 : c.nota_final;
-      registrar(c.aluno_id, nota);
+      registrar(c.aluno_id, nota, 'impressa');
     }
-    return mapa;
+    return { notasOnline: mapa, origens };
   }, [provasOnline, envios, avaliacoesImpressas, correcoesImpressas, bimestre, turmaId, alunosBrutos]);
 
   const fizeramOnline = alunos
@@ -174,5 +186,5 @@ export function usePendentesProva(turmaId: string, bimestre: Bimestre, ctx: Cont
   const farao = alunos.filter(a => precisaFazerProva(a) && !notasOnline.has(a.id));
   const dispensados = alunos.filter(a => !precisaFazerProva(a));
 
-  return { loading, erro, alunos, isAEE, farao, dispensados, fizeramOnline, notasOnline };
+  return { loading, erro, alunos, isAEE, farao, dispensados, fizeramOnline, notasOnline, origens };
 }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { cn } from "../AppLayout";
-import { X, FileDown, Save, Upload, Loader2, Check } from "lucide-react";
+import { X, FileDown, Save, Upload, Loader2, Check, RefreshCw } from "lucide-react";
+import { PainelProvasTurma } from "./PainelProvasTurma";
 import { salvarNotas, buscarNotas, sincronizarNomesAlunos, supabase } from "../../data/supabase";
 import { buscarRemanejados, ehTransferenciaErroneaDeImportacao, chaveNomeSituacao, chavesCanonicasDeNomesCompativeis } from "../../domain/situacaoAluno";
 import { bimestreAtual } from "../../domain/useRelatorioFrequencia";
@@ -110,6 +111,9 @@ export function GradeReport() {
   const [excelTurmas, setExcelTurmas] = useState<NotasTurmaImportada[]>([]);
   const [excelMsg, setExcelMsg] = useState<string | null>(null);
   const [excelBusy, setExcelBusy] = useState(false);
+  // Painel "quem já fez a avaliação": vale só pra turma/bimestre consultados;
+  // `vez` muda a cada toque no botão pra buscar tudo de novo.
+  const [consultaProvas, setConsultaProvas] = useState<{ turma: string; bimestre: number; vez: number } | null>(null);
 
   const handleExcelFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files: File[] = Array.from(e.target.files || []);
@@ -144,6 +148,13 @@ export function GradeReport() {
     else if (view === "desempenho") carregarDesempenho();
     else carregarGrafico();
   }, [turma, bimestre, view]);
+
+  const painelProvas = consultaProvas?.turma === turma && consultaProvas.bimestre === bimestre ? consultaProvas : null;
+  const atualizarProvas = () => {
+    setConsultaProvas(c => ({ turma, bimestre, vez: (c?.vez ?? 0) + 1 }));
+    // Recarrega a lista também, sem descartar um PDF carregado e não salvo.
+    if (saved || alunos.length === 0) carregarNotas();
+  };
 
   const carregarNotas = async () => {
     setIsLoading(true);
@@ -727,6 +738,20 @@ export function GradeReport() {
       )}
 
       <div className="p-4 pb-20">
+        {view === "notas" && (
+          <div className="print:hidden">
+            <button type="button" onClick={atualizarProvas}
+              className="mb-3 w-full h-11 rounded-xl border border-[#0B6B3A] bg-white text-[#0B6B3A] text-[13px] font-extrabold flex items-center justify-center gap-2 active:scale-95 transition-all">
+              <RefreshCw className="w-4 h-4" aria-hidden />
+              {painelProvas ? `Atualizar avaliação da ${turma}` : `Quem já fez a avaliação da ${turma}`}
+            </button>
+            {painelProvas && (
+              <div key={`${turma}-${bimestre}-${painelProvas.vez}`}>
+                <PainelProvasTurma turma={turma} bimestre={bimestre} onFechar={() => setConsultaProvas(null)} />
+              </div>
+            )}
+          </div>
+        )}
         {isLoading ? (
           <div className="text-center p-10 text-gray-500">Carregando...</div>
         ) : view === "notas" ? (
