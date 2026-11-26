@@ -4,8 +4,9 @@ import { X, FileDown, Save, Upload, Loader2, Check, RefreshCw } from "lucide-rea
 import { PainelProvasTurma } from "./PainelProvasTurma";
 import { BaixarListasImpressa } from "./BaixarListasImpressa";
 import { ImagensTodasTurmas } from "./ImagensTodasTurmas";
-import { salvarNotas, buscarNotas, editarNota, sincronizarNomesAlunos, supabase } from "../../data/supabase";
+import { salvarNotas, buscarNotas, editarNota, sincronizarNomesAlunos, buscarAlunosEspeciais, supabase } from "../../data/supabase";
 import { EditorNota } from "./EditorNota";
+import { criarVerificadorAee } from "../../domain/alunosAee";
 import { buscarRemanejados, ehTransferenciaErroneaDeImportacao, chaveNomeSituacao, chavesCanonicasDeNomesCompativeis } from "../../domain/situacaoAluno";
 import { bimestreAtual } from "../../domain/useRelatorioFrequencia";
 import { formatarNome } from "../../utils/formatarNome";
@@ -153,6 +154,12 @@ export function GradeReport() {
     else if (view === "desempenho") carregarDesempenho();
     else carregarGrafico();
   }, [turma, bimestre, view]);
+
+  // Alunos AEE ganham destaque na lista. `undefined` = a consulta falhou.
+  const [cadastroAee, setCadastroAee] = useState<{ nome: string; turma_id: string }[] | null | undefined>(null);
+  useEffect(() => {
+    buscarAlunosEspeciais().then(setCadastroAee).catch(() => setCadastroAee(undefined));
+  }, []);
 
   // Edição manual: guarda turma/bimestre/nome pra fechar ao trocar de lista.
   const [editando, setEditando] = useState<string | null>(null);
@@ -626,6 +633,9 @@ export function GradeReport() {
   // Largura e altura fixas: "7,0", "10,0" e "-" ocupam a mesma caixa.
   const caixaNota = "inline-flex items-center justify-center w-[52px] h-8 rounded-lg font-extrabold tabular-nums";
 
+  const ehAee = criarVerificadorAee(cadastroAee ?? [], turma);
+  const totalAee = alunos.filter(a => !/transferi|remanej/.test(a.situacao?.toLowerCase() ?? '') && ehAee(a.nome)).length;
+
   const faixas = [
     { rot: '9 a 10', cor: '#4CC785', n: comNota.filter(a => (a.nota as number) >= 9).length },
     { rot: '7 a 8,9', cor: '#B5E48C', n: comNota.filter(a => (a.nota as number) >= NOTA_APROVACAO && (a.nota as number) < 9).length },
@@ -793,16 +803,27 @@ export function GradeReport() {
                 {saved && (
                   <p className="px-3.5 pt-2 text-xs text-on-surface-variant print:hidden">Toque em uma nota para editar.</p>
                 )}
-                <div className="flex flex-col divide-y divide-surface-container">
+                {totalAee > 0 && (
+                  <p className="px-3.5 py-2 text-xs font-bold text-purple-700">
+                    {totalAee === 1 ? '1 aluno AEE' : `${totalAee} alunos AEE`} em destaque roxo.
+                  </p>
+                )}
+                {cadastroAee === undefined && (
+                  <p role="alert" className="px-3.5 pt-2 text-xs font-semibold text-[#B42318] print:hidden">Não consegui carregar a lista de alunos AEE. Recarregue a página.</p>
+                )}
+                <div className="flex flex-col divide-y divide-surface-container rounded-b-[19px] overflow-hidden">
                   {alunos.map(aluno => {
                     const transferido = /transferi|remanej/.test(aluno.situacao?.toLowerCase() ?? '');
+                    const aee = !transferido && ehAee(aluno.nome);
                     const status = !transferido && aluno.nota !== null ? getStatus(aluno.nota!) : null;
                     return (
                       <div key={aluno.nome}>
-                      <div className="px-3.5 py-3 flex items-center gap-1">
+                      <div className={cn("px-3.5 py-3 flex items-center gap-1", aee && "bg-purple-50 print:[print-color-adjust:exact]")}>
                         <span className="text-xs text-on-surface-variant w-6 shrink-0 tabular-nums">{aluno.num}</span>
                         <span className="flex-1 min-w-0 flex flex-col">
-                          <span className={cn("text-sm font-bold leading-snug", transferido ? "text-on-surface-variant line-through" : "text-on-surface")}>{formatarNome(aluno.nome)}</span>
+                          <span className={cn("text-sm font-bold leading-snug", transferido ? "text-on-surface-variant line-through" : "text-on-surface")}>{formatarNome(aluno.nome)}{aee && (
+                            <span className="ml-1.5 inline-block align-middle text-[10px] leading-4 font-extrabold px-1.5 rounded-full bg-purple-700 text-white">AEE</span>
+                          )}</span>
                           {transferido ? (
                             <span className="text-[11px] text-[#B42318] font-semibold">{situacaoAbrev(aluno.situacao)}{aluno.data_situacao ? ` · ${aluno.data_situacao}` : ''}</span>
                           ) : status && status.text !== "Aprovado" ? (

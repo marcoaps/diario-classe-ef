@@ -90,7 +90,7 @@ export async function buscarChavesTransferidos(turmas: string[]): Promise<Set<st
 }
 
 // Distância de Levenshtein normalizada (1 = idêntico).
-function similaridade(a: string, b: string): number {
+export function similaridade(a: string, b: string): number {
   if (a === b) return 1;
   const anterior = Array.from({ length: b.length + 1 }, (_, j) => j);
   for (let i = 1; i <= a.length; i++) {
