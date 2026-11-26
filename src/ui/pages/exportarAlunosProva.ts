@@ -138,15 +138,15 @@ export async function exportarTurmaCompletaWord(bimestre: number, turmas: TurmaS
   saveAs(blob, `Situacao_Prova_${bimestre}Bim_TODAS.docx`);
 }
 
-// Lista para aplicar a prova impressa: só quem ainda não fez, com espaço para
-// assinatura. Todas as turmas num arquivo, uma turma por folha.
+// Lista para aplicar a prova impressa: só quem ainda não fez.
+// Todas as turmas num arquivo, uma turma por folha.
 export interface TurmaImpressaExport {
   turma: string;
   alunos: { numero_chamada?: number | null; nome: string }[];
 }
 
 export function montarProvaImpressaDoc(bimestre: number, turmas: TurmaImpressaExport[], quando: Date) {
-  const W = [800, 6200, 4330]; // soma 11330 (A4 com margens de 0,5 cm)
+  const W = [800, 10530]; // soma 11330 (A4 com margens de 0,5 cm)
   const data = quando.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   const children: (Paragraph | Table)[] = [];
 
@@ -157,7 +157,6 @@ export function montarProvaImpressaDoc(bimestre: number, turmas: TurmaImpressaEx
       children: [
         celula('Nº', W[0], { bold: true, center: true, fill: 'D9EAD3', keep: true }),
         celula('Aluno', W[1], { bold: true, fill: 'D9EAD3', keep: true }),
-        celula('Assinatura', W[2], { bold: true, center: true, fill: 'D9EAD3', keep: true }),
       ],
     });
     const linhas = t.alunos.map((a, i) => { const keep = i < t.alunos.length - 1; return new TableRow({
@@ -166,7 +165,6 @@ export function montarProvaImpressaDoc(bimestre: number, turmas: TurmaImpressaEx
       children: [
         celula(a.numero_chamada ? String(a.numero_chamada) : '', W[0], { center: true, keep }),
         celula(a.nome, W[1], { keep }),
-        celula('', W[2], { keep }),
       ],
     }); });
     const total = t.alunos.length === 1 ? '1 aluno' : `${t.alunos.length} alunos`;
