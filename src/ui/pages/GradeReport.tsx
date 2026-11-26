@@ -580,15 +580,16 @@ export function GradeReport() {
   const serieAtual = turma.charAt(0);
   const series = Array.from(new Set(TURMAS.map(t => t.charAt(0))));
 
-  // Cor da nota por faixa (verde ≥ 9, dourado 5–8,9, laranja 3–4,9, vermelho < 3)
+  // Um só formato de selo para qualquer nota; a cor segue o status de getStatus
+  // (verde = aprovado, laranja = rec., vermelho = reprovado).
   const notaChip = (nota: number | null) => {
     if (nota === null) return "text-on-surface-variant bg-[#EEF2EF]";
-    if (nota >= 10) return "text-white bg-[#0B6B3A]";
-    if (nota >= 9) return "text-[#0B6B3A] bg-[#E3F2EA]";
-    if (nota >= 5) return "text-[#9A6A00] bg-[#FDF3DC]";
-    if (nota >= 3) return "text-[#B45309] bg-[#FFEDD5]";
+    if (nota >= 5) return "text-[#0B6B3A] bg-[#E3F2EA]";
+    if (nota >= 3) return "text-[#9A4708] bg-[#FFEDD5]";
     return "text-[#B42318] bg-[#FDECEA]";
   };
+  // Largura e altura fixas: "7,0", "10,0" e "-" ocupam a mesma caixa.
+  const caixaNota = "inline-flex items-center justify-center w-[52px] h-8 rounded-lg font-extrabold tabular-nums";
 
   const faixas = [
     { rot: '9 a 10', cor: '#4CC785', n: comNota.filter(a => (a.nota as number) >= 9).length },
@@ -736,7 +737,7 @@ export function GradeReport() {
                   <span className="w-6 shrink-0">Nº</span>
                   <span className="flex-1">ALUNO</span>
                   <span className="w-12 text-center">FALTAS</span>
-                  <span className="w-16 text-right">NOTA</span>
+                  <span className="w-16 flex justify-end"><span className="w-[52px] text-center">NOTA</span></span>
                 </div>
                 <div className="flex flex-col divide-y divide-surface-container">
                   {alunos.map(aluno => {
@@ -758,9 +759,9 @@ export function GradeReport() {
                         </span>
                         <span className="w-16 flex justify-end shrink-0">
                           {transferido ? (
-                            <span className="text-[11px] font-extrabold text-on-surface-variant bg-[#E7ECE9] px-2 py-1.5 rounded-lg">{situacaoAbrev(aluno.situacao)}</span>
+                            <span className={cn(caixaNota, "text-[11px] text-on-surface-variant bg-[#E7ECE9]")}>{situacaoAbrev(aluno.situacao)}</span>
                           ) : (
-                            <span className={cn("text-sm font-extrabold px-2.5 py-1.5 rounded-lg", notaChip(aluno.nota))}>{fmtNota(aluno.nota)}</span>
+                            <span className={cn(caixaNota, "text-sm", notaChip(aluno.nota))}>{fmtNota(aluno.nota)}</span>
                           )}
                         </span>
                       </div>
@@ -799,7 +800,7 @@ export function GradeReport() {
                           <td className="px-1 py-2.5 text-center text-on-surface font-semibold tabular-nums">{fmtNota(aluno.b2)}</td>
                           <td className="px-1 py-2.5 text-center text-on-surface font-semibold tabular-nums">{fmtNota(aluno.b3)}</td>
                           <td className="px-1 py-2.5 text-center text-on-surface font-semibold tabular-nums">{fmtNota(aluno.b4)}</td>
-                          <td className="px-1 py-2.5 text-center"><span className={cn("inline-block min-w-[40px] text-xs font-extrabold px-2 py-1 rounded-lg tabular-nums", notaChip(media))}>{fmtNota(media)}</span></td>
+                          <td className="px-1 py-2.5 text-center"><span className={cn("inline-block w-11 text-xs font-extrabold py-1 rounded-lg tabular-nums", notaChip(media))}>{fmtNota(media)}</span></td>
                         </tr>
                       );
                     })}
