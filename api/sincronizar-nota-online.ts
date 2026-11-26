@@ -33,6 +33,11 @@ export function normalizarNotaOnline(nota: number, bimestre?: number | null): nu
   return Math.min(Math.ceil(Math.round(nota * 100) / 100), NOTA_MAXIMA_ONLINE);
 }
 
+// Mesma regra de src/domain/nomeNasNotas.ts: `notas` diferencia maiúsculas e
+// acentos no nome, então compara sem eles pra não criar linha duplicada.
+const chaveNome = (n: string) =>
+  n.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim().replace(/\s+/g, ' ');
+
 function bimestreDoTitulo(titulo: string): number | null {
   const m = titulo.match(/([1-4])\s*[º°o]?\s*bim/i);
   return m ? parseInt(m[1], 10) : null;
@@ -78,10 +83,15 @@ export default async function handler(req: any, res: any) {
     if (eTentativas) throw eTentativas;
     const melhorNota = normalizarNotaOnline((tentativas || []).reduce((max: number, r: any) => Math.max(max, r.nota ?? 0), 0), bimestre);
 
-    const nomeChave = aluno.nome.toUpperCase();
-    const { data: atual } = await supabase
-      .from('notas').select('nota, situacao, data_situacao, faltas')
-      .eq('turma', turma_id).eq('bimestre', bimestre).eq('nome', nomeChave).maybeSingle();
+    const { data: linhas, error: eNotas } = await supabase
+      .from('notas').select('nome, nota, situacao, data_situacao, faltas')
+      .eq('turma', turma_id).eq('bimestre', bimestre);
+    if (eNotas) throw eNotas;
+    // Se o aluno já tiver mais de uma linha, usa a que tem a maior nota.
+    const chave = chaveNome(aluno.nome);
+    const atual = (linhas || [])
+      .filter((l: any) => chaveNome(l.nome) === chave)
+      .sort((a: any, b: any) => Number(b.nota ?? -1) - Number(a.nota ?? -1))[0];
 
     const notaGravada = atual?.nota != null && Number(atual.nota) > melhorNota ? Number(atual.nota) : melhorNota;
 
@@ -89,7 +99,7 @@ export default async function handler(req: any, res: any) {
       turma: turma_id,
       bimestre,
       numero: aluno_numero,
-      nome: nomeChave,
+      nome: atual?.nome ?? aluno.nome.toUpperCase(),
       nota: notaGravada,
       situacao: atual?.situacao ?? 'Em Curso',
       data_situacao: atual?.data_situacao ?? '',

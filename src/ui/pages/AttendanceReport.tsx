@@ -6,7 +6,8 @@ import { UserRound, Loader2, BarChart3, AlertTriangle, FileSpreadsheet, FileText
 import { cn } from '../AppLayout';
 import { useRelatorioFrequencia, type Bimestre, PONTOS_MAXIMOS, getPeriodoBimestre, periodoParaNotas, bimestreAtual } from '../../domain/useRelatorioFrequencia';
 import { exportarExcel, exportarPDF, type ModoPDF } from '../../domain/exportarFrequencia';
-import { situacoesEfetivasDaTurma } from '../../domain/situacaoAluno';
+import { situacoesEfetivasDaTurma, chaveNomeSituacao } from '../../domain/situacaoAluno';
+import { nomeNasNotas } from '../../domain/nomeNasNotas';
 import { gerarRelatorioGeralProvas, gerarResumoContagemProvas } from '../../domain/relatorioGeralProvas';
 import { gerarCardsLideresProvas } from '../../domain/cardsLideresProvas';
 
@@ -252,12 +253,15 @@ export function AttendanceReport() {
       // manual para 10,0), o recálculo mantém a maior. O professor pode escolher
       // substituir (recálculo com nova base de frequência).
       const { data: existentes, error: errEx } = await supabase
-        .from('notas').select('nome, nota_ef').eq('turma', turmaNorm).eq('bimestre', bimestre);
+        .from('notas').select('nome, nota, nota_ef').eq('turma', turmaNorm).eq('bimestre', bimestre);
       if (errEx) throw errEx;
       const substituir = (existentes || []).some((r: any) => r.nota_ef != null)
         && window.confirm('Já existem notas salvas neste bimestre.\n\nOK = SUBSTITUIR pelas notas recalculadas (pode baixar notas, inclusive ajustes manuais de 10,0).\nCancelar = manter a maior entre a nota salva e a recalculada.');
       const atualPorNome: Record<string, number> = {};
-      if (!substituir) (existentes || []).forEach((r: any) => { if (r.nota_ef != null) atualPorNome[r.nome] = Number(r.nota_ef); });
+      if (!substituir) (existentes || []).forEach((r: any) => {
+        const k = chaveNomeSituacao(r.nome);
+        if (r.nota_ef != null) atualPorNome[k] = Math.max(Number(r.nota_ef), atualPorNome[k] ?? 0);
+      });
 
       // 4º Bimestre: a frequência conta só a partir de 01/11 (periodoParaNotas).
       const janela = bimestre === 4 ? periodoParaNotas(bimestre) : null;
@@ -290,9 +294,9 @@ export function AttendanceReport() {
           return {
             turma: turmaNorm,
             bimestre,
-            nome: a.nome,
+            nome: nomeNasNotas(a.nome, existentes || []),
             numero: a.numero_chamada ?? 0,
-            nota_ef: Math.max(calculada, atualPorNome[a.nome] ?? 0),
+            nota_ef: Math.max(calculada, atualPorNome[chaveNomeSituacao(a.nome)] ?? 0),
           };
         });
       if (updates.length === 0) { alert('Nenhum aluno com registros de frequência.'); return; }
@@ -314,10 +318,13 @@ export function AttendanceReport() {
     if (!window.confirm(`Ajustar a nota de ${formatarNome(a.nome)} para 10,0 (${bimestre}º Bimestre, turma ${turmaId})?\n\nUse só em casos excepcionais.`)) return;
     setAjustandoId(a.id);
     try {
+      const { data: existentes, error: errEx } = await supabase
+        .from('notas').select('nome, nota').eq('turma', normalizarTurma(turmaId)).eq('bimestre', bimestre);
+      if (errEx) throw errEx;
       const { error } = await supabase.from('notas').upsert([{
         turma: normalizarTurma(turmaId),
         bimestre,
-        nome: a.nome,
+        nome: nomeNasNotas(a.nome, existentes || []),
         numero: a.numero_chamada ?? 0,
         nota_ef: 10.0,
       }], { onConflict: 'turma,bimestre,nome' });

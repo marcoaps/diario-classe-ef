@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { Participacao } from '../domain/frequenciaPontos';
 import type { InscricaoInterclasses } from '../domain/interclasses';
 import { criarFetchComCache, limparCacheLeitura } from './cacheLeitura';
+import { nomeNasNotas } from '../domain/nomeNasNotas';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://rsifjxeqitgiecqwvien.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_Vw7h5WZ5BF-GzaAM0hOECg_TMjwdiby';
@@ -217,14 +218,14 @@ export async function salvarNotas(
     faltas?: number;
   }[]
 ) {
+  const existentes = await buscarNotas(turma, bimestre);
   const upsertData = alunos.map(a => ({
     turma,
     bimestre,
     numero: a.numero,
-    // Uppercase para o "onConflict" (turma,bimestre,nome) ser sempre o mesmo
-    // registro, nao importa se quem chamou mandou o nome em Title Case ou
-    // CAIXA ALTA -- sem isso, o mesmo aluno pode acabar duplicado na tabela.
-    nome: limparAnotacaoDeSituacao(a.nome).toUpperCase(),
+    // Reaproveita o nome já gravado para o "onConflict" (turma,bimestre,nome)
+    // cair na mesma linha -- sem isso o mesmo aluno duplica na tabela.
+    nome: nomeNasNotas(limparAnotacaoDeSituacao(a.nome), existentes),
     nota: a.nota ?? null,
     nota_texto: a.nota_texto ?? null,
     situacao: a.situacao ?? 'Em Curso',
@@ -263,9 +264,10 @@ export async function lancarNotaCorretorProva(
 ): Promise<number> {
   const nomeChave = limparAnotacaoDeSituacao(aluno.nome).toUpperCase();
   const existentes = await buscarNotas(turma, bimestre);
-  // Casa por nome e, se a grafia no Diário for outra (caixa/acento), pelo nº
+  // Casa por nome (ignorando caixa/acento) e, se ainda assim não achar, pelo nº
   // de chamada -- assim não cria uma linha duplicada do mesmo aluno.
-  const atual = (existentes.find((n: any) => n.nome === nomeChave)
+  const nomeGravado = nomeNasNotas(nomeChave, existentes as any[]);
+  const atual = (existentes.find((n: any) => n.nome === nomeGravado)
     ?? existentes.find((n: any) => n.numero === aluno.numero)) as any;
   // Regra (10/10/2026): vale sempre a MAIOR nota. Corrigir/recorrigir uma
   // prova nunca rebaixa uma nota que já está no Diário (ex.: 8,5 não vira 7,0).
