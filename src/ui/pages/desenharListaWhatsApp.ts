@@ -1,4 +1,7 @@
 // Desenha a lista de uma turma como imagem (PNG) para postar no WhatsApp.
+import { nomesCurtos } from '../../domain/nomesCurtos';
+import type { LinhaResumo } from '../../domain/resumoProvasTurma';
+
 export interface ListaWhatsApp {
   turma: string;
   bimestre: number;
@@ -70,4 +73,21 @@ export async function desenharListaWhatsApp(d: ListaWhatsApp): Promise<Blob> {
 
   return new Promise((ok, falha) =>
     canvas.toBlob(b => (b ? ok(b) : falha(new Error('Não foi possível gerar a imagem.'))), 'image/png'));
+}
+
+// Arquivo pronto para enviar. `data` vem do campo de data (aaaa-mm-dd) ou vazio.
+export async function arquivoListaWhatsApp(turma: string, bimestre: number, linhas: LinhaResumo[], data: string): Promise<File> {
+  const doisDigitos = (n: number) => String(n).padStart(2, '0');
+  const hoje = new Date();
+  const dia = doisDigitos(hoje.getDate());
+  const mes = doisDigitos(hoje.getMonth() + 1);
+  const nomes = nomesCurtos(linhas.map(l => l.nome));
+  const blob = await desenharListaWhatsApp({
+    turma,
+    bimestre,
+    alunos: linhas.map((l, i) => ({ numero: l.numero, nome: nomes[i] })),
+    dataProva: data ? data.split('-').reverse().slice(0, 2).join('/') : '',
+    atualizadaEm: `${dia}/${mes}`,
+  });
+  return new File([blob], `Prova_Impressa_${turma}_${dia}-${mes}.png`, { type: 'image/png' });
 }

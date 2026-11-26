@@ -26,7 +26,14 @@ function ColetorTurma({ turma, bimestre, ctx, notas, onPronto, onErro }: {
   return null;
 }
 
-function Coleta({ bimestre, onFim }: { bimestre: Bimestre; onFim: (erro: string | null) => void }) {
+export type TurmaPendente = { turma: string; linhas: LinhaResumo[] };
+
+// Consulta as 18 turmas e entrega só as que têm alguém para a prova impressa.
+export function ColetaImpressa({ bimestre, usar, onFim }: {
+  bimestre: Bimestre;
+  usar: (turmas: TurmaPendente[]) => Promise<void> | void;
+  onFim: (erro: string | null) => void;
+}) {
   const ctx = useContextoPendentesProva();
   const [notas, setNotas] = useState<NotaDaTurma[] | null>(null);
   const prontas = useRef(new Map<string, LinhaResumo[]>());
@@ -48,10 +55,10 @@ function Coleta({ bimestre, onFim }: { bimestre: Bimestre; onFim: (erro: string 
     prontas.current.set(turma, linhas);
     if (prontas.current.size < TURMAS_PADRAO.length || encerrado.current) return;
     const turmas = TURMAS_PADRAO
-      .map(t => ({ turma: t, alunos: prontas.current.get(t)!.map(l => ({ numero_chamada: l.numero, nome: formatarNome(l.nome) })) }))
-      .filter(t => t.alunos.length > 0);
+      .map(t => ({ turma: t, linhas: prontas.current.get(t)! }))
+      .filter(t => t.linhas.length > 0);
     if (turmas.length === 0) { encerrar('Nenhum aluno pendente de prova nas turmas.'); return; }
-    try { await exportarProvaImpressaWord(bimestre, turmas); encerrar(null); }
+    try { await usar(turmas); encerrar(null); }
     catch (e: any) { encerrar(e.message); }
   };
 
@@ -77,7 +84,11 @@ export function BaixarListasImpressa({ bimestre }: { bimestre: Bimestre }) {
       </button>
       {erro && <p role="alert" className="mt-1.5 text-xs font-semibold text-[#B42318]">Word não gerado: {erro}</p>}
       {pedido && (
-        <Coleta bimestre={pedido.bimestre} onFim={e => { setErro(e); setPedido(null); }} />
+        <ColetaImpressa bimestre={pedido.bimestre}
+          usar={turmas => exportarProvaImpressaWord(pedido.bimestre, turmas.map(t => ({
+            turma: t.turma, alunos: t.linhas.map(l => ({ numero_chamada: l.numero, nome: formatarNome(l.nome) })),
+          })))}
+          onFim={e => { setErro(e); setPedido(null); }} />
       )}
     </div>
   );

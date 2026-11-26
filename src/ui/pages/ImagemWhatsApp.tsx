@@ -1,11 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Download, Image as ImagemIcone, Loader2, Share2 } from 'lucide-react';
 import { saveAs } from 'file-saver';
-import { nomesCurtos } from '../../domain/nomesCurtos';
 import type { LinhaResumo } from '../../domain/resumoProvasTurma';
-import { desenharListaWhatsApp } from './desenharListaWhatsApp';
-
-const doisDigitos = (n: number) => String(n).padStart(2, '0');
+import { arquivoListaWhatsApp } from './desenharListaWhatsApp';
 
 // Imagem com quem ainda vai fazer a prova impressa, para o grupo da turma.
 export function ImagemWhatsApp({ turma, bimestre, linhas }: { turma: string; bimestre: number; linhas: LinhaResumo[] }) {
@@ -22,20 +19,9 @@ export function ImagemWhatsApp({ turma, bimestre, linhas }: { turma: string; bim
     let url = '';
     setImagem(null);
     setErro(null);
-    const hoje = new Date();
-    const dia = doisDigitos(hoje.getDate());
-    const mes = doisDigitos(hoje.getMonth() + 1);
-    const nomes = nomesCurtos(linhas.map(l => l.nome));
-    desenharListaWhatsApp({
-      turma,
-      bimestre,
-      alunos: linhas.map((l, i) => ({ numero: l.numero, nome: nomes[i] })),
-      dataProva: data ? data.split('-').reverse().slice(0, 2).join('/') : '',
-      atualizadaEm: `${dia}/${mes}`,
-    })
-      .then(blob => {
+    arquivoListaWhatsApp(turma, bimestre, linhas, data)
+      .then(arquivo => {
         if (!ativo) return;
-        const arquivo = new File([blob], `Prova_Impressa_${turma}_${dia}-${mes}.png`, { type: 'image/png' });
         url = URL.createObjectURL(arquivo);
         setImagem({ arquivo, url });
       })

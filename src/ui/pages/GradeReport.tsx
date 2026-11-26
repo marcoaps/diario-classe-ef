@@ -3,6 +3,7 @@ import { cn } from "../AppLayout";
 import { X, FileDown, Save, Upload, Loader2, Check, RefreshCw } from "lucide-react";
 import { PainelProvasTurma } from "./PainelProvasTurma";
 import { BaixarListasImpressa } from "./BaixarListasImpressa";
+import { ImagensTodasTurmas } from "./ImagensTodasTurmas";
 import { salvarNotas, buscarNotas, editarNota, sincronizarNomesAlunos, supabase } from "../../data/supabase";
 import { EditorNota } from "./EditorNota";
 import { buscarRemanejados, ehTransferenciaErroneaDeImportacao, chaveNomeSituacao, chavesCanonicasDeNomesCompativeis } from "../../domain/situacaoAluno";
@@ -762,6 +763,7 @@ export function GradeReport() {
         {view === "notas" && (
           <div className="print:hidden">
             <BaixarListasImpressa bimestre={bimestre} />
+            <div key={bimestre}><ImagensTodasTurmas bimestre={bimestre} /></div>
             <button type="button" onClick={atualizarProvas}
               className="mb-3 w-full h-11 rounded-xl border border-[#0B6B3A] bg-white text-[#0B6B3A] text-[13px] font-extrabold flex items-center justify-center gap-2 active:scale-95 transition-all">
               <RefreshCw className="w-4 h-4" aria-hidden />
