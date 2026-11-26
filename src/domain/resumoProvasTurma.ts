@@ -21,7 +21,8 @@ export interface LinhaResumo {
 }
 
 // Separa os alunos ativos de uma turma pela situação da prova do bimestre.
-// "Falta nota" = fez e a nota não está em Notas, ou precisa fazer e não fez.
+// "Falta nota" = fez e a nota não está em Notas, ou precisa fazer, não fez e
+// também não tem nota pela frequência (que a tela Notas já mostra como nota).
 export function resumirProvas(
   alunos: AlunoDoResumo[],
   origens: Map<string, Set<OrigemProva>>,
@@ -42,6 +43,7 @@ export function resumirProvas(
   const lancados: LinhaResumo[] = [];
   const comNotaSemProva: LinhaResumo[] = [];
   const dispensadosSemProva: LinhaResumo[] = [];
+  const soFrequencia: LinhaResumo[] = [];
 
   for (const a of alunos) {
     const gravada = porNome.get(chaveNomeSituacao(a.nome));
@@ -55,10 +57,11 @@ export function resumirProvas(
     };
     if (linha.origens.length) (linha.nota == null ? faltaLancar : lancados).push(linha);
     else if (dispensados.has(a.id)) dispensadosSemProva.push(linha);
-    else (linha.nota == null ? naoFizeram : comNotaSemProva).push(linha);
+    else if (linha.nota != null) comNotaSemProva.push(linha);
+    else ((linha.notaFrequencia ?? 0) > 0 ? soFrequencia : naoFizeram).push(linha);
   }
-  for (const l of [faltaLancar, naoFizeram, lancados, comNotaSemProva, dispensadosSemProva]) {
+  for (const l of [faltaLancar, naoFizeram, lancados, comNotaSemProva, dispensadosSemProva, soFrequencia]) {
     l.sort((a, b) => (a.numero ?? 999) - (b.numero ?? 999) || a.nome.localeCompare(b.nome, 'pt-BR'));
   }
-  return { faltaLancar, naoFizeram, lancados, comNotaSemProva, dispensadosSemProva };
+  return { faltaLancar, naoFizeram, lancados, comNotaSemProva, dispensadosSemProva, soFrequencia };
 }

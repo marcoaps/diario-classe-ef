@@ -93,6 +93,7 @@ export function PainelProvasTurma({ turma, bimestre, onFechar }: { turma: string
           <Grupo titulo="Fizeram, falta lançar a nota" linhas={r.faltaLancar} aberto />
           <Grupo titulo="Fizeram, nota lançada" linhas={r.lancados} aberto />
           <Grupo titulo="Ainda não fizeram" linhas={r.naoFizeram} aberto />
+          <Grupo titulo="Com nota pela frequência, sem prova" linhas={r.soFrequencia} aberto />
           <Grupo titulo="Com nota, sem prova registrada" linhas={r.comNotaSemProva} />
           <Grupo titulo="Dispensados pela presença" linhas={r.dispensadosSemProva} />
           <p className="border-t border-[#DCEBE2] px-3.5 py-2.5 text-xs text-on-surface-variant">
