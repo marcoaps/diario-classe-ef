@@ -5,6 +5,7 @@ import { useContextoPendentesProva, usePendentesProva } from '../../domain/usePe
 import type { Bimestre } from '../../domain/useRelatorioFrequencia';
 import { resumirProvas, type LinhaResumo, type NotaGravada } from '../../domain/resumoProvasTurma';
 import { formatarNome } from '../../utils/formatarNome';
+import { ImagemWhatsApp } from './ImagemWhatsApp';
 
 const fmt = (n: number) => n.toFixed(1).replace('.', ',');
 const ORIGEM = { online: 'Online', impressa: 'Impressa' } as const;
@@ -90,6 +91,9 @@ export function PainelProvasTurma({ turma, bimestre, onFechar }: { turma: string
       </div>
       {r && (
         <>
+          {r.naoFizeram.length > 0 && (
+            <ImagemWhatsApp turma={turma} bimestre={bimestre} linhas={r.naoFizeram} />
+          )}
           <Grupo titulo="Fizeram, falta lançar a nota" linhas={r.faltaLancar} aberto />
           <Grupo titulo="Fizeram, nota lançada" linhas={r.lancados} aberto />
           <Grupo titulo="Ainda não fizeram" linhas={r.naoFizeram} aberto />
