@@ -21,10 +21,13 @@ import { createClient } from '@supabase/supabase-js';
 // (ex.: 7,2 -> 8; 9,1 -> 9,5 pelo teto). O round(2) antes do ceil evita que
 // ruído de ponto flutuante (8,0000000001) suba um ponto à toa.
 const NOTA_MAXIMA_ONLINE = 9.5;
+// Piso (26/11/2026): quem fez a prova entra em Notas com no mínimo 7,0. A nota
+// real da tentativa continua em `respostas.nota` (tela de Resultados).
+const NOTA_MINIMA_ONLINE = 7;
 // 4º Bimestre de 2026: quem gabaritar (nota 10) fica com 10,0 -- só o gabarito
 // completo passa de 9,5; qualquer outra nota segue a regra normal (teto 9,5).
 export function normalizarNotaOnline(nota: number, bimestre?: number | null): number {
-  if (!(nota > 0)) return 0;
+  if (!(nota >= NOTA_MINIMA_ONLINE)) return NOTA_MINIMA_ONLINE;
   if (bimestre === 4 && nota >= 9.995) return 10;
   if (nota >= NOTA_MAXIMA_ONLINE) return NOTA_MAXIMA_ONLINE;
   return Math.min(Math.ceil(Math.round(nota * 100) / 100), NOTA_MAXIMA_ONLINE);

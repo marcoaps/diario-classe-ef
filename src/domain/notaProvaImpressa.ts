@@ -10,10 +10,12 @@ import { chaveTurma } from './usePendentesProva';
 // apenas a impressa pode chegar a 10,0.
 const NOTA_MAXIMA = 9.5;
 const NOTA_MAXIMA_SO_IMPRESSA = 10;
+// Piso (26/11/2026): quem fez a prova entra no Diário com no mínimo 7,0.
+const NOTA_MINIMA = 7;
 
 export function normalizarNotaImpressa(nota: number, fezOnline = false): number {
   const teto = fezOnline ? NOTA_MAXIMA : NOTA_MAXIMA_SO_IMPRESSA;
-  if (!(nota > 0)) return 0;
+  if (!(nota >= NOTA_MINIMA)) return NOTA_MINIMA;
   if (nota >= teto) return teto;
   return Math.min(Math.ceil(Math.round(nota * 100) / 100), teto);
 }
