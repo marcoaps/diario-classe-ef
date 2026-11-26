@@ -1,7 +1,7 @@
 // Exporta para Word (docx + file-saver) a lista de alunos que vão fazer a prova.
 import {
   Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun,
-  WidthType, AlignmentType, BorderStyle, ShadingType,
+  WidthType, AlignmentType, BorderStyle, ShadingType, HeightRule,
 } from 'docx';
 import { saveAs } from 'file-saver';
 
@@ -136,4 +136,60 @@ export async function exportarTurmaCompletaWord(bimestre: number, turmas: TurmaS
 
   const blob = await Packer.toBlob(doc);
   saveAs(blob, `Situacao_Prova_${bimestre}Bim_TODAS.docx`);
+}
+
+// Lista para aplicar a prova impressa: só quem ainda não fez, com espaço para
+// assinatura. Todas as turmas num arquivo, uma turma por folha.
+export interface TurmaImpressaExport {
+  turma: string;
+  alunos: { numero_chamada?: number | null; nome: string }[];
+}
+
+export function montarProvaImpressaDoc(bimestre: number, turmas: TurmaImpressaExport[], quando: Date) {
+  const W = [800, 6200, 4330]; // soma 11330 (A4 com margens de 0,5 cm)
+  const data = quando.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const children: (Paragraph | Table)[] = [];
+
+  turmas.forEach((t, idx) => {
+    const cab = new TableRow({
+      tableHeader: true,
+      cantSplit: true,
+      children: [
+        celula('Nº', W[0], { bold: true, center: true, fill: 'D9EAD3', keep: true }),
+        celula('Aluno', W[1], { bold: true, fill: 'D9EAD3', keep: true }),
+        celula('Assinatura', W[2], { bold: true, center: true, fill: 'D9EAD3', keep: true }),
+      ],
+    });
+    const linhas = t.alunos.map((a, i) => { const keep = i < t.alunos.length - 1; return new TableRow({
+      cantSplit: true,
+      height: { value: 400, rule: HeightRule.ATLEAST },
+      children: [
+        celula(a.numero_chamada ? String(a.numero_chamada) : '', W[0], { center: true, keep }),
+        celula(a.nome, W[1], { keep }),
+        celula('', W[2], { keep }),
+      ],
+    }); });
+    const total = t.alunos.length === 1 ? '1 aluno' : `${t.alunos.length} alunos`;
+    children.push(
+      new Paragraph({ alignment: AlignmentType.CENTER, keepNext: true, pageBreakBefore: idx > 0, spacing: { before: 0, after: 60 },
+        children: [new TextRun({ text: 'Prova impressa de Educação Física', bold: true, size: 30 })] }),
+      new Paragraph({ alignment: AlignmentType.CENTER, keepNext: true, spacing: { before: 0, after: 80 },
+        children: [new TextRun({ text: `Turma: ${t.turma}  •  ${bimestre}º Bimestre  •  ${total}  •  Lista de ${data}`, size: 22 })] }),
+      new Table({ width: { size: 11330, type: WidthType.DXA }, columnWidths: W, rows: [cab, ...linhas] }),
+    );
+  });
+
+  return new Document({
+    sections: [{
+      properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 283, bottom: 283, left: 283, right: 283 } } },
+      children,
+    }],
+  });
+}
+
+export async function exportarProvaImpressaWord(bimestre: number, turmas: TurmaImpressaExport[]) {
+  const quando = new Date();
+  const blob = await Packer.toBlob(montarProvaImpressaDoc(bimestre, turmas, quando));
+  const dia = `${String(quando.getDate()).padStart(2, '0')}-${String(quando.getMonth() + 1).padStart(2, '0')}`;
+  saveAs(blob, `Prova_Impressa_${bimestre}Bim_${dia}.docx`);
 }

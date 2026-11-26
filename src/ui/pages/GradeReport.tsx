@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { cn } from "../AppLayout";
 import { X, FileDown, Save, Upload, Loader2, Check, RefreshCw } from "lucide-react";
 import { PainelProvasTurma } from "./PainelProvasTurma";
+import { BaixarListasImpressa } from "./BaixarListasImpressa";
 import { salvarNotas, buscarNotas, editarNota, sincronizarNomesAlunos, supabase } from "../../data/supabase";
 import { EditorNota } from "./EditorNota";
 import { buscarRemanejados, ehTransferenciaErroneaDeImportacao, chaveNomeSituacao, chavesCanonicasDeNomesCompativeis } from "../../domain/situacaoAluno";
@@ -760,6 +761,7 @@ export function GradeReport() {
       <div className="p-4 pb-20">
         {view === "notas" && (
           <div className="print:hidden">
+            <BaixarListasImpressa bimestre={bimestre} />
             <button type="button" onClick={atualizarProvas}
               className="mb-3 w-full h-11 rounded-xl border border-[#0B6B3A] bg-white text-[#0B6B3A] text-[13px] font-extrabold flex items-center justify-center gap-2 active:scale-95 transition-all">
               <RefreshCw className="w-4 h-4" aria-hidden />
