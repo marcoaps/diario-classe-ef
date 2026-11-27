@@ -1,4 +1,5 @@
 import { notaEfetiva, temDesconto, dataDoServidor } from '../../../domain/atrasoProva';
+import { TURMAS_PADRAO } from '../../../domain/usePendentesProva';
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
@@ -44,6 +45,7 @@ export function AvaliacaoResultados() {
   const [resultados, setResultados] = useState<ResultadoAluno[]>([]);
   const [loading, setLoading] = useState(true);
   const [variasTurmas, setVariasTurmas] = useState(false);
+  const [rotuloAnos, setRotuloAnos] = useState(''); // ex.: "8º ano", na prova online
   const [filtro, setFiltro] = useState<'todos' | 'corrigidos' | 'pendentes'>('todos');
   const [questoesOnline, setQuestoesOnline] = useState<QuestaoOnline[]>([]);
   const [verResposta, setVerResposta] = useState<ResultadoAluno | null>(null);
@@ -56,14 +58,18 @@ export function AvaliacaoResultados() {
       setAvaliacao(av);
 
       // Prova online compartilhada entre turmas (ex.: "AVA-8ºanos" cadastrada na 8A,
-      // mas respondida por 8A–8F): inclui também as turmas que enviaram respostas,
-      // senão elas ficariam invisíveis aqui.
+      // mas respondida por 8A–8F): lista todas as turmas do professor no(s) ano(s)
+      // da avaliação, inclusive as que ainda não enviaram nada, para aparecerem
+      // como pendentes.
       let turmasLista = turmasDoValor(av.turma_id);
       if (av.prova_online_id) {
         const { data: turmasOnline } = await supabase
           .from('respostas').select('turma_id').eq('prova_id', av.prova_online_id);
         const extras = [...new Set((turmasOnline || []).map(t => t.turma_id).filter(Boolean))] as string[];
-        turmasLista = [...new Set([...turmasLista, ...extras])];
+        const comEnvio = [...new Set([...turmasLista, ...extras])];
+        const anos = [...new Set(comEnvio.map(t => t.charAt(0)))].filter(a => /[1-9]/.test(a)).sort();
+        turmasLista = [...new Set([...comEnvio, ...TURMAS_PADRAO.filter(t => anos.includes(t.charAt(0)))])];
+        if (turmasLista.length > 1) setRotuloAnos(`${anos.map(a => `${a}º`).join(' e ')} ano${anos.length > 1 ? 's' : ''}`);
       }
       setVariasTurmas(turmasLista.length > 1);
 
@@ -208,7 +214,7 @@ export function AvaliacaoResultados() {
           <div>
             <h1 className="text-base font-bold text-on-surface">Resultados</h1>
             <p className="text-xs text-on-surface-variant">
-              {avaliacao.titulo} · {ehGrupoDeTurmas(avaliacao.turma_id) ? labelTurmaOuGrupo(avaliacao.turma_id) : `Turma ${avaliacao.turma_id}`}
+              {avaliacao.titulo} · {rotuloAnos || (ehGrupoDeTurmas(avaliacao.turma_id) ? labelTurmaOuGrupo(avaliacao.turma_id) : `Turma ${avaliacao.turma_id}`)}
             </p>
           </div>
         </div>
@@ -239,7 +245,7 @@ export function AvaliacaoResultados() {
           <p className="text-2xl font-bold text-primary">{corrigidos.length}/{resultados.length}</p>
         </div>
         <div className="bg-surface border border-outline-variant rounded-2xl p-3 text-center">
-          <p className="text-xs text-on-surface-variant">Média da turma</p>
+          <p className="text-xs text-on-surface-variant">{variasTurmas ? 'Média geral' : 'Média da turma'}</p>
           <p className="text-2xl font-bold text-primary">{mediaNotas.toFixed(1)}</p>
         </div>
         <div className="bg-surface border border-outline-variant rounded-2xl p-3 text-center">
