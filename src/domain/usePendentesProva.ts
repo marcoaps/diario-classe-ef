@@ -1,3 +1,4 @@
+import { notaEfetiva } from './atrasoProva';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../data/supabase';
 import { filtrarTransferenciasEfetivas } from './situacaoAluno';
@@ -75,10 +76,11 @@ export function useContextoPendentesProva(): ContextoPendentesProva {
     })().finally(terminou);
     (async () => {
       const { data: provas, error: eProvas } = await supabase.from('provas').select('id, titulo, turma_id');
-      const { data: resp, error: eResp } = await supabase.from('respostas').select('prova_id, turma_id, aluno_numero, aluno_nome, nota');
+      const { data: resp, error: eResp } = await supabase.from('respostas').select('*');
       if (eProvas || eResp) setErro((eProvas || eResp)!.message);
       setProvasOnline(provas || []);
-      setEnvios(resp || []);
+      // `nota` daqui em diante é a que vale (com o desconto por atraso).
+      setEnvios((resp || []).map((r: any) => ({ ...r, nota: notaEfetiva(r) })));
     })().finally(terminou);
     // Provas impressas corrigidas e já vinculadas a um aluno. Na página
     // pública dos líderes (sem login) a RLS de avaliacoes_respostas não

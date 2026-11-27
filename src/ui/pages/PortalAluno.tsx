@@ -1,3 +1,4 @@
+import { dataDoServidor, formatarDataAcre, formatarNota1 } from '../../domain/atrasoProva';
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import {
@@ -242,7 +243,7 @@ function AbaProvas({ provas, onAbrir }: { provas: ProvaPortal[]; onAbrir: (p: Pr
           <button key={p.resposta_id} onClick={() => onAbrir(p)} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-3 text-left active:bg-gray-50 transition-colors min-h-[64px]">
             <div className="flex-1 min-w-0">
               <p className="font-bold text-base text-gray-900 truncate">{p.titulo}</p>
-              <p className="text-sm text-gray-500 mt-0.5">{new Date(p.enviado_em).toLocaleDateString('pt-BR')} · {p.questoes.length} questões</p>
+              <p className="text-sm text-gray-500 mt-0.5">{formatarDataAcre(dataDoServidor(p.enviado_em))} · {p.questoes.length} questões</p>
             </div>
             <div className="text-right shrink-0">
               <p className="text-3xl font-black leading-none" style={{ color: cor }}>{p.nota !== null ? p.nota.toFixed(1).replace('.', ',') : '—'}</p>
@@ -276,7 +277,12 @@ function ModalProva({ prova, onFechar }: { prova: ProvaPortal; onFechar: () => v
               <Trophy className="w-7 h-7" style={{ color: corNota }} />
               <div>
                 <p className="text-xs font-bold uppercase text-gray-400 tracking-widest">Nota final</p>
-                <p className="text-sm text-gray-500">{new Date(prova.enviado_em).toLocaleDateString('pt-BR')}</p>
+                <p className="text-sm text-gray-500">{formatarDataAcre(dataDoServidor(prova.enviado_em))}</p>
+                {prova.desconto && (
+                  <p className="text-sm font-bold text-amber-700">
+                    Entregue com atraso: nota {formatarNota1(prova.desconto.nota_corrigida)}, vale {prova.desconto.percentual}%
+                  </p>
+                )}
               </div>
             </div>
             <p className="text-4xl font-black" style={{ color: corNota }}>{prova.nota !== null ? prova.nota.toFixed(1).replace('.', ',') : '—'}</p>

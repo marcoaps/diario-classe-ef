@@ -3,9 +3,15 @@ import { supabase } from '../../data/supabase';
 import {
   Plus, Trash2, Eye, Copy, CheckCircle, X,
   FileText, Users, Upload, Image as ImageIcon,
-  BookOpen, AlertCircle, Share2, Edit2, Save, Brain,
+  BookOpen, AlertCircle, Share2, Edit2, Save, Brain, Clock,
 } from 'lucide-react';
 import mammoth from 'mammoth';
+import { FormularioRegraAtraso, TabelaPrazos, erroNasFaixas } from './RegraAtraso';
+import { FaltaSemEnvio, FaltaJustificada } from './FaltaSemEnvio';
+import {
+  FAIXAS_PADRAO, FaixaAtraso, dataDoServidor, entregueComAtraso, formatarDataAcre, formatarHoraAcre,
+  formatarNota1, isoParaLocalAcre, localAcreParaISO, notaEfetiva, temDesconto,
+} from '../../domain/atrasoProva';
 
 interface SubItem {
   letra: string;
@@ -45,6 +51,10 @@ interface Resposta {
   enviado_em: string;
   respostas: Record<string, string>;
   correcoes_dissertativas: CorrecaoItem[];
+  // Preenchidos pelo banco nas provas com prazo (vazios = sem desconto).
+  dias_atraso?: number | null;
+  percentual_aplicado?: number | null;
+  nota_final?: number | null;
 }
 
 interface CorrecaoItem {
@@ -64,7 +74,11 @@ interface Prova {
   data_limite: string;
   criado_em: string;
   texto_apoio?: string | null;
+  prazo_integral?: string | null;
+  faixas_atraso?: FaixaAtraso[] | null;
 }
+
+const MIGRACAO_PENDENTE = 'Rode no Supabase o arquivo sql/prova_online_prazo_atraso.sql para usar prazo e descontos.';
 
 const GRUPOS = [
   { id: '6-7', label: '6º e 7º Ano', turmas: ['6F','7A','7B','7C','7D','7E','7F'] },
@@ -268,6 +282,17 @@ export function ProvasOnline() {
   const [respostaCorrigir, setRespostaCorrigir] = useState<Resposta | null>(null);
   const [notasManual, setNotasManual] = useState<Record<string, string>>({});
   const [salvandoCorrecao, setSalvandoCorrecao] = useState(false);
+  // Prazo e descontos: prova nova e edição de uma prova publicada.
+  const [novoPrazo, setNovoPrazo] = useState('');
+  const [novasFaixas, setNovasFaixas] = useState<FaixaAtraso[]>(FAIXAS_PADRAO);
+  const [editandoRegraId, setEditandoRegraId] = useState<string | null>(null);
+  const [prazoEdit, setPrazoEdit] = useState('');
+  const [faixasEdit, setFaixasEdit] = useState<FaixaAtraso[]>(FAIXAS_PADRAO);
+  const [salvandoRegra, setSalvandoRegra] = useState(false);
+  const [erroRegra, setErroRegra] = useState('');
+  const [faltas, setFaltas] = useState<FaltaJustificada[]>([]);
+  const [salvandoFalta, setSalvandoFalta] = useState(false);
+  const [avisoFalta, setAvisoFalta] = useState('');
 
   useEffect(() => { carregarProvas(); }, []);
 
@@ -441,12 +466,15 @@ Regras: mantenha um parágrafo curto por assunto, na mesma ordem; mantenha os te
     if (semGabarito.length > 0) {
       if (!confirm(`${semGabarito.length} questão(ões) sem gabarito. Deseja publicar mesmo assim?`)) return;
     }
+    const erroFaixas = novoPrazo ? erroNasFaixas(novasFaixas) : null;
+    if (erroFaixas) { alert(erroFaixas); return; }
     setSalvando(true);
     try {
       const codigo = gerarCodigo();
       const { data: prova, error } = await supabase.from('provas').insert({
         titulo: titulo.trim(), descricao: descricao.trim(),
         turma_id: grupo, codigo, data_limite: dataLimite || null,
+        ...(novoPrazo ? { prazo_integral: localAcreParaISO(novoPrazo), faixas_atraso: novasFaixas } : {}),
       }).select().single();
       if (error) throw error;
       const questoesInsert = questoes.map((q, i) => ({
@@ -463,6 +491,7 @@ Regras: mantenha um parágrafo curto por assunto, na mesma ordem; mantenha os te
       setTimeout(() => {
         setSucesso(false); setTitulo(''); setDescricao('');
         setGrupo(GRUPOS[0].id); setDataLimite(''); setQuestoes([]);
+        setNovoPrazo(''); setNovasFaixas(FAIXAS_PADRAO);
         setTab('lista'); carregarProvas();
       }, 2500);
     } catch (e: any) { alert('Erro ao salvar: ' + e.message); }
@@ -487,15 +516,93 @@ Regras: mantenha um parágrafo curto por assunto, na mesma ordem; mantenha os te
     setTimeout(() => setCompartilhado(null), 3000);
   };
 
+  const abrirEditorRegra = (prova: Prova) => {
+    setEditandoRegraId(prova.id);
+    setPrazoEdit(isoParaLocalAcre(prova.prazo_integral));
+    setFaixasEdit(prova.faixas_atraso ?? FAIXAS_PADRAO);
+    setErroRegra('');
+  };
+
+  const salvarRegra = async (prova: Prova) => {
+    const erroFaixas = prazoEdit ? erroNasFaixas(faixasEdit) : null;
+    if (erroFaixas) { setErroRegra(erroFaixas); return; }
+    setSalvandoRegra(true); setErroRegra('');
+    const regra = { prazo_integral: localAcreParaISO(prazoEdit), faixas_atraso: faixasEdit };
+    const { data, error } = await supabase.from('provas').update(regra).eq('id', prova.id).select('id');
+    setSalvandoRegra(false);
+    if (error || !data?.length) {
+      setErroRegra(error?.code === 'PGRST204' ? MIGRACAO_PENDENTE
+        : 'Erro ao salvar: ' + (error?.message || 'faça login novamente e tente de novo.'));
+      return;
+    }
+    setProvas(prev => prev.map(p => p.id === prova.id ? { ...p, ...regra } : p));
+    setEditandoRegraId(null);
+  };
+
+  const carregarRespostas = async (provaId: string) => {
+    const { data, error } = await supabase.from('respostas').select('*').eq('prova_id', provaId).order('enviado_em', { ascending: false });
+    if (error) { alert('Erro ao carregar os resultados: ' + error.message); return; }
+    setResultados((data || []) as Resposta[]);
+  };
+
+  const carregarFaltas = async (provaId: string) => {
+    const { data, error } = await supabase.from('prova_faltas_justificadas')
+      .select('turma_id, aluno_numero, aluno_nome').eq('prova_id', provaId).order('turma_id').order('aluno_nome');
+    // Sem a migração a tabela não existe: os resultados continuam funcionando.
+    setFaltas(error ? [] : (data || []) as FaltaJustificada[]);
+  };
+
   const verResultados = async (prova: Prova) => {
     setProvaResultados(prova);
-    const [{ data: resps }, { data: qs }] = await Promise.all([
-      supabase.from('respostas').select('*').eq('prova_id', prova.id).order('enviado_em', { ascending: false }),
+    setResultados([]); setFaltas([]); setAvisoFalta('');
+    const [, , { data: qs }] = await Promise.all([
+      carregarRespostas(prova.id),
+      carregarFaltas(prova.id),
       supabase.from('questoes').select('*').eq('prova_id', prova.id).order('ordem'),
     ]);
-    setResultados((resps || []) as Resposta[]);
     setQuestoesProva((qs || []) as QuestaoCompleta[]);
     setTab('resultados');
+  };
+
+  // Marca/desmarca a falta justificada. O banco recalcula as tentativas; depois
+  // a nota é reenviada para o Diário (que nunca rebaixa uma nota maior).
+  const alterarFalta = async (
+    aluno: { turma_id: string; aluno_numero: number; aluno_nome: string | null },
+    marcar: boolean, temEnvio: boolean,
+  ) => {
+    if (!provaResultados) return;
+    const nome = aluno.aluno_nome || `nº ${aluno.aluno_numero}`;
+    if (!marcar && !confirm(`Desmarcar a falta justificada de ${nome}? O desconto por atraso volta a valer.`)) return;
+    setSalvandoFalta(true); setAvisoFalta('');
+    const chave = { prova_id: provaResultados.id, turma_id: aluno.turma_id, aluno_numero: aluno.aluno_numero };
+    const { data, error } = marcar
+      ? await supabase.from('prova_faltas_justificadas').insert({ ...chave, aluno_nome: aluno.aluno_nome }).select('turma_id')
+      : await supabase.from('prova_faltas_justificadas').delete().match(chave).select('turma_id');
+    if (error || !data?.length) {
+      setSalvandoFalta(false);
+      alert(error?.code === 'PGRST205' || error?.code === '42P01' ? MIGRACAO_PENDENTE
+        : 'Nada foi salvo: ' + (error?.message || 'faça login novamente e tente de novo.'));
+      return;
+    }
+    await Promise.all([carregarRespostas(provaResultados.id), carregarFaltas(provaResultados.id)]);
+    let aviso = marcar
+      ? `Falta justificada marcada para ${nome}: a nota vale 100%.`
+      : `Falta justificada desmarcada para ${nome}.`;
+    if (temEnvio) {
+      try {
+        const r = await fetch('/api/sincronizar-nota-online', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(chave),
+        });
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.motivo || j.error || 'sem resposta');
+        aviso += ` Nota no Diário: ${formatarNota1(Number(j.nota))}.`;
+        if (!marcar) aviso += ' O Diário mantém a maior nota; se precisar baixar, edite na tela Notas.';
+      } catch (e: any) {
+        aviso += ` Atenção: o Diário não foi atualizado (${e.message}). Confira na tela Notas.`;
+      }
+    }
+    setAvisoFalta(aviso);
+    setSalvandoFalta(false);
   };
 
   const deletarProva = async (id: string) => {
@@ -560,10 +667,14 @@ Regras: mantenha um parágrafo curto por assunto, na mesma ordem; mantenha os te
       const gabaritou = totalPontos > 0 && pontosTotal >= totalPontos - 1e-9;
       const tetoProva = /4\s*[º°o]?\s*bim/i.test(provaResultados.titulo) ? 10 : 9.5;
       const notaFinal = gabaritou ? tetoProva : Math.min(novaNota, 9.5);
-      const { error } = await supabase.from('respostas').update({ nota: notaFinal, correcoes_dissertativas: novasCorrecoes }).eq('id', respostaCorrigir.id);
+      // O banco recalcula a nota final (com o desconto) e devolve a linha.
+      const { data: salva, error } = await supabase.from('respostas').update({ nota: notaFinal, correcoes_dissertativas: novasCorrecoes })
+        .eq('id', respostaCorrigir.id).select('*').single();
       if (error) throw error;
-      setResultados(prev => prev.map(r => r.id === respostaCorrigir.id ? { ...r, nota: notaFinal, correcoes_dissertativas: novasCorrecoes } : r));
-      alert(`Correção salva! Nova nota: ${notaFinal.toFixed(1)}`);
+      setResultados(prev => prev.map(r => r.id === respostaCorrigir.id ? salva as Resposta : r));
+      alert(temDesconto(salva)
+        ? `Correção salva! Nota corrigida: ${formatarNota1(notaFinal)} · com atraso vale ${salva.percentual_aplicado}% · nota final: ${formatarNota1(notaEfetiva(salva))}`
+        : `Correção salva! Nova nota: ${formatarNota1(notaFinal)}`);
       setRespostaCorrigir(null);
     } catch (e: any) { alert('Erro ao salvar correção: ' + e.message); }
     finally { setSalvandoCorrecao(false); }
@@ -587,7 +698,7 @@ Regras: mantenha um parágrafo curto por assunto, na mesma ordem; mantenha os te
     return Array.from(mapa.values())
       .map(tentativas => {
         const ordenadas = [...tentativas].sort((a, b) => new Date(a.enviado_em).getTime() - new Date(b.enviado_em).getTime());
-        const melhor = ordenadas.reduce((m, r) => (r.nota ?? -1) > (m.nota ?? -1) ? r : m, ordenadas[0]);
+        const melhor = ordenadas.reduce((m, r) => (notaEfetiva(r) ?? -1) > (notaEfetiva(m) ?? -1) ? r : m, ordenadas[0]);
         return { aluno_nome: ordenadas[0].aluno_nome, aluno_numero: ordenadas[0].aluno_numero, turma_id: ordenadas[0].turma_id, tentativas: ordenadas, melhorId: melhor.id };
       })
       .sort((a, b) => (a.turma_id || '').localeCompare(b.turma_id || '', 'pt-BR')
@@ -671,6 +782,30 @@ Regras: mantenha um parágrafo curto por assunto, na mesma ordem; mantenha os te
                   <FileText className="w-4 h-4" /> {prova.texto_apoio ? 'Editar / resumir texto de apoio' : 'Adicionar texto de apoio'}
                 </button>
               )}
+              {editandoRegraId === prova.id ? (
+                <div className="flex flex-col gap-3 border border-gray-200 rounded-xl p-3">
+                  <FormularioRegraAtraso prazo={prazoEdit} faixas={faixasEdit} onPrazo={setPrazoEdit} onFaixas={setFaixasEdit} />
+                  {prazoEdit && !erroNasFaixas(faixasEdit) && (
+                    <TabelaPrazos regra={{ prazo_integral: localAcreParaISO(prazoEdit), faixas_atraso: faixasEdit }} />
+                  )}
+                  {erroRegra && <p role="alert" className="text-xs text-red-600">{erroRegra}</p>}
+                  <div className="flex gap-2">
+                    <button onClick={() => salvarRegra(prova)} disabled={salvandoRegra}
+                      className="flex-1 py-2 rounded-xl bg-primary text-white font-bold text-sm disabled:opacity-50">
+                      {salvandoRegra ? 'Salvando...' : 'Salvar prazo'}
+                    </button>
+                    <button onClick={() => setEditandoRegraId(null)} disabled={salvandoRegra}
+                      className="px-3 py-2 rounded-xl border border-gray-200 text-gray-500 text-sm">Cancelar</button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => abrirEditorRegra(prova)}
+                  className="w-full py-2 rounded-xl bg-gray-100 text-gray-700 font-bold text-sm flex items-center justify-center gap-2 hover:bg-gray-200 transition-colors">
+                  <Clock className="w-4 h-4" /> {prova.prazo_integral
+                    ? `Prazo: ${formatarDataAcre(new Date(prova.prazo_integral))} às ${formatarHoraAcre(new Date(prova.prazo_integral))}`
+                    : 'Definir prazo e descontos'}
+                </button>
+              )}
               <button onClick={() => verResultados(prova)}
                 className="w-full py-2 rounded-xl bg-primary/10 text-primary font-bold text-sm flex items-center justify-center gap-2 hover:bg-primary/20 transition-colors">
                 <Eye className="w-4 h-4" /> Ver Resultados
@@ -709,6 +844,11 @@ Regras: mantenha um parágrafo curto por assunto, na mesma ordem; mantenha os te
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
               </div>
             </div>
+          </div>
+
+          <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-col gap-3 shadow-sm">
+            <p className="font-bold text-gray-700 text-sm">Prazo e desconto por atraso</p>
+            <FormularioRegraAtraso prazo={novoPrazo} faixas={novasFaixas} onPrazo={setNovoPrazo} onFaixas={setNovasFaixas} />
           </div>
 
           <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex flex-col gap-2">
@@ -845,6 +985,9 @@ Regras: mantenha um parágrafo curto por assunto, na mesma ordem; mantenha os te
               {getLabelGrupo(provaResultados.turma_id)} · {gruposResultados.length} aluno{gruposResultados.length !== 1 ? 's' : ''} · {resultados.length} tentativa{resultados.length !== 1 ? 's' : ''}
             </p>
           </div>
+          {avisoFalta && (
+            <p role="status" className="bg-green-50 border border-green-200 rounded-2xl px-4 py-3 text-sm text-green-800 font-medium">{avisoFalta}</p>
+          )}
           {resultados.length === 0 && (
             <div className="text-center py-8 text-gray-400">
               <Users className="w-10 h-10 mx-auto mb-2 opacity-30" />
@@ -853,6 +996,8 @@ Regras: mantenha um parágrafo curto por assunto, na mesma ordem; mantenha os te
           )}
           {gruposResultados.map(g => {
             const temCorrigiveis = questoesProva.some(q => q.tipo === 'dissertativa' || q.tipo === 'composta');
+            const justificada = faltas.some(x => x.turma_id === g.turma_id && x.aluno_numero === g.aluno_numero);
+            const atrasado = g.tentativas.some(entregueComAtraso);
             return (
               <div key={`${g.turma_id}|${g.aluno_numero ?? g.aluno_nome}`} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex flex-col gap-2">
                 <div className="flex items-center justify-between">
@@ -872,13 +1017,23 @@ Regras: mantenha um parágrafo curto por assunto, na mesma ordem; mantenha os te
                             Tentativa {i + 1}/{g.tentativas.length}
                             {ehMelhor && g.tentativas.length > 1 && <span className="text-green-600"> · ✓ nota considerada</span>}
                           </p>
-                          <p className="text-[11px] text-gray-400">
-                            {new Date(r.enviado_em).toLocaleDateString('pt-BR')} às {new Date(r.enviado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          <p className="text-[11px] text-gray-500">
+                            {formatarDataAcre(dataDoServidor(r.enviado_em))} às {formatarHoraAcre(dataDoServidor(r.enviado_em))}
                           </p>
+                          {entregueComAtraso(r) && (
+                            <p className="text-[11px] font-bold text-amber-700">
+                              Entregue com atraso ({r.dias_atraso} {r.dias_atraso === 1 ? 'dia' : 'dias'}){justificada ? ' · falta justificada' : ''}
+                            </p>
+                          )}
+                          {r.percentual_aplicado != null && (
+                            <p className="text-[11px] text-gray-500">
+                              Corrigida {formatarNota1(r.nota)} · vale {r.percentual_aplicado}% · final {formatarNota1(notaEfetiva(r))}
+                            </p>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <span className={`text-lg font-black ${r.nota !== null && r.nota >= 6 ? 'text-green-500' : 'text-red-500'}`}>
-                            {r.nota?.toFixed(1) ?? '—'}
+                          <span className={`text-lg font-black ${(notaEfetiva(r) ?? 0) >= 6 ? 'text-green-500' : 'text-red-500'}`}>
+                            {notaEfetiva(r)?.toFixed(1) ?? '—'}
                           </span>
                           {temCorrigiveis && (
                             <button onClick={() => abrirCorrecaoManual(r)}
@@ -892,6 +1047,14 @@ Regras: mantenha um parágrafo curto por assunto, na mesma ordem; mantenha os te
                     );
                   })}
                 </div>
+                {g.aluno_numero != null && (atrasado || justificada) && (
+                  <button disabled={salvandoFalta} aria-pressed={justificada}
+                    onClick={() => alterarFalta({ turma_id: g.turma_id, aluno_numero: g.aluno_numero!, aluno_nome: g.aluno_nome }, !justificada, true)}
+                    className={`w-full py-2 rounded-xl text-xs font-bold border disabled:opacity-50 ${justificada
+                      ? 'bg-green-50 border-green-300 text-green-800' : 'bg-amber-100 border-amber-300 text-amber-800'}`}>
+                    {justificada ? '✓ Falta justificada (100%) · tocar para desfazer' : 'Marcar falta justificada (vale 100%)'}
+                  </button>
+                )}
                 {g.tentativas.some(r => r.correcoes_dissertativas?.some(c => c.justificativa?.includes('Erro'))) && (
                   <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5">
                     <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
@@ -901,6 +1064,16 @@ Regras: mantenha um parágrafo curto por assunto, na mesma ordem; mantenha os te
               </div>
             );
           })}
+          {provaResultados.prazo_integral && (
+            <FaltaSemEnvio
+              turmas={getTurmasDoGrupo(provaResultados.turma_id).length ? getTurmasDoGrupo(provaResultados.turma_id) : [provaResultados.turma_id]}
+              faltas={faltas}
+              comEnvio={new Set(resultados.map(r => `${r.turma_id}|${r.aluno_numero}`))}
+              ocupado={salvandoFalta}
+              onMarcar={a => alterarFalta(a, true, false)}
+              onDesmarcar={x => alterarFalta(x, false, false)}
+            />
+          )}
           <button onClick={() => { setTab('lista'); setProvaResultados(null); setResultados([]); setQuestoesProva([]); }}
             className="w-full py-3 rounded-2xl bg-gray-100 text-gray-600 font-bold text-sm">
             ← Voltar

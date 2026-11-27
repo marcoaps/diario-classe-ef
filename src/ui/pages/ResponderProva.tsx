@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../data/supabase';
 import { getTurmasDoGrupo } from './ProvasOnline';
+import { TabelaPrazos } from './RegraAtraso';
+import {
+  FaixaAtraso, MENSAGEM_PRAZO_ENCERRADO, notaEfetiva, prazoFinalPassou, temDesconto, formatarNota1,
+} from '../../domain/atrasoProva';
 import { Search, CheckCircle, Send, BookOpen, AlertCircle, ChevronLeft, ChevronRight, Brain, Loader } from 'lucide-react';
 
 interface SubItem {
@@ -29,7 +33,15 @@ interface Prova {
   data_limite: string;
   texto_apoio: string | null;
   restringir_alunos?: boolean | null;
+  prazo_integral?: string | null;
+  faixas_atraso?: FaixaAtraso[] | null;
 }
+
+// Resultado gravado pelo banco quando há desconto por atraso.
+interface Desconto { notaCorrigida: number; percentual: number }
+
+// Função ainda não criada no banco (migração de atraso não rodada).
+const funcaoInexistente = (e: { code?: string } | null) => e?.code === 'PGRST202' || e?.code === '42883';
 
 interface AlunoAutorizado { turma_id: string; numero_chamada: number; nome: string; }
 
@@ -136,6 +148,9 @@ export function ResponderProva() {
   const [textoApoioAberto, setTextoApoioAberto] = useState(true);
   const [tentativaAtual, setTentativaAtual] = useState<number | null>(null);
   const [verificandoTentativas, setVerificandoTentativas] = useState(false);
+  // Quanto a nota vale se o aluno enviar agora (informado pelo servidor).
+  const [percentualAgora, setPercentualAgora] = useState(100);
+  const [desconto, setDesconto] = useState<Desconto | null>(null);
 
   // Prova restrita: só alunos da lista "Alunos para a Prova" (liberada pelo professor).
   const [autorizados, setAutorizados] = useState<AlunoAutorizado[]>([]);
@@ -223,23 +238,32 @@ export function ResponderProva() {
         setVerificandoTentativas(false);
         return;
       }
+      // Prazo conferido no relógio do servidor, já considerando falta justificada.
+      if (prova.prazo_integral) {
+        const { data: situacao, error: ePrazo } = await supabase.rpc('prova_situacao_envio', {
+          p_prova: prova.id, p_turma: turmaAluno, p_numero: parseInt(numero, 10),
+        });
+        if (ePrazo) throw ePrazo;
+        if (!situacao?.permitido) {
+          setErro(MENSAGEM_PRAZO_ENCERRADO);
+          setVerificandoTentativas(false);
+          return;
+        }
+        setPercentualAgora(Number(situacao.percentual));
+      }
+      // Limpa a tentativa anterior só depois de saber que pode começar outra.
+      setRespostas({});
+      setNota(null);
+      setDesconto(null);
+      setCorrecoesDissertativas([]);
+      setQuestaoAtual(0);
+      setEtapaCorrecao('');
       setTentativaAtual(tentativasUsadas + 1);
       setStep('prova');
     } catch (e) {
-      setErro('Erro ao verificar tentativas. Tente novamente.');
+      setErro('Erro ao verificar tentativas e prazo. Tente novamente.');
     }
     setVerificandoTentativas(false);
-  };
-
-  // Botão da tela de resultado: limpa a tentativa anterior e reinicia a prova
-  // com a mesma identificação (iniciarProva reconta as tentativas no banco).
-  const novaTentativa = () => {
-    setRespostas({});
-    setNota(null);
-    setCorrecoesDissertativas([]);
-    setQuestaoAtual(0);
-    setEtapaCorrecao('');
-    iniciarProva();
   };
 
   const responder = (chave: string, resposta: string) =>
@@ -252,6 +276,19 @@ export function ResponderProva() {
       if (!confirm(`Você deixou ${naoRespondidas.length} questão(ões) sem resposta. Deseja enviar assim mesmo?`)) return;
     }
     setEnviando(true);
+
+    // Registra no servidor o momento do envio ANTES da correção por IA, que
+    // demora: quem envia às 23:59 não perde o prazo esperando a correção.
+    const { data: envioId, error: eEnvio } = await supabase.rpc('prova_registrar_envio', {
+      p_prova: prova.id, p_turma: turmaAluno, p_numero: numero ? parseInt(numero, 10) : null,
+    });
+    if (eEnvio && !funcaoInexistente(eEnvio)) {
+      alert(eEnvio.message.includes('PRAZO_ENCERRADO')
+        ? MENSAGEM_PRAZO_ENCERRADO
+        : 'Não foi possível enviar. Confira a internet e toque em Enviar de novo. Suas respostas continuam na tela.');
+      setEnviando(false);
+      return;
+    }
     setStep('corrigindo');
 
     let totalPontos = 0, pontosObtidos = 0;
@@ -308,28 +345,38 @@ export function ResponderProva() {
     const notaBruta = totalPontos > 0 ? (pontosObtidos / totalPontos) * 10 : null;
     const notaFinal = notaBruta !== null ? (notaBruta >= 10 ? NOTA_MAXIMA_PROVA : notaBruta) : null;
 
-    try {
-      await supabase.from('respostas').insert({
-        prova_id: prova.id, aluno_nome: nome.trim(),
-        aluno_numero: numero ? parseInt(numero) : null,
-        turma_id: turmaAluno, respostas, nota: notaFinal,
-        correcoes_dissertativas: correcoes,
-      });
-      // Leva a nota pra tela Notas do professor automaticamente. Roda no
-      // servidor (nunca no navegador do aluno) pra ninguém conseguir forjar
-      // a própria nota — se falhar ou não estiver configurado ainda, não
-      // afeta o aluno: a resposta dele já está salva acima de qualquer jeito.
-      if (numero) {
-        fetch('/api/sincronizar-nota-online', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prova_id: prova.id, turma_id: turmaAluno, aluno_numero: parseInt(numero) }),
-        }).catch(() => { /* melhor esforço, não bloqueia o aluno */ });
-      }
-    } catch (e: any) { alert('Erro ao salvar: ' + e.message); }
+    const { data: salva, error: eSalvar } = await supabase.from('respostas').insert({
+      prova_id: prova.id, aluno_nome: nome.trim(),
+      aluno_numero: numero ? parseInt(numero) : null,
+      turma_id: turmaAluno, respostas, nota: notaFinal,
+      correcoes_dissertativas: correcoes,
+      ...(envioId ? { envio_id: envioId } : {}),
+    }).select('*').single();
+    if (eSalvar || !salva) {
+      alert(eSalvar?.message.includes('PRAZO_ENCERRADO')
+        ? MENSAGEM_PRAZO_ENCERRADO
+        : 'Sua prova NÃO foi enviada. Confira a internet e toque em Enviar de novo. Suas respostas continuam na tela.\n\n' + (eSalvar?.message || ''));
+      setEnviando(false);
+      setStep('prova');
+      return;
+    }
+    // Leva a nota pra tela Notas do professor automaticamente. Roda no
+    // servidor (nunca no navegador do aluno) pra ninguém conseguir forjar
+    // a própria nota — se falhar ou não estiver configurado ainda, não
+    // afeta o aluno: a resposta dele já está salva acima de qualquer jeito.
+    if (numero) {
+      fetch('/api/sincronizar-nota-online', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prova_id: prova.id, turma_id: turmaAluno, aluno_numero: parseInt(numero) }),
+      }).catch(() => { /* melhor esforço, não bloqueia o aluno */ });
+    }
 
     setCorrecoesDissertativas(correcoes);
-    setNota(notaFinal);
+    setDesconto(temDesconto(salva) && notaFinal !== null
+      ? { notaCorrigida: notaFinal, percentual: Number(salva.percentual_aplicado) }
+      : null);
+    setNota(notaEfetiva(salva));
     setEnviando(false);
     setStep('resultado');
   };
@@ -404,6 +451,22 @@ export function ResponderProva() {
         </div>
       </div>
 
+      {prova.prazo_integral && (
+        <section className="bg-white rounded-2xl p-5 mb-4 shadow-sm flex flex-col gap-3">
+          <h3 className="text-gray-800 font-black text-base">Prazo de entrega</h3>
+          <TabelaPrazos regra={prova} />
+          <p className="text-gray-500 text-xs leading-snug">
+            Horário do Acre. Com desconto, a nota é arredondada para cima, de 0,5 em 0,5.
+            Faltou com atestado ou justificativa aceita pela escola? Procure o professor.
+          </p>
+          {prazoFinalPassou(prova) && (
+            <p role="alert" className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-700 text-sm font-bold">
+              {MENSAGEM_PRAZO_ENCERRADO}
+            </p>
+          )}
+        </section>
+      )}
+
       <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 mb-4 flex items-start gap-2.5">
         <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
         <p className="text-amber-800 text-sm font-bold leading-snug">
@@ -451,7 +514,7 @@ export function ResponderProva() {
             ))}
           </div>
         </div>
-        {erro && <p className="text-red-500 text-sm font-medium">{erro}</p>}
+        {erro && <p role="alert" className="text-red-600 text-sm font-medium">{erro}</p>}
         <button onClick={iniciarProva} disabled={verificandoTentativas}
           className="w-full py-4 rounded-2xl font-black text-white text-lg transition-all active:scale-95 disabled:opacity-50"
           style={{ background: 'linear-gradient(135deg, #0B7A3D, #149951)' }}>
@@ -537,6 +600,11 @@ export function ResponderProva() {
         </aside>
 
         <main className="flex-1 flex flex-col pb-28">
+          {percentualAgora < 100 && (
+            <p className="mx-4 lg:mx-8 mt-3 bg-amber-50 border border-amber-300 rounded-xl px-4 py-2.5 text-amber-900 text-sm font-bold">
+              Prova com atraso: se enviar agora, a nota vale {percentualAgora}%.
+            </p>
+          )}
           <div className="lg:hidden flex items-center justify-between px-4 pt-4 pb-2">
             <span className="text-xs text-gray-400 font-semibold">
               Questão <span className="text-[#0B7A3D] font-black text-sm">{questaoAtual + 1}</span> de {questoes.length}
@@ -710,6 +778,13 @@ export function ResponderProva() {
                 <div className={`h-full rounded-full ${nota >= NOTA_APROVACAO ? 'bg-green-500' : 'bg-red-500'}`}
                   style={{ width: `${nota * 10}%` }} />
               </div>
+              {desconto && (
+                <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 mb-3 text-amber-900 text-sm">
+                  <p className="font-black">Entregue com atraso: a nota vale {desconto.percentual}%</p>
+                  <p>Nota da correção: {formatarNota1(desconto.notaCorrigida)}</p>
+                  <p>Nota final com desconto: {formatarNota1(nota)}</p>
+                </div>
+              )}
               <p className={`text-lg font-black ${nota >= NOTA_APROVACAO ? 'text-green-600' : 'text-red-600'}`}>
                 {nota >= NOTA_MAXIMA_PROVA ? '🏆 Nota máxima! Parabéns!'
                   : nota >= NOTA_APROVACAO ? '✓ Aprovado'
@@ -729,7 +804,7 @@ export function ResponderProva() {
           )}
 
           {tentativaAtual !== null && tentativaAtual < MAX_TENTATIVAS && (
-            <button onClick={novaTentativa} disabled={verificandoTentativas}
+            <button onClick={iniciarProva} disabled={verificandoTentativas}
               className="w-full mb-4 py-3.5 rounded-xl font-black text-white text-base disabled:opacity-50 transition-all"
               style={{ background: 'linear-gradient(135deg, #0B7A3D, #149951)' }}>
               {verificandoTentativas
@@ -737,6 +812,8 @@ export function ResponderProva() {
                 : tentativaAtual === 1 ? 'Segunda tentativa' : 'Terceira, última tentativa'}
             </button>
           )}
+
+          {erro && <p role="alert" className="text-red-600 text-sm font-medium mb-4">{erro}</p>}
 
           <div className="flex items-center justify-center gap-4 text-gray-400 text-sm">
             <span>📝 {questoes.length} questões</span>

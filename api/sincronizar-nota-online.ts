@@ -33,6 +33,18 @@ export function normalizarNotaOnline(nota: number, bimestre?: number | null): nu
   return Math.min(Math.ceil(Math.round(nota * 100) / 100), NOTA_MAXIMA_ONLINE);
 }
 
+// Prazo e atraso (sql/prova_online_prazo_atraso.sql): tentativa com desconto
+// vai pra Notas com a nota final calculada pelo banco, SEM o piso de 7,0 nem o
+// arredondamento para inteiro. No prazo (ou com falta justificada) vale a regra
+// acima. Entre as tentativas, vale a que der a maior nota no Diário.
+export function notaDiarioDaTentativa(
+  r: { nota: number | null; nota_final?: number | string | null; percentual_aplicado?: number | string | null },
+  bimestre?: number | null,
+): number {
+  if (r.percentual_aplicado != null && Number(r.percentual_aplicado) < 100) return Number(r.nota_final ?? 0);
+  return normalizarNotaOnline(r.nota ?? 0, bimestre);
+}
+
 // Mesma regra de src/domain/nomeNasNotas.ts: `notas` diferencia maiúsculas e
 // acentos no nome, então compara sem eles pra não criar linha duplicada.
 const chaveNome = (n: string) =>
@@ -78,10 +90,13 @@ export default async function handler(req: any, res: any) {
     if (!aluno) return res.status(200).json({ ok: false, motivo: 'Aluno não encontrado em alunos (turma/número não batem).' });
 
     // Maior nota entre todas as tentativas dessa prova pra esse aluno.
+    // select('*') para continuar funcionando antes da migração de atraso.
     const { data: tentativas, error: eTentativas } = await supabase
-      .from('respostas').select('nota').eq('prova_id', prova_id).eq('turma_id', turma_id).eq('aluno_numero', aluno_numero);
+      .from('respostas').select('*').eq('prova_id', prova_id).eq('turma_id', turma_id).eq('aluno_numero', aluno_numero);
     if (eTentativas) throw eTentativas;
-    const melhorNota = normalizarNotaOnline((tentativas || []).reduce((max: number, r: any) => Math.max(max, r.nota ?? 0), 0), bimestre);
+    // Sem nenhuma tentativa não há o que lançar (evita criar nota 7,0 à toa).
+    if (!tentativas?.length) return res.status(200).json({ ok: false, motivo: 'Nenhuma resposta deste aluno nesta prova.' });
+    const melhorNota = Math.max(...tentativas.map((r: any) => notaDiarioDaTentativa(r, bimestre)));
 
     const { data: linhas, error: eNotas } = await supabase
       .from('notas').select('nome, nota, situacao, data_situacao, faltas')

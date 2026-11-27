@@ -1,3 +1,4 @@
+import { notaEfetiva, temDesconto } from './atrasoProva';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../data/supabase';
 import { getPeriodoBimestre, type Bimestre } from './useRelatorioFrequencia';
@@ -50,6 +51,8 @@ export interface ProvaPortal {
   enviado_em: string;
   nota: number | null;
   respostas_aluno: Record<string, string>;
+  /** Preenchido quando houve desconto por atraso. */
+  desconto?: { nota_corrigida: number | null; percentual: number } | null;
   correcoes_dissertativas: CorrecaoDissertativaPortal[];
   questoes: QuestaoPortal[];
 }
@@ -176,7 +179,7 @@ export function usePortalAluno(token: string | undefined) {
         // 4) Provas/respostas — usa ilike para nome também
         const { data: respostasData, error: respErr } = await supabase
           .from('respostas')
-          .select('id, prova_id, nota, enviado_em, respostas, correcoes_dissertativas')
+          .select('*')
           .eq('turma_id', alunoRow.turma_id)
           .ilike('aluno_nome', alunoRow.nome)
           .order('enviado_em', { ascending: false });
@@ -208,8 +211,9 @@ export function usePortalAluno(token: string | undefined) {
           prova_id: r.prova_id,
           titulo: provasMap.get(r.prova_id)?.titulo || 'Prova',
           enviado_em: r.enviado_em,
-          nota: r.nota !== null && r.nota !== undefined ? Number(r.nota) : null,
+          nota: notaEfetiva(r),
           respostas_aluno: (r.respostas as Record<string, string>) || {},
+          desconto: temDesconto(r) ? { nota_corrigida: r.nota, percentual: Number(r.percentual_aplicado) } : null,
           correcoes_dissertativas: (r.correcoes_dissertativas as CorrecaoDissertativaPortal[]) || [],
           questoes: questoesMap.get(r.prova_id) || [],
         }));

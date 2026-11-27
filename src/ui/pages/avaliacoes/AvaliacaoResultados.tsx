@@ -1,3 +1,4 @@
+import { notaEfetiva, temDesconto, dataDoServidor } from '../../../domain/atrasoProva';
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../data/supabase';
@@ -17,6 +18,7 @@ interface Resposta {
   nota_final: number;
   escaneado_em: string;
   online?: boolean;
+  comDesconto?: number | null; // percentual aplicado por atraso
   correcoes?: { questao_id: string; pontos_obtidos: number; pontos_total: number; justificativa: string }[];
 }
 
@@ -86,7 +88,7 @@ export function AvaliacaoResultados() {
       // -- entre elas, vale a de MAIOR nota, não a mais recente.
       if (av.prova_online_id) {
         const [{ data: online }, { data: qs }] = await Promise.all([
-          supabase.from('respostas').select('aluno_numero, turma_id, respostas, nota, enviado_em, correcoes_dissertativas')
+          supabase.from('respostas').select('*')
             .eq('prova_id', av.prova_online_id).order('enviado_em', { ascending: false }),
           supabase.from('questoes').select('id, enunciado, tipo, opcoes, resposta_correta, pontos, subitens, ordem')
             .eq('prova_id', av.prova_online_id).order('ordem'),
@@ -98,14 +100,15 @@ export function AvaliacaoResultados() {
           const aluno = (alunos || []).find(a => a.turma_id === o.turma_id && a.numero_chamada === o.aluno_numero);
           if (!aluno || respostasMap.has(aluno.id)) continue; // papel já registrado tem prioridade
           const atual = melhorPorAluno.get(aluno.id);
-          if (!atual || (o.nota ?? 0) > (atual.o.nota ?? 0)) melhorPorAluno.set(aluno.id, { o, aluno });
+          if (!atual || (notaEfetiva(o) ?? 0) > (notaEfetiva(atual.o) ?? 0)) melhorPorAluno.set(aluno.id, { o, aluno });
         }
         for (const { o, aluno } of melhorPorAluno.values()) {
           const acertos = (qs || []).filter(q => q.tipo === 'multipla_escolha' && o.respostas?.[q.id] === q.resposta_correta).length;
-          const nota = ((o.nota ?? 0) / 10) * valorTotal;
+          const nota = ((notaEfetiva(o) ?? 0) / 10) * valorTotal;
           respostasMap.set(aluno.id, {
             aluno_id: aluno.id, respostas: o.respostas || {}, acertos, nota, nota_final: nota,
-            escaneado_em: o.enviado_em, online: true, correcoes: o.correcoes_dissertativas || [],
+            escaneado_em: dataDoServidor(o.enviado_em).toISOString(), online: true,
+            comDesconto: temDesconto(o) ? Number(o.percentual_aplicado) : null, correcoes: o.correcoes_dissertativas || [],
           });
         }
       }
@@ -315,6 +318,7 @@ export function AvaliacaoResultados() {
                   {resposta && (
                     <p className="text-xs text-on-surface-variant">
                       {resposta.acertos}/{avaliacao.quantidade_objetivas} acertos objetivas{resposta.online ? ' · online' : ''}
+                      {resposta.comDesconto != null && <span className="font-semibold text-amber-700"> · com atraso, vale {resposta.comDesconto}%</span>}
                     </p>
                   )}
                 </div>

@@ -1,3 +1,4 @@
+import { notaEfetiva, dataDoServidor, formatarDataAcre } from '../../domain/atrasoProva';
 import React, { useState, useEffect, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '../../data/supabase';
@@ -230,7 +231,8 @@ function AbaResultados({ turma }: { turma: string }) {
     const { data } = await supabase.from('respostas').select('*')
       .eq('prova_id', prova.id)
       .order('aluno_numero', { ascending: true, nullsFirst: false });
-    setResultados(prev => ({ ...prev, [prova.id]: data || [] }));
+    // `nota` exibida aqui é a que vale (com o desconto por atraso).
+    setResultados(prev => ({ ...prev, [prova.id]: (data || []).map((r: any) => ({ ...r, nota: notaEfetiva(r) })) }));
     setLoadingResp(null);
   };
 
@@ -286,7 +288,7 @@ function AbaResultados({ turma }: { turma: string }) {
                             <p className="font-semibold text-gray-800 text-sm">{r.aluno_nome}</p>
                             <p className="text-xs text-gray-400">
                               {r.aluno_numero ? `Nº ${r.aluno_numero} · ` : ''}
-                              {new Date(r.enviado_em).toLocaleDateString('pt-BR')}
+                              {formatarDataAcre(dataDoServidor(r.enviado_em))}
                             </p>
                           </div>
                           <span className={cn('text-2xl font-black',
