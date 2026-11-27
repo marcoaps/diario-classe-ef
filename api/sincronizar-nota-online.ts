@@ -24,11 +24,13 @@ const NOTA_MAXIMA_ONLINE = 9.5;
 // Piso (26/11/2026): quem fez a prova entra em Notas com no mínimo 7,0. A nota
 // real da tentativa continua em `respostas.nota` (tela de Resultados).
 const NOTA_MINIMA_ONLINE = 7;
-// 4º Bimestre de 2026: quem gabaritar (nota 10) fica com 10,0 -- só o gabarito
-// completo passa de 9,5; qualquer outra nota segue a regra normal (teto 9,5).
+// 4º Bimestre de 2026 (ajustada em 27/11): de 9,7 para cima vira 10,0 (comparado
+// com uma casa decimal, como aparece na tela de Resultados); abaixo disso segue
+// a regra normal (teto 9,5).
+const CORTE_DEZ_4BIM = 9.7;
 export function normalizarNotaOnline(nota: number, bimestre?: number | null): number {
   if (!(nota >= NOTA_MINIMA_ONLINE)) return NOTA_MINIMA_ONLINE;
-  if (bimestre === 4 && nota >= 9.995) return 10;
+  if (bimestre === 4 && Number(nota.toFixed(1)) >= CORTE_DEZ_4BIM) return 10;
   if (nota >= NOTA_MAXIMA_ONLINE) return NOTA_MAXIMA_ONLINE;
   return Math.min(Math.ceil(Math.round(nota * 100) / 100), NOTA_MAXIMA_ONLINE);
 }

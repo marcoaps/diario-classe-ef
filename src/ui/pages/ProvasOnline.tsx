@@ -663,10 +663,12 @@ Regras: mantenha um parágrafo curto por assunto, na mesma ordem; mantenha os te
       const totalPontos = totalObj + totalDisser;
       const pontosTotal = pontosObj + pontosDisser;
       const novaNota = totalPontos > 0 ? parseFloat(((pontosTotal / totalPontos) * 10).toFixed(1)) : 0;
-      // 4º Bimestre: gabarito completo vale 10,0 (demais provas: teto 9,5).
+      // 4º Bimestre: gabarito completo vale 10,0 e de 9,7 a 9,9 a nota é mantida
+      // (vira 10,0 em Notas). Demais casos: teto 9,5.
       const gabaritou = totalPontos > 0 && pontosTotal >= totalPontos - 1e-9;
-      const tetoProva = /4\s*[º°o]?\s*bim/i.test(provaResultados.titulo) ? 10 : 9.5;
-      const notaFinal = gabaritou ? tetoProva : Math.min(novaNota, 9.5);
+      const quartoBim = /4\s*[º°o]?\s*bim/i.test(provaResultados.titulo);
+      const tetoProva = quartoBim ? 10 : 9.5;
+      const notaFinal = gabaritou ? tetoProva : quartoBim && novaNota >= 9.7 ? novaNota : Math.min(novaNota, 9.5);
       // O banco recalcula a nota final (com o desconto) e devolve a linha.
       const { data: salva, error } = await supabase.from('respostas').update({ nota: notaFinal, correcoes_dissertativas: novasCorrecoes })
         .eq('id', respostaCorrigir.id).select('*').single();
