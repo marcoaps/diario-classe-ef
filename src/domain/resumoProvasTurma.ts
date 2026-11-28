@@ -65,3 +65,21 @@ export function resumirProvas(
   }
   return { faltaLancar, naoFizeram, lancados, comNotaSemProva, dispensadosSemProva, soFrequencia };
 }
+
+export type TipoSituacao = 'fazer' | 'fez' | 'dispensado' | 'outro';
+export interface LinhaSituacao { numero: number | null; nome: string; situacao: string; tipo: TipoSituacao }
+
+// A turma inteira, em ordem de chamada, com a situação de cada aluno na prova.
+// 'fazer' é exatamente quem entra na prova impressa (`naoFizeram`).
+export function listarSituacoes(r: ReturnType<typeof resumirProvas>): LinhaSituacao[] {
+  const marcar = (linhas: LinhaResumo[], tipo: TipoSituacao, situacao: (l: LinhaResumo) => string) =>
+    linhas.map(l => ({ numero: l.numero, nome: l.nome, situacao: situacao(l), tipo }));
+  const fez = (l: LinhaResumo) => l.origens.length > 1 ? 'Fez online e impressa' : `Fez a prova ${l.origens[0]}`;
+  return [
+    ...marcar(r.naoFizeram, 'fazer', () => 'Fazer a prova impressa'),
+    ...marcar([...r.faltaLancar, ...r.lancados], 'fez', fez),
+    ...marcar(r.dispensadosSemProva, 'dispensado', () => 'Dispensado: presença na quadra'),
+    ...marcar(r.soFrequencia, 'outro', () => 'Nota pela frequência'),
+    ...marcar(r.comNotaSemProva, 'outro', () => 'Já tem nota'),
+  ].sort((a, b) => (a.numero ?? 999) - (b.numero ?? 999) || a.nome.localeCompare(b.nome, 'pt-BR'));
+}

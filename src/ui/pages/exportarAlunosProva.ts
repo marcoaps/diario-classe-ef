@@ -4,6 +4,7 @@ import {
   WidthType, AlignmentType, BorderStyle, ShadingType, HeightRule,
 } from 'docx';
 import { saveAs } from 'file-saver';
+import type { TipoSituacao } from '../../domain/resumoProvasTurma';
 
 export interface AlunoProvaExport {
   numero_chamada?: number | null;
@@ -138,15 +139,23 @@ export async function exportarTurmaCompletaWord(bimestre: number, turmas: TurmaS
   saveAs(blob, `Situacao_Prova_${bimestre}Bim_TODAS.docx`);
 }
 
-// Lista para aplicar a prova impressa: só quem ainda não fez.
-// Todas as turmas num arquivo, uma turma por folha.
+// Lista para aplicar a prova impressa: a turma inteira com a situação de cada
+// aluno. Todas as turmas num arquivo, uma turma por folha.
 export interface TurmaImpressaExport {
   turma: string;
-  alunos: { numero_chamada?: number | null; nome: string }[];
+  alunos: { numero_chamada?: number | null; nome: string; situacao: string; tipo: TipoSituacao }[];
 }
 
+// Quem vai fazer a prova é o destaque: fundo escuro, legível também em preto e branco.
+const ESTILO_SITUACAO: Record<TipoSituacao, { fill?: string; corTexto?: string; bold?: boolean }> = {
+  fazer: { fill: '0B6B3A', corTexto: 'FFFFFF', bold: true },
+  fez: { fill: 'D9EAD3' },
+  dispensado: { fill: 'EDEDED' },
+  outro: {},
+};
+
 export function montarProvaImpressaDoc(bimestre: number, turmas: TurmaImpressaExport[], quando: Date) {
-  const W = [800, 10530]; // soma 11330 (A4 com margens de 0,5 cm)
+  const W = [800, 7000, 3530]; // soma 11330 (A4 com margens de 0,5 cm)
   const data = quando.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   const children: (Paragraph | Table)[] = [];
 
@@ -157,22 +166,34 @@ export function montarProvaImpressaDoc(bimestre: number, turmas: TurmaImpressaEx
       children: [
         celula('Nº', W[0], { bold: true, center: true, fill: 'D9EAD3', keep: true }),
         celula('Aluno', W[1], { bold: true, fill: 'D9EAD3', keep: true }),
+        celula('Situação', W[2], { bold: true, center: true, fill: 'D9EAD3', keep: true }),
       ],
     });
     const linhas = t.alunos.map((a, i) => { const keep = i < t.alunos.length - 1; return new TableRow({
       cantSplit: true,
-      height: { value: 400, rule: HeightRule.ATLEAST },
+      height: { value: 320, rule: HeightRule.ATLEAST },
       children: [
         celula(a.numero_chamada ? String(a.numero_chamada) : '', W[0], { center: true, keep }),
-        celula(a.nome, W[1], { keep }),
+        celula(a.nome, W[1], { bold: a.tipo === 'fazer', keep }),
+        celula(a.situacao, W[2], { center: true, keep, ...ESTILO_SITUACAO[a.tipo] }),
       ],
     }); });
-    const total = t.alunos.length === 1 ? '1 aluno' : `${t.alunos.length} alunos`;
+    const conta = (tipo: TipoSituacao) => t.alunos.filter(a => a.tipo === tipo).length;
+    const outros = conta('outro');
+    const resumo = [
+      `Fazer a prova impressa: ${conta('fazer')}`,
+      `Já fizeram: ${conta('fez')}`,
+      `Dispensados: ${conta('dispensado')}`,
+      ...(outros ? [`Com nota, sem prova: ${outros}`] : []),
+      `Total: ${t.alunos.length}`,
+    ].join('  •  ');
     children.push(
       new Paragraph({ alignment: AlignmentType.CENTER, keepNext: true, pageBreakBefore: idx > 0, spacing: { before: 0, after: 60 },
-        children: [new TextRun({ text: 'Prova impressa de Educação Física', bold: true, size: 30 })] }),
+        children: [new TextRun({ text: 'Prova de Educação Física: situação da turma', bold: true, size: 30 })] }),
+      new Paragraph({ alignment: AlignmentType.CENTER, keepNext: true, spacing: { before: 0, after: 40 },
+        children: [new TextRun({ text: `Turma: ${t.turma}  •  ${bimestre}º Bimestre  •  Lista de ${data}`, size: 22 })] }),
       new Paragraph({ alignment: AlignmentType.CENTER, keepNext: true, spacing: { before: 0, after: 80 },
-        children: [new TextRun({ text: `Turma: ${t.turma}  •  ${bimestre}º Bimestre  •  ${total}  •  Lista de ${data}`, size: 22 })] }),
+        children: [new TextRun({ text: resumo, bold: true, size: 20 })] }),
       new Table({ width: { size: 11330, type: WidthType.DXA }, columnWidths: W, rows: [cab, ...linhas] }),
     );
   });
